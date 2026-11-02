@@ -352,6 +352,8 @@ scan_safe_ids()
 	for _i in "$@"
 	do
 		case "$_i" in 7|f|F|17|1f|1F) continue ;; esac
+		# the card a stuck INQUIRY round hung on (the miniroot's bound): not opened this boot
+		case "$SUSPECT_CARD" in [0-3]) [ "`id_card $_i`" = "$SUSPECT_CARD" ] && continue ;; esac
 		[ -n "$_cdx" ] && [ "$_i" = "$_cdx" ] && continue
 		case " $_cand " in
 			*" $_i "*)
@@ -418,6 +420,13 @@ scsi_label() {
 # drive behind an A4091/A4092 never gets a dd-layer read.
 CARDS_F=/tmp/setup.cards
 SETUP_PROBE="${SETUP_PROBE:-/tmp/cards.probe}"
+# a probe the miniroot abandoned at its bound (asleep in the kernel for the rest of the boot) names
+# the card it hung on here, or "unknown": that card's controller may be wedged for disk I/O too, so
+# its units are not opened at all (a read could hang the interview), and with "unknown" every disk
+# is marked and must be chosen by its id
+SETUP_SUSPECT="${SETUP_SUSPECT:-/tmp/cards.probe.suspect}"
+SUSPECT_CARD=
+[ -s "$SETUP_SUSPECT" ] && SUSPECT_CARD=`cat "$SETUP_SUSPECT"`
 CARDS_PROBED=
 read_cards()
 {
@@ -480,6 +489,8 @@ card_units()
 		if [ "$_a" = card ]; then
 			_cur=`expr "$_b" : '\([0-3]\):$'`
 			[ -n "$_cur" ] || continue
+			# the card a stuck probe hung on: none of its units is opened this boot
+			[ "$_cur" = "$SUSPECT_CARD" ] && { _cur=; continue; }
 			if [ -z "$CARDS_PROBED" ]; then
 				for _u in 0 1 2 3 4 5 6
 				do
@@ -950,6 +961,15 @@ choose_disk()
 	fi
 
 	echo "\nHard disks attached to this system:\n"
+	_skey=
+	[ -s "$CARDS_F" ] && _skey=`card_key "$SUSPECT_CARD"`
+	_sname=`card_name "$_skey"`
+	case "$SUSPECT_CARD" in
+		[0-3])	echo "card $SUSPECT_CARD${_sname:+ ($_sname)} did not answer in time: its disks are not"
+			echo "scanned this boot (its controller may be wedged).  Restart to try it again.\n" ;;
+		unknown) echo "A controller did not answer in time; which one is not known.  The disks"
+			echo "below may not all work this boot: choose by id, and check before erasing.\n" ;;
+	esac
 	# The eligible ids, collected in the PARENT: the loop below is fed by a
 	# redirect and therefore runs in a subshell, so it may only append.
 	cp /dev/null "$TOK_F"
@@ -970,6 +990,8 @@ choose_disk()
 			echo "`scsi_label $sid`${sctl:+  $sctl}		$stext	$shold"
 			echo "$sid" >> "$TOK_F"
 			[ "$shold" = blank ] || echo "$sid" >> "$TOK_F.held"
+			# a controller that did not answer in time, and which is unknown: every disk is chosen by id
+			[ "$SUSPECT_CARD" = unknown ] && echo "$sid" >> "$TOK_F.held"
 			continue
 		fi
 		case "$sstate" in
@@ -1067,6 +1089,7 @@ choose_disk()
 	# question too, never an upgrade.
 	if rdb_present "$SCSI"; then
 		[ -n "$UNIVERSAL" ] && echo "\n`scsi_label $SCSI` holds `disk_contents $SCSI`.  All of it will be erased."
+		[ -n "$UNIVERSAL" ] && [ "$SUSPECT_CARD" = unknown ] && echo "A controller did not answer in time this boot: make sure this is the disk you mean."
 		echo "\nWARNING:  The following existing data on disk will be destroyed.\n"
 		/etc/rdb -V "/dev/dsk/c${SCSI}d0s0" 2>/dev/null
 		while :

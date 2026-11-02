@@ -10123,6 +10123,23 @@ def audit_cd_candidates():
         got = " ".join(open(os.path.join(d, "out.txt")).read().split())
         (ok if got == full and took < 20 else fail)("CD addresses: a probe that hangs is abandoned at its bound (%.0f s), the full list used%s"
                                                      % (took, "" if got == full else " -- got %r" % got))
+        # past the bound the card the probe hung on (its last flushed `card N:` line) is recorded as
+        # suspect for the interview; no card line at all: "unknown"
+        for part, want_s, what in (
+                ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\n"
+                 "card 1: c8-cf zorro:0202:54 base 0x40800000\\n", "1", "the card its last line names (card 1)"),
+                ("", "unknown", "no card line: unknown")):
+            open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") printf "%%b" "%s"; exec /bin/sleep 30 ;;\n'
+                                '"cards ") printf "%%b" "%s";;\nesac\n' % (part, cards))
+            for x in ("cards.probe.suspect",):
+                if os.path.exists(os.path.join(d, x)):
+                    os.remove(os.path.join(d, x))
+            subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe PROBE_SECS=2\n%s\ncd_candidates_from_cards >/dev/null" % (kb, d, f)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+            sp = os.path.join(d, "cards.probe.suspect")
+            got_s = open(sp).read().strip() if os.path.exists(sp) else "(none)"
+            (ok if got_s == want_s else fail)("CD addresses: an abandoned probe records its suspect card: %s%s"
+                                              % (what, "" if got_s == want_s else " -- got %r" % got_s))
         r = subprocess.run(["/usr/bin/dash", "-c", "KBOOTSET=%s/none SCSIDEV=/dev/null CARDS_PROBE=%s/cards.probe\n%s\ncd_candidates_from_cards" % (d, d, f)],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         (ok if not r.stdout.strip() else fail)("CD addresses: no kbootset on the RAM disk gives no list (the fixed one stands)")
@@ -10180,9 +10197,17 @@ def audit_universal_cards():
                 (0, 'read_cards; for i in 6 b 16; do card_name "`card_key \\`id_card $i\\``"; done',
                  "Z3660 SCSI A4091 SCSI IDE", "each id is named by its card's controller"),
                 (0, 'read_cards; for i in 6 b 16; do card_hba "`card_key \\`id_card $i\\``"; done',
-                 "z3660scsi a4091 gayle", "and given the profile word l11.sh's key table knows")):
+                 "z3660scsi a4091 gayle", "and given the profile word l11.sh's key table knows"),
+                (2, 'SUSPECT_CARD=1; read_cards; card_units', "0 1 2 3 4 5 6 10 11 12 13 14 15 16",
+                 "a card a stuck probe hung on (card 1): none of its units is scanned")):
             got = run(prc, script)
             (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        ssi = "\n".join(_extract_func(setup, n) or "" for n in ("cd_unit_id", "spec_id", "scan_safe_ids"))
+        r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s\nCD_SPEC= MINIROOT_CD_CANDIDATES= INSTALLABLE_IDS= SUSPECT_CARD=2\n"
+                            "scan_safe_ids 0 6 e 10 16" % (body, ssi)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        got = " ".join(r.stdout.decode().split())
+        (ok if got == "0 6 e" else fail)("universal cards: scan_safe_ids drops the suspect card's ids on any medium (card 2: 10, 16)%s"
+                                         % ("" if got == "0 6 e" else " -- got %r" % got))
         r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=%s/none CARDS_F=%s/cards\n%s\nread_cards; echo rc=$?"
                             % (d, d, body)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
         (ok if r.stdout.decode().strip().endswith("rc=1") else fail)("universal cards: no kbootset: read_cards fails (the card-0 scan stands)")

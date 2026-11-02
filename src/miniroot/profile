@@ -162,7 +162,7 @@ PROBE_SECS=60
 cards_probe_bounded()
 {
 	cp /dev/null $CARDS_PROBE
-	rm -f $CARDS_PROBE.new $CARDS_PROBE.done
+	rm -f $CARDS_PROBE.new $CARDS_PROBE.done $CARDS_PROBE.suspect
 	[ -x /bin/sleep ] || return 1
 	# the probe runs in the background and marks its end; the miniroot has no kill, so a probe
 	# past the bound is abandoned, not stopped (its INQUIRY ends with the selection timeout)
@@ -171,7 +171,20 @@ cards_probe_bounded()
 	_ps=0
 	while [ ! -f $CARDS_PROBE.done ]
 	do
-		[ $_ps -lt $PROBE_SECS ] || return 1
+		if [ $_ps -ge $PROBE_SECS ]
+		then
+			# the probe is asleep in the kernel for the rest of this boot, on the card its last
+			# `card N:` line names (kbootset flushes each line): that card's controller may be
+			# wedged, so the interview marks its disks. No line: which card is unknown.
+			_sus=`while read _a _b _r; do [ "$_a" = card ] && expr "$_b" : '\([0-3]\):$'; done < $CARDS_PROBE.new`
+			_last=unknown
+			for _c in $_sus
+			do
+				_last=$_c
+			done
+			echo "$_last" > $CARDS_PROBE.suspect
+			return 1
+		fi
 		/bin/sleep 1
 		_ps=`expr $_ps + 1`
 	done
