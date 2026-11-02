@@ -134,7 +134,7 @@ fi
 
 # ---- 2. kernel objects ----
 KCC="m68k-cbm-sysv4-gcc $AMIX_KERNEL_CFLAGS -Wall -I$DLM/include -I$DLM -DDLM_KABI=\"k46.1.2\" -DDLM_PIN=\"$PIN\""
-rm -f "$B/kobj.warn"
+rm -f "${B:?}/kobj.warn"
 sh "$DLM/tools/mkreg" "$R/abi/registry/majors" > "$DLM/dlmreg.c"	# the major registry
 for f in dlm_core dlm_ld dlm_sym dlm_slot dlm_str dlmconf dlmreg dlm_arena dlm_post dlm_ddi dlm_intr; do
 	$KCC -c "$DLM/$f.c" -o "$B/obj/$f.o" 2>> "$B/kobj.warn"
@@ -157,7 +157,7 @@ fi
 m68k-elf-nm -u "$B/obj/dlm.o" | awk '$1=="U"{print $2}' | sort -u > "$B/obj/dlm.undef"
 
 # the platform hook (core/plat): built as the kernel builds it, and on the host
-rm -f "$B/plat.warn"
+rm -f "${B:?}/plat.warn"
 for f in amiga k30/line k46/line; do
 	m68k-cbm-sysv4-gcc -O2 -m68020 -fno-builtin -fomit-frame-pointer -Wall \
 		-I"$R/loader/common" -c "$R/core/plat/$f.c" -o "$B/obj/plat-$(echo $f | tr / -).o" 2>> "$B/plat.warn"
@@ -193,7 +193,7 @@ fi
 # ---- 3. the user side ----
 if for f in modload moduload modpath modstat modadm getksym; do
 	m68k-cbm-sysv4-as -o "$B/target/$f.o" "$DLM/libmod/$f.s" || exit 1; done &&
-   rm -f "$B/target/libmod.a" &&
+   rm -f "${B:?}/target/libmod.a" &&
    m68k-elf-ar rcs "$B/target/libmod.a" "$B/target"/mod*.o "$B/target/getksym.o" &&
    m68k-cbm-sysv4-gcc -O -I"$DLM/include" -o "$B/target/modadmin" "$DLM/modadmin.c" \
 	"$B/target/libmod.a" > "$B/target.log" 2>&1 &&

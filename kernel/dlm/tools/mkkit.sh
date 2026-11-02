@@ -167,7 +167,7 @@ headers() {	# headers SRC DST
 	mkdir -p "$2"
 	(cd "$1" && find . -name '*.h' -type f) > "$OUT/.list"
 	tar -C "$1" -cf - -T "$OUT/.list" | tar -C "$2" -xf -
-	rm -f "$OUT/.list"
+	rm -f "${OUT:?}/.list"
 }
 headers "$AMIX_SYSROOT/usr/include" "$OUT/sysroot/usr/include"
 headers "$AMIX_ROOT/usr/include" "$OUT/stock/usr/include"
@@ -182,7 +182,7 @@ for e in '#define	SDCARDS	2|#define	SDCARDS	4' \
 	n=$(grep -cxF -- "$old" "$SDH" || true)
 	[ "$n" = 1 ] || { echo "mkkit: '$old' occurs $n time(s) in $SDH, want 1" >&2; exit 1; }
 	OLD=$old NEW=$new awk '$0 == ENVIRON["OLD"] { print ENVIRON["NEW"]; next } { print }' \
-		"$SDH" > "$SDH.edit" && mv "$SDH.edit" "$SDH"
+		"$SDH" > "$SDH.edit" && mv "${SDH:?}.edit" "${SDH:?}"
 done
 # the stock console's Sun font as a linkable object (a console-drawing
 # driver links it, C3-6 section 3); built from the stock source, which is
@@ -195,7 +195,7 @@ if [ "$LINE" = k46 ]; then
 		for h in immu param; do
 			[ -f "$PORT/include-modelb/sys/$h.h" ] ||
 				{ echo "mkkit: no $PORT/include-modelb/sys/$h.h (the k46 4 KiB headers)" >&2; exit 1; }
-			mv "$d/$h.h" "$d/${h}_stock.h"
+			mv "${d:?}/${h:?}.h" "${d:?}/${h}_stock.h"
 			cp "$PORT/include-modelb/sys/$h.h" "$d/$h.h"
 		done
 	done

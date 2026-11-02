@@ -11,6 +11,6 @@ B=${B:-build}
 T=${TMPDIR:-/tmp}/bss-of.$$
 e=$($B/axrel "$1" 0 $T.e 1 | sed -n 's/.*end \(0x[0-9a-f]*\).*/\1/p')
 b=$($B/axrel "$2" 0 $T.b | sed -n 's/.*end \(0x[0-9a-f]*\).*/\1/p')
-rm -f $T.e $T.b
+rm -f "${T:?}".e "${T:?}".b
 [ -n "$e" ] && [ -n "$b" ] || { echo "bss-of: cannot relocate $1 or $2" >&2; exit 1; }
 echo $((e - b))

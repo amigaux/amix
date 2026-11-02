@@ -101,8 +101,10 @@
 #ifdef KS_ZLIB
 #include <zlib.h>
 #endif
-#ifdef KS_SYNC			/* the box build: sync() before a hold; mknod */
+#ifdef KS_SYNC			/* the box build: sync() before a hold; mknod; /dev/scsi */
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <sys/sysmacros.h>
 #endif
 
@@ -428,7 +430,7 @@ usage(void)
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
-		"  major NAME | major -l | cards [DEV]\n"
+		"  major NAME | major -l | cards [DEV | --probe] | inquiry CARD UNIT\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -465,14 +467,18 @@ disknode(const char *b)
  * c<8k + unit> (hex) on card k.  It reads nothing else and writes nothing; kp is
  * main's kinfo buffer.
  */
+static int inq_line(int card, int unit, char *line, char *why);
+
 static int
 cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 {
-	char key[48];
+	char key[48], line[80], why[200];
 	const char *b = 0, *p;
 	long c = -1;
-	int i;
+	int i, u, probe = 0;
 
+	if (n == 1 && !strcmp(a[0], "--probe"))	/* each card's units by INQUIRY (C2-4 §18) */
+		probe = 1, n = 0;
 	if (n > 1)
 		usage();
 	if (n == 1) {			/* /dev/dsk/cNdMsK, /dev/rdsk/..., or the name alone */
@@ -500,6 +506,12 @@ cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 			if (kp->card[i].base)
 				printf(" base 0x%08lx", (unsigned long)kp->card[i].base);
 			printf("\n");
+			fflush(stdout);
+			for (u = 0; probe && u < 8; u++)
+				if (inq_line((int)k, u, line, why) == 0) {
+					printf("  unit %d: %s\n", u, line);
+					fflush(stdout);
+				}
 		} else if (k == (unsigned long)c / 8) {
 			if (!key[0]) {
 				fprintf(stderr, "kbootset: %s: card %lu has the unknown controller id 0x%08lx\n",
@@ -516,6 +528,163 @@ cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 	}
 	if (kp->ncards == 0)
 		fprintf(stderr, "kbootset: the running kernel registered no sd cards\n");
+	return 0;
+}
+
+/*
+ * `inquiry CARD UNIT` and `cards --probe` (C2-4 §18): one SCSI INQUIRY
+ * (6-byte CDB, 36 bytes back) through the stock raw passthrough /dev/scsi
+ * (char major 11, scsi.c gsioctl: ioctl 'GSIO' with a struct sdcom).  It
+ * reads; no other command is sent and no disk is opened, so a unit is
+ * known before anything reads it through sd.  The struct is the kernel's
+ * gcc 2.7.2.3 layout, written byte by byte: next 0, reading 4, okay 5,
+ * status 6, cdb 7, addr 20, nbyte 24, card 28, unit 32, intr 36; 40 bytes.
+ * The kernel bounces the data through its static iobuf, which it never
+ * clears, so only the bytes the unit says it sent (5 + byte 4) are read.
+ * KBOOTSET_SCSIDIR (the host test) takes the answer from the file
+ * <dir>/<card>.<unit> instead: its bytes, or no file for no unit.
+ */
+#define GSIO		0x4753494FUL	/* 'GSIO' */
+#define SD_SIZE		40
+#define INQ_LEN		36
+
+#ifdef KS_SYNC
+static void
+put32(ax_u8 *p, unsigned long v)
+{
+	p[0] = (ax_u8)(v >> 24), p[1] = (ax_u8)(v >> 16), p[2] = (ax_u8)(v >> 8), p[3] = (ax_u8)v;
+}
+#endif
+
+/* the 36 bytes of an INQUIRY into r; 0, or an errno-like code with why */
+static int
+inquire(int card, int unit, ax_u8 *r, char *why)
+{
+	const char *dir = getenv("KBOOTSET_SCSIDIR");
+
+	memset(r, 0, INQ_LEN);
+	if (dir && *dir) {
+		char p[1100];
+		FILE *f;
+		size_t n;
+
+		sprintf(p, "%.1000s/%d.%d", dir, card, unit);
+		if ((f = fopen(p, "rb")) == 0) {
+			sprintf(why, "no answer (selection failed)");
+			return 1;
+		}
+		n = fread(r, 1, INQ_LEN, f);
+		fclose(f);
+		if (n == 0) {
+			sprintf(why, "the command failed");
+			return 1;
+		}
+		return 0;
+	}
+#ifdef KS_SYNC
+	{
+		ax_u8 sd[SD_SIZE];
+		int fd, e;
+
+		if ((fd = open("/dev/scsi", O_RDONLY)) < 0) {
+			sprintf(why, "/dev/scsi: %s (mknod /dev/scsi c 11 0)", strerror(errno));
+			return 1;
+		}
+		memset(sd, 0, sizeof sd);
+		sd[4] = 1;				/* reading */
+		sd[7] = 0x12;				/* INQUIRY, LUN 0 */
+		sd[7 + 4] = INQ_LEN;			/* allocation length */
+		put32(sd + 20, (unsigned long)r);	/* addr: the kernel copies out here */
+		put32(sd + 24, INQ_LEN);
+		put32(sd + 28, (unsigned long)card);
+		put32(sd + 32, (unsigned long)unit);
+		e = ioctl(fd, (int)GSIO, sd) < 0 ? errno : 0;
+		close(fd);
+		if (e == ENXIO || e == ENODEV) {
+			sprintf(why, "the running kernel has no card %d", card);
+			return 1;
+		}
+		if (e) {
+			sprintf(why, "/dev/scsi: %s", strerror(e));
+			return 1;
+		}
+		if (!sd[5]) {
+			sprintf(why, "no answer (status 0x%02x)", sd[6]);
+			return 1;
+		}
+		return 0;
+	}
+#else
+	(void)card, (void)unit;
+	sprintf(why, "inquiry needs the box's /dev/scsi");
+	return 1;
+#endif
+}
+
+/* bytes [a, b) of the answer as one word: blanks and NULs trimmed at the
+ * end, inner blanks '_', anything not printable '?', all blank "-" */
+static void
+inq_word(const ax_u8 *r, int a, int b, int got, char *out)
+{
+	int i, n = 0, end = b < got ? b : got;
+
+	for (i = a; i < end; i++)
+		out[n++] = r[i] == 0 || r[i] == ' ' ? ' ' : r[i] < 0x20 || r[i] > 0x7e ? '?' : (char)r[i];
+	while (n > 0 && out[n - 1] == ' ')
+		n--;
+	for (i = 0; i < n; i++)
+		if (out[i] == ' ')
+			out[i] = '_';
+	if (n == 0)
+		out[n++] = '-';
+	out[n] = 0;
+}
+
+/* one unit: its line "type N VENDOR PRODUCT REVISION" into line, or 1 with why */
+static int
+inq_line(int card, int unit, char *line, char *why)
+{
+	ax_u8 r[INQ_LEN];
+	char v[20], p[20], rev[8];
+	int got;
+
+	if (inquire(card, unit, r, why))
+		return 1;
+	if (r[0] >> 5) {
+		sprintf(why, "no unit (qualifier %d)", r[0] >> 5);
+		return 1;
+	}
+	if ((r[0] & 0x1f) == 0x1f) {
+		sprintf(why, "no unit (device type 0x1f)");
+		return 1;
+	}
+	got = 5 + r[4];
+	inq_word(r, 8, 16, got, v);
+	inq_word(r, 16, 32, got, p);
+	inq_word(r, 32, 36, got, rev);
+	sprintf(line, "type %d %s %s %s", r[0] & 0x1f, v, p, rev);
+	return 0;
+}
+
+static int
+inquiry(int n, char **a)
+{
+	char line[80], why[200], *e1, *e2;
+	long c, u;
+
+	if (n != 2)
+		usage();
+	c = strtol(a[0], &e1, 10);
+	u = strtol(a[1], &e2, 10);
+	if (!*a[0] || *e1 || !*a[1] || *e2 || c < 0 || c > 3 || u < 0 || u > 7) {
+		fprintf(stderr, "kbootset: inquiry takes a card 0-3 and a unit 0-7\n");
+		return 2;
+	}
+	if (inq_line((int)c, (int)u, line, why)) {
+		fprintf(stderr, "kbootset: card %ld unit %ld: %s\n", c, u, why);
+		return 1;
+	}
+	printf("%s\n", line);
 	return 0;
 }
 
@@ -763,6 +932,8 @@ main(int argc, char **argv)
 	}
 	if (!strcmp(argv[i], "cards"))		/* kinfo only, no store (C2-4 §17) */
 		return cards(kpath && *kpath ? kpath : "/dev/kinfo", argc - i - 1, argv + i + 1, &ki);
+	if (!strcmp(argv[i], "inquiry"))	/* /dev/scsi only, no store (C2-4 §18) */
+		return inquiry(argc - i - 1, argv + i + 1);
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");

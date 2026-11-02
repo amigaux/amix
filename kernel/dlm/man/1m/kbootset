@@ -375,6 +375,42 @@ Exit status 1, with a message on the standard error and nothing on the
 standard output, when there is no kinfo record or the disk's card is not in
 the table; 2 for a name that is not a disk node.
 .TP
+.B "cards \-\-probe"
+The card lines, and under each card one line per unit that answers an
+INQUIRY, as
+.B inquiry
+prints it after
+.IR "  unit u: " .
+Exit status 0 whatever the units answer.
+.TP
+.BI "inquiry " "card unit"
+Asks one unit its type with one SCSI INQUIRY through
+.B /dev/scsi
+(char major 11), and nothing else: it reads, opens no disk and writes
+nothing, so an installer knows a CD from a disk before anything reads
+it.
+.I card
+is the number
+.B cards
+prints (0\-3) and
+.I unit
+the target id (0\-7).
+It prints
+.I "type n vendor product revision"
+.RB ( "type 5 hp PLDS_DVDRW_DU8AE 6HSM" ):
+.I n
+is the peripheral device type (0 a disk, 5 a CD), and each field is one
+word, its blanks turned into
+.B _
+and
+.B \-
+when it is empty.
+Exit status 1, with a message on the standard error and nothing on the
+standard output, when no unit answers (a non-zero qualifier, type 0x1f, a
+failed or unanswered command, a card the kernel did not register, or no
+.BR /dev/scsi );
+2 for usage.
+.TP
 .B "media \fR...\fP"
 Builds the pristine generation of a new medium (a disk image, a floppy
 pair, a CD tree).
@@ -390,7 +426,13 @@ refuse, with exit status 4 and a line naming the gate, when:
 1
 a kernel-space member's SHA-256 is not the one
 .B apkg
-recorded at install (hash);
+recorded at install, or no record names it (hash): the file was changed or
+placed by hand or by a bare
+.BR pkgadd ;
+the line names the package, and
+.B "apkg -f install"
+.I package
+puts it right;
 .TP
 2
 the members disagree on the kernel ABI, or a module needs a symbol that
@@ -451,9 +493,10 @@ Every line
 prints for a person starts with
 .BR "kbootset: " ;
 the lines of
-.B major
-and
+.BR major ,
 .B cards
+and
+.B inquiry
 are for scripts and do not.
 .SH ENVIRONMENT
 .TP 16

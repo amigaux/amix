@@ -54,7 +54,7 @@ row() {
 			$B/axsim "$OUT/$name.sim" "$OFF" "$boots"
 			echo "# expected store after the cell (lsstore of the slot image)"
 			$B/lsstore "$OUT/$name.sim" "$OFF" | sed 's/^/#   /'
-			rm -f "$OUT/$name.sim"
+			rm -f "${OUT:?}/${name:?}.sim"
 		fi
 	} > "$OUT/$name.expected"
 	echo "$name: $OUT/$name.hdf ($boots boots)"

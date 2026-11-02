@@ -27,7 +27,7 @@ export RC_CONF=$T/rc.conf RC_LOG=$T/rc.log RC_BGLOG=$T/rclog RC_RUN=$T
 
 # run SCRIPT ARG: one run from a clean slate; fails if the script does not exit 0
 run() {
-	rm -f $T/calls $T/console $T/rc.log
+	rm -f "${T:?}"/calls "${T:?}"/console "${T:?}"/rc.log
 	sh kbootset/rc/$1 $2
 }
 want() {
@@ -48,7 +48,7 @@ for s in kbnamelist kbmarkgood; do
 	RC_KBOOTSET=$T/nosuch run $s start; want "" "$s without kbootset"
 	if [ -r "$SUBR" ]; then
 		export RC_SUBR=$SUBR
-		rm -f $T/rc.conf
+		rm -f "${T:?}"/rc.conf
 		KBRC=3 run $s start; want "$c" "$s with rc.subr, no rc.conf"
 		grep -q " $s: kbootset $c, status 3\$" $T/rc.log
 		echo "$s=yes" > $T/rc.conf
@@ -62,7 +62,7 @@ for s in kbnamelist kbmarkgood; do
 			grep -q " kbmarkgood: off in rc.conf; nothing marked\$" $T/rc.log ;;
 		*)	[ ! -s $T/console ] ;;
 		esac
-		rm -f $T/rc.conf
+		rm -f "${T:?}"/rc.conf
 	fi
 	# the 1991 sh: no $(...), no ${...#...}-style expansions, no printf, no local
 	if grep -n '\$(\|\${[A-Za-z_]*[#%]\|printf\|local ' kbootset/rc/$s; then

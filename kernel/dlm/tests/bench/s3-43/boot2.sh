@@ -58,7 +58,7 @@ G() { printf 'generation %s\nstate %s\n' "$1" "$2"; hdr "$3"
       echo "kernel unix $OUT/stand/$LINE/$4${BSS:+ bss=$BSS} z=deflate"; }
 G 1 good "$ARENA" unix > "$OUT/l5-g1.spec"
 G 2 trial "$AOFF 0x00000040" unix.l5 > "$OUT/l5-g2.spec"
-rm -f "$OUT/l5.img"
+rm -f "${OUT:?}/l5.img"
 "$R/build/mkstore" -o "$OUT/l5.img" -s "$SSIZE" -1 "$R/build/boot1.img" -2 "$R/build/boot2.bin" \
 	-v 2 -d 1 "$OUT/l5-g1.spec" "$OUT/l5-g2.spec" > "$OUT/mkstore.log"
 # boot2's checks, as core.c arena_fill makes them: L14 on the first, the

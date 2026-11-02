@@ -87,7 +87,7 @@ if [ -f "$K46" ]; then
 	$KB namelist | grep -q "^kbootset: namelist for generation 1 is current$"
 	$KB status | grep -q "^namelist: /stand/unix is generation 1's, bound at 0x08000000$"
 	# mark-good writes it on every boot (here generation 1 is not a trial)
-	rm $R/stand/unix
+	rm "${R:?}"/stand/unix
 	$KB status | grep -q "^namelist: /stand/unix is missing: run kbootset namelist$"
 	$KB mark-good > $T/out
 	grep -q "^kbootset: namelist /stand/unix written for generation 1" $T/out
@@ -116,7 +116,7 @@ if [ -f "$K46" ]; then
 	cp "$K46" $R/stand/k46/unix
 	echo "build=68060-261026-56" > $R/stand/k46/kabi
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 0 cd
-	rm -f $R/stand/unix
+	rm -f "${R:?}"/stand/unix
 	$KB status > $T/out
 	grep -q "^booted: generation 1 of a read-only medium (a CD), not of this box's store; kernel 68060-261026-56" $T/out
 	$KB namelist | grep -q "^kbootset: namelist /stand/unix written for the medium's kernel (68060-261026-56), bound at 0x08000000$"

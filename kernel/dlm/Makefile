@@ -85,6 +85,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(
 	B=$(B) sh tests/host/kmajor.sh
 	sh tests/host/kbmin.sh
 	B=$(B) sh tests/host/kcards.sh
+	B=$(B) sh tests/host/kinq.sh
 	B=$(B) sh tests/host/kitkern.sh
 	B=$(B) sh tests/host/kitdigest.sh
 	B=$(B) sh tests/host/rcscripts.sh
