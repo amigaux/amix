@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — scan060-g14 decodes only the executable sections (f07fdb0)
+
+scan060-g14 names each executable section for objdump (-j): with an address range alone, -D also decoded the .debug_* sections at address 0 of an unstripped shared library (libamixrt.so.1) and reported movep.
+
 ## 2026-11-02 — the build container carries its pins (3a30b19)
 
 The build container carries the pins it was built from in /opt/amix/PINS; make dist runs toolchain/check-image first and stops on an image built from other pins or without the stamp. A stamped image of 33ebadc/43825b2 has the same TOOLCHAIN.sha256 as the unstamped one.
