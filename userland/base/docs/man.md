@@ -77,7 +77,11 @@ shell front-end. Its own page is `man/man.1`, installed as
    one; the front-end reads the fragments) or anything under the cache.
 5. A package that replaces a stock binary ships its page under a name of its
    own (`/opt/amix/man/1/heirloom-tar`), its index line naming both
-   (`tar, heirloom-tar`), and `/opt/amix/man/replaces.d/<pkginst>`.
+   (`tar, heirloom-tar`), and `/opt/amix/man/replaces.d/<pkginst>`. A
+   package built here declares those binaries in its `package.sh` as
+   `MAN_REPLACES`, `<binary path> <sect> <page name>` triples
+   (`build/pkg/README.md`), and its stage hook writes `replaces.d/<PKG>` from
+   it with `amix_man_replaces` (`userland/packages/tools/manpages.sh`).
 6. A package with pages does not depend on the base package: its pages are
    plain files, and without the front-end the stock `man` still shows them
    with `MANPATH=/opt/amix/man`.
