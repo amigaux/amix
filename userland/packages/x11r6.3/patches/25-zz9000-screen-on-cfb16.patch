@@ -269,7 +269,7 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
  #endif /* ZZ9000_H */
 --- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
 +++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
-@@ -1,756 +1,382 @@
+@@ -1,756 +1,440 @@
  /*
 -** ZZ9000screen.c - ZZ9000 ScreenRec initialisation and GC management.
 +** zz9000screen.c -- the ZZ9000/Z3660 RTG screen: X's own 16-bit framebuffer
@@ -324,6 +324,7 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 +#include "regionstr.h"
  #include "servermd.h"
 +#include "colormapst.h"
++#include "resource.h"
  #include "mi.h"
 -#include "mfb.h"
 +#include "cfb.h"
@@ -906,7 +907,11 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -        pGC->ops->Polylines   = pGC->lineWidth ? miWideDash : miZeroLine;
 -        pGC->ops->PolySegment = miPolySegment;
 -    }
--
++    zzUnwrap(pGC);
++    (*pGC->funcs->ChangeGC)(pGC, mask);
++    zzWrap(pGC, FALSE);
++}
+ 
 -#ifdef NEED_LINEHELPER
 -    pGC->ops->LineHelper = (pGC->joinStyle == JoinMiter) ? miMiter : miNotMiter;
 -#endif
@@ -940,20 +945,34 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -        pGC->ops->PolyText8    = miPolyText8;
 -        break;
 -    }
-+    zzUnwrap(pGC);
-+    (*pGC->funcs->ChangeGC)(pGC, mask);
-+    zzWrap(pGC, FALSE);
++static void
++zzCopyGC(pGCSrc, mask, pGCDst)
++GCPtr         pGCSrc, pGCDst;
++unsigned long mask;
++{
++    zzUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyGC)(pGCSrc, mask, pGCDst);
++    zzWrap(pGCDst, FALSE);
  }
  
 -/* ------------------------------------------------------------------ */
 -/* Clip region management                                              */
--
++static void
++zzDestroyGC(pGC)
++GCPtr pGC;
++{
++    zzUnwrap(pGC);
++    (*pGC->funcs->DestroyGC)(pGC);
++}
+ 
 -/*
 -** ZZ9000ChangeClip - set a new client clip region on a GC.
 -*/
 -void
 -ZZ9000ChangeClip(pGC, type, pval, nrects)
--GCPtr   pGC;
++static void
++zzChangeClip(pGC, type, pvalue, nrects)
+ GCPtr   pGC;
 -int     type;
 -pointer pval;
 -int     nrects;
@@ -984,14 +1003,12 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -    pGC->clientClipType =
 -        (type != CT_NONE && pGC->clientClip) ? CT_REGION : CT_NONE;
 -    pGC->stateChanges |= GCClipMask;
-+static void
-+zzCopyGC(pGCSrc, mask, pGCDst)
-+GCPtr         pGCSrc, pGCDst;
-+unsigned long mask;
++int     type, nrects;
++pointer pvalue;
 +{
-+    zzUnwrap(pGCDst);
-+    (*pGCDst->funcs->CopyGC)(pGCSrc, mask, pGCDst);
-+    zzWrap(pGCDst, FALSE);
++    zzUnwrap(pGC);
++    (*pGC->funcs->ChangeClip)(pGC, type, pvalue, nrects);
++    zzWrap(pGC, FALSE);
  }
  
 -/*
@@ -1000,18 +1017,27 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -void
 -ZZ9000DestroyClip(pGC)
 +static void
-+zzDestroyGC(pGC)
++zzDestroyClip(pGC)
  GCPtr pGC;
  {
 -    if (pGC->clientClipType == CT_PIXMAP)
 -        (*pGC->pScreen->DestroyPixmap)(pGC->clientClip);
 -    else if (pGC->clientClipType != CT_NONE)
 -        (*pGC->pScreen->RegionDestroy)(pGC->clientClip);
--
++    zzUnwrap(pGC);
++    (*pGC->funcs->DestroyClip)(pGC);
++    zzWrap(pGC, FALSE);
++}
+ 
 -    pGC->clientClipType = CT_NONE;
 -    pGC->clientClip     = NULL;
-+    zzUnwrap(pGC);
-+    (*pGC->funcs->DestroyGC)(pGC);
++static void
++zzCopyClip(pGCDst, pGCSrc)
++GCPtr pGCDst, pGCSrc;
++{
++    zzUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyClip)(pGCDst, pGCSrc);
++    zzWrap(pGCDst, FALSE);
  }
  
 -/*
@@ -1034,33 +1060,46 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -    if (src->clientClipType == CT_PIXMAP)
 -        ((PixmapPtr) src->clientClip)->refcnt++;
 -    ZZ9000ChangeClip(dst, src->clientClipType, src->clientClip, 0);
-+static void
-+zzChangeClip(pGC, type, pvalue, nrects)
-+GCPtr   pGC;
-+int     type, nrects;
-+pointer pvalue;
++static Bool
++zzCreateGC(pGC)
++GCPtr pGC;
 +{
-+    zzUnwrap(pGC);
-+    (*pGC->funcs->ChangeClip)(pGC, type, pvalue, nrects);
++    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
++
++    if (!(*zzCfbCreateGC)(pGC))
++        return FALSE;
++    pPriv->wrapped = FALSE;
 +    zzWrap(pGC, FALSE);
++    return TRUE;
  }
  
 -/* ------------------------------------------------------------------ */
 -/* Screen-level functions                                              */
--
--/*
++/* ---------------------------------------------------------------------- */
++/* Colormaps                                                               */
+ 
+ /*
 -** ZZ9000QueryBestSize - return an acceptable size for cursors, tiles, stipples.
 -**
 -** Software cursor can be any size; we cap at 64x64 to match TIGA.
 -** Tile and stipple: no hardware constraint - return requested size.
--*/
++** TrueColor has no colour table to load, but one map is always the
++** installed one and clients are told when it changes.  zzInstalledMap is
++** cleared at every screen init, so a reset never leaves it pointing at a
++** freed map.
+ */
 -void
 -ZZ9000QueryBestSize(kind, W, H, pScreen)
 -int     kind;
 -CARD16 *W;
 -CARD16 *H;
--ScreenPtr pScreen;
--{
++static ColormapPtr zzInstalledMap = (ColormapPtr) NULL;
++
++static int
++zzListInstalledColormaps(pScreen, pmaps)
+ ScreenPtr pScreen;
++Colormap *pmaps;
+ {
 -    switch (kind)
 -    {
 -    case CursorShape:
@@ -1076,13 +1115,10 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -    default:
 -        break;
 -    }
-+static void
-+zzDestroyClip(pGC)
-+GCPtr pGC;
-+{
-+    zzUnwrap(pGC);
-+    (*pGC->funcs->DestroyClip)(pGC);
-+    zzWrap(pGC, FALSE);
++    if (!zzInstalledMap)
++        return 0;
++    *pmaps = zzInstalledMap->mid;
++    return 1;
  }
  
 -/*
@@ -1096,13 +1132,18 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -int       i;
 -ScreenPtr pScreen;
 +static void
-+zzCopyClip(pGCDst, pGCSrc)
-+GCPtr pGCDst, pGCSrc;
++zzInstallColormap(pmap)
++ColormapPtr pmap;
  {
 -    return TRUE;
-+    zzUnwrap(pGCDst);
-+    (*pGCDst->funcs->CopyClip)(pGCDst, pGCSrc);
-+    zzWrap(pGCDst, FALSE);
++    ColormapPtr old = zzInstalledMap;
++
++    if (pmap == old)
++        return;
++    if (old)
++        WalkTree(pmap->pScreen, TellLostMap, (pointer) &old->mid);
++    zzInstalledMap = pmap;
++    WalkTree(pmap->pScreen, TellGainedMap, (pointer) &pmap->mid);
  }
  
 -/*
@@ -1117,17 +1158,17 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 -WindowPtr pWin;
 -GCPtr     pGC;
 -int       guarantee;
-+static Bool
-+zzCreateGC(pGC)
-+GCPtr pGC;
++static void
++zzUninstallColormap(pmap)
++ColormapPtr pmap;
  {
-+    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
++    ColormapPtr def;
 +
-+    if (!(*zzCfbCreateGC)(pGC))
-+        return FALSE;
-+    pPriv->wrapped = FALSE;
-+    zzWrap(pGC, FALSE);
-+    return TRUE;
++    if (pmap != zzInstalledMap || pmap->mid == pmap->pScreen->defColormap)
++        return;
++    def = (ColormapPtr) LookupIDByType(pmap->pScreen->defColormap, RT_COLORMAP);
++    if (def)
++        (*pmap->pScreen->InstallColormap)(def);
  }
  
 -/* ------------------------------------------------------------------ */
@@ -1291,7 +1332,8 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 +            return FALSE;
 +        zzGeneration = serverGeneration;
 +    }
-+
+ 
+-    /* Block/Wakeup and cursor are installed by rtgInit.c after this returns */
 +    /* the card has no colour table at 16 bits: TrueColor only */
 +    if (!cfbSetVisualTypes(ZZ9000_DEPTH, 1 << TrueColor, 6))
 +        return FALSE;
@@ -1299,7 +1341,6 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 +                       pRTG->height, dpix, dpiy, pRTG->pitch / 2))
 +        return FALSE;
  
--    /* Block/Wakeup and cursor are installed by rtgInit.c after this returns */
 +    /* cfb's depth-16 TrueColor is 6-5-5 red-low; the card is RGB565 */
 +    for (i = 0, v = pScreen->visuals; i < pScreen->numVisuals; i++, v++) {
 +        if (v->class != TrueColor || v->nplanes != ZZ9000_DEPTH)
@@ -1313,7 +1354,15 @@ Ours.  The ZZ9000/Z3660 screen is built on X's own 16-bit framebuffer code
 +        v->bitsPerRGBValue = 6;
 +        v->ColormapEntries = 64;
 +    }
- 
++
++    /* cfb sets the colormap hooks only when built STATIC_COLOR, which it
++     * is not here: the DDX sets them.  TrueColor: no StoreColors */
++    zzInstalledMap = (ColormapPtr) NULL;
++    pScreen->InstallColormap        = zzInstallColormap;
++    pScreen->UninstallColormap      = zzUninstallColormap;
++    pScreen->ListInstalledColormaps = zzListInstalledColormaps;
++    pScreen->StoreColors            = (void (*)()) NoopDDA;
++
 +    if (!AllocateGCPrivate(pScreen, zzGCPrivateIndex, sizeof(ZZGCPrivRec)))
 +        return FALSE;
 +    zzCfbCreateGC = pScreen->CreateGC;
