@@ -52,6 +52,18 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
+# -70 against -69 (2026-11-02): the cut 68030-261102-70 (amix kernel/k30/cuts/
+# 68030-261102-70), -69's recipe from amix 406be5d: sdqueue runs the
+# controller's queue function at sdspl() or above (templates/sd.c.in, raise
+# only), so the raw passthrough's first command to the A3000 WD no longer
+# kills the stock driver ("a3091: 0x1 0 0x0"); kinfo030.c gives "A1200 IDE"
+# motherboard id 2, as "A4000 IDE", and the port at 31edbc6 gives rth1.c the
+# same rule.  The link inputs that differ from -69: sd.o, kinfo.o, rth1.o.
+# kabi k30.1.4 and abi= 18c0a1c9 unchanged; modules kabi k30.1.2; the sidecar
+# keeps kbootset-min=1.1.0.261102-35.  The same sums on the host and in the
+# build container (amix-toolchain:dist).  Core and kit amix 406be5d, port
+# 31edbc6, paula 1b2736d, audio.c 1f43c5ff.
+#
 # -69 against -68 (2026-11-02): the cut 68030-261102-69 (amix kernel/k30/cuts/
 # 68030-261102-69), -68's recipe and pins from amix 46c269c: the module core's
 # patch 0052 skips the INT2 and INT6 chain walks while no handler is attached
@@ -135,47 +147,47 @@
 
 # the cut's output: kernel/k30/cuts/build.sh (make kernel-k30) writes it
 # there, from cuts/68030-261102-69/cut.sh (gitignored)
-K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261102-69}"
-K30M_SYSDIR=cut-68030-261102-69/usr/sys   # the cut's kernel tree under K30M_SRC
-K30M_SUMS=SHA256SUMS-68030-261102-69      # under K30M_SRC; names relative to K30M_SYSDIR
-K30M_CARVE=cut-68030-261102-69/carve      # the carve sources of ufs and s5 (R2)
-K30M_AMIX_COMMIT=46c269c    # amix, the cut's commit: elf2brel and the in-amix licences
+K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261102-70}"
+K30M_SYSDIR=cut-68030-261102-70/usr/sys   # the cut's kernel tree under K30M_SRC
+K30M_SUMS=SHA256SUMS-68030-261102-70      # under K30M_SRC; names relative to K30M_SYSDIR
+K30M_CARVE=cut-68030-261102-70/carve      # the carve sources of ufs and s5 (R2)
+K30M_AMIX_COMMIT=406be5d    # amix, the cut's commit: elf2brel and the in-amix licences
 K30M_ELF2BREL=kernel/k30/tools/elf2brel.py
 K30M_ELF2BREL_SHA=0026fb59d5bd58468786e0af6b4178667260e77944758c91d834e8adaf4b42f5
-K30M_DLM_COMMIT=46c269c     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
-K30M_KIT_COMMIT=46c269c     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
-K30M_KIT_PORT=b0f1d86       # amix-040-060-port, the kit's headers (k46 half of `make kit`)
-K30M_PORT_COMMIT=b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd    # K30M_KIT_PORT in full, fetched by hash
+K30M_DLM_COMMIT=406be5d     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
+K30M_KIT_COMMIT=406be5d     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
+K30M_KIT_PORT=31edbc6       # amix-040-060-port, the kit's headers (k46 half of `make kit`)
+K30M_PORT_COMMIT=31edbc688e2eefa013c1854811bf11973712351f    # K30M_KIT_PORT in full, fetched by hash
 K30M_PAULA_COMMIT=1b2736d9bb291af77bd1e8995d15f3e60d0627ff   # amix-paula, the audio patchers
 
 K30M_CATALOG_NAME=kernel-k30-m
 K30M_PKG=kern30m
-K30M_BUILDID=68030-261102-69
+K30M_BUILDID=68030-261102-70
 K30M_KABI=k30.1.4
 K30M_FSKABI=k30.1.2       # the .moddata kabi of ufs and s5 (the minor they import)
-K30M_VERSION=k30.1.4.261102-69
+K30M_VERSION=k30.1.4.261102-70
 
-K30M_BREL_SHA=86e7db4b27e8318eb5cbce19b6a8b667a0a9340331cd46be305df31faaee14d2
-K30M_BREL_SIZE=1540964
+K30M_BREL_SHA=aa957de923233bc5eab5b45e33c6f8bd04f00426b1a08f7d622d67b6e133cdf0
+K30M_BREL_SIZE=1541096
 K30M_BSS=346576
-K30M_KABI_SHA=d096278ebf901bed7d20fc1f8cfe850e294c5c04c15f584ab9e9fd618c9938b2
-K30M_SYM_SHA=a6dcd3aa5753e02fd6e357efd1ba7c23c4027056a9ca0218701f9fa1e39e13ee
-K30M_SYM_SIZE=180436
-K30M_ETREL_SHA=a7b4d7b1d9b22cd143bb76275a4efe6cb066b4ad8cc139923bbe1ff27c489468
+K30M_KABI_SHA=0e74a23d0e41588d356384857ad3d62c356ebec58449df5859dec052eb547c47
+K30M_SYM_SHA=955d1284d145b89962c810ac501f76f280378d02541a61168b7e965661ad8f45
+K30M_SYM_SIZE=180468
+K30M_ETREL_SHA=91c2535afbc3bbfa12406b8a1a22f6f95f5fe9603f33455f6a4cbc508214289f
 # the cut's patched audio driver source (SHA256SUMS names it; the three
 # amix-paula patchers, 1b2736d's (548d258's bytes), on the stock audio.c)
 K30M_AUDIO_SHA=1f43c5ff6558bf6583bcc3525b456bf3560e2bcf6100f5c736b0aa0221b260cc
 # the sidecar's other fields, for the record (build.sh checks ident/arena/
 # ksym are present once and abi= against amix-dlm's reference):
-#   ident=0x000e2930  arena=0x000e2970 0x00060000  ksym=0x000e108c 0x000018a0
+#   ident=0x000e29a4  arena=0x000e29f0 0x00060000  ksym=0x000e1100 0x000018a0
 #   abi=18c0a1c98b2c9284fb10a6b6386403ed5e13193e3ec7aa4f113ff2a174285378 (= abi-k30.1.4.txt, = 1.3's)
 #   root=mobo:a3000-wd,zorro:0202:01,zorro:0202:03, sdcards=4 and rth1=2
 #   passed through verbatim; no rootfs= (build.sh refuses one)
 
 # the filesystem modules: <fs> <sha256> <size>, at $K30M_SYSDIR/mod.d/<fs>
 K30M_FSMODS="\
-ufs 70105a0226e936b24f84691f53ab9a95962a47323f90c39dc114c5cd49c11567 79624
-s5  86a9c6ba288673be44782d35668b057688d48b2ed90570b3c826e206788ef514 58310"
+ufs 84b4f3c6a6a438cd5d93ca9914155d88a86c35ba27baf0a6bea39fc2dc3db016 79624
+s5  8f0449be18460f6a146ba5c073244ff3c0c1b887b095c2d089f07eccac3014c0 58310"
 # the stock objects the carve wraps (the sysroot's, as the cut's carve/stock.sha256)
 K30M_FSSTOCK="\
 fs/ufs/exp a439e68f880d01450f156a0fd5886610c828d2a7cbdfdf3e8a28d93dd656273c
@@ -183,7 +195,7 @@ fs/s5/exp  1c9cb6342da321047b6861170543382eaa75457573858fe641586ff6fddaf33e"
 
 # licences of the code linked in besides the stock kernel: as kernel-k30-u
 # (pin.sh there says which repository gives what; rth1.c is the port's
-# b0f1d86 here), then the module core below.  Since -22 the patched audio
+# 31edbc6 here), then the module core below.  Since -22 the patched audio
 # driver: the stock amiga/driver/audio.c with amix-paula's three patchers
 # (MIT).  Since -14
 # the A4091 driver (a4091.o) and the Gayle IDE driver (ide.o) are not

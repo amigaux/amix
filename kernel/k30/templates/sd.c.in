@@ -74,12 +74,27 @@ sdopen( card)
 }
 
 
+/*
+ * The controller's queue function runs at sdspl() or above.  dd, sdpart and ct
+ * raise it before they call here; the raw passthrough (scsi.c gsioctl) calls at
+ * spl0.  The stock a3091 resets its WD33C93 on its first command and polls for
+ * the reset's interrupt: with INT2 open, a3091intr takes that interrupt first,
+ * reads SS 0x01 while idle and shuts the driver down ("a3091: 0x1 0 0x0"), and
+ * the command never runs.  Raise only: a caller above sdspl keeps its level.
+ * The instructions are sys/inline.h's spl2 and splx, which dd.o inlines.
+ */
 void
 sdqueue( cp)
 struct sdcom	*cp;
 {
+	int	sr;
 
+	__asm__ __volatile__ ("movew %%sr,%0" : "=d" (sr));
+	if ((sr & 0x0700) < 0x0200)
+		__asm__ __volatile__ ("movew &0x2200,%%sr" : : : "memory");
 	(*queue[cp->card].f)( queue[cp->card].c, cp);
+	if ((sr & 0x0700) < 0x0200)
+		__asm__ __volatile__ ("movew %0,%%sr" : : "d" (sr) : "memory");
 }
 
 
