@@ -4,7 +4,8 @@
 # key, and one disk node's key.  Covered: the three 1.1 install controllers
 # side by side (the Z3660, Gayle IDE, the A4000T's 53C710) and a Zorro
 # A4091 with its base; the disk forms (/dev/dsk, /dev/rdsk, the bare name)
-# for the first and last unit of a card; a card the kernel lacks; an
+# for the first and last unit of a card, the controller number in hex as
+# the stock names write it (c10 is card 2, ced0s1 card 1's unit 6); a card the kernel lacks; an
 # unknown motherboard code; no cards; no kinfo; a damaged kinfo; names that
 # are not disk nodes; usage; -R and --image before the command change
 # nothing (no store is read).  Run from the repository root after
@@ -45,8 +46,8 @@ expect() {	# expect STATUS STDOUT STDERR-PATTERN ARGS... ('' = stderr empty)
 # card 0 the Z3660 (Zorro 144b:01 at 0x40000000), card 1 Gayle, card 2 the
 # A4000T's 53C710, card 3 an A4091 (0202:54 at 0x00e90000)
 kinfo 0,0x144b0100,0x40000000,0/1,2,0,1/2,3,0,1/3,0x02025400,0x00e90000,0
-printf '%s\n' 'card 0: c0-c7 zorro:144b:01 base 0x40000000' 'card 1: c8-c15 mobo:gayle' \
-	'card 2: c16-c23 mobo:a4000t-710' 'card 3: c24-c31 zorro:0202:54 base 0x00e90000' > $T/want
+printf '%s\n' 'card 0: c0-c7 zorro:144b:01 base 0x40000000' 'card 1: c8-cf mobo:gayle' \
+	'card 2: c10-c17 mobo:a4000t-710' 'card 3: c18-c1f zorro:0202:54 base 0x00e90000' > $T/want
 $B/kbootset cards > $T/got
 cmp -s $T/want $T/got || { echo "kcards: list:" >&2; diff $T/want $T/got >&2; exit 1; }
 $B/kbootset -R $T/root cards | cmp -s $T/want -
@@ -55,16 +56,21 @@ $B/kbootset --image $T/none.img --offset 65536 cards | cmp -s $T/want -
 expect 0 zorro:144b:01 '' cards /dev/dsk/c6d0s1
 expect 0 zorro:144b:01 '' cards c0d0s0
 expect 0 mobo:gayle '' cards /dev/dsk/c8d0s1
-expect 0 mobo:gayle '' cards /dev/rdsk/c15d0s7
-expect 0 mobo:a4000t-710 '' cards c22d0s2
-expect 0 zorro:0202:54 '' cards /dev/dsk/c30d0s1
+expect 0 mobo:gayle '' cards /dev/rdsk/cfd0s7
+expect 0 mobo:gayle '' cards /dev/dsk/ced0s1
+expect 0 mobo:gayle '' cards cdd0s0
+expect 0 mobo:a4000t-710 '' cards /dev/dsk/c10d0s0
+expect 0 mobo:a4000t-710 '' cards c12d0s2
+expect 0 mobo:a4000t-710 '' cards /dev/rdsk/c17d0s7
+expect 0 zorro:0202:54 '' cards /dev/dsk/c1ed0s1
+expect 0 zorro:0202:54 '' cards c1fd0s7
 # a card the kernel does not have
 kinfo 0,0x144b0100,0x40000000,0/1,2,0,1
 expect 1 '' 'the running kernel has no card 2' cards /dev/dsk/c16d0s1
-expect 1 '' 'has no card 4' cards c33d0s0
+expect 1 '' 'has no card 4' cards c20d0s0
 # an unknown motherboard code: listed with its id, refused for a disk
 kinfo 0,0x144b0100,0x40000000,0/1,9,0,1
-$B/kbootset cards | grep -qx 'card 1: c8-c15 unknown controller id 0x00000009'
+$B/kbootset cards | grep -qx 'card 1: c8-cf unknown controller id 0x00000009'
 expect 1 '' 'unknown controller id 0x00000009' cards c8d0s1
 # no cards: nothing listed, a line on stderr, status 0
 kinfo ''
@@ -78,8 +84,9 @@ printf 'x' | dd of=$T/kinfo bs=1 seek=470 conv=notrunc 2>/dev/null
 expect 1 '' 'no kinfo record' cards
 # not disk nodes, and usage
 kinfo 0,0x144b0100,0x40000000,0
-for d in /dev/dsk/c0 /dev/dsk/c0d0 c0d0s cxd0s1 /dev/kinfo c0d0s1x d0s1; do
+for d in /dev/dsk/c0 /dev/dsk/c0d0 c0d0s cxd0s1 /dev/kinfo c0d0s1x d0s1 cd0s1 cAd0s1 cgd0s1 c123d0s1 \
+	c0ds1 c0d0sx; do
 	expect 2 '' 'is not a disk node' cards $d
 done
 expect 2 '' 'usage' cards c0d0s1 c8d0s1
-echo "kcards: four controllers, three disk spellings, a missing card, an unknown code, no cards, no or damaged kinfo, bad names, usage ok"
+echo "kcards: four controllers, three disk spellings, hex controller numbers, a missing card, an unknown code, no cards, no or damaged kinfo, bad names, usage ok"
