@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-02 — pkg-smoke uses apkg's pkgadd; man directory attribute documented (59d87dc, 1a67187)
+
+- pkg-smoke's guest.sh uses /usr/apkg/bin/pkgadd when it is installed, else the stock pkgadd.
+- docs/man-pages.md: the shared man directories are 0755 root sys in every package.
+
 ## 2026-11-02 — x11r6.3 6.3-4, pth 2.0.7-2, python3 3.11.18-3 (packages, ..eb26631)
 
 - x11r63 6.3-4: the ZZ9000 server's GC clip is bounded and keeps the client clip, pixmaps over 32767 are refused, keycodes start at 8, the switch-key filter keeps releases, key repeat has one source, the Paula bell needs -audiobell, blitter batches follow the driver's count, only the framebuffer is mapped, ZZ9K-SOFT3D and MIT-SHM are gone, the screen runs on cfb16 with the card blitter and installs its own TrueColor colormaps, Xzz9000(1) is new, and the package ships its copyright notices. Emulated 030 and 060 rows: scroll and copy about +61%, text 13-14x.

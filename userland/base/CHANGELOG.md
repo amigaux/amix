@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the man directories are root sys; amix-base 1.0-25, dhcp-client 1.0-6 (6e83c56)
+
+The shared /opt/amix/man directories (man, the section directories, whatis.d, replaces.d) are 0755 root sys, the same as in every other package. Stock pkgadd stops on a d entry whose attributes differ from the registry. man.md rule 4 now states the attribute. On a disk that already has these packages, apkg's install of the new amix-base rewrites the directories' registry entries. amxbase-1.0-25 md5 5c827fc6, dhcpc-1.0-6 md5 2369ad74.
+
 ## 2026-11-01 — amix-base 1.0-24 (7c25608)
 
 man shows a package's own page for a stock program the package has replaced. The package lists the program in /opt/amix/man/replaces.d/<pkginst>, one line per program: "<binary path> <section> <page name>". When the program PATH runs is listed there and the page exists, that page is shown and cached under the page's own name; -a then adds the stock page. The table is keyed by the binary's path, so another package's page for the same name still serves its own binary. amxbase-1.0-24 md5 69bb46c9.
