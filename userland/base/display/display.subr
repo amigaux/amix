@@ -71,6 +71,7 @@ disp_errors() {
 		k == "monsw" { if (NF != 2 || ($2 != "yes" && $2 != "no")) print at "monsw is yes or no"; next }
 		k == "monswtool" { if (NF != 2 || $2 !~ /^\//) print at "monswtool is a full path"; next }
 		k == "restore" { if ($2 !~ /^\//) print at "restore is a command by its full path"; next }
+		k == "once" { if (NF != 2 || ($2 != "none" && $2 !~ /^-/)) print at "once is the server\047s option, as -terminate, or none"; next }
 		k == "args" || k == "env" || k == "console" || k == "name" { next }
 		{ print at "unknown key \"" k "\"" }
 		END { if (!seen) {} }

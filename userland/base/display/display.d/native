@@ -9,3 +9,4 @@ modes    auto
 depths   1
 env      SCREEN_GROUP=%n
 monsw    no
+once     -once        # end with the session (the stock server has no -terminate)

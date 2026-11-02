@@ -84,6 +84,30 @@ run, by its full path, after a session whose server ended on its own
 (it crashed or was killed) rather than being stopped at the session's end;
 for a card whose server must give the keyboard back to the console itself.
 .TP
+.BI once " option"
+the server's option to end with its first session instead of resetting
+for another, given to the server of a session
+.B xstart
+runs (never to
+.BR xdm 's
+or
+.BR dtlogin 's,
+which keep their server for the next login);
+.B none
+gives no option.
+Without the line: X11R6's
+.B \-terminate
+for a server under
+.BR /opt/amix/X11R6 ,
+the system's
+.B \-once
+for one under
+.BR /usr/X ,
+nothing for another.
+The system's server has no
+.B \-terminate
+and stops at an option it does not know.
+.TP
 .BI console " command"
 reserved for the card's console takeover; no tool reads it yet.
 .TP
@@ -159,8 +183,18 @@ modes    auto
 depths   1
 env      SCREEN_GROUP=%n
 monsw    no
+once     -once
 .ft R
 .fi
 .SH SEE ALSO
 .BR display (4),
 .BR xstart (1)
+.SH NOTES
+A server that resets when its last client goes takes the whole set-up
+again before it can stop: on a 68LC040 or 68LC060, where X runs on the
+kernel's floating-point emulation, up to half a minute.
+.B xinit
+waits ten seconds and then kills it, and a killed server does not give the
+display back to the Amiga video.
+.B once
+lets the server end with the session instead.

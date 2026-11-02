@@ -28,6 +28,17 @@ mkdir -p "$B" "$T/d" "$T/home" "$T/dev" "$T/log" "$T/tmp"
 for p in Xzz Xnat xinit xdm dtlogin tool; do
 	printf '#!/bin/sh\necho "%s $*" >> %s/calls\n' $p "$T" > "$B/$p"
 done
+# ps -ef as Amix prints it: a header, then st/ps's lines while st/ps-left
+# (polls still to answer) is above 0; each call counts one down
+mkdir -p "$T/st"
+{
+	echo '#!/bin/sh'
+	echo 'echo "     UID   PID  PPID  C    STIME TTY      TIME COMD"'
+	echo "n=\`cat $T/st/ps-left 2>/dev/null || echo 0\`"
+	echo '[ "$n" -gt 0 ] || exit 0'
+	echo "cat $T/st/ps"
+	echo "echo \`expr \$n - 1\` > $T/st/ps-left"
+} > "$B/ps"
 printf '#!/bin/sh\nexit 1\n' > "$B/monswctl-no"
 printf '#!/bin/sh\nexit 0\n' > "$B/monswctl-yes"
 chmod +x "$B/"*
@@ -59,6 +70,7 @@ run() { # run <args...>: xstart, its output and status
 	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="$T/d" HOME="$T/home" \
 	    XINITS="${XI:-$B/xinit}" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="${XS:-$T/xsession}" \
 	    MONSWCTL="${MCTL:-$B/monswctl-no}" XSTART_TMP="$T/tmp" \
+	    R6DIR="$T/r6" STOCKXDIR="$T/stockx" XSTART_PS="${PS_:-$B/ps}" XSTART_WAIT="${WAIT_:-60}" \
 	    $SH "$here/xstart" "$@" 2>&1
 	echo "rc=$?"
 }
@@ -187,6 +199,75 @@ printf 'server %s\nrestore kbdback\n' "$B/Xnat" > "$T/d/zbad"
 o=$(run -n card=native)
 expect "restore not a full path: said" "$T/d/zbad:2: restore is a command by its full path" "$o"
 rm -f "${T:?}/d/zbad"
+
+# --- once: the card's, else -terminate for an X11R6 server, -once for the
+# stock one, nothing for another; never on xdm's line
+mkdir -p "$T/r6/bin" "$T/stockx/bin"
+for x in "$T/r6/bin/Xr6" "$T/stockx/bin/X"; do
+	printf '#!/bin/sh\necho "server $*" >> %s/calls\n' "$T" > "$x"
+	chmod +x "$x"
+done
+printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\n' "$T" "$T" > "$T/d/r6"
+printf 'node %s/dev/console\nserver %s/stockx/bin/X\nmodes auto\n' "$T" "$T" > "$T/d/stock"
+printf 'card r6\n' | conf
+o=$(run)
+same "once: X11R6 server, -terminate" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+o=$(run -n)
+expect "once: -n shows it" "-- $T/r6/bin/Xr6 :0 -terminate" "$o"
+o=$(run -xdm)
+same "once: never on xdm's line" "xdm -server :0 local $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
+o=$(run card=stock)
+same "once: stock server, -once" "xinit $T/xsession -- $T/stockx/bin/X :0 -once" "$(cat "$T/calls")"
+echo "once none" >> "$T/d/r6"
+o=$(run)
+same "once none: no option" "xinit $T/xsession -- $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
+sed -i '$d' "$T/d/r6"; echo "once -kill-at-end" >> "$T/d/r6"
+o=$(run)
+same "once: the card's own" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -kill-at-end" "$(cat "$T/calls")"
+sed -i '$d' "$T/d/r6"; echo "once sometimes" >> "$T/d/r6"
+o=$(run -n)
+expect "once: a bad value said" "$T/d/r6:4: once is the server's option, as -terminate, or none" "$o"
+sed -i '$d' "$T/d/r6"
+o=$(run card=z3660 mode=640x480)
+same "once: another server, nothing" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\nenv SCREEN_GROUP=%%n\n' "$T" "$T" > "$T/d/r6env"
+o=$(run card=r6env)
+expect "once: through the env wrapper too" "/tmp/xstart." "$(cat "$T/calls")"
+expect "once: the wrapper's line ends with it" " :0 -terminate" "$(cat "$T/calls")"
+rm -f "${T:?}/d/r6env"
+same "native card file: once -once" "-once" "$(sh -c ". '$here/display.subr'; disp_val '$here/display.d/native' once")"
+
+# --- an X server still on the display: wait for it, or refuse
+printf 'card r6\n' | conf
+printf '    root   612     1  0 14:03:22 ?        0:05 %s/r6/bin/Xr6 :0 -terminate\n' "$T" > "$T/st/ps"
+echo 1 > "$T/st/ps-left"
+o=$(run -n)
+expect "-n: a running server reported" "running  an X server on :0 (pid 612); xstart waits up to 60 s for it to end" "$o"
+echo 2 > "$T/st/ps-left"
+o=$(run)
+expect "ending server: waited, said" "an X server on :0 (pid 612) is still running; waiting up to 60 s for it to end" "$o"
+same "ending server: said once" 1 "$(echo "$o" | grep -c 'waiting up to')"
+same "ending server: then started" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+echo 99 > "$T/st/ps-left"
+o=$(WAIT_=2 run)
+expect "a server that stays: refused" "an X server on :0 is still running (pid 612); not starting another" "$o"
+expect "a server that stays: status 1" "rc=1" "$o"
+same "a server that stays: nothing started" "" "$(cat "$T/calls")"
+echo 99 > "$T/st/ps-left"
+o=$(WAIT_=2 run -xdm)
+expect "-xdm waits as well" "not starting another" "$o"
+same "-xdm refused: no xdm" "" "$(cat "$T/calls")"
+printf '    root   612     1  0   Nov  2 ?        0:05 %s/r6/bin/Xr6 :1 -terminate\n' "$T" > "$T/st/ps"
+echo 99 > "$T/st/ps-left"
+o=$(WAIT_=2 run)
+refuse "a server on :1 does not block :0" "still running" "$o"
+o=$(WAIT_=2 run :1)
+expect "it blocks :1 (STIME two fields)" "an X server on :1 is still running (pid 612)" "$o"
+printf '    root   600     1  0 14:03:20 ?        0:00 %s/r6/bin/xinit /x -- %s/r6/bin/Xr6 :0\n' "$T" "$T" > "$T/st/ps"
+echo 99 > "$T/st/ps-left"
+o=$(WAIT_=2 run)
+refuse "xinit's own line is not a server" "still running" "$o"
+rm -f "${T:?}/st/ps-left" "${T:?}/d/r6" "${T:?}/d/stock"
 
 # --- the monitor switch: the tool around the session when no monsw module
 printf 'card z3660\nmonsw 34\n' | conf
