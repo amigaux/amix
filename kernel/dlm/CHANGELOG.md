@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — core 0052: an empty interrupt chain costs two instructions (6c6afef)
+
+Each interrupt chain keeps its handler count, and the level-2 walk and the level-6 wrapper skip the chain when it is empty. The empty level-2 walk cost about 390 cycles (15.6 µs on a 25 MHz 68030) on every level-2 interrupt; now 2 instructions.
+
 ## 2026-11-02 — tests/bench/bprobe reads MAC_HI as a long (3bdf89d)
 
 tests/bench/bprobe reads the Z3660's MAC_HI as a long, as the register is 32 bits (a word read gave its high half, 0).
