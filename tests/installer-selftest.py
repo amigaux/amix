@@ -9944,15 +9944,15 @@ def audit_kbootset_cards():
     d = tempfile.mkdtemp(prefix="kcards_")
     try:
         os.makedirs(os.path.join(d, "bin"))
-        def run(stub, hba):
+        def run(stub, hba, pre="TARGET_SCSI_ID=e\n"):
             kb = os.path.join(d, "bin", "kbootset")
             if stub is None:
                 if os.path.exists(kb): os.remove(kb)
             else:
                 open(kb, "w").write("#!/bin/sh\n%s\n" % stub); os.chmod(kb, 0o755)
-            body = ('L11=%s\nTARGET_SCSI_ID=e\nTARGET_ROOT_SLICE=1\nTARGET_HBA=%s\nKBOOTSET_BOOTDEV=\n'
+            body = ('L11=%s\n%sTARGET_ROOT_SLICE=1\nTARGET_HBA=%s\nKBOOTSET_BOOTDEV=\n'
                     'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n%s\necho "BOOTDEV=$KBOOTSET_BOOTDEV"\n'
-                    'echo "CTL=$L11_CTL"\n' % (d, hba, m.group(1)))
+                    'echo "CTL=$L11_CTL"\n' % (d, pre, hba, m.group(1)))
             return subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10).stdout
         # each case: the key, and the source the install log is given (L11_CTL, logged by l11_bootstore)
         cases = (
@@ -9968,13 +9968,25 @@ def audit_kbootset_cards():
             ("no kbootset on the medium: the profile stands", None, "a3000",
              ["BOOTDEV=mobo:a3000-wd", "CTL=the profile's TARGET_HBA=a3000; the medium has no kbootset for cards"]),
         )
+        # the IDE master on card 2, its card from the interview (IDE_CARD): -35 names the IDE,
+        # -34 read c16 as card 1 and named that card's controller -- the install must stop
+        ide2 = "IDE_CARD=2\nTARGET_SCSI_ID=16\n"
+        cases += (
+            ("the IDE master on card 2, kbootset -35", '[ "$1 $2" = "cards /dev/dsk/c16d0s1" ] && echo mobo:gayle',
+             "gayle", ["BOOTDEV=mobo:gayle"], ide2),
+            ("the IDE master on card 2, kbootset -34 names card 1's A4091: stop",
+             '[ "$1 $2" = "cards /dev/dsk/c16d0s1" ] && echo "zorro:0202:54 base 0x40800000"', "gayle",
+             ["DIE kbootset cards names 'zorro:0202:54' for the IDE master c16d0 (IDE card 2)"], ide2),
+        )
         bad = []
-        for w, stub, hba, want in cases:
-            out = run(stub, hba)
+        for c in cases:
+            w, stub, hba, want = c[:4]
+            out = run(stub, hba, *c[4:])
             if not all(x in out for x in want):
                 bad.append("%s: %r" % (w, out.strip().splitlines()[-2:]))
-        (fail if bad else ok)("kbootset cards EXECUTED (5 cases: the disk's key wins, Zorro key, no `cards`, a card "
-                              "not in the table, no kbootset; each names its source for the log)%s"
+        (fail if bad else ok)("kbootset cards EXECUTED (7 cases: the disk's key wins, Zorro key, no `cards`, a card "
+                              "not in the table, no kbootset, a card-2 IDE master under -35 and under -34 (stops); "
+                              "each names its source for the log)%s"
                               % ((": " + "; ".join(bad)) if bad else ""))
     finally:
         shutil.rmtree(d, ignore_errors=True)
