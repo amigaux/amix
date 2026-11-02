@@ -90,6 +90,27 @@ is taken from
 and
 .B /etc/domain
 is emptied.
+.B ifup
+never turns DNS off: with no name server known it leaves all of these
+as they are, so a static line with no
+.B dns
+line after a lease keeps DNS on.
+While DNS is on,
+.B /etc/resolv.conf
+must stay: without it every name lookup waits on the resolver, and so does
+every
+.B telnet
+or
+.B ftp
+login.
+To go back to
+.B /etc/inet/hosts
+alone, run
+.B "ln \-f /usr/lib/libsockhost.so /usr/lib/libsocket.so"
+(the library the system is installed with) and remove
+.B ,/usr/lib/resolv.so
+from the four lines of
+.BR /etc/netconfig .
 .PP
 With
 .BR \-n ,
