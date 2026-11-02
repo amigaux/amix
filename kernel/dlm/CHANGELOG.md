@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — spec 40: the 32-module manifest limit (b566bba)
+
+spec 40 §3.1 names the 32-module, 32-parameter manifest limit (AXM_MAXMOD, AXM_MAXPARAM) as a known limit: every installed module counts, matched or not; raising it needs a loader revision.
+
 ## 2026-11-02 — core/kbootset-min 1.1.0.261102-35 (e62f9a9)
 
 A kernel cut from now on carries kbootset-min=1.1.0.261102-35 (the hex cards fix); recorded cuts keep their sidecars.
