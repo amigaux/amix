@@ -55,6 +55,10 @@
 #         different values the catalog is not written (rc 4, every
 #         conflicting package named); see "conf layers" below.
 # Output: catalog + catalog.md5 written into the staging dir (or -o DIR).
+#         No .pkg file is moved: apkg fetches <repo>/catalog and
+#         <repo>/pkgs/<filename>, so a repository is a directory R with
+#         the datastreams in R/pkgs/ and `gen-catalog.py -o R R/pkgs`
+#         run over them (a local one is then repo=file:///R, or repo=/R).
 #
 # Catalog format v1 (docs/design.md section 2):
 #   header line "#apkg-catalog 1", then one line per package:
@@ -1340,7 +1344,12 @@ def build_raw_image(outdir, catalog_bytes, md5_bytes, entries, staging):
 def main(argv):
     ap = argparse.ArgumentParser(
         description="Generate an apkg v1 catalog from a staging directory "
-                    "of SVR4 datastream packages.")
+                    "of SVR4 datastream packages.",
+        epilog="No .pkg file is moved.  apkg reads <repo>/catalog and "
+               "<repo>/pkgs/<filename>, so a repository R (local or served) "
+               "is: the datastreams in R/pkgs/, then `gen-catalog.py -o R "
+               "R/pkgs`; a box takes it as repo=file:///R (or repo=/R).  "
+               "A release's whole tree comes from assemble-release.py.")
     ap.add_argument("staging", help="directory containing *.pkg / *.pkg.Z")
     ap.add_argument("-o", "--output-dir", default=None,
                     help="where to write catalog + catalog.md5 "

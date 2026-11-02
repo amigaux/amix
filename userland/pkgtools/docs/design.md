@@ -336,6 +336,12 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   verifies, `--remove-root` removes the root's copy), and the web server answers the old root
   paths with a 301 into `/1.0/`, which the deployed 0.2.x clients follow (`redirects=1`).
 
+- **A local repository has the same layout.** gen-catalog moves no file. apkg reads
+  `<repo>/catalog` and `<repo>/pkgs/<filename>`, so a directory R works as a repository when
+  the datastreams are in `R/pkgs/` and `gen-catalog.py -o R R/pkgs` has written R's catalog
+  (`repo=file:///R`, or `repo=/R`). gen-catalog's `--help` says so. apkg.1 says it from the
+  next APKG version on: the page ships in APKG, and 0.3.6's bytes are minted.
+
 - **A release tree is assembled, and keeps every published version.**
   `assemble-release.py --userland DIR --kspace DIR [--apkg DIR] [--stock DIR] [--previous DIR]
   --release 1.1 --out OUT` writes one release's tree from four inputs:
