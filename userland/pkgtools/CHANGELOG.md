@@ -1,3 +1,7 @@
+## 2026-11-02 — assemble-release: GCC 14 scan and fstype blocks (0be0157)
+
+assemble-release.py scans GCC 14 ELFs as build/pkg's D4 gate does (scan060-g14.py, with scan060.py's hits explained) and carries gen-catalog's fstype/isize blocks with their rows; a package without an ELF is no failure.
+
 ## 2026-11-02 — assemble-release.py; scan060 section names (a862c0e, c38ab8f)
 
 - assemble-release.py writes one repository tree per release from make dist's catalogs, APKG/APKGENG and the stock datastreams stock-1.1.lock pins; every published version stays (older rows in an #ext older block every apkg skips); a refused check writes nothing.
