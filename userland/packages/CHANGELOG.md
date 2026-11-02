@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — heirloom-tar: replaces.d from MAN_REPLACES (ee8fb31)
+
+replaces.d/heirtar is written from MAN_REPLACES ("/usr/sbin/tar 1 heirloom-tar") by amix_man_replaces; pkgmeta counts /usr/sbin/tar as documented, and the package bytes are unchanged (heirtar-070715-1, md5 d27bb2c4).
+
 ## 2026-11-02 — manpages.sh writes replaces.d (7cf3775)
 
 manpages.sh's amix_man_replaces writes replaces.d/<PKG> from MAN_REPLACES, refusing a page that is not staged.
