@@ -1,3 +1,7 @@
+## 2026-11-02 — the local-repository layout documented (c963d61)
+
+gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
+
 ## 2026-11-02 — guarded deletes (a0c38f7)
 
 Every rm and mv of a variable path in the scripts and tests takes "${NAME:?}"; no behaviour change.
