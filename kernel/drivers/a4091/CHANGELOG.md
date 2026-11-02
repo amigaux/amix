@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the first command's bus reset counts beam lines (3197019)
+
+The bus reset before a card's first command adds up the beam lines that passed, not the counter changes seen: unchanged on metal (2 + 4000 lines, 254 ms), no longer 53 s / 72 s under Amiberry at cpu_speed=max (one or two counter values a frame); new global a4091_busreset_chg; host cases for metal, burst and stuck beams. a4091 module 1.0.0-6, package 1.0.0-9; a4kt710 module 1.0.0-2, package 1.0.0-5.
+
 ## 2026-11-01 — a4091 1.0.0-8, a4kt710 1.0.0-4 on the 33ebadc kit (9392ffc)
 
 Re-rolled with gcc-cross-amix 33ebadc (.moddata cc=gcc-2.7.2.3-33ebadc, other sections unchanged; modules 1.0.0-5 and 1.0.0-1); for kernel-k30-m -68 and kernel-k46-m -56 or later.
