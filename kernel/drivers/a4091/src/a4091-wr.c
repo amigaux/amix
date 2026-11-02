@@ -36,7 +36,7 @@
  * every transfer goes through the D42 prepare/complete seam (a4091_dmarec.h,
  * docs/D42-CALL-SHAPE.md); a misaligned FROM_DEVICE range of at most 1 KB is
  * bounced through a 16-aligned driver buffer (D42 "Bounce"); a4091_bytewrite_probe
- * (off by default) measures U77.
+ * (off by default) measures U77 (static arm only: the module has no probe).
  *
  * MODULE FORM (-DA4091_MODULE, with -DA4091_KVA on the k46 line): the same source
  * is the root-class loadable module a4091 (amix-dlm contracts C4-1, C4-2, C4-5;
@@ -276,10 +276,13 @@ static uchar	status_buf[4];
 static uchar	msg_buf[8];
 #endif
 
-/* last-transaction diagnostics (data path goes straight to cp->addr now) */
+#ifndef	A4091_MODULE
+/* last-transaction diagnostics (data path goes straight to cp->addr now); the
+ * module keeps none: its "A4091 slow" trace prints the same state on an anomaly */
 ulong	a4091_dsps;
 ulong	a4091_resid;		/* DATA_IN short-read FIFO/odd-byte residue (real HW; 0 in emu) */
 uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
+#endif
 
 /*
  * "A4091 slow" console threshold, in ISTAT polls.  Under emulation the
@@ -320,14 +323,14 @@ ulong	a4091_maxpoll;
 #define	A4091_M_NOMAP	"a4kt710: board %d: cannot map it at 0x%x: no chip\n"
 #define	A4091_M_BERR	"a4kt710: board %d: bus error at 0x%x: no chip\n"
 #define	A4091_M_BWREF	"a4kt710: board %d: byte writes refused: chip not usable\n"
-#define	A4091_M_ATTACH	"a4kt710: board %d at 0x%x, NCS pages, D42 seam %s\n"
+#define	A4091_M_ATTACH	"a4kt710: board %d at 0x%x\n"
 #elif	defined(A4091_MODULE)
 #define	A4091_M_U77	"a4091: board %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
 #define	A4091_M_NOBASE	"a4091: board %d: no base recorded\n"
 #define	A4091_M_NOMAP	"a4091: board %d: cannot map it at 0x%x: no board\n"
 #define	A4091_M_BERR	"a4091: board %d: bus error at 0x%x: no board\n"
 #define	A4091_M_BWREF	"a4091: board %d: byte writes refused: board not usable\n"
-#define	A4091_M_ATTACH	"a4091: board %d at 0x%x, NCS pages, D42 seam %s\n"
+#define	A4091_M_ATTACH	"a4091: board %d at 0x%x\n"
 #else
 #define	A4091_M_U77	"a4091: card %d: U77 byte-write probe: %d/4 lanes ok (mask 0x%x)\n"
 #define	A4091_M_NOBASE	"a4091: card %d: no board (autocon recorded no base)\n"
@@ -348,7 +351,10 @@ extern int	bprobe();
 #endif	/* A4091_KVA */
 
 /*
- * Patchable knobs (.data; poke the kernel image before boot, or /dev/kmem).
+ * Patchable knobs of the static 040/060 arm (.data; poke the kernel image before
+ * boot, or /dev/kmem).  The module has neither: no U77 probe (every metal run
+ * has done odd-byte register writes on each command), and the record's off is
+ * 0 for good, since an off record skips the cache maintenance.
  *   a4091_bytewrite_probe  nonzero: run the U77 byte-write probe at attach (and
  *                          once per card on the next I/O if poked at runtime).
  *                          OFF by default: a refused write that the line's
@@ -356,8 +362,14 @@ extern int	bprobe();
  *   a4091_dma_off       nonzero: the D42 service sees off != 0 in the record,
  *                          counts, and does no cache op (the coherence test's control arm).
  */
+#ifdef	A4091_MODULE
+#define	A4091_DMA_OFF	0L
+#else
+#define	A4091_U77
 long	a4091_bytewrite_probe = 0;
 long	a4091_dma_off = 0;
+#define	A4091_DMA_OFF	a4091_dma_off
+#endif
 
 /*
  * The per-controller D42 record: owned by THIS object (D42 as amended), one per
@@ -387,7 +399,7 @@ struct a4091_kstat {
 	ulong	bw_rfault;		/* lanes whose byte READ faulted             */
 	ulong	bw_mismatch;		/* lanes read back different                 */
 	ulong	bw_refused;		/* attaches refused on a failed probe        */
-	ulong	bw_mask[A4091_NCARD];	/* per card, see above                       */
+	ulong	bw_mask[A4091_NCARD];	/* per card, see above; bw_* stay 0 in the module */
 	ulong	bounce_n;		/* FROM_DEVICE transfers bounced (misaligned) */
 	ulong	bounce_toolong;		/* misaligned FROM_DEVICE > 1 KB: refused    */
 #ifdef	A4091_MODULE			/* appended: the static layout is unchanged */
@@ -517,7 +529,9 @@ int	dir;
 		r->drv_zero++;
 		return;
 	}
+#ifndef	A4091_MODULE
 	r->off = (ulong)a4091_dma_off;
+#endif
 	r->drv_prep++;
 	(void)dma_prepare( r, pa, len, dir);
 }
@@ -557,6 +571,7 @@ int	v;
 	return f;
 }
 
+#ifdef	A4091_U77
 /*
  * U77 -- can this board, through this bridge, take a single-byte WRITE at an odd
  * offset of a Zorro III register window?  ISSUE-65 (port) saw a byte write to a
@@ -610,6 +625,7 @@ volatile uchar	*s;
 	    card, 4 - bad, (int)m);
 	return bad;
 }
+#endif	/* A4091_U77 */
 
 /*
  * First map of a card on the driver line.  0 = mapped and accepted, ENXIO = no
@@ -660,6 +676,7 @@ int	card;
 	}
 
 	/* U77, before anything else writes a byte to the chip */
+#ifdef	A4091_U77
 	if (a4091_bytewrite_probe && a4091_bwprobe( card, s) != 0) {
 		dev_kvunmap( (char *)a, A4091_MAPLEN);
 		dev_kvunmap( (char *)s, A4091_MAPLEN);
@@ -668,6 +685,7 @@ int	card;
 		printf(A4091_M_BWREF, card);
 		return ENXIO;
 	}
+#endif
 
 	/* the D42 record: identity fields now, before the first transfer */
 	r = &a4091_dmarec[card];
@@ -675,14 +693,18 @@ int	card;
 	r->version = DMA_REC_VERSION;
 	r->ctlid   = A4091_CTLID;	/* the driver family's id, not the board's */
 	r->unit    = (ulong)card;
-	r->off     = (ulong)a4091_dma_off;
+	r->off     = (ulong)A4091_DMA_OFF;
 
 	acfg_tbl[card] = a;
 	siop_tbl[card] = s;
 	phys_tbl[card] = base;
 	a4091_kstat.attached++;
+#ifdef	A4091_MODULE
+	printf(A4091_M_ATTACH, card, (int)base);
+#else
 	printf(A4091_M_ATTACH, card, (int)base,
 	    a4091_kstat.d42_linked ? "linked" : "STUB (no cache maintenance)");
+#endif
 	return 0;
 }
 #endif	/* A4091_KVA */
@@ -711,8 +733,11 @@ int	card;
 
 		if (e = a4091attach( card))
 			return e;
-	} else if (a4091_bytewrite_probe && a4091_kstat.bw_mask[card] == 0)
+	}
+#ifdef	A4091_U77
+	else if (a4091_bytewrite_probe && a4091_kstat.bw_mask[card] == 0)
 		(void)a4091_bwprobe( card, siop_tbl[card]);	/* poked at runtime: record only */
+#endif
 #else
 	if (siop_tbl[card] == 0) {		/* first request for this card: map it */
 		base = (long)sdcardbase( card);
@@ -1076,16 +1101,20 @@ struct sdcom	*cp;
 		 * a no-op in emulation.
 		 */
 		{
+#ifndef	A4091_MODULE
 			uchar	dfifo, sstat1;
 			int	adjust;
+#endif
 			ulong	g;
 
+#ifndef	A4091_MODULE
 			dfifo  = RD8(R_DFIFO);
 			sstat1 = RD8(R_SSTAT1);
 			adjust = (dfifo - (int)(RD32(R_DBC) & 0x7f)) & 0x7f;
 			if (sstat1 & SSTAT1_ORF) adjust = adjust + 1;
 			if (sstat1 & SSTAT1_OLF) adjust = adjust + 1;
 			a4091_resid = (ulong)adjust;		/* diagnostic only; 0 in emu */
+#endif
 
 			WR8( R_CTEST8, RD8(R_CTEST8) | CTEST8_CLF);	/* clear DMA+SCSI FIFO */
 			g = 0;
@@ -1131,9 +1160,11 @@ struct sdcom	*cp;
 		recovered = 1;
 	}
 
+#ifndef	A4091_MODULE
 	/* stash diagnostics (data already DMA'd into cp->addr) */
 	a4091_rc = (uchar)rc;  a4091_dsps = dsps;
 	a4091_istat = istat;   a4091_dstat = dstat;  a4091_stat = status_buf[0];
+#endif
 
 	if (poll > a4091_maxpoll)
 		a4091_maxpoll = poll;
@@ -1337,7 +1368,7 @@ char	*params;
 			r->version = DMA_REC_VERSION;
 			r->ctlid   = A4091_CTLID;
 			r->unit    = (ulong)k;
-			r->off     = (ulong)a4091_dma_off;
+			r->off     = (ulong)A4091_DMA_OFF;
 #endif
 			e = sd_register( a4091queue, (uint)k, (char *)base,
 			    a4091_name[p], A4091_RANK);
@@ -1581,7 +1612,7 @@ char	*params;
 	r->version = DMA_REC_VERSION;
 	r->ctlid   = A4091_CTLID;
 	r->unit    = 0;
-	r->off     = (ulong)a4091_dma_off;
+	r->off     = (ulong)A4091_DMA_OFF;
 	a4kt_gate = 0;
 	printf( "a4kt710: onboard 53C710 rev %d, host id %d\n", (int)a4kt_rev, a4kt_hostid);
 

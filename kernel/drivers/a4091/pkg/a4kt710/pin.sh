@@ -24,16 +24,19 @@
 # first command adds up the beam lines that passed, not the counter changes
 # seen (on metal the same 254 ms; under an emulator that runs the CPU in
 # bursts no longer most of a minute).
+# 1.0.0-6 (2026-11-02): module 1.0.0-3: no U77 byte-write probe, no
+# a4091_dma_off knob (the D42 record's off is 0 for good), no last-command
+# globals; the k46 attach line reads "a4kt710: board 0 at 0xdd0000".
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-2
-KM_PKG_VERSION=1.0.0-5
+KM_VERSION=1.0.0-3
+KM_PKG_VERSION=1.0.0-6
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=f2fd6f05c7529b7c620895e625d64cf48b7845829f88896e88bb76e3e0aaf610
-KM_K46_SHA=cbeeeb903627f715b46b1797842ea80e420cb7cf45aee69e562e79938d90ab16
+KM_K30_SHA=12b70948470bb8667639c1b7e069dd75cc6b96a73b23864831b59c64c1de892e
+KM_K46_SHA=ce656da818770504cf5d48fb3fbf4724a62e399a5aae4e244e60445da2031db5
 KM_K30_DEPS=
 KM_K46_DEPS=
 

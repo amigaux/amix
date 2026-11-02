@@ -61,6 +61,22 @@ extern void		*a4091_da;
 extern unsigned long	a4091_dapa;
 extern struct dma_rec	a4091_dmarec[];
 extern int		mock_verbose;
+extern unsigned long	a4091_kstat[];	/* 23 longs, magic first */
+/* the static arm's diagnostics, absent from the module: weak, so a missing
+ * name links as a null address */
+extern long		a4091_bytewrite_probe __attribute__((weak));
+extern long		a4091_dma_off __attribute__((weak));
+extern unsigned long	a4091_dsps __attribute__((weak));
+extern unsigned long	a4091_resid __attribute__((weak));
+extern unsigned char	a4091_rc __attribute__((weak));
+extern unsigned char	a4091_stat __attribute__((weak));
+static int
+no_static_diag(void)
+{
+	return &a4091_bytewrite_probe == NULL && &a4091_dma_off == NULL
+	    && &a4091_dsps == NULL && &a4091_resid == NULL
+	    && &a4091_rc == NULL && &a4091_stat == NULL;
+}
 
 #define R_DSA		0x10
 #define R_DSP		0x2c
@@ -585,6 +601,45 @@ t_reset_stuck(void)
 	reset_once();
 }
 
+/*
+ * The module has no U77 probe, no dma_off knob and no last-command globals;
+ * the kstat keeps its 23 longs (magic "A4K2"; bw_* at 8-17 stay 0), the
+ * record's off is 0, and the attach line names the board and its base.
+ */
+#define KS_BW_RUNS	8
+#define KS_BW_MASK	14
+#define KS_BOUNCE_N	18
+#define KS_SELTIMEOUT	22
+
+static void
+t_module_lean(void)
+{
+	static char raw[600] __attribute__((aligned(16)));
+	struct mock_board *b;
+	int i, bw;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(no_static_diag(), "no U77 knob, no dma_off, no last-command globals");
+	CHECK(a4091_dmarec[0].off == 0, "the record's off is 0 at attach");
+	CHECK(run_queue(0, 0, 1, raw + 2, 16, 0x03), "a misaligned 16-byte read (bounce)");
+	CHECK(a4091_dmarec[0].off == 0, "and stays 0");
+	mock_chip_seltimeout(b);
+	CHECK(run_status(0, 1, NULL, 0, 0x12) == -1, "an absent id");
+	CHECK(a4091_kstat[0] == 0x41344b32UL, "kstat magic A4K2");
+	CHECK(a4091_kstat[KS_BOUNCE_N] == 1 && a4091_kstat[KS_SELTIMEOUT] == 1,
+	    "bounce_n at 18, seltimeout at 22: the layout has not moved");
+	bw = 0;
+	for (i = KS_BW_RUNS; i < KS_BW_MASK + 4; i++)
+		bw |= a4091_kstat[i] != 0;
+	CHECK(!bw, "bw_runs..bw_mask[3] stay 0");
+#ifdef MODTEST_KVA
+	CHECK(!strcmp(mock_attach_line, "a4091: board 0 at 0x40000000\n"),
+	    "attach line: a4091: board 0 at 0x40000000");
+#endif
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -612,6 +667,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "bus reset: burst beam, PAL, mid-frame start", t_reset_burst_pal_mid },
 	{ "bus reset: burst beam, NTSC", t_reset_burst_ntsc },
 	{ "bus reset: stuck beam", t_reset_stuck },
+	{ "module: no U77, no dma_off, no last-command globals", t_module_lean },
 };
 
 int

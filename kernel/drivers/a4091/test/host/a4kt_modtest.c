@@ -38,6 +38,21 @@ extern struct dma_rec	a4091_dmarec[];
 extern int		a4kt_hostid;
 extern unsigned long	a4kt_gate, a4kt_tagoff;
 extern int		mock_verbose;
+/* the static arm's diagnostics, absent from the module: weak, so a missing
+ * name links as a null address */
+extern long		a4091_bytewrite_probe __attribute__((weak));
+extern long		a4091_dma_off __attribute__((weak));
+extern unsigned long	a4091_dsps __attribute__((weak));
+extern unsigned long	a4091_resid __attribute__((weak));
+extern unsigned char	a4091_rc __attribute__((weak));
+extern unsigned char	a4091_stat __attribute__((weak));
+static int
+no_static_diag(void)
+{
+	return &a4091_bytewrite_probe == NULL && &a4091_dma_off == NULL
+	    && &a4091_dsps == NULL && &a4091_resid == NULL
+	    && &a4091_rc == NULL && &a4091_stat == NULL;
+}
 
 #define ROMBASE		0xF80000UL
 #define ROMLEN		0x80000UL
@@ -208,6 +223,21 @@ t_hostid_halt(void)
 	    "halt: DMODE 0xe0, SIEN and DIEN 0");
 }
 
+/* the a4kt710 module: no U77 knob, no dma_off, the record's off 0 */
+static void
+t_module_lean(void)
+{
+	setup(1, 0);
+	mock_add_a4kt();
+	CHECK(a4kt710_load("") == 0, "the tag found: load returns 0");
+	CHECK(no_static_diag(), "no U77 knob, no dma_off, no last-command globals");
+	CHECK(a4091_dmarec[0].off == 0, "the record's off is 0 at attach");
+#ifdef MODTEST_KVA
+	CHECK(!strcmp(mock_attach_line, "a4kt710: board 0 at 0xdd0000\n"),
+	    "attach line: a4kt710: board 0 at 0xdd0000");
+#endif
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "no NCR tag in the Kickstart", t_no_tag },
 	{ "tag without RTF_COLDSTART", t_tag_no_coldstart },
@@ -221,6 +251,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "tag found, no chip", t_no_chip },
 	{ "tag found, fingerprint fails", t_fingerprint_fails },
 	{ "host ID and halt", t_hostid_halt },
+	{ "module: no U77, no dma_off", t_module_lean },
 };
 
 int

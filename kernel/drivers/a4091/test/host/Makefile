@@ -48,7 +48,7 @@ $(BUILD)/drv-a4kt-k46.o: $(DRV) ../../src/a4091_dmarec.h $(STUBS)
 
 $(BUILD)/test-a4kt-%.o: a4kt_modtest.c mock.h ../../src/a4091_dmarec.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -std=gnu11 -DLINE_NAME='"a4kt-$*"' -c a4kt_modtest.c -o $@
+	$(CC) $(CFLAGS) -std=gnu11 -DLINE_NAME='"a4kt-$*"' $(if $(findstring k46,$*),-DMODTEST_KVA) -c a4kt_modtest.c -o $@
 
 $(BUILD)/modtest-a4kt-%: $(BUILD)/drv-a4kt-%.o $(BUILD)/mock.o $(BUILD)/test-a4kt-%.o
 	$(CC) $(CFLAGS) $^ -o $@
@@ -59,7 +59,7 @@ $(BUILD)/mock.o: mock.c mock.h
 
 $(BUILD)/test-%.o: a4091_modtest.c mock.h ../../src/a4091_dmarec.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -std=gnu11 -DLINE_NAME='"$*"' -c a4091_modtest.c -o $@
+	$(CC) $(CFLAGS) -std=gnu11 -DLINE_NAME='"$*"' $(if $(findstring k46,$*),-DMODTEST_KVA) -c a4091_modtest.c -o $@
 
 $(BUILD)/modtest-%: $(BUILD)/drv-%.o $(BUILD)/mock.o $(BUILD)/test-%.o
 	$(CC) $(CFLAGS) $^ -o $@

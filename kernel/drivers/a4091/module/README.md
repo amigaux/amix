@@ -53,7 +53,7 @@ unchanged:
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (the force-bounce status bug, below) |
 | Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, the poll bound (rc -2), a phase error (rc -3) or a short-read recovery. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
-| Version | `VERSION` (`1.0.0-5`), the package version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console) |
+| Version | `VERSION` (`1.0.0-7`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals |
 
 ### The `dma_alloc` area
 
@@ -111,7 +111,7 @@ clock stopped** (C4-2 §2). There it:
   - **k30:** `sptalloc`, as the static 030 driver does, with no fixed
     0x40000000 fallback;
 - prints the k46 attach line per board, numbered by the module's board
-  index (`a4091: board 0 at 0x48000000, …`): sd ranks the cards only after
+  index (`a4091: board 0 at 0x48000000`): sd ranks the cards only after
   the registrations close, so RTH1 and `kinfo` name the card;
 - calls `sd_register()` once per board that mapped.
 
