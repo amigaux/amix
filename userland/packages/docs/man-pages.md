@@ -13,9 +13,11 @@ the base package's `man` front-end reads; `userland/base/docs/man.md` states the
 | `/opt/amix/man/whatis.d/<PKG>` | The package's whatis fragment, named by its SVR4 instance (at most 9 bytes): one line per page file in the package, aliases included, in stock whatis form, `name(sect)` padded with spaces to column 18 and then `names - description`, sorted. |
 
 The directories `/opt/amix/man`, `/opt/amix/man/<sect>` and `/opt/amix/man/whatis.d` are shared
-`d` lines in every package that uses them. No package ships `/opt/amix/man/whatis`, and none ships
-anything under the cat tree: the front-end reads `whatis.d/*` itself and keeps its formatted pages
-in `/var/opt/amix/catman`, which only the base package creates. The two packages at `/usr/local`
+`d` lines in every package that uses them, `0755 root sys`, the same in every package: pkgadd
+stops on a shared directory whose mode, owner or group differs. No package ships
+`/opt/amix/man/whatis`, and none ships anything under the cat tree: the front-end reads
+`whatis.d/*` itself and keeps its formatted pages in `/var/opt/amix/catman`, which only the base
+package creates. The two packages at `/usr/local`
 (`acompat`, `patch`) put their pages here too, where `man` finds them. No package depends on the
 base package: without the front-end the pages are plain files, readable with
 `/usr/ucb/nroff -man <file> | more`.
