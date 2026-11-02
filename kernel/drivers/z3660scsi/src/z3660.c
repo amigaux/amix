@@ -20,7 +20,9 @@
  * an AGA machine (VPOSR >= 0x22; the ECS build box must never touch it) -- probe
  * the fixed base directly.  Either way the mailbox must answer a signature the
  * open bus cannot fake (ZS-02, see z3660_sig()) before a single unit is trusted;
- * on the fixed base no signature means no board.
+ * on the fixed base no signature means no board, and before the signature's
+ * first write the fixed window must lie outside the boot's memory regions and
+ * answer a read-only bprobe (z3660_fixed_gate()).
  *
  * BOTH windows this driver maps are BOARD apertures, not kernel RAM -- including
  * the "bounce buffer", which is the FIRMWARE's own staging area seen through the
@@ -266,9 +268,21 @@ static long		board_phys;
 #define	WRLONG(cmd,val)	(*(volatile ulong *)(regs + (cmd)) = (ulong)(val))
 #define	RDLONG(cmd)	(*(volatile ulong *)(regs + (cmd)))
 #define	RDVPOSR()	(*(volatile ushort *)VPOSR)
+/*
+ * The boot's memory regions: the stock kernel's struct bootinfo
+ * (amiga/kernel/support.c) is 16 ConfigDev of 68 bytes, then 16 MemHeader of
+ * 32 bytes with mh_Lower at +20 and mh_Upper at +24 -- the regions config()
+ * builds main memory from.  Read by offset: the kit has no MemHeader.
+ */
+extern uchar	bootinfo[];
+#define	BI_MEM(i,o)	(*(ulong *)(bootinfo + 16 * 68 + (i) * 32 + (o)))
+#define	BI_MEMLO(i)	BI_MEM(i, 20)
+#define	BI_MEMHI(i)	BI_MEM(i, 24)
 #endif	/* !HOST_TEST: the host harness force-includes its own WRLONG/RDLONG/
-	 * RDVPOSR (test/host/mock_regs.h) that drive a mock piscsi mailbox and a
-	 * mock Agnus/Alice id instead of real MMIO.  Inert for the kernel build. */
+	 * RDVPOSR/BI_MEMLO/BI_MEMHI (test/host/mock_regs.h) that drive a mock
+	 * piscsi mailbox, a mock Agnus/Alice id and mock memory regions instead
+	 * of real MMIO.  Inert for the kernel build. */
+extern int	bprobe();	/* (caddr_t addr, int v): 1 = bus error */
 
 /*
  * ZS-05 -- the address-capture rule (Z3660 FPGA, real-CPU path; 2026-10-26).
@@ -912,6 +926,42 @@ int	leave;
 }
 
 /*
+ * The fixed base before its first access.  Nothing has proved a board there:
+ * on an AGA box without a Z3660 the address is empty Zorro III space (where
+ * the access ends in a bus error) or something else's memory (the
+ * signature's writes would land in it).  So, with no access at all, refuse a window that
+ * overlaps a memory region the boot handed the kernel; then read one byte of
+ * the first signature cell with bus errors caught (bprobe, read-only), the
+ * cell z3660_sig()'s first arming read takes next.  0 = go on to the
+ * signature; ENXIO = no board, the window is never written.
+ */
+ulong	z3660_fixed_ram;	/* fixed window refused: overlaps a memory region */
+ulong	z3660_fixed_berr;	/* fixed window refused: the probe read faulted   */
+
+static int
+z3660_fixed_gate()
+{
+	ulong	lo, hi, b, t;
+	int	i;
+
+	b = (ulong)Z3660_FIXED;
+	t = b + (ulong)Z3660_WINDOW_TOP;
+	for (i = 0; i < 16; i++) {
+		lo = BI_MEMLO( i);
+		hi = BI_MEMHI( i);
+		if (lo < hi && lo < t && hi > b) {
+			z3660_fixed_ram++;
+			return ENXIO;
+		}
+	}
+	if (bprobe( (caddr_t)(b + PISCSI_OFFSET + P_READ_ADDR2), -1)) {
+		z3660_fixed_berr++;
+		return ENXIO;
+	}
+	return 0;
+}
+
+/*
  * Map the register window and the bounce buffer into kernel VA and verify the
  * mailbox answers.  0 on success; ENXIO when no Z3660 is present.
  *
@@ -930,6 +980,9 @@ int	leave;
  *   2. only when autocon() finds nothing, and only on AGA (VPOSR >= 0x22):
  *      the fixed base 0x10000000.  Here nothing but the signature says a Z3660
  *      is present, so no signature means ENXIO and the window is dropped.
+ *      Before the signature's first write, z3660_fixed_gate(): ENXIO when
+ *      the window overlaps a boot memory region (no access), or when a
+ *      read-only bprobe of the first signature cell takes a bus error.
  *
  * MAPPING STRATEGY -- why the metal box needs no sptalloc() at all.
  *
@@ -1031,6 +1084,10 @@ z3660map()
 			return ENXIO;	/* ECS/OCS machine -- no Z3660 here */
 		}
 		base = Z3660_FIXED;	/* AGA: probe the fixed combo window */
+		if (z3660_fixed_gate()) {
+			z3660_present = 0;
+			return ENXIO;	/* memory there, or nothing answers */
+		}
 	}
 	board_phys = base;
 	bp = (ulong)base;
@@ -1380,6 +1437,8 @@ z3660_test_unmap()
 	z3660_skip_msgs = 0;
 	z3660_skip_recovered = 0;
 	z3660_map_fails = 0;
+	z3660_fixed_ram = 0;
+	z3660_fixed_berr = 0;
 	for (i = 0; i < Z3660_NUNITS; ++i) {
 		z3660_geom[i].bs = 512;
 		z3660_geom[i].nblocks = 0;
@@ -1941,11 +2000,13 @@ z3660intr()
  * _load runs in marc_root: process 0, inside rth1_mountroot, before the root
  * is mounted, at LEVEL 7 WITH THE CLOCK STOPPED (C4-2 section 2).  What it
  * does there is z3660present()'s work and nothing more: z3660map() -- autocon()
- * first, the fixed base 0x10000000 only on AGA, the ZS-02 signature, the
- * attach-time unit sweep -- all of it polled register reads and writes, every
- * write armed (ZS-05), then one sd_register().  It allocates no memory (the
- * driver's state is its own .data/.bss), sleeps on nothing, sets no timeout,
- * waits for no interrupt and opens no file.  It does NOT take the mailbox
+ * first, the fixed base 0x10000000 only on AGA and only past its gate (no boot
+ * memory region over it, a read-only bprobe that does not fault), the ZS-02
+ * signature, the attach-time unit sweep -- all of it polled register reads
+ * and writes, every write armed (ZS-05), then one sd_register().  It
+ * allocates no memory (the driver's state is its own .data/.bss), sleeps on
+ * nothing, sets no timeout, waits for no interrupt and opens no file.  It
+ * does NOT take the mailbox
  * bracket (z3660_enter()): spl6 is an absolute move to IPL 4, and here it
  * would LOWER the level from 7; at level 7 no clock callout can nest a
  * transaction, which is all the bracket is for.  The board has no interrupt

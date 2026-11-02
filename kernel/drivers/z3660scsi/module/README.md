@@ -40,7 +40,7 @@ pin (`b43e36e7…`) is checked by that relink.
 | `_halt` | touches no register: the mailbox is idle between transactions; records `z3660_halted` |
 | Interrupts | none: the piscsi mailbox is synchronous; `root_defer` is not called |
 | DMA | none through the module's memory: the firmware moves data to the caller's buffer as the static driver's requests do |
-| Version | `VERSION` (`1.0.0-2`: the cache arm), the package version |
+| Version | `VERSION` (`1.0.0-3`: the fixed window's gate; `1.0.0-2`: the cache arm), the package version |
 
 ## What `_load` does in the root pass
 
@@ -53,6 +53,11 @@ clock stopped** (C4-2 §2). There it:
   write armed against the address-capture race (ZS-05) exactly as the
   static driver does;
 - reads `VPOSR` for the AGA gate and asks `autocon()` for the ConfigDev;
+- with no ConfigDev, gates the fixed window `0x10000000` before its first
+  write: `ENXIO` with no access when the window overlaps a memory region
+  the boot handed the kernel (`bootinfo.memory[]`), and `ENXIO` when a
+  read-only `bprobe` of the first signature cell (`0x10002024`) takes a bus
+  error (`z3660_fixed_ram`, `z3660_fixed_berr` count the refusals);
 - maps the window: the identity map below `0x40000000` (the shipped
   config), `sptalloc()` for a board above it (autoconfig_rtg YES);
 - prints the unit sweep's console lines;
@@ -115,6 +120,22 @@ the piscsi mailbox (the Z3660 is the CPU card).
 After `_load`, sd's first open (`rth1_apply`, still in the root pass) calls
 `z3660queue()`, whose `spl6` bracket moves the level to 4 and back for each
 transaction, as the static driver does at the same point today.
+
+## Known limits of the fixed-window gate
+
+The `mobo:` match key always matches, so `_load` runs on every AGA box, and
+on one without a Z3660 the fixed window is probed. The gate makes the empty
+Zorro III window and the kernel's own memory safe; two cases it cannot see:
+
+- `bprobe` catches a bus error, not a cycle that nothing terminates. On a
+  CPU card with no bus timeout for `0x10000000` the probe read hangs the
+  box. Which accelerators (A1200 030 cards, A4000 040/060 cards) end that
+  access with a bus error is not measured.
+- A device other than memory the boot listed, answering at `0x10000000`,
+  still receives the signature's writes: two longs at `0x10002024` and
+  `0x10002244`, and two at `0x10002090`.
+
+On an empty window the probe costs one bus timeout in the root pass.
 
 ## Package (C3-5)
 

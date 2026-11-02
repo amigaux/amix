@@ -47,6 +47,7 @@ extern unsigned long	z3660_sig_rd[5];
 extern unsigned char	z3660_present;
 extern long		z3660_cache;
 extern void		z3660_test_unmap();
+extern unsigned long	z3660_fixed_ram, z3660_fixed_berr;	/* fixed-window gate */
 
 /* CD units on this mock bus: 6 = CD-ROM (also the detection-probe unit), 0 = disk. */
 #define U_CD	6
@@ -1420,6 +1421,10 @@ static void test_fault_knob()
 /* value <=1.                                                              */
 /* ====================================================================== */
 
+/* the fixed-window gate's inputs for the next zs_cell (cleared after use) */
+static unsigned long	zs_mem_lo, zs_mem_hi;
+static int		zs_berr;
+
 static int zs_cell( autocon_base, vposr, bus)
 unsigned long	autocon_base;
 unsigned short	vposr;
@@ -1433,6 +1438,11 @@ int		bus;
 	mock_autocon_base = autocon_base;
 	mock_vposr = vposr;
 	mock_bus_mode = bus;
+	mock_mem_lo[3] = zs_mem_lo;		/* one boot memory region, slot 3 */
+	mock_mem_hi[3] = zs_mem_hi;
+	mock_bprobe_fault = zs_berr;
+	zs_mem_lo = zs_mem_hi = 0;
+	zs_berr = 0;
 	g_probe_base = 0;
 	return z3660present( &g_probe_base);
 }
@@ -1555,6 +1565,36 @@ static void test_zs02_detection()
 	CHECK( z3660_sig_ok == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 6
 	       && mock_sptalloc_calls == 2,
 	       "ZS-02 ConfigDev, answering: the deferred sweep ran once and named only the 6 empty units");
+
+	/* 9. the fixed window's gate, before the signature's first write */
+	zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x18000000UL;	/* RAM across the window */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_present == 0 && z3660_fixed_ram == 1 && z3660_fixed_berr == 0
+	       && mock_trips == 0 && mock_bprobe_calls == 0,
+	       "fixed gate: a boot memory region over the window -> refused with zero accesses");
+	zs_mem_lo = 0x1008FFFCUL; zs_mem_hi = 0x10090004UL;	/* overlaps the top cell */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_fixed_ram == 1 && mock_trips == 0 && mock_bprobe_calls == 0,
+	       "fixed gate: a region over the window's last bytes -> refused with zero accesses");
+	zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x10000000UL;	/* RAM up to the window */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_fixed_ram == 0 && z3660_sig_ok == 1 && mock_bprobe_calls == 1
+	       && mock_bprobe_addr == 0x10002024UL && mock_bprobe_v == -1,
+	       "fixed gate: RAM ending at the window -> one read-only bprobe of 0x10002024, attached");
+	zs_mem_lo = 0x10090000UL; zs_mem_hi = 0x10100000UL;	/* RAM from the window top */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_fixed_ram == 0 && z3660_sig_ok == 1,
+	       "fixed gate: RAM starting at the window top -> attached");
+	zs_berr = 1;						/* empty Zorro III space */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_present == 0 && z3660_fixed_berr == 1 && mock_bprobe_calls == 1
+	       && mock_trips == 0 && mock_trips_wr == 0 && z3660_sig_fails == 0,
+	       "fixed gate: the probe read faults -> refused, zero writes, no signature attempt");
+	zs_berr = 1; zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x18000000UL;
+	r = zs_cell( 0x10000000UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_sig_ok == 1 && mock_bprobe_calls == 0 && z3660_fixed_ram == 0
+	       && mock_vposr_reads == 0,
+	       "fixed gate: a ConfigDev board never meets it (AutoConfig proved the board)");
 }
 
 /* ====================================================================== */

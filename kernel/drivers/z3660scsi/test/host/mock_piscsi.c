@@ -210,6 +210,38 @@ unsigned short z3660_mock_vposr()
 }
 
 /*
+ * bprobe() and the boot's memory regions (bootinfo.memory[]), for the fixed
+ * window's gate.  mock_bprobe_fault nonzero: the probe takes a bus error.
+ * mock_mem_lo/hi: the regions, all empty by default.  Reset by mock_reset().
+ */
+int		mock_bprobe_fault;
+unsigned long	mock_bprobe_calls, mock_bprobe_addr;
+long		mock_bprobe_v;
+unsigned long	mock_mem_lo[16], mock_mem_hi[16];
+
+int bprobe( addr, v)
+char	*addr;
+int	v;
+{
+	mock_bprobe_calls++;
+	mock_bprobe_addr = (unsigned long)addr;
+	mock_bprobe_v = v;
+	return mock_bprobe_fault ? 1 : 0;
+}
+
+unsigned long z3660_mock_memlo( i)
+int	i;
+{
+	return mock_mem_lo[i];
+}
+
+unsigned long z3660_mock_memhi( i)
+int	i;
+{
+	return mock_mem_hi[i];
+}
+
+/*
  * phystokv() for the direct arm keys on MOCK_BOARD_BASE; a cell that moves the
  * ConfigDev base must stay on that base or at/above VSECT1 (sptalloc arm).
  */
@@ -510,6 +542,11 @@ void mock_reset()
 	mock_autocon_base = MOCK_BOARD_BASE;
 	mock_vposr = 0x2300;
 	mock_vposr_reads = 0;
+	mock_bprobe_fault = 0;
+	mock_bprobe_calls = mock_bprobe_addr = 0;
+	mock_bprobe_v = 0;
+	memset( mock_mem_lo, 0, sizeof mock_mem_lo);
+	memset( mock_mem_hi, 0, sizeof mock_mem_hi);
 	mock_sptalloc_calls = 0;
 	mock_sptalloc_fail = 0;
 	mock_capture_and = 0;

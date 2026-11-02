@@ -105,6 +105,10 @@ extern unsigned long  mock_bus_flaky_reads;
 extern unsigned long  mock_autocon_base;
 extern unsigned short mock_vposr;
 extern unsigned long  mock_vposr_reads;
+extern int            mock_bprobe_fault;    /* nonzero: bprobe() bus error */
+extern unsigned long  mock_bprobe_calls, mock_bprobe_addr;
+extern long           mock_bprobe_v;
+extern unsigned long  mock_mem_lo[16], mock_mem_hi[16]; /* bootinfo.memory[] */
 extern unsigned long  mock_sptalloc_calls;
 extern int            mock_sptalloc_fail;   /* nonzero: sptalloc() fails */
 

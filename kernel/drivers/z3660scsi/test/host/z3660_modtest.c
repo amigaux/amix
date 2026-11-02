@@ -100,10 +100,13 @@ static void cap_end()
 	close( cap_fd);
 }
 
-static int load_cell( autocon_base, vposr, bus)
+/* load_cell2: also the fixed-window gate's inputs (a bus error at the probe,
+ * one boot memory region lo..hi) */
+static int load_cell2( autocon_base, vposr, bus, berr, lo, hi)
 unsigned long	autocon_base;
 unsigned short	vposr;
-int		bus;
+int		bus, berr;
+unsigned long	lo, hi;
 {
 	int	r;
 
@@ -115,11 +118,22 @@ int		bus;
 	mock_autocon_base = autocon_base;
 	mock_vposr = vposr;
 	mock_bus_mode = bus;
+	mock_bprobe_fault = berr;
+	mock_mem_lo[0] = lo;
+	mock_mem_hi[0] = hi;
 	sr_calls = 0; sr_fn = 0; sr_base = 0; sr_name = 0; sr_c = 99; sr_rank = 0;
 	cap_begin();
 	r = z3660scsi_load( (char *)0);
 	cap_end();
 	return r;
+}
+
+static int load_cell( autocon_base, vposr, bus)
+unsigned long	autocon_base;
+unsigned short	vposr;
+int		bus;
+{
+	return load_cell2( autocon_base, vposr, bus, 0, 0UL, 0UL);
 }
 
 static volatile int	g_done;
@@ -242,6 +256,17 @@ int main()
 	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_ZERO);	/* AGA, open bus */
 	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0,
 	       "AGA, fixed window with no mailbox: ENXIO, silent (no console line), nothing registered");
+
+	r = load_cell2( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD, 1, 0UL, 0UL);
+	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0
+	       && mock_trips == 0 && mock_bprobe_calls == 1,
+	       "AGA, the fixed window's probe read faults: ENXIO, silent, no mailbox access");
+
+	r = load_cell2( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD, 0,
+	    0x08000000UL, 0x18000000UL);
+	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0
+	       && mock_trips == 0 && mock_bprobe_calls == 0,
+	       "AGA, boot memory over the fixed window: ENXIO, silent, zero accesses");
 
 	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);	/* AGA, the board */
 	CHECK( r == 0 && sr_calls == 1, "fixed-base board: _load 0, one sd_register");
