@@ -50,7 +50,7 @@
  *
  * Line-granular 040/060 maintenance and the attach-time free-ride assert live
  * below, gated by z3660eth_cache (0 = off, the shipping default; 40/60 poked
- * through /dev/kmem).  On the 030 line nothing of it is reachable, which is the
+ * through /dev/kmem), in the static driver only: the module form leaves it out.  On the 030 line nothing of it is reachable, which is the
  * proven aen/z3660 no-flush behaviour, correct there because the 030 data cache
  * is effectively off in every validated config.
  * See docs/BLIZZARD-F3.md and ETHERNET-SCOPING.md sections 5/10.
@@ -162,7 +162,7 @@ static int z3660eth_number_of_boards;
 static int z3660eth_autoconfigured;
 
 /* diagnostics (read via /dev/mem on real HW, like z3660.c) */
-unsigned long z3660eth_board_phys, z3660eth_last_rc, z3660eth_last_off, z3660eth_machi, z3660eth_maclo;
+unsigned long z3660eth_board_phys, z3660eth_machi, z3660eth_maclo;
 unsigned char z3660eth_present;
 unsigned char z3660eth_direct_map;	/* 1 = section-0 identity, 0 = sptalloc'd */
 
@@ -304,6 +304,7 @@ static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
 #define Z3660ETH_CONFIG(r_, x_)	Z3660ETH_WRA((r_), ZZ_ARM_CONFIG, ZZ_CONFIG, (x_))
 #define Z3660ETH_RX_STROBE(r_)	Z3660ETH_WRA((r_), ZZ_ARM_ETH_RX, ZZ_ETH_RX, 1)
 
+#ifndef Z3660ETH_MODULE
 /* ----------------------------------------------------------------------------
  * BLIZZARD F3-M0 -- the 040/060 gate, and the free ride asserted instead of
  * silently depended on.  Full argument in docs/BLIZZARD-F3.md.
@@ -622,6 +623,18 @@ z3660eth_sync()
     Z3660ETH_NOP();
     z3660eth_sync_n++;
 }
+#else	/* Z3660ETH_MODULE */
+/*
+ * The module form leaves the 040/060 cache block out: no manifest parameter
+ * sets z3660eth_cache and /dev/kmem cannot reach the module's copy, so it could
+ * never arm.  The calls in the shared code stay, as no-ops; a cache= parameter
+ * would bring the block back.
+ */
+#define z3660eth_ci_check(b)	0
+#define z3660eth_push(va, len)	((void)0)
+#define z3660eth_inval(va, len)	((void)0)
+#define z3660eth_sync()		((void)0)
+#endif	/* Z3660ETH_MODULE */
 
 /*
  * Is hi a MAC_HI word the firmware can return?  It puts MAC bytes 0 and 1 in
@@ -1170,7 +1183,6 @@ mblk_t *mp;
      * delays no interrupt (see the ZS-05 comment).
      */
     Z3660ETH_WRV(info->regs, ZZ_ETH_TX, pktsize, rc);
-    z3660eth_last_rc = rc;
 
     info->tx_busy = 0;			/* release: volatile store, after the rc load */
 
@@ -1349,7 +1361,6 @@ int board_index;
 
     while (++loop <= 256) {
 	Z3660ETH_RDA(info->regs, ZZ_ETH_RX_ADDR, off);	/* ZS-05: W $194 -> R $1A4 rises */
-	z3660eth_last_off = off;
 
 	if (off < ZZ_RXBACKLOG_OFF ||
 	    off >= ZZ_RXBACKLOG_OFF + ZZ_RX_MAX_SLOTS * ZZ_FRAME_SIZE) {

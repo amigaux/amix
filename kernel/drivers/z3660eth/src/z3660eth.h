@@ -202,9 +202,6 @@ typedef struct ether_header ether_header_t;
 #define Z3660ETH_RX_PEEK	16
 
 #define blklen(bp)		((bp)->b_wptr - (bp)->b_rptr)
-#ifndef DELAY
-#define DELAY(x)		{ int _d = (x) * 100; while (_d--) ; }
-#endif
 
 /* ---- per-stream state (one per opened minor/SAP) ---- */
 typedef struct

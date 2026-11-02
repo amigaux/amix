@@ -197,30 +197,34 @@ spun on both and printed "interrupt self-test failed; polled" every time.
   every form arms the strobe ("ZS-05" above).
 
 **Kit result (2026-10-26, kernel/dlm 6ef133e kits, gcc-cross-amix 8949028).**
-`modcheck.py` passes on both lines (`ok (k30.1.0, boot, 12444 bytes)`, the
-same for k46.1.0). Imports, both lines: `OTHERQ RD WR allocb autocon bcmp bcopy
+`modcheck.py` passes on both lines (`ok (k30.1.0, boot, 12444 bytes)`, the same
+for k46.1.0). Imports, both lines: `OTHERQ RD WR allocb autocon bcmp bcopy
 bzero canput cmn_err flushq freemsg getmajor getminor getq if_attach
 intr_attach intr_detach lbolt makedevice memcpy mod_drvops panicstr putbq
-putnext putq qreply sptalloc sptfree timeout unlinkb untimeout`, all on DDI
-v1; one weak undefined, the wrapper's own `z3660eth_conf_data` (C3-1:
-resolves to 0). 34 COMMON symbols, each a checker warning: `ifnet` and
-`rawintrq` are tentative definitions in the stock `<net/if.h>` (in the static
-object too; the module gets private copies, which the driver never uses), the
-other 32 are the driver's own uninitialised counters and tunables, allocated
-by the core with the module. The static objects compiled against the kits'
-headers are the static objects of record: k30 `c2d6225e…`, k46 `142e2486…`
-(`make -C module static`); since ZS-05 (1.0.0-5) k30 `c9370806…`, k46
-`37185507…`; since the bprobe guard and the MAC_HI shape check
-(1.0.0-6) k30 `421d908c…`, k46 `6c6a9a07…`.
+putnext putq qreply sptalloc sptfree timeout unlinkb untimeout`, all on DDI v1;
+one weak undefined, the wrapper's own `z3660eth_conf_data` (C3-1: resolves to
+0). Its COMMON symbols are the driver's own uninitialised counters and
+tunables, allocated by the core with the module, and `ifnet` and `rawintrq`,
+tentative definitions in the stock `<net/if.h>` (in the static object too; the
+module gets private copies, which the driver never uses). At first every COMMON
+symbol was a checker warning; today's kits (f5678ba) warn only about those two,
+the names outside the module's own. The static objects compiled
+against the kits' headers are the static objects of record: k30 `c2d6225e…`,
+k46 `142e2486…` (`make -C module static`); since ZS-05 (1.0.0-5) k30
+`c9370806…`, k46 `37185507…`; since the bprobe guard and the MAC_HI shape check
+(1.0.0-6) k30 `421d908c…`, k46 `6c6a9a07…`; since 1.0.0-7 (two kmem-only
+diagnostics gone) k30 `04ec0a58…`, k46 `4a17c662…`.
 
-**In the module, the kmem tunables move.** `z3660eth_cache`,
-`z3660eth_ci_enforce`, `z3660eth_reprobe` and the counters are pokes and reads
-at a kernel address the static kernel's `nm` gives. In the module they live
-wherever the core placed the module at load; their addresses are in the
-module's symbol table the core builds at load (`getksym`, the kit's
+**In the module, the kmem tunables move.** `z3660eth_reprobe` and the counters
+are pokes and reads at a kernel address the static kernel's `nm` gives. In the
+module they live wherever the core placed the module at load; their addresses
+are in the module's symbol table the core builds at load (`getksym`, the kit's
 `sys/ksym.h`), not in the kernel's. How a tool on the box reads them is
-kernel/dlm's side (`modadmin`); until then the documented `/dev/kmem`
-pokes (BUILD.md section 8) apply to the static driver only.
+kernel/dlm's side (`modadmin`); until then the documented `/dev/kmem` pokes
+(BUILD.md section 8) apply to the static driver only. The 040/060 cache gate
+(`z3660eth_cache`, `z3660eth_ci_enforce` and their read-backs, BUILD.md section
+8) is not in the module at all since 1.0.0-7: nothing could set it there, so
+the module form compiles it out and its calls are no-ops.
 
 ## RX backpressure (2026-10-19, decided in the RX throughput investigation)
 
