@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — pkgmeta dirs reads only tracked prototypes (e4aa3cf)
+
+pkgmeta dirs reads only the prototypes git tracks, so make dist's kspace step no longer reads build output (after kernel-k46, kernel/port/build/cuts holds a cut's whole old tree with root bin man directories). In a git checkout dirs lists the tree with git ls-files and refuses when git cannot list it; a tree outside git, such as the tests' temporary trees, is still walked.
+
 ## 2026-11-02 — repro-selftest fixture: man directories root sys (122fe12)
 
 The repro-selftest fixture recipe declares /opt/amix/man and /opt/amix/man/1 as 0755 root sys. The shared-directory rule refused the old root bin, and the container selftests failed at pkgbuild.sh.
