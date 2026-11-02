@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — release-check's image mode tested on a real ufs (1aba914)
+
+tools/test-release-check reads two ufs disk image fixtures, a clean one and one with a planted shadow hash and private address, fetched as distfiles (amix-distfiles release-check-fixtures-1).
+
 ## 2026-11-02 — release step scans with the GCC 14 sysroot; release-allow; gcc14 dcfd12d (c85a9ee, 3709c53, 07db7ea)
 
 - make dist release scans with GCC 14's sysroot, so stock members' tables in .text are data as in the D4 gate.
