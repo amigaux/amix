@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — manpages.sh writes replaces.d (7cf3775)
+
+manpages.sh's amix_man_replaces writes replaces.d/<PKG> from MAN_REPLACES, refusing a page that is not staged.
+
 ## 2026-11-02 — pkg-smoke uses apkg's pkgadd; man directory attribute documented (59d87dc, 1a67187)
 
 - pkg-smoke's guest.sh uses /usr/apkg/bin/pkgadd when it is installed, else the stock pkgadd.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — MAN_REPLACES (7cf3775)
+
+The package.sh key MAN_REPLACES lists the stock binaries a package replaces as `<binary path> <sect> <page name>` triples. pkgmeta check counts such a binary as documented by its page and refuses malformed entries, a page the prototype lacks, or a missing replaces.d/<PKG>.
+
 ## 2026-11-02 — shared directories are 0755 root sys in every prototype (80570cc)
 
 pkgmeta check refuses a recipe whose prototype declares a shared directory (/opt, /opt/amix, /opt/amix/doc, /opt/amix/man and its sections, whatis.d, replaces.d) with other than 0755 root sys. The new pkgmeta dirs applies the same rule to the kernel-space prototypes; check-packages (CI) and make dist's kspace step run it.
