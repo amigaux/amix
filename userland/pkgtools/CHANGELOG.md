@@ -1,3 +1,7 @@
+## 2026-11-02 — scan060 names its code sections (49ef07a)
+
+scan060: every objdump call names its code section (-j), so an unstripped shared library's .debug_* at address 0 is no longer decoded as code (libamixrt.so.1's 2 false movepw hits); other verdicts unchanged.
+
 ## 2026-11-02 — scan060 skips data objects in .text; APKGENG 1.12.6 minted (5c00ef4, c84ded4, ba9d84b)
 
 - scan060: a sized data object in .text (values-Xa.o's _lib_version) is skipped as data and objdump -D runs per executable section, so the code after it is decoded; the old verdicts are unchanged and APKGENG's 7 false hits are gone.
