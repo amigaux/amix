@@ -390,7 +390,13 @@ refuse, with exit status 4 and a line naming the gate, when:
 1
 a kernel-space member's SHA-256 is not the one
 .B apkg
-recorded at install (hash);
+recorded at install, or no record names it (hash): the file was changed or
+placed by hand or by a bare
+.BR pkgadd ;
+the line names the package, and
+.B "apkg -f install"
+.I package
+puts it right;
 .TP
 2
 the members disagree on the kernel ABI, or a module needs a symbol that

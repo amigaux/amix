@@ -79,7 +79,7 @@ struct ks {
 	int nused;
 	struct ks_ext used[KS_MAXEXT];	/* every extent the control block references */
 	int gate;		/* after KS_EREFUSE: the gate of 40 §3.1, 0 for a rule */
-	char msg[320];		/* what happened, one line, for the caller */
+	char msg[400];		/* what happened, one line, for the caller */
 };
 
 #define KS_OK		0

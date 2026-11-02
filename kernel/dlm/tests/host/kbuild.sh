@@ -152,9 +152,11 @@ refused 6 $KB build --line 46 --bootdev zorro:0202:54 --rootdev zorro:0202:54
 sidecar 4; record			# one above the store's loader (version 3)
 refused 7 $KB build $FACTS
 sidecar; record
-# a kernel changed by hand after apkg installed it
+# a kernel changed by hand after apkg installed it: the line names the
+# package and the reinstall that puts it right
 flip $R/stand/k46/unix 1000
 refused 1 $KB build $FACTS
+grep -q "gate 1 (hash): /stand/k46/unix differs from what package kernel-kd060a installed: changed by hand or by a bare pkgadd; reinstall it with apkg (apkg -f install kernel-kd060a)\$" $T/out
 sidecar; record
 # no record at all: placed by hand or by a bare pkgadd
 mv $R/var/apkg/kpkg/kernel-kd060a $T/rec
@@ -702,6 +704,17 @@ modpkg cdfs2 class=boot match=always fs=cdfs
 refused 3 $KB build $RFACTS
 grep -q "modules cdfs and cdfs2 are both filesystem type cdfs" $T/out
 rm -f "${MD:?}"/cdfs2 "${R:?}"/var/apkg/kpkg/mod-cdfs2
+# gate 1's "differs" line at its longest (a 40-character module file, a
+# 60-character package name, the longest a record name line gives) keeps
+# the whole reinstall command
+ln=llllllllllllllllllllllllllllllllllllllll
+pn=pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp
+modpkg $ln class=boot match=always
+sed -i "s/^name mod-$ln\$/name $pn/" $R/var/apkg/kpkg/mod-$ln
+flip $MD/$ln 64
+refused 1 $KB build $RFACTS
+grep -q "gate 1 (hash): /etc/conf/mod.d/$ln differs from what package $pn installed: changed by hand or by a bare pkgadd; reinstall it with apkg (apkg -f install $pn)\$" $T/out
+rm -f "${MD:?}/$ln" "${R:?}/var/apkg/kpkg/mod-$ln"
 sed -i 's/^kabi=k46.1.4$/kabi=k46.1.0/' $R/stand/k46/kabi
 record; sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 # gate 4: the whole root set against an arena that holds the directory

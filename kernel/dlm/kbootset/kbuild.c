@@ -51,7 +51,7 @@ refuse(struct ks *k, int gate, const char *msg)
 
 	k->gate = gate;
 	if (gate)
-		sprintf(k->msg, "gate %d (%s): %.260s", gate, name[gate], msg);
+		sprintf(k->msg, "gate %d (%s): %.360s", gate, name[gate], msg);
 	else
 		sprintf(k->msg, "%.300s", msg);
 	return KS_EREFUSE;
@@ -199,6 +199,7 @@ sidecar(struct ks *k, const char *root, int line, struct kb_kernel *kk)
 struct kb_rec {
 	ax_u32 size;
 	char sha256[65], kabi[24], pin[48], verified[8], name[64], other[64];
+	char pkg[64];		/* the name line: the catalog name apkg installs by (C2-2 §2) */
 };
 
 static int
@@ -228,7 +229,9 @@ record(const char *root, const char *path, struct kb_rec *r)
 			char *fp, *fs, *fh;
 
 			line[strcspn(line, "\n")] = 0;
-			if (!strncmp(line, "kabi ", 5))
+			if (!strncmp(line, "name ", 5))
+				sprintf(t.pkg, "%.60s", line + 5);
+			else if (!strncmp(line, "kabi ", 5))
 				sprintf(t.kabi, "%.23s", line + 5);
 			else if (!strncmp(line, "pin ", 4))
 				sprintf(t.pin, "%.47s", line + 4);
@@ -316,7 +319,13 @@ hashed(struct ks *k, const char *root, const char *path, const ax_u8 *data, ax_u
 		return refuse(k, 1, m);
 	}
 	if (r->size != len || strcmp(r->sha256, sha)) {
-		sprintf(m, "%s differs from what package %s installed", path, r->name);
+		/* the package by its catalog name, the one apkg installs by; the
+		 * record's file name (its pkginst) when it has no name line.  At
+		 * most 79 + 60 + 60 + 111 = 310 bytes (path[80], %.60s) */
+		const char *pk = r->pkg[0] ? r->pkg : r->name;
+
+		sprintf(m, "%s differs from what package %s installed: changed by hand or by a bare pkgadd; "
+		    "reinstall it with apkg (apkg -f install %s)", path, pk, pk);
 		return refuse(k, 1, m);
 	}
 	/* the signature hook (60 §4): require-signature does not exist in 1.1,
