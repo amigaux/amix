@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — spec 20 §6 and C4-2 v9: the Gayle gate walks the Kickstart's resident tags (8203245)
+
+The Gayle IDE's gate walks the Kickstart's resident tags; card.resource means the A1200 row (0xDA0000, ALTSTAT 0xDA101A, `A1200 IDE`), and the `board` parameter (0 auto, 1 A4000, 2 A1200, -1 never probe) overrides it.
+
 ## 2026-11-02 — C2-4 §18: the A3000 WD limit is the passthrough's only (028c27a)
 
 The A3000 WD's first-command hang is the passthrough's only (gsioctl queues at level 0; the block path at level 2 is safe), and kernels whose sdqueue raises to level 2 (k30 -70, k46 -60) are not affected.
