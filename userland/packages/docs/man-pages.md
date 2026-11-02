@@ -33,7 +33,11 @@ amix_man_alias bunzip2 1 bzip2        # an alias
 amix_man_whatis                       # whatis.d/<PKG> from each page's NAME section, last
 ```
 
-and the prototype lists every page, alias and the fragment.
+and the prototype lists every page, alias and the fragment. A package that replaces a stock
+binary sets `MAN_REPLACES` in `package.sh`, `<binary path> <sect> <page name>` triples
+(`/usr/sbin/tar 1 heirloom-tar`), and its hook calls `amix_man_replaces` after the pages, which
+writes `/opt/amix/man/replaces.d/<PKG>`: the table amix-base's `man` reads to show that page for
+the binary.
 
 ## Why this shape (measured on the stock system, 2026-10-30)
 

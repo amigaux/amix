@@ -112,7 +112,9 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   the one already registered, and under apkg the last package installed sets
   them. `dirs` reads a prototype file, or every `prototype*` file in a `pkg/`
   directory of a tree (not under `tests/`): the kernel-space recipes, whose
-  prototypes are not `package.sh` recipes. `check-packages` runs it on
+  prototypes are not `package.sh` recipes. In a git checkout it reads only
+  tracked files, never build output (a cut's whole old tree under
+  `kernel/port/build/cuts`), and refuses when git cannot list them. `check-packages` runs it on
   `kernel/`, and so does make dist's kspace step.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one

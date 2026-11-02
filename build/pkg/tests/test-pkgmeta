@@ -596,6 +596,33 @@ try:
     refused("dirs refuses a kernel-space prototype's shared directory",
             ("dirs", kt), "prototype.k46: prototype line 8: d /opt/amix/man/whatis.d 0777 root sys")
 
+    # dirs in a git work tree reads only tracked prototypes: a cut's whole old
+    # tree under kernel/port/build/cuts (gitignored) and an untracked file
+    # are build output, not recipes
+    gt = os.path.join(tmp, "gtree")
+    gk = os.path.join(gt, "kernel")
+    write(os.path.join(gk, "drivers", "x", "pkg", "prototype"), "i pkginfo\n" + SHARED)
+    write(os.path.join(gk, "port", ".gitignore"), "build/\n")
+    old_cut = os.path.join(gk, "port", "build", "cuts", "68060-1", "userland",
+                           "base", "pkg", "amix-base", "prototype")
+    write(old_cut, "d none /opt/amix/man 0755 root bin\n")
+    write(os.path.join(gk, "modules", "y", "pkg", "prototype"),
+          "d none /opt/amix/man/1 0755 root bin\n")
+    g = lambda *a: subprocess.run(["git", "-C", gt] + list(a), stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT).returncode
+    g("init", "-q")
+    g("add", "kernel/drivers/x/pkg/prototype", "kernel/port/.gitignore")
+    rc, out, err = run("dirs", gk)
+    check("dirs skips a gitignored cut tree and an untracked prototype",
+          rc == 0 and "1 prototype(s)" in out, err or out)
+    g("add", "-f", os.path.relpath(old_cut, gt))
+    refused("dirs refuses the same prototype once tracked (control)", ("dirs", gk),
+            "amix-base/prototype: prototype line 1: d /opt/amix/man 0755 root bin")
+    os.rename(os.path.join(gt, ".git"), os.path.join(gt, ".git-off"))
+    write(os.path.join(gt, ".git"), "gitdir: /nonexistent\n")
+    refused("dirs refuses a checkout git cannot read, not walking it whole",
+            ("dirs", gk), "git ls-files failed")
+
     # --- check-packages: CI's check of userland/packages --------------------------------
     def check_packages(root):
         p = subprocess.run(["sh", CHECK_PACKAGES, root], stdout=subprocess.PIPE,

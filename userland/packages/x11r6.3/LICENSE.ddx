@@ -1,6 +1,34 @@
-MIT License
+The Amiga X server of the x11r63 package (Xzz9000): who holds which part
 
-Copyright (c) 2026 isoriano1968
+The server's hw/amix tree comes from patch 00, Ignacio Soriano's Amiga X
+server, with the package's patches 01 onwards on top.  Its parts, and the
+notice that covers each:
+
+1. The rtg/ layer and the ZZ9000 driver (hw/amix/rtg) are based on Antti
+   Sokero's xrtg-amix (its rtg/ layer and VA2000 driver), MIT:
+
+       Copyright (c) 2025-2026 Antti Sokero
+
+2. The ZZ9000 version of that layer and driver, mfbimage.c's depth-1 image
+   code, and the rest of patch 00 that is not listed under 1 or 3, MIT:
+
+       Copyright (c) 2026 isoriano1968
+
+3. The Z3660 and Amix changes: those patch 00 carries from amix-z3660rtg
+   (the Z3660 modes, the raster-op and window copy fixes, fills and copies
+   on the card's blitter, the monitor switch, the keyboard back to the
+   console when the server ends), the package's patches 01 onwards, and
+   zz9000screen.c, the package's own, MIT:
+
+       Copyright (c) 2026 Jussi Alanärä
+
+4. The input and screen framework of hw/amix (amixInit.c, amixIo.c,
+   amixKbd.c, amixMouse.c, amix.h) comes from the 1987 Sun X server through
+   Commodore's Amix X server and keeps the notices of the Regents of the
+   University of California and of Sun Microsystems in each file; COPYRIGHT
+   in this directory lists them with the rest of X11R6.3's notices.
+
+The holders of 1, 2 and 3 each grant their part under the MIT License:
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

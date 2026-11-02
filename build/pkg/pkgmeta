@@ -178,17 +178,43 @@ def shared_dir_problems(proto):
     return out
 
 
+def tracked_files(tree):
+    """The files under TREE that git tracks, relative to TREE, or None when
+    TREE is in no git checkout. Build output (a cut's whole old tree under
+    kernel/port/build/cuts) is untracked and so never read; in a checkout git
+    cannot read, the walk is refused rather than taken over the whole tree."""
+    d = os.path.abspath(tree)
+    while not os.path.exists(os.path.join(d, ".git")):
+        if os.path.dirname(d) == d:
+            return None
+        d = os.path.dirname(d)
+    try:
+        p = subprocess.run(["git", "-C", tree, "ls-files", "-z"],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except OSError as e:
+        raise Refused("%s: git ls-files: %s" % (tree, e))
+    if p.returncode != 0:
+        raise Refused("%s: git ls-files failed: %s" % (
+            tree, p.stderr.decode("utf-8", "replace").strip()))
+    return [f for f in p.stdout.decode("utf-8", "replace").split("\0") if f]
+
+
 def kspace_prototypes(tree):
     """The prototype files under TREE: prototype or prototype.<x> in a pkg/
-    directory or below one, not under tests/."""
+    directory or below one, not under tests/; in a git work tree only the
+    tracked ones."""
+    tracked = tracked_files(tree)
+    if tracked is None:
+        tracked = [os.path.relpath(os.path.join(root, f), tree)
+                   for root, dirs, files in os.walk(tree) for f in files]
     out = []
-    for root, dirs, files in os.walk(tree):
-        dirs[:] = sorted(d for d in dirs if d != "tests" and not d.startswith("."))
-        rel = os.path.relpath(root, tree).split(os.sep)
-        if "pkg" not in rel:
-            continue
-        out += [os.path.join(root, f) for f in sorted(files)
-                if re.match(r"^prototype(\.[\w-]+)?$", f)]
+    for rel in sorted(tracked):
+        d = rel.replace(os.sep, "/").split("/")
+        if ("pkg" in d[:-1] and "tests" not in d[:-1]
+                and not any(x.startswith(".") for x in d[:-1])
+                and re.match(r"^prototype(\.[\w-]+)?$", d[-1])
+                and os.path.isfile(os.path.join(tree, rel))):
+            out.append(os.path.join(tree, rel))
     return out
 
 

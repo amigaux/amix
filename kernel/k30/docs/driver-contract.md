@@ -119,6 +119,15 @@ A SCSI driver may call **only** these symbols exported by the kernel / generated
 Needing a symbol outside this set is a **kernel/k30 change**, not something a driver patches in
 unilaterally — open it against the hub so the ABI stays a known surface.
 
+**What a driver can address directly.** The 68030 kernel maps the low 1 GiB (`0x00000000`–`0x3FFFFFFF`)
+one-to-one through a single early-termination page descriptor in entry 0 of its 4-entry MMU root table
+(`tc_on` = `0x82B02D60` in `amiga/ml/ttrap.s`: 2 KiB pages, 2 root index bits, so each entry covers 1 GiB). The
+transparent-translation registers are off (E=0): `ttrap.s` defines `tt0_on` and `tt1_on`, but nothing in the
+kernel refers to them, and a running kernel reads both as disabled (grimoire-amix,
+`docs/drivers/zorro-autoconfig.md#the-identity-map`). So a Zorro II board, or a board placed below `0x40000000`,
+is dereferenced at its `autocon()` base, while a Zorro III board at or above `VSECT1` (`0x40000000`, where the
+page-mapped kernel space begins) must be mapped with `sptalloc` before any register access.
+
 ## Canonical repo shape
 
 ### SCSI driver repo

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-02 — make dist lists only tracked module and driver directories (d818fd4)
+
+make dist lists module and driver directories by the files git tracks there (git ls-files). A leftover untracked directory under kernel/drivers or kernel/modules, such as a removed driver's gitignored build output, is no longer a recipe: the kspace step does not name it or exit 3 over it, and the modules step neither builds it nor takes its objects. Rolled bytes are unchanged.
+
+## 2026-11-02 — pkgmeta dirs reads only tracked prototypes (e4aa3cf)
+
+pkgmeta dirs reads only the prototypes git tracks, so make dist's kspace step no longer reads build output (after kernel-k46, kernel/port/build/cuts holds a cut's whole old tree with root bin man directories). In a git checkout dirs lists the tree with git ls-files and refuses when git cannot list it; a tree outside git, such as the tests' temporary trees, is still walked.
+
+## 2026-11-02 — repro-selftest fixture: man directories root sys (122fe12)
+
+The repro-selftest fixture recipe declares /opt/amix/man and /opt/amix/man/1 as 0755 root sys. The shared-directory rule refused the old root bin, and the container selftests failed at pkgbuild.sh.
+
 ## 2026-11-02 — MAN_REPLACES (7cf3775)
 
 The package.sh key MAN_REPLACES lists the stock binaries a package replaces as `<binary path> <sect> <page name>` triples. pkgmeta check counts such a binary as documented by its page and refuses malformed entries, a page the prototype lacks, or a missing replaces.d/<PKG>.

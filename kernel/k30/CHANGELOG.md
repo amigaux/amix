@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — driver contract: how the 68030 kernel maps the low 1 GiB (49d6c51)
+
+The driver contract says how the 68030 kernel maps the low 1 GiB (one early-termination descriptor in the 4-entry root table; the TT registers off) and that a Zorro III board at or above VSECT1 needs sptalloc.
+
 ## 2026-11-01 — the sidecar carries the kbootset floor (77971fb)
 
 The sidecar copies the module core's core/kbootset-min as kbootset-min= (C2-3 version 10), refusing anything but one line in the kbootset version form; recorded cuts keep their sidecars.

@@ -68,13 +68,10 @@ stage() {
 	cp tar/NOTES "$d/NOTES"
 	cp "$HERE/../LICENSE" "$d/LICENSE.amix"
 	chmod 0644 "$d"/*
-	# the manual page, heirloom-tar(1); replaces.d/<PKG> tells man(1) that
-	# it is the page of /usr/sbin/tar (README.md, Manual page)
+	# the manual page, heirloom-tar(1); replaces.d/<PKG>, from MAN_REPLACES,
+	# tells man(1) that it is the page of /usr/sbin/tar (README.md, Manual page)
 	. "$HERE/../tools/manpages.sh"
 	amix_man "$HERE/man/heirloom-tar.1" 1
 	amix_man_whatis
-	mkdir -p "$DEST$AMIX_MANDIR/replaces.d"
-	{ echo "# binary section page: the page man(1) shows for the binary"
-	  echo "/usr/sbin/tar 1 heirloom-tar"; } > "$DEST$AMIX_MANDIR/replaces.d/$PKG"
-	chmod 0644 "$DEST$AMIX_MANDIR/replaces.d/$PKG"
+	amix_man_replaces
 }

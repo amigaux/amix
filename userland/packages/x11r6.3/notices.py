@@ -24,10 +24,12 @@ changes for Amix.  Its parts and their terms:
 - the package's own changes and files (the recipe, patches 01 onwards):
   MIT, see LICENSE in this directory;
 - the Amiga X server of patch 00 (hw/amix with its rtg/zz9000 driver, and
-  the mfbimage.c change), as published by Ignacio Soriano under MIT: see
-  LICENSE.ddx.  Its hw/amix input code derives from the 1987 Sun X server
-  through Commodore's Amix server and carries their notices, listed below;
-  the package's README says who wrote which part;
+  the mfbimage.c change), as published by Ignacio Soriano under MIT: its
+  rtg/ layer and ZZ9000 driver are based on Antti Sokero's xrtg-amix (MIT),
+  and it carries Z3660 changes from amix-z3660rtg (MIT); LICENSE.ddx has
+  those notices and says which part each covers.  Its hw/amix input code
+  derives from the 1987 Sun X server through Commodore's Amix server and
+  carries their notices, listed below;
 - X11R6.3 itself: the notices below, from every source file compiled into
   the package's programs and libraries.  The installed headers carry their
   own notices.  The X Consortium's is the first.

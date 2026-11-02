@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-02 — x11r63 6.3-6: X built with fork, not vfork (c3abeff, 443fe46)
+
+x11r63 6.3-6 builds X with fork instead of vfork (amix.cf HasVFork NO, patch 27). xinit's vfork child rewrote the parent's libc signal table, so xinit died with a Bus Error when the server became ready; X now starts through xinit/xstart on metal (A4000D 060). Xzz9000 is unchanged; xinit dab346c0…; package md5 2ed3a8f3.
+
+## 2026-11-02 — x11r63 6.3-5: credits for the server's parts (9c7315d, a4aa387, 7889823)
+
+x11r63 6.3-5 credits the server's parts: LICENSE.ddx carries Antti Sokero's MIT notice for the rtg/ layer and the ZZ9000 driver (based on his xrtg-amix), one section per part, and the rtg/ sources gain provenance headers (patch 26). Xzz9000 is byte-identical to 6.3-4 (sha256 20d4c654…); package md5 0b03c5a8. man-pages.md documents MAN_REPLACES.
+
+## 2026-11-02 — heirloom-tar: replaces.d from MAN_REPLACES (ee8fb31)
+
+replaces.d/heirtar is written from MAN_REPLACES ("/usr/sbin/tar 1 heirloom-tar") by amix_man_replaces; pkgmeta counts /usr/sbin/tar as documented, and the package bytes are unchanged (heirtar-070715-1, md5 d27bb2c4).
+
 ## 2026-11-02 — manpages.sh writes replaces.d (7cf3775)
 
 manpages.sh's amix_man_replaces writes replaces.d/<PKG> from MAN_REPLACES, refusing a page that is not staged.

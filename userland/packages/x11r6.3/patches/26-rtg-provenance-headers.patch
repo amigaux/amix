@@ -1,0 +1,113 @@
+Ours.  A provenance comment at the top of each rtg/ source (rtg.h,
+rtgInit.c, zz9000.h, zz9000draw.c, zz9000hw.c, zz9000screen.c), which had
+none: what the file is, that the rtg/ layer and the ZZ9000 driver are based
+on Antti Sokero's xrtg-amix (MIT), the ZZ9000 version Ignacio Soriano's
+(MIT), the Z3660 and Amix changes ours (MIT); zz9000screen.c is the
+package's own.  Comments only: the compiled server is unchanged.
+
+--- a/programs/Xserver/hw/amix/rtg/rtg.h
++++ b/programs/Xserver/hw/amix/rtg/rtg.h
+@@ -1,3 +1,14 @@
++/*
++ * rtg.h -- the RTG layer's interface.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
+ #ifndef AMIX_RTG_H
+ #define AMIX_RTG_H
+ /*
+--- a/programs/Xserver/hw/amix/rtg/rtgInit.c
++++ b/programs/Xserver/hw/amix/rtg/rtgInit.c
+@@ -1,4 +1,15 @@
+ /*
++ * rtgInit.c -- the RTG layer: probe, screen creation, input, monitor switch.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
+ ** rtgInit.c - RTG DDX entry points for xamix-rtg.
+ **
+ ** Provides rtgProbe() and rtgCreate() which plug into amixFbData[] in
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
+@@ -1,3 +1,14 @@
++/*
++ * zz9000.h -- the ZZ9000/Z3660 driver's interface.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
+ #ifndef ZZ9000_H
+ #define ZZ9000_H
+ 
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
+@@ -1,4 +1,15 @@
+ /*
++ * zz9000draw.c -- the ZZ9000/Z3660 blitter queue and CPU drawing helpers.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
+ ** zz9000draw.c - the ZZ9000/Z3660 card's blitter and CPU helpers for the
+ ** cfb16 screen (zz9000screen.c): the blitter queue, CPU fills and copies
+ ** for what the blitter does not take, the ordered copy of a box list, and
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
+@@ -1,4 +1,15 @@
+ /*
++ * zz9000hw.c -- ZZ9000/Z3660 hardware: mode, framebuffer map, monitor.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
+ ** zz9000hw.c - MNT ZZ9000 hardware init/close for xamix-rtg.
+ */
+ 
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
+@@ -1,4 +1,15 @@
+ /*
++ * zz9000screen.c -- the ZZ9000/Z3660 screen on X's cfb16 code.
++ *
++ * Written for the x11r63 package: MIT, Copyright (c) 2026 Jussi Alanärä.
++ * It replaces the screen code of Ignacio Soriano's ZZ9000 driver (MIT,
++ * Copyright (c) 2026 isoriano1968), which was based on Antti Sokero's
++ * xrtg-amix (its rtg/ layer and VA2000 driver; MIT, Copyright (c) 2025-2026
++ * Antti Sokero), and keeps a few of its lines.  The notices and licence
++ * texts are in the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
+ ** zz9000screen.c -- the ZZ9000/Z3660 RTG screen: X's own 16-bit framebuffer
+ ** code (cfb16) on the card's framebuffer, with the card's blitter for large
+ ** copies and fills.
