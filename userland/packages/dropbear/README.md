@@ -327,3 +327,10 @@ hardware's, and only compare with each other):
 | mlkem768x25519 + aes128-ctr | 7.8 | 11.5 | 11.6 |
 | curve25519 + chacha20-poly1305 | 7.6 | 10.9 | 11.2 |
 | curve25519 + aes128-ctr | 7.6 | 11.0 | 11.8 |
+
+**Hardware, 2026-11-02.** A4000, 68060 at 80 MHz, the 1.1 system with the
+random module: installed with apkg's pkgadd, the boot script
+(`sh /etc/init.d/dropbear start`) made the host key and started the server,
+and password logins work. From OpenSSH on the host: the banner in 0.13 s,
+key exchange about 5 s (5.4 s mlkem768x25519, 5.2 s curve25519, with
+chacha20-poly1305 and an ed25519 host key), login plus one command 5.6 s.
