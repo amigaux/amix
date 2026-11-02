@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — x11r63 6.3-5: credits for the server's parts (9c7315d, a4aa387, 7889823)
+
+x11r63 6.3-5 credits the server's parts: LICENSE.ddx carries Antti Sokero's MIT notice for the rtg/ layer and the ZZ9000 driver (based on his xrtg-amix), one section per part, and the rtg/ sources gain provenance headers (patch 26). Xzz9000 is byte-identical to 6.3-4 (sha256 20d4c654…); package md5 0b03c5a8. man-pages.md documents MAN_REPLACES.
+
 ## 2026-11-02 — heirloom-tar: replaces.d from MAN_REPLACES (ee8fb31)
 
 replaces.d/heirtar is written from MAN_REPLACES ("/usr/sbin/tar 1 heirloom-tar") by amix_man_replaces; pkgmeta counts /usr/sbin/tar as documented, and the package bytes are unchanged (heirtar-070715-1, md5 d27bb2c4).
