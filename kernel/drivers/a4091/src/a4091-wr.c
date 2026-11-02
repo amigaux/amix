@@ -1406,8 +1406,13 @@ char	*params;
  *        a valid cold-start ROM tag named exactly "NCR scsi.device".  exec runs
  *        every cold-start tag before the strap, so its presence means the chip
  *        was initialised.  The parameter declared overrides it: -1 (default)
- *        the scan decides, 0 never touch, 1 touch without the scan.  Not
+ *        the scan decides, 0 never touch, 1 touch without the tag.  Not
  *        declared: ENXIO, silent, nothing under $DD0000 touched;
+ *   GM   the machine: the same scan looks for a "card.resource" ROM tag, which
+ *        every A1200 and A600 Kickstart has and no A3000, A4000 or A4000T one
+ *        does (checked over every image in our ROM register).  Found: ENXIO,
+ *        silent, before any $DD access and whatever declared says, since on an
+ *        A1200 $DD0000 is not an A4000T's 53C710 (a4kt_gate 5);
  *   G0   VPOSR: AGA (keeps the A3000's WD33C93 untouched);
  *   G1   map the chip page and the DIP page; a first-touch bprobe of ISTAT;
  *   G2   read-only fingerprint: ISTAT's reserved bits clear and not 0xff,
@@ -1434,10 +1439,11 @@ extern int	bprobe();
 extern void	sptfree();	/* (va, npages, flag): flag 1 = segkmem_mapout */
 #endif
 
-ulong	a4kt_gate;	/* kmem-readable: the gate that said no (1 G-D, 2 G0, 3 G1, 4 G2) */
+ulong	a4kt_gate;	/* kmem-readable: the gate that said no (1 G-D, 2 G0, 3 G1, 4 G2, 5 GM) */
 uchar	a4kt_rev;	/* kmem-readable: CTEST8's revision nibble at attach */
 long	a4kt_declared;	/* kmem-readable: the declared parameter as _load took it */
 ulong	a4kt_tagoff;	/* kmem-readable: the NCR tag's offset in the Kickstart, 0 none */
+ulong	a4kt_cardoff;	/* kmem-readable: the card.resource tag's offset, 0 none */
 
 /* declared=<-1|0|1> from _load's "name=value ..." string; -1 when absent */
 static long
@@ -1475,17 +1481,44 @@ char	*params;
 #define	A4KT_BE32(q)	((ulong)(q)[0] << 24 | (ulong)(q)[1] << 16 | (ulong)(q)[2] << 8 | (ulong)(q)[3])
 
 /*
- * G-D's scan: map the Kickstart read-only and look for a valid ROM tag -- the
- * word 0x4AFC at an even offset, rt_MatchTag its own address, RTF_COLDSTART,
- * rt_Name inside the image and exactly "NCR scsi.device".  1 = found.
+ * The scan for G-D and GM: map the Kickstart read-only and look at every valid
+ * ROM tag -- the word 0x4AFC at an even offset, rt_MatchTag its own address,
+ * rt_Name inside the image.  A4KT_T_NCR: a cold-start tag named exactly "NCR
+ * scsi.device"; A4KT_T_CARD: a tag named exactly "card.resource" (any flags);
+ * A4KT_T_NOMAP: the Kickstart could not be mapped.
  */
+#define	A4KT_T_NCR	1
+#define	A4KT_T_CARD	2
+#define	A4KT_T_NOMAP	4
+
+static char	a4kt_ncrname[] = "NCR scsi.device";
+static char	a4kt_cardname[] = "card.resource";
+
+/* 1 = the image holds the NUL-terminated name at ROM address nm */
 static int
-a4kt_romtag()
+a4kt_named( rom, nm, want, len)
+volatile uchar	*rom;
+ulong	nm;
+char	*want;
+int	len;
 {
-	static char	want[] = "NCR scsi.device";
-	volatile uchar	*rom, *t, *n;
+	volatile uchar	*n;
+	int	i;
+
+	if (nm < A4KT_ROM || nm + len > A4KT_ROM + A4KT_ROMLEN)
+		return 0;
+	n = rom + (nm - A4KT_ROM);
+	for (i = 0; i < len && n[i] == (uchar)want[i]; ++i)
+		;
+	return i == len;
+}
+
+static int
+a4kt_romtags()
+{
+	volatile uchar	*rom, *t;
 	ulong	off, nm;
-	int	i, found;
+	int	found;
 
 #ifdef	A4091_KVA
 	rom = (volatile uchar *)dev_kvmap( A4KT_ROM, A4KT_ROMLEN, A4KT_CM_ROM, A4091_NOSLEEP);
@@ -1495,24 +1528,26 @@ a4kt_romtag()
 #endif
 	if (rom == 0) {
 		printf( "a4kt710: cannot map the Kickstart at 0x%x\n", (int)A4KT_ROM);
-		return 0;
+		return A4KT_T_NOMAP;
 	}
 	found = 0;
-	for (off = 0; !found && off + RT_SIZE <= A4KT_ROMLEN; off += 2) {
+	for (off = 0; found != (A4KT_T_NCR | A4KT_T_CARD) && off + RT_SIZE <= A4KT_ROMLEN;
+	    off += 2) {
 		t = rom + off;
 		if (t[0] != (RTC_MATCHWORD >> 8) || t[1] != (RTC_MATCHWORD & 0xff))
 			continue;
-		if (A4KT_BE32(t + 2) != A4KT_ROM + off || !(t[10] & RTF_COLDSTART))
+		if (A4KT_BE32(t + 2) != A4KT_ROM + off)
 			continue;
 		nm = A4KT_BE32(t + 14);
-		if (nm < A4KT_ROM || nm + sizeof want > A4KT_ROM + A4KT_ROMLEN)
-			continue;
-		n = rom + (nm - A4KT_ROM);
-		for (i = 0; i < sizeof want && n[i] == (uchar)want[i]; ++i)
-			;
-		if (i == sizeof want) {
-			found = 1;
+		if (!(found & A4KT_T_NCR) && (t[10] & RTF_COLDSTART)
+		    && a4kt_named( rom, nm, a4kt_ncrname, (int)sizeof a4kt_ncrname)) {
+			found |= A4KT_T_NCR;
 			a4kt_tagoff = off;
+		}
+		if (!(found & A4KT_T_CARD)
+		    && a4kt_named( rom, nm, a4kt_cardname, (int)sizeof a4kt_cardname)) {
+			found |= A4KT_T_CARD;
+			a4kt_cardoff = off;
 		}
 	}
 #ifdef	A4091_KVA
@@ -1565,14 +1600,21 @@ int
 a4kt710_load( params)
 char	*params;
 {
-	int	e;
+	int	e, tags;
 	ulong	pa;
 	struct dma_rec	*r;
 
 	a4kt_gate = 1;
 	a4kt_declared = a4kt_param( params);
-	if (a4kt_declared == 0 || (a4kt_declared != 1 && !a4kt_romtag()))
+	if (a4kt_declared == 0)
 		return ENXIO;		/* G-D: nothing under $DD0000 is touched */
+	tags = a4kt_romtags();
+	if (tags & A4KT_T_CARD) {
+		a4kt_gate = 5;
+		return ENXIO;		/* GM: an A1200 or A600, never $DD0000 */
+	}
+	if (a4kt_declared != 1 && !(tags & A4KT_T_NCR))
+		return ENXIO;		/* G-D */
 	a4kt_gate = 2;
 	if (!A4KT_IS_AGA( A4KT_VPOSR()))
 		return ENXIO;

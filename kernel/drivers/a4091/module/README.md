@@ -222,7 +222,7 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Item | Content |
 |---|---|
 | `.moddata` | `name=a4kt710`, `class=root`, `match=mobo:a4000t-710`, `rank=mobo`, `unload=never`, `param declared:int:-1:-1:1` |
-| Gate (C4-2 v6 §8.1) | the running Kickstart's `NCR scsi.device` cold-start ROM tag (or `declared=1`), then VPOSR AGA, then a read-only `bprobe` of ISTAT and the fingerprint. Any no: `ENXIO`, silent, and nothing under `$DD0000` touched |
+| Gate (C4-2 v6 §8.1) | no `card.resource` ROM tag in the Kickstart (an A1200 or A600 has one; refused even with `declared=1`), the running Kickstart's `NCR scsi.device` cold-start ROM tag (or `declared=1`), then VPOSR AGA, then a read-only `bprobe` of ISTAT and the fingerprint. Any no: `ENXIO`, silent, and nothing under `$DD0000` touched |
 | Chip | `$DD0000`, registers at +0x40 written directly, DCNTL `0x20` (EA), host ID from the DIP bank at +0x3000, SIEN/DIEN 0 at attach; one controller, c 0 |
 | sd | `sd_register(a4091queue, 0, 0xDD0000, "A4000T onboard SCSI", 3)` |
 | Everything else | the A4091 module's: the queue path, the `dma_alloc` area, C4-5, the bounce, the bus reset, `_halt` |

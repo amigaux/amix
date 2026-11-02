@@ -44,7 +44,7 @@ make -C test/host clean
 ## The a4kt710 arms
 
 `modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
-a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 13/13 cases each:
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 18/18 cases each:
 
 | Case | What it shows |
 |---|---|
@@ -52,7 +52,9 @@ a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`
 | `declared=0` | `ENXIO` with the tag present; the Kickstart is not even read |
 | not AGA | `ENXIO`, zero accesses (G0) |
 | the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3 |
-| `declared=1` | registers without reading the Kickstart |
+| `declared=1` | registers without the NCR tag; the Kickstart is read once, for `card.resource` |
+| an A1200 Kickstart (`card.resource`), with the default, with `declared=1`, and together with the NCR tag | `ENXIO`, zero accesses under `$DD0000`, no DMA area, `a4kt_gate` 5, the tag's offset in `a4kt_cardoff`; the Kickstart mapped once and unmapped |
+| `card.resource` as a name only, or a tag whose `rt_MatchTag` is wrong | not a tag: the A4000T registers, `a4kt_cardoff` 0 |
 | no chip / the fingerprint fails | `ENXIO`, the area given back (and the pages unmapped) |
 | host ID and halt | host ID 5 from the DIP bank; `_halt` writes DCNTL `0x20` and SCID `1 << 5` directly |
 | module: no U77, no dma_off | The static arm's knobs and last-command globals are absent (weak references); the record's `off` is 0; on k46 the attach line is `a4kt710: board 0 at 0xdd0000` |
@@ -63,6 +65,7 @@ so a launch's longword writes would overwrite the mock's "command done" state.
 The mutation check: each of these makes a case fail on both lines.
 - dropping the tag scan (the parameter alone);
 - dropping the `RTF_COLDSTART` or the `rt_MatchTag` check;
+- dropping GM, or letting `declared=1` skip it (the 1.0.0-3 driver fails the A1200 and `declared=1` cases);
 - dropping G0;
 - keeping the write shadow;
 - rank 2;
