@@ -1,3 +1,7 @@
+## 2026-11-02 — apkg 0.3.6: a reinstall passes instance=overwrite; APKG 0.3.6 minted (a687496, 7e57c29)
+
+`apkg -f install` of an installed package passes instance=overwrite at the same version too (the engine quit with exit 4 under instance=quit), as does a kernel-space install over files a bare pkgadd laid; a test against the real host engine; apkg.1: kernel-space packages install only through apkg, with the remedy. APKG 0.3.6 minted, md5 f87c02e0, staged, not published.
+
 ## 2026-11-01 — APKG 0.3.5 minted (bfbf1f7)
 
 make dist in the build container, md5 3d2f87375a3d2bd49e0668addfb1bf91, sha256 d0005d59…, 253440 B, the same bytes from a git archive copy; staged, not published.
