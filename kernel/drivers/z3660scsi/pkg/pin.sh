@@ -23,19 +23,21 @@
 # cc=gcc-2.7.2.3-33ebadc, which kernels built with that pin require.
 # 1.0.0-6 (2026-11-02): the module's 1.0.0-3, the fixed window gated before
 # its first write (no access over a boot memory region; a read-only bprobe).
+# 1.0.0-7 (2026-11-02): the module's 1.0.0-4, an unmapped unit answers
+# INQUIRY as no device (peripheral qualifier 3, type 0x1F).
 
 KM_NAME=z3660scsi
 KM_SHORT=zscsi
 KM_REPO=kernel/drivers/z3660scsi
-KM_VERSION=1.0.0-3
-KM_PKG_VERSION=1.0.0-6
+KM_VERSION=1.0.0-4
+KM_PKG_VERSION=1.0.0-7
 
-KM_K30_SHA=3ae98bb26d0cc7ea20c75baae8d7e89c5a6283181670d172f29f34b5f7ee52a9
-KM_K46_SHA=b53742ba049ae3177f4b3ff39c1475e5443bc213f6ea71a73ffe04ffa605bb07
+KM_K30_SHA=fffa4d6b06340b2bcc524e96023fd6a602161ada8c459e2f1fb76b1eedc556f8
+KM_K46_SHA=bdc7965c920cd668d78ed1c7e1585aed1067be178ca9631eded93ffb15017bab
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=1a3fa61a1d650996a28f0680167065cdd88705ab
+KM_KIT_COMMIT=b80abd62a1e2c927622eda735b2b91c94155289f
 
 KM_LICENCES="\
 kernel/drivers/z3660scsi/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
