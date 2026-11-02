@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — C2-4 version 25 §18: the A3000 WD limit lifted for k30 -70 (c7e13e5)
+
+The A3000 WD passthrough limit is lifted for k30 -70 and later, whose sdqueue raises to level 2; k46 keeps it until -60 is shown.
+
 ## 2026-11-02 — spec 20 §6 and C4-2 v9: the Gayle gate walks the Kickstart's resident tags (8203245)
 
 The Gayle IDE's gate walks the Kickstart's resident tags; card.resource means the A1200 row (0xDA0000, ALTSTAT 0xDA101A, `A1200 IDE`), and the `board` parameter (0 auto, 1 A4000, 2 A1200, -1 never probe) overrides it.
