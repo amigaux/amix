@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — dhcpc lives on when -b stopped waiting; dhcp-client 1.0-7 (2c058ba)
+
+The daemon told the foreground dhcpc -b of its first lease only after the BOUND hook. When -b had already returned (a hook longer than the wait, or a lease that came late), that write raised SIGPIPE and ended the daemon without a log line, so the lease was never renewed. tell() now ignores SIGPIPE for that write. test-tell.sh tests it on the host. dhcpc-1.0-7 md5 878d3d2a.
+
 ## 2026-11-02 — ifup: the kernel's domain, a lease still being applied; amix-base 1.0-26 (8e185fd, 064ae88, 960e8fd)
 
 - With DNS on, the kernel's domain was rpcdomain after every boot: the stock sysinit's `domainname` does nothing with an empty /etc/domain, and the resolver appended the kernel's default to lookups. ifup's DNS step now clears the kernel's domain whenever it is set.
