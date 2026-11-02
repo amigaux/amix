@@ -90,6 +90,11 @@ is taken from
 and
 .B /etc/domain
 is emptied.
+The kernel's domain is cleared too, at every boot: with
+.B /etc/domain
+empty the boot leaves the kernel's default,
+.BR rpcdomain ,
+which the resolver would append to every lookup.
 .B ifup
 never turns DNS off: with no name server known it leaves all of these
 as they are, so a static line with no

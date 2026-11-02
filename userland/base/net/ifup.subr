@@ -553,8 +553,9 @@ _if_leasedns() {
 # DNS is on whenever a nameserver is known, with all five parts, each made
 # only when it is not already so: resolv.conf (nameservers only; a domain or
 # search line would be appended to every lookup), libsocket.so linked to
-# libsockdns.so, netconfig from netconfig.DNS, an empty /etc/domain, and
-# literal addresses in every boot-time ifconfig (true by construction here).
+# libsockdns.so, netconfig from netconfig.DNS, an empty /etc/domain and
+# kernel domain, and literal addresses in every boot-time ifconfig (true by
+# construction here).
 # With no nameserver nothing is changed.
 if_dns_apply() {
 	_if_ns=`if_dns`
@@ -587,7 +588,13 @@ if_dns_apply() {
 	if [ -s "$IF_DOMAINF" ]
 	then
 		cp /dev/null "$IF_DOMAINF" && _if_say "dns: $IF_DOMAINF emptied"
-		domainname "" > /dev/null 2>&1
+	fi
+	# the kernel's domain too: with /etc/domain empty, the stock sysinit's
+	# "domainname `cat /etc/domain`" sets nothing and the kernel's default
+	# (rpcdomain) stays, so it is cleared at every boot
+	if [ -n "`domainname 2>/dev/null`" ]
+	then
+		domainname "" > /dev/null 2>&1 && _if_say "dns: the kernel's domain cleared"
 	fi
 	return 0
 }
