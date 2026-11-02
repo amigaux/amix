@@ -53,8 +53,9 @@ each listed symbol's range (to the member's next symbol) is data, like a
 sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied.
 A sized STT_OBJECT symbol inside an executable section is data the same way
 (values-Xa.o's _lib_version, in every program the period toolchain links),
-with a NOTE.  objdump runs with -D on each executable section by name (-j),
-never -d, and never over .debug_* or another section that is not code:
+with a NOTE.  objdump runs with -D on each executable section, by objdump's
+own name for it, never -d, and only that section's listing is read, never
+.debug_* or another section that is not code:
 -d prints a data symbol's range as a hex dump up to the next symbol, which in
 a stripped program can be the rest of .text, and the dump's lines would be
 read as instructions.
@@ -117,31 +118,51 @@ def exec_sections(data):
     return out
 
 
-def exec_section_names(data):
-    """The names of exec_sections(data)'s sections, in the same order."""
-    shoff = struct.unpack(">I", data[32:36])[0]
-    shentsize, shnum, shstrndx = struct.unpack(">HHH", data[46:52])
-    shdrs = [struct.unpack(">IIIIII", data[shoff + i * shentsize: shoff + i * shentsize + 24])
-             for i in range(shnum)]
-    stroff = shdrs[shstrndx][4] if shstrndx < shnum else 0
+HEADER = re.compile(r"^\s*\d+ (\S*)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+[0-9a-f]+\s+[0-9a-f]+\s+2\*\*\d+\s*$")
+
+
+def exec_section_names(tool, path, secs):
+    """The name objdump gives each of exec_sections' sections, in the same
+    order, from objdump -h by address and size: BFD's name, not the section
+    header's.  A section whose sh_name is 0 has an empty name there even
+    when the string table does not start with a NUL (a period kernel's
+    .text: its string table starts ".text")."""
+    r = subprocess.run([tool, "-h", path], capture_output=True, text=True, errors="replace")
+    if r.returncode != 0:
+        die("objdump -h failed on %s: %s" % (path, r.stderr.strip()[:200]))
+    bfd = {}
+    for line in r.stdout.splitlines():
+        m = HEADER.match(line)
+        if m:
+            bfd.setdefault((int(m.group(3), 16), int(m.group(2), 16)), m.group(1))
     names = []
-    for nm, typ, flags, _a, _o, size in shdrs:
-        if typ == 1 and flags & 0x4 and size:
-            names.append(data[stroff + nm:data.index(b"\0", stroff + nm)].decode("latin1"))
+    for sa, _o, sz in secs:
+        if (sa, sz) not in bfd:
+            die("%s: objdump -h lists no section at 0x%x of 0x%x bytes" % (path, sa, sz))
+        names.append(bfd[(sa, sz)])
     return names
 
 
 def objdump(tool, path, sec, lo, hi):
     """-D of section sec over [lo, hi): every word is decoded as code,
     whatever symbol type covers it (-d dumps a data symbol's range as hex
-    instead; data_objects).  -j names the section: an address range alone
-    also selects the non-alloc sections at address 0 (.debug_*), which
-    -D would decode too."""
-    cmd = [tool, "-D", "-j", sec, "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+    instead; data_objects).  Only sec's own listing is kept: an address
+    range alone also selects the non-alloc sections at address 0
+    (.debug_*), which -D would decode too.  -j names sec where objdump can
+    (an empty name it cannot)."""
+    cmd = [tool, "-D", "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+    if sec:
+        cmd[1:1] = ["-j", sec]
     r = subprocess.run(cmd + [path], capture_output=True, text=True, errors="replace")
     if r.returncode != 0:
         die("objdump failed on %s: %s" % (path, r.stderr.strip()[:200]))
-    return r.stdout
+    out, keep = [], False
+    for line in r.stdout.splitlines(True):
+        if line.startswith("Disassembly of section "):
+            keep = line.rstrip("\n") == "Disassembly of section %s:" % sec
+        if keep:
+            out.append(line)
+    return "".join(out)
 
 
 def parse(listing):
@@ -718,7 +739,7 @@ def resync_listing(tool, path, secs, names, skip):
 def scan(tool, path):
     data = open(path, "rb").read()
     secs = exec_sections(data)
-    names = exec_section_names(data)
+    names = exec_section_names(tool, path, secs)
     listing = resync_listing(tool, path, secs, names, set())
     if "Disassembly of section" not in listing:
         die("%s: objdump produced no disassembly" % path)
