@@ -1,0 +1,6 @@
+$modtype misc
+$class boot
+$match always
+$param empty:hex:0x20000000
+$desc bprobe test, boot pass
+bpboot	bpboot
