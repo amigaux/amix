@@ -103,12 +103,13 @@ gate fails naming the function; the strobe armed by `$1A4` — "W $194 armed by 
 rise"; the WRA macro without the `or.w` — the gate finds no blocks; `ZZ_ARM_ETH_RX = $1A4` —
 the compile stops at the `#error`.
 
-**Host test.** This repo's host harness is `test-params.sh`, which cuts one pure function out
-of the source; there is no mock register seam to run the drain or the handlers against an AND
-capture model (z3660scsi's `mock_piscsi.c` has one for its mailbox). The object gate above is
-the mechanical check instead: it proves the shape on the shipped objects, and the table above
-is the address arithmetic. Metal proof belongs to the tripwire firmware (Z3660 `dd9d179`): with
-ZS-05 this driver's own MODE/ACC_OP phantoms should be 0.
+**Host test.** This repo's host harness is `test-params.sh` and `test-mac.sh` (the probe's
+MAC_HI shape check), each of which cuts one pure function out of the source; there is no mock
+register seam to run the drain or the handlers against an AND capture model (z3660scsi's
+`mock_piscsi.c` has one for its mailbox). The object gate above is the mechanical check
+instead: it proves the shape on the shipped objects, and the table above is the address
+arithmetic. Metal proof belongs to the tripwire firmware (Z3660 `dd9d179`): with ZS-05 this
+driver's own MODE/ACC_OP phantoms should be 0.
 
 ## Module form (2026-10-26, kernel/dlm contract C3-6 version 1)
 
@@ -209,7 +210,8 @@ other 32 are the driver's own uninitialised counters and tunables, allocated
 by the core with the module. The static objects compiled against the kits'
 headers are the static objects of record: k30 `c2d6225e…`, k46 `142e2486…`
 (`make -C module static`); since ZS-05 (1.0.0-5) k30 `c9370806…`, k46
-`37185507…`.
+`37185507…`; since the bprobe guard and the MAC_HI shape check
+(1.0.0-6) k30 `421d908c…`, k46 `6c6a9a07…`.
 
 **In the module, the kmem tunables move.** `z3660eth_cache`,
 `z3660eth_ci_enforce`, `z3660eth_reprobe` and the counters are pokes and reads

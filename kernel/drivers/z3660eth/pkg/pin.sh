@@ -17,15 +17,19 @@
 # kernels from k30 -68 and k46 -56 refuse an 8949028 module).  Module
 # 1.0.0-5, source unchanged; built in amix-toolchain:gca-33ebadc.  The
 # package files are -10's but for the revision.
+# 1.0.0-12 (2026-11-02): module 1.0.0-6, the fixed-window probe guarded by
+# bprobe (a box without a Z3660 gets ENXIO, not a bus error, in _load), and
+# the MAC probe checks MAC_HI's shape (no open-bus pattern passes).
+# Built in amix-toolchain:dist at amix 8653b72 (gcc-cross-amix 33ebadc).
 
 KM_NAME=z3660eth
 KM_SHORT=zeth
 KM_REPO=kernel/drivers/z3660eth
-KM_VERSION=1.0.0-5
-KM_PKG_VERSION=1.0.0-11
+KM_VERSION=1.0.0-6
+KM_PKG_VERSION=1.0.0-12
 
-KM_K30_SHA=e1caab15db0064a77bcce424ca8042466847b42d125bb13260520f2180c7addd
-KM_K46_SHA=d8b292ba153ef3d59b00a11f5ee9d21e832b6568fc8bc743367f0ad9fa937c80
+KM_K30_SHA=149582a65af09e81cd1eda4416f23cdff4e7749d90ccb13c527f99cd8f7032c4
+KM_K46_SHA=46df59d84caee64123d7045c37123a401848ef51478d37a7f7607aea1cca710f
 KM_K30_DEPS=
 KM_K46_DEPS=
 
