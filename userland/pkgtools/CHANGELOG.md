@@ -1,3 +1,7 @@
+## 2026-11-02 — guarded deletes (a0c38f7)
+
+Every rm and mv of a variable path in the scripts and tests takes "${NAME:?}"; no behaviour change.
+
 ## 2026-11-02 — assemble-release: GCC 14 scan and fstype blocks (0be0157)
 
 assemble-release.py scans GCC 14 ELFs as build/pkg's D4 gate does (scan060-g14.py, with scan060.py's hits explained) and carries gen-catalog's fstype/isize blocks with their rows; a package without an ELF is no failure.
