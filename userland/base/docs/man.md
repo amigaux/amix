@@ -71,7 +71,9 @@ shell front-end. Its own page is `man/man.1`, installed as
    file, aliases included, in the stock `whatis` format, `name(sect)` padded to
    column 18 and then `names - description`; sorted, no blank or comment lines.
 4. The packages share `/opt/amix/man`, its section directories, `whatis.d`
-   and `replaces.d` as `d` objects. No package ships `/opt/amix/man/whatis` (nothing assembles
+   and `replaces.d` as `d` objects, each 0755 root sys, the same in every
+   package (stock pkgadd stops on a `d` entry whose attributes differ from
+   the registry's). No package ships `/opt/amix/man/whatis` (nothing assembles
    one; the front-end reads the fragments) or anything under the cache.
 5. A package that replaces a stock binary ships its page under a name of its
    own (`/opt/amix/man/1/heirloom-tar`), its index line naming both
