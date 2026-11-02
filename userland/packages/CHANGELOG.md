@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — dropbear: hardware timings (54140f8)
+
+README Acceptance adds the hardware figures: on an A4000 with a 68060 at 80 MHz, key exchange takes about 5 s and login plus one command 5.6 s; package bytes are unchanged (dropbear-2026.94-1, md5 d87bc85e).
+
 ## 2026-11-02 — amix-benchmark-gcc14 1.3-9 (5b25a3e)
 
 Built with gcc14-cross-amix dcfd12d; the programs are unchanged, and BUILD-INFO and PROVENANCE name the new toolchain. md5 679b6c1d.
