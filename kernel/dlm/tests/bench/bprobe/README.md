@@ -72,12 +72,19 @@ Every claimant of the address was checked:
 - **The boot list.** The module checks it too: a board whose range
   covers the address stops the probe (`... lies in board ...: not
   probed`).
-- **What an unanswered cycle does.** On this box class the Z3660's CPLD
-  waits for the motherboard without limit, and the A4000 ends an
-  unanswered Zorro III cycle with a bus error after about 280 ms. That was
-  measured on the A4000D and A4000T with the A4092's non-terminating ROM
-  cycle (a frame-format-4 access fault, the FSLW byte read ended by TEA,
-  2026-09-30/10-01), and grimoire quirk 66 records it.
+- **What an unanswered cycle does: not measured.** The Z3660's CPLD
+  waits for the motherboard without limit (quirk 66). What ends an empty
+  Zorro III read on a real A4000 has no measured record. The one measured
+  case is a different one: the A4092's ROM cycle, a board that was there
+  and never terminated, which the A4000 ended with a bus error after about
+  280 ms (a frame-format-4 access fault, the FSLW byte read ended by TEA,
+  A4000D and A4000T, 2026-09-30/10-01). Gary never turns an unanswered
+  motherboard read into a bus error; it ends the cycle with wrong data
+  (grimoire, z3660-timings method law 6). So three outcomes are open, and
+  the module tells them apart: a bus error caught (`empty=caught`, the
+  time printed), a cycle that ends with no fault (`empty=NO-FAULT
+  data=<byte>`), or a cycle that never ends (the console stops after
+  `probing empty Zorro III`).
 - **Why the identity map matters.** The address is below `VSECT1`, so it
   needs no mapping: k30 reaches it through the page tables' early
   termination, k46 through DTT0 (cache-inhibited), and the access reaches
@@ -88,8 +95,9 @@ Every claimant of the address was checked:
   never-terminating reads are there.
 
 On a box without a Z3660, `0x10000000` is the same kind of address
-(Zorro III space with no responder), so a 1 at `0x20000000` here is the
-evidence the two driver fixes rest on. It is evidence for this CPU card's
+(Zorro III space with no responder), so the outcome at `0x20000000` here
+is the evidence the two driver fixes rest on: only `caught` supports a
+`bprobe` guard. It is evidence for this CPU card's
 bus path; another accelerator's bus logic would need its own row.
 
 ## Build and stage
@@ -121,9 +129,12 @@ bproot: level 7, lbolt <x>, VPOSR <v> (PAL, TOD tick 64 us), params ''
 bproot: root pass: probing custom chips at dff004
 bproot: root pass: bprobe custom chips (dff004, read) -> 0 (no fault) in <t> us (...), level 7, lbolt unmoved
 bproot: root pass: probing empty Zorro III at 20000000
-bproot: root pass: bprobe empty Zorro III (20000000, read) -> 1 (bus error caught) in ~280000 us (...), level 7, lbolt unmoved
+bproot: root pass: bprobe empty Zorro III (20000000, read) -> 1 (bus error caught) in <t> us (...), level 7, lbolt unmoved
 ...                                               (again; then the Z3660 MAC_HI read and its word)
 bproot: root pass: RESULT good=ok empty=caught z3660=ok level=ok
+
+(with no fault instead: "empty Zorro III read without a fault: byte <b>"
+and "RESULT good=ok empty=NO-FAULT data=<b> ...")
 ```
 
 The boot pass prints the TOD check, then the same probes three times
@@ -137,10 +148,10 @@ console (serial, or the frames).
 
 | `empty=` | Meaning |
 |---|---|
-| `caught`, about 280 ms each | the bus error came back as 1, at level 7 and in the boot pass: the driver fixes stand on it |
-| `NO-FAULT` | the address answered: open bus or a board. Expected under Amiberry, which raises no bus error for an empty Zorro III address; on metal, find what answers before going on |
+| `caught`, with its time | the bus error came back as 1, in the root pass (level 7) and the boot pass at levels 0, 4 and 7: a `bprobe` guard holds on this line. The time is the bus's timeout (none is measured for an empty address yet) |
+| `NO-FAULT data=<b>` | the cycle ended with no fault and returned `<b>`: open bus, Gary-style wrong data, or a board. Expected under Amiberry. On metal it means `bprobe` cannot tell an empty window from a present one here: a driver must also check an identity the open bus cannot fake |
 | `MIXED` | the two reads disagreed: report both lines |
-| the console stops after `probing empty Zorro III` | the fault was not caught, or the cycle never ended. `bprobe` is not a guard on this line. The trial is not marked good, so power-cycle and the loader returns to the default generation (try-once, L8). Report the line and the line before it |
+| the console stops after `probing empty Zorro III` | the cycle never ended, or the fault was not caught: `bprobe` is not a guard on this line. The trial is not marked good (the hang comes before run level 2's `kbootset mark-good`), so power-cycle and the loader returns to the default generation (try-once, L8). Report the line and the line before it |
 | a panic naming a bus error | the same verdict, with the panic text as evidence |
 
 The times hold only if the TOD check agrees with `lbolt` (about 260
@@ -164,7 +175,7 @@ behaviour, which is what 1.1 gets on that configuration.
 
 | Object | File bytes | SHA-256 |
 |---|---|---|
-| `root/build/k30/mod.d/bproot` | 5151 | `48bd9c8d59b00df1a991e3bb5fa288ea732ad0fdeb9d9965df5d69dec437b9a4` |
-| `boot/build/k30/mod.d/bpboot` | 5345 | `90f984b5be2f9d750502552397e66b9c059c8bd23b451ec135c1dfacde3fd530` |
-| `root/build/k46/mod.d/bproot` | 5123 | `7da900f1dc486a982c4245e73b053390b82639dd025137a4c0e9f71ec7bd3ab2` |
-| `boot/build/k46/mod.d/bpboot` | 5317 | `d0c22b0d66a966399a9c95e3526e88d49c02aa5c7ef304ef8833520efabcb5f0` |
+| `root/build/k30/mod.d/bproot` | 5355 | `5285f23fb749605caf917a1631a742ae2839e747565c48736445c9181f394770` |
+| `boot/build/k30/mod.d/bpboot` | 5549 | `6f0d98021852e48efb65dc62c3cc6cdb540ba6e3794ec39c4ce6bbd14a1a6b81` |
+| `root/build/k46/mod.d/bproot` | 5327 | `07c71d1f8e4d242bfb8e3aabb953754b9e7f7121e8053857029673a6bf13bcd6` |
+| `boot/build/k46/mod.d/bpboot` | 5521 | `c9f8334322db2d527f490260e68358844bd95ecc7dd710e478b354b5b7ef968f` |

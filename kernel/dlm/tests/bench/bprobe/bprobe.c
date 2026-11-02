@@ -12,8 +12,9 @@
  * Each pass probes, reading one byte with bprobe(addr, -1):
  *   1. the custom chips (0xdff004, VPOSR): decoded on every Amiga, so 0;
  *   2. the empty address (default 0x20000000, parameter empty=), twice:
- *      on an A4000 nothing answers there, Buster ends the cycle with a
- *      bus error after its Zorro III timeout, and bprobe should give 1;
+ *      nothing answers there; the cycle either ends in a bus error
+ *      (bprobe gives 1), ends with no fault and some data (the byte is
+ *      printed), or never ends (the console stops after "probing");
  *      skipped when a board in the boot list covers it;
  *   3. with a Z3660 whose window lies below 0x40000000 (autocon
  *      0x144b0001), its MAC_HI register (base + 0x198), then the word
@@ -190,7 +191,7 @@ pass(name, params)
 {
 	unsigned base = 0, size = 0;
 	unsigned long e = empty_param(params);
-	int good, r1 = -1, r2 = -1, z = -1;
+	int good, r1 = -1, r2 = -1, z = -1, dv = -1;
 
 	good = probe(name, "custom chips", (unsigned long)VPOSR);
 	if (e == 0)
@@ -201,6 +202,12 @@ pass(name, params)
 	else if (!covered(e)) {
 		r1 = probe(name, "empty Zorro III", e);
 		r2 = probe(name, "empty Zorro III again", e);
+		if (r1 == 0 && r2 == 0) {
+			/* the access completed: what came back (an ended cycle with
+			 * no responder gives stale or floating data, no fault) */
+			dv = R8(e);
+			printf("%s: %s: empty Zorro III read without a fault: byte %x\n", TAG, name, dv);
+		}
 	}
 	if (autocon(Z3660, 0, &base, &size) && base && base < VSECT1) {
 		z = probe(name, "Z3660 MAC_HI", (unsigned long)base + MAC_HI);
@@ -210,10 +217,11 @@ pass(name, params)
 	} else
 		printf("%s: %s: no Z3660 window below %x (autocon base %x)\n", TAG, name,
 		    VSECT1, base);
-	printf("%s: %s: RESULT good=%s empty=%s z3660=%s%s\n", TAG, name,
-	    good == 0 ? "ok" : "FAIL",
-	    r1 < 0 ? "skipped" : r1 == 1 && r2 == 1 ? "caught" : r1 == 0 && r2 == 0 ? "NO-FAULT" : "MIXED",
-	    z < 0 ? "absent" : z == 0 ? "ok" : "FAIL",
+	printf("%s: %s: RESULT good=%s empty=%s", TAG, name, good == 0 ? "ok" : "FAIL",
+	    r1 < 0 ? "skipped" : r1 == 1 && r2 == 1 ? "caught" : r1 == 0 && r2 == 0 ? "NO-FAULT" : "MIXED");
+	if (dv >= 0)
+		printf(" data=%x", dv);
+	printf(" z3660=%s%s\n", z < 0 ? "absent" : z == 0 ? "ok" : "FAIL",
 #ifdef BP_ROOT
 	    bad ? " level=FAIL" : " level=ok");
 #else
