@@ -91,9 +91,13 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
 - **Swap.** The swap slice is added in steps (`SWAP_ADD_MB`, sizes in MiB tried in order, `all` the
   whole slice; the first the kernel takes is used and logged). `swap -a` needs one contiguous
   block of kernel space for its page table; the guarded kernels (k30 -67, k46 -56) refuse an
-  oversized request ("Not enough space") where older ones wait for ever. The images use `all 48 30`
-  (the whole 64 MiB slice first); without the key, 30 MiB on the 68030 line and the whole slice on
-  the 68040/68060 line. The same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
+  oversized request ("Not enough space") where older ones wait for ever. The k46 image uses
+  `all 48 30` (the whole 64 MiB slice first); the k30 image uses 30. On the 68030 kernel the swap
+  anon array (16 bytes a page, 512 KiB for 64 MiB) comes from the same 4.25 MB system map as the
+  8 KiB file system buffers: `swap -a` of the whole slice succeeds, but later oversize requests
+  can then sleep for ever on a fragmented map (a k30 image install hung in pkgadd that way).
+  Without the key, 30 MiB on the 68030 line and the whole slice on the 68040/68060 line. The
+  same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
   `swap -l` shows what is in use.
 - **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
   the old cap was 1024); `docs/l11-disk.md`.
