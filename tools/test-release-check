@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+# test-release-check: host test of tools/release-check.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Each case writes a small tree that holds one thing and runs release-check on
+# it, as a directory and, for some, mastered as an ISO 9660 image (xorriso).
+# The ROM register and the private patterns are made up here at run time.
+# Everything the check must refuse (an RFC 1918 address, a PEM header, the
+# hashes, the host key name, a Kickstart header) is assembled at run time and
+# never written whole in this file, so this file passes the push check.
+# Package datastreams are built here too: their members are checked.
+# Prints "N/N passed"; exits non-zero on any failure.
+
+import hashlib
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+CHECK = os.path.join(HERE, "release-check")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace("\n", "\n    ")) if detail else ""))
+
+
+def write(root, rel, data):
+    p = os.path.join(root, rel)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "wb") as f:
+        f.write(data if isinstance(data, bytes) else data.encode())
+
+
+def newc(members):
+    """a newc cpio archive of (name, bytes) regular files, with its trailer"""
+    out = b""
+    for ino, (name, body) in enumerate(list(members) + [("TRAILER!!!", None)], 1):
+        mode = 0o100644 if body is not None else 0
+        body = body.encode() if isinstance(body, str) else body or b""
+        nb = name.encode() + b"\0"
+        h = b"070701" + b"".join(b"%08X" % v for v in (ino if mode else 0, mode, 0, 0, 1, 0, len(body),
+                                                         0, 0, 0, 0, len(nb), 0))
+        out += h + nb
+        out += b"\0" * (-len(out) % 4) + body
+        out += b"\0" * (-len(out) % 4)
+    return out
+
+
+def datastream(pkg, members, tail=b""):
+    """a package datastream: the header, then its archives padded to 512"""
+    out = b"# PaCkAgE DaTaStReAm\n%s 1 1\n# end of header\n" % pkg.encode()
+    out += b"\0" * (-len(out) % 512)
+    for arch in ([("%s/pkginfo" % pkg, b"PKG=%s\n" % pkg.encode())], members):
+        out += newc(arch)
+        out += b"\0" * (-len(out) % 512)
+    return out + tail
+
+
+CLEAN = {
+    "README": "The 1.1 package repository.\nhttp://192.0.2.1:8080/1.1 is a documentation address.\n",
+    "pkgs/core-2.1.pkg": bytes(range(256)) * 64,
+    "pkgs/blob.bin": b"\x00\x01\x02\x03" * 65536,
+    "etc/shadow": "root:*LK*:6445::::::\nnobody::6445::::::\nsys:x:6445::::::\n",
+    "etc/device.tab": "disk1:/dev/rdsk/c0d0s2:/dev/dsk/c0d0s2::desc=\"Disk\"\n",
+}
+ROMBYTES = bytes((i * 37 + 11) & 0xFF for i in range(4096))
+KICK = struct.pack(">I", 0x11144EF9) + b"\0" * (262144 - 4)
+PRIV_ADDR = ".".join(("10", "20", "30", "40"))
+PEM = "-----BEGIN " + "RSA PRIVATE" + " KEY-----\nMIIBOgIBAAJBAK\n-----END " + "RSA PRIVATE" + " KEY-----\n"
+DES = "aBfIg3" + "itnYv/A"
+MD5 = "$" + "1$abcdefgh$" + "0123456789abcdefghijkl"
+HOSTKEY = "etc/ssh/ssh_host" + "_rsa_key"
+CASES = [
+    # name, extra files, the hit kind (None: clean), also as an ISO
+    ("clean", {}, None, True),
+    ("kickstart", {"roms/kick.bin": KICK}, "rom", False),
+    ("register", {"pkgs/a.rom": ROMBYTES}, "rom", False),
+    ("crypt-des", {"etc/passwd.bak": "root:" + DES + ":0:0::/:/sbin/sh\n"}, "credential", False),
+    ("crypt-md5", {"etc/shadow.old": "root:" + MD5 + ":6445::::::\n"}, "credential", False),
+    ("pem", {"etc/key.pem": PEM}, "credential", False),
+    ("hostkey", {HOSTKEY: "not really a key\n"}, "credential", False),
+    ("seed", {"opt/amix/etc/prngd/prngd" + "-seed": "random bytes\n"}, "credential", False),
+    ("rfc1918", {"etc/hosts": PRIV_ADDR + "\tbuildbox\n"}, "privacy", False),
+    ("pattern", {"etc/motd": "built on secretbox-lab\n"}, "privacy", True),
+    # inside a package datastream: the members are checked, each by name
+    ("pkg-clean", {"pkgs/good-1.0-1.pkg": datastream("good", [("root/etc/motd", b"hello\n"),
+                                                               ("root/usr/bin/x", b"\x7fELF\0\0")])}, None, True),
+    ("pkg-kickstart", {"pkgs/bad-1.0-1.pkg": datastream("bad", [("root/opt/kick.rom", KICK)])},
+     "rom s0 /pkgs/bad-1.0-1.pkg!root/opt/kick.rom", False),
+    ("pkg-crypt", {"pkgs/bad-1.0-1.pkg": datastream("bad", [("root/etc/shadow", "root:" + DES + ":1::::::\n")])},
+     "credential /pkgs/bad-1.0-1.pkg!root/etc/shadow", False),
+    ("pkg-rfc1918", {"pkgs/bad-1.0-1.pkg": datastream("bad", [("root/etc/hosts", PRIV_ADDR + " h\n")])},
+     "privacy", True),
+    # the release exemptions: what upstream ships, at its own path only
+    ("allowed", {"pkgs/python3-3.11-1.pkg": datastream("python3", [
+        ("root/opt/amix/lib/python3.11/ipaddress.py", ".".join(("10", "0", "0", "0")) + "/8\n")])}, None, False),
+    ("not-allowed", {"pkgs/python3-3.11-1.pkg": datastream("python3", [
+        ("root/opt/amix/lib/python3.11/other.py", ".".join(("10", "0", "0", "0")) + "/8\n")])}, "privacy", False),
+]
+
+
+def rdb_image(swap, store):
+    """an RDB disk image with no ufs slice: slice 1 swap ('resv'), slice 2
+    a boot store ('UNI\\0'), 64 KiB each from cylinder 1 (8 KiB a cylinder)"""
+    cyl, n = 8192, 8
+    img = bytearray(cyl * (1 + 2 * n))
+    rdsk = bytearray(512)
+    rdsk[0:4] = b"RDSK"
+    struct.pack_into(">I", rdsk, 28, 1)                     # PartitionList
+    struct.pack_into(">II", rdsk, 68, 16, 1)                # sectors, heads
+    img[0:512] = rdsk
+    for slot, (dostype, name, body) in enumerate(((0x72657376, b"UNIX_Swap", swap),
+                                                  (0x554e4900, b"UNIX_Boot", store)), 1):
+        pb = bytearray(512)
+        pb[0:4] = b"PART"
+        struct.pack_into(">I", pb, 16, slot + 1 if slot < 2 else 0xffffffff)
+        pb[36] = len(name)
+        pb[37:37 + len(name)] = name
+        for i, v in ((1, 128), (3, 1), (5, 16), (9, 1 + (slot - 1) * n), (10, slot * n), (16, dostype)):
+            struct.pack_into(">I", pb, 128 + 4 * i, v)
+        img[slot * 512:(slot + 1) * 512] = pb
+        off = cyl * (1 + (slot - 1) * n)
+        img[off:off + len(body)] = body
+    return bytes(img)
+
+
+def run(args, env=None):
+    r = subprocess.run([sys.executable, CHECK] + args, capture_output=True, text=True,
+                       env=env or os.environ, timeout=600)
+    return r.returncode, r.stdout + r.stderr
+
+
+def master(tree, iso):
+    r = subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-R", "-o", iso, tree],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    return r.returncode == 0
+
+
+if not shutil.which("xorriso"):
+    print("test-release-check: needs xorriso (the ISO cases)")
+    sys.exit(2)
+
+tmp = tempfile.mkdtemp(prefix="test-release-check.")
+try:
+    reg = os.path.join(tmp, "MANIFEST.sha256")
+    write(tmp, "MANIFEST.sha256", "%s  test-rom.bin\n" % hashlib.sha256(ROMBYTES).hexdigest())
+    pat = os.path.join(tmp, "patterns.txt")
+    write(tmp, "patterns.txt", "secretbox\n")
+    env = {k: v for k, v in os.environ.items() if k not in ("ROM_MANIFEST", "PRIVACY_PATTERNS")}
+    flags = ["--rom-register", reg, "--private-patterns", pat]
+
+    for name, extra, want, iso in CASES:
+        tree = os.path.join(tmp, "t", name)
+        for rel, data in list(CLEAN.items()) + list(extra.items()):
+            write(tree, rel, data)
+        targets = [tree]
+        if iso:
+            img = os.path.join(tmp, name + ".iso")
+            check("%s: xorriso masters the tree" % name, master(tree, img))
+            targets.append(img)
+        for t in targets:
+            kind = "an ISO" if t.endswith(".iso") else "a directory"
+            rc, out = run(flags + [t], env)
+            if want is None:
+                check("%s as %s: clean" % (name, kind), rc == 0 and "CLEAN" in out and "HIT" not in out, out)
+            else:
+                check("%s as %s: refused, %s" % (name, kind, want), rc == 1 and ("HIT  %s" % want) in out, out)
+
+    # an image's slices that are no ufs: swap must be zero, the store is
+    # read raw (a Kickstart at a block start, its strings)
+    text = b"\0kbootset store\0generation 7\0"
+    unaligned = b"\0\0" + KICK[:4] + b"\0\0"
+    for name, swap, store, want in (
+            ("img-clean", b"", b"\0" * 512 + text + unaligned, None),
+            ("img-swap", b"\0" * 40000 + b"\x01", text, "swap s1: not zeroed, 64 KiB written"),
+            ("img-kick", b"", b"\0" * 1024 + KICK[:4096], "rom s2 raw+0x400: a Kickstart header"),
+            ("img-pattern", b"", text + b"built on secretbox-lab\0", "privacy"),
+            ("img-crypt", b"", b"\0root:" + DES.encode() + b":0:0::/:/sbin/sh\0",
+             "credential /raw/s2-raw-000.txt")):
+        img = os.path.join(tmp, name + ".img")
+        write(tmp, name + ".img", rdb_image(swap, store))
+        rc, out = run(flags + [img], env)
+        if want is None:
+            check("%s: clean, both slices read raw" % name,
+                  rc == 0 and "0 files, CLEAN" in out and "2 raw slice(s)" in out, out)
+        else:
+            check("%s: refused, %s" % (name, want), rc == 1 and ("HIT  %s" % want) in out, out)
+
+    # what an installed image must not keep from its build box (trace_hits,
+    # which image mode applies to each file of a ufs slice)
+    import importlib.machinery
+    import importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("release_check", CHECK)
+    rc_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("release_check", loader))
+    loader.exec_module(rc_mod)
+    for slot, p, data, want in (
+            (1, "/tmp/catalog", b"x", "a file in /tmp"),
+            (1, "/var/tmp/x.1", b"", "a file in /var/tmp"),
+            (4, "/tmp/catalog", b"x", None),                    # another slice's tmp is not /tmp
+            (1, "/var/adm/wtmpx", b"\1" * 372, "a login record that is not empty"),
+            (1, "/var/adm/sulog", b"SU 11/02\n", "a login record that is not empty"),
+            (1, "/var/adm/wtmp", b"", None),                    # shipped empty: fine
+            (1, "/.sh_history", b"ls\n", "a shell history"),
+            (4, "/jussi/.bash_history", b"ls\n", "a shell history"),
+            (1, "/root.history", b"ls\n", "a shell history"),
+            (1, "/usr/share/doc/history", b"text\n", None)):
+        got = rc_mod.trace_hits(slot, p, data)
+        check("image trace s%d %s: %s" % (slot, p, want or "none"),
+              (not got) if want is None else (len(got) == 1 and want in got[0]), repr(got))
+
+    # the register and the patterns come by environment as well
+    rc, out = run([os.path.join(tmp, "t", "register")], dict(env, ROM_MANIFEST=reg, PRIVACY_PATTERNS=pat))
+    check("ROM_MANIFEST and PRIVACY_PATTERNS stand for the flags", rc == 1 and "HIT  rom" in out, out)
+    # without them it refuses to run; the opt-outs run without them
+    clean = os.path.join(tmp, "t", "clean")
+    rc, out = run(["--private-patterns", pat, clean], env)
+    check("no ROM register: refused, exit 2", rc == 2 and "no ROM register" in out, out)
+    rc, out = run(["--rom-register", reg, clean], env)
+    check("no private patterns: refused, exit 2", rc == 2 and "no private patterns" in out, out)
+    rc, out = run(["--no-rom-register", "--no-private-patterns", os.path.join(tmp, "t", "register")], env)
+    check("--no-rom-register: a register ROM passes, as asked", rc == 0 and "CLEAN" in out, out)
+    rc, out = run(["--no-rom-register", "--no-private-patterns", os.path.join(tmp, "t", "kickstart")], env)
+    check("--no-rom-register still refuses a Kickstart header", rc == 1 and "HIT  rom" in out, out)
+    rc, out = run(["--no-rom-register", "--no-private-patterns", os.path.join(tmp, "t", "pattern")], env)
+    check("--no-private-patterns: the local name passes, as asked", rc == 0, out)
+    rc, out = run(["--rom-register", os.path.join(tmp, "none"), "--private-patterns", pat, clean], env)
+    check("an unreadable register: a failure, exit 2", rc == 2 and "FAILED" in out, out)
+
+    # privacy-check's summary ("N file(s), M hit(s)") is no hit, whatever N is
+    for n in (1, 3):
+        t = os.path.join(tmp, "few%d" % n)
+        for k in range(n):
+            write(t, "f%d.txt" % k, "plain text %d\n" % k)
+        rc, out = run(flags + [t], env)
+        check("a tree of %d text file(s): clean" % n, rc == 0 and "CLEAN" in out, out)
+
+    # the control: without the commit-id test, the summary reads as a hit
+    os.makedirs(os.path.join(tmp, "tools"))
+    for f in ("privacy-check", "privacy-allow.txt", "release-allow.txt"):
+        shutil.copy2(os.path.join(HERE, f), os.path.join(tmp, "tools", f))
+    noid = os.path.join(tmp, "tools", "release-check")
+    src = open(CHECK).read()
+    want = 're.fullmatch(r"[0-9a-f]{7,40}", w[0]) and '
+    check("control: release-check tests the hit line's commit id once", src.count(want) == 1)
+    with open(noid, "w") as f:
+        f.write(src.replace(want, ""))
+    r = subprocess.run([sys.executable, noid] + flags + [os.path.join(tmp, "few3")], capture_output=True,
+                       text=True, env=env)
+    check("control: without it, the 3-file tree is refused", r.returncode == 1, r.stdout + r.stderr)
+
+    # a symbolic link is not followed out of the tree
+    t = os.path.join(tmp, "linked")
+    write(t, "README", "a tree\n")
+    write(tmp, "outside/hosts", PRIV_ADDR + " h\n")
+    os.symlink(os.path.join(tmp, "outside"), os.path.join(t, "elsewhere"))
+    os.symlink(os.path.join(tmp, "outside", "hosts"), os.path.join(t, "hosts"))
+    rc, out = run(flags + [t], env)
+    check("symbolic links out of the tree are not followed", rc == 0 and "1 files" in out, out)
+
+    # a datastream part that is not a cpio archive is a failure, never skipped
+    t = os.path.join(tmp, "zpart")
+    write(t, "pkgs/z-1.0-1.pkg", datastream("z", [("root/a", b"a\n")], tail=b"\x1f\x9d" + b"\x55" * 600))
+    rc, out = run(flags + [t], env)
+    check("a datastream part that is not cpio: a failure, exit 2",
+          rc == 2 and "is not a cpio archive" in out, out)
+    rc, out = run(flags + [os.path.join(tmp, "nosuch")], env)
+    check("a path that does not exist: a failure, exit 2", rc == 2 and "no such file" in out, out)
+
+    # the ufs reader image mode uses: its own hermetic selftest
+    r = subprocess.run([sys.executable, os.path.join(HERE, "lib", "ufs.py")], capture_output=True, text=True)
+    check("tools/lib/ufs.py's selftest passes", r.returncode == 0 and "selftest: PASS" in r.stdout,
+          r.stdout[-800:] + r.stderr)
+finally:
+    shutil.rmtree(tmp, ignore_errors=True)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

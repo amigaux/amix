@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+# release-check: what a release file holds that must not be published.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Python 3 standard library, git, and xorriso for an ISO.
+"""release-check -- what a release file holds that must not be published.
+
+    tools/release-check --rom-register FILE --private-patterns FILE PATH...
+
+PATH is an Amix disk image (its RDB's slices), an ISO 9660 medium (*.iso,
+read with xorriso), or a directory (a repository tree; symbolic links are not
+followed).  A package datastream (a file that starts "# PaCkAgE DaTaStReAm")
+is read member by member, wherever it lies: a member is named
+"<datastream>!<member>".
+
+An image's ufs slices are read file by file.  Any other slice is read raw: a
+swap slice must be all zero, and every such slice (the boot store) is
+searched for a Kickstart header at a block start, and its printable strings
+take the credential and privacy tests below.
+
+For each PATH:
+  * no Kickstart or board ROM: every regular file is tested by content -- a
+    256 KiB or 512 KiB file whose first longword is a Kickstart's
+    (0x11114EF9 or 0x11144EF9), or whose sha256 is in the ROM register
+    ("sha256  name" lines);
+  * no private address, local name or secret: tools/privacy-check --tree,
+    classes 1 and 3, with the private patterns, over a scratch git tree of
+    the text files: an image's /etc and its first-boot payload
+    (/var/adm/firstboot), every text file of an ISO or a directory; the
+    exemptions are tools/privacy-allow.txt and tools/release-allow.txt (what
+    upstream software ships, such as documentation's example networks);
+  * no credential: in every text file no "user:HASH:" line with a crypt-style
+    hash (DES's 13 characters or a $id$ hash; *LK*, x or an empty field
+    passes) and no PEM private key; no SSH or dropbear host key, user key or
+    random seed file by name;
+  * in an image, nothing kept from the box it was built on: no file in the
+    root slice's /tmp or /var/tmp, no login record that is not empty (utmp,
+    utmpx, wtmp, wtmpx, lastlog, sulog), no shell history (a dot file whose
+    name ends in "history", or a *history file in /).
+
+The ROM register and the private patterns are never part of this repository;
+each is given by path (the flag, or $ROM_MANIFEST and $PRIVACY_PATTERNS).
+Without one, release-check refuses to run; --no-rom-register and
+--no-private-patterns run without it, for tests.  PRIVACY_CHECK names another
+privacy-check.
+
+Prints one line per hit and a verdict per PATH.  Exit 0 clean, 1 hits, 2 usage
+or a tool failure (never 0 on a failure).
+"""
+import argparse
+import hashlib
+import mmap
+import os
+import re
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(HERE, "lib"))
+sys.dont_write_bytecode = True      # no __pycache__ left in the checkout
+
+PRIVACY = os.environ.get("PRIVACY_CHECK", os.path.join(HERE, "privacy-check"))
+# the repository's exemptions, then those for what packages ship
+ALLOW = (os.path.join(HERE, "privacy-allow.txt"), os.path.join(HERE, "release-allow.txt"))
+KS_MAGIC = (0x11114EF9, 0x11144EF9)
+ROM_SIZES = (262144, 524288)
+TEXT_PROBE = 8192
+DATASTREAM = b"# PaCkAgE DaTaStReAm"
+CRYPT_LINE = re.compile(rb'(?m)^[a-z_][a-z0-9_.-]{0,31}:(\$[0-9a-z]{1,2}\$[./0-9A-Za-z]{1,16}\$[./0-9A-Za-z]{10,}|[./0-9A-Za-z]{13}):')
+PRIVKEY = re.compile(rb'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----')
+KEYFILE = re.compile(r'(^|/)(ssh_host_[a-z0-9]+_key|dropbear_[a-z0-9]+_host_key|id_(rsa|dsa|ecdsa|ed25519))$')
+SEEDFILE = re.compile(r'(^|/)(prngd-seed|random[-_]seed|\.rnd)$')
+LOGINREC = ("utmp", "utmpx", "wtmp", "wtmpx", "lastlog", "sulog")
+HISTORY = re.compile(r'(^|/)\.[^/]*history$')
+
+
+class Failure(Exception):
+    """a tool failure: never a clean verdict"""
+
+
+def is_text(data):
+    return b"\0" not in data[:TEXT_PROBE]
+
+
+def credential_hits(p, data):
+    out = []
+    if KEYFILE.search(p):
+        out.append("credential %s: a host or user private key file by its name" % p)
+    if SEEDFILE.search(p):
+        out.append("credential %s: a random seed file by its name (made at first boot)" % p)
+    if is_text(data):
+        # a path in the second field (device.tab's /dev/rdsk/... names) has
+        # DES's shape but is no hash
+        m = next((x for x in CRYPT_LINE.finditer(data) if not re.match(rb'/[a-z]+/', x.group(1))), None)
+        if m:
+            user = m.group(0).split(b":")[0].decode("latin-1", "replace")
+            out.append("credential %s: a crypt-style password hash for %s" % (p, user))
+        if PRIVKEY.search(data):
+            out.append("credential %s: a PEM private key" % p)
+    return out
+
+
+def trace_hits(slot, p, data):
+    """what an installed image must not keep from the box it was built on:
+    a file in the root slice's /tmp or /var/tmp, a login record that is not
+    empty, a shell history"""
+    out = []
+    base = p.rsplit("/", 1)[-1]
+    if slot == 1 and p.startswith(("/tmp/", "/var/tmp/")):
+        out.append("trace s%d %s: a file in %s" % (slot, p, "/var/tmp" if p.startswith("/var/") else "/tmp"))
+    if base in LOGINREC and data:
+        out.append("trace s%d %s: a login record that is not empty (%d bytes)" % (slot, p, len(data)))
+    if HISTORY.search(p) or (p.count("/") == 1 and base.endswith("history")):
+        out.append("trace s%d %s: a shell history" % (slot, p))
+    return out
+
+
+def load_register(path):
+    """{sha256: name} from "sha256  name" lines"""
+    out = {}
+    try:
+        lines = open(path, encoding="latin-1").read().splitlines()
+    except OSError as e:
+        raise Failure("cannot read the ROM register %s: %s" % (path, e.strerror))
+    for line in lines:
+        w = line.split(None, 1)
+        if w and re.fullmatch(r"[0-9a-f]{64}", w[0]):
+            out[w[0]] = w[1].strip() if len(w) > 1 else ""
+    return out
+
+
+def rom_hit(data, register):
+    if len(data) in ROM_SIZES and struct.unpack(">I", data[:4])[0] in KS_MAGIC:
+        return "a Kickstart ROM by its header (%d bytes)" % len(data)
+    if register:
+        h = hashlib.sha256(data).hexdigest()
+        if h in register:
+            return "a ROM of the register by sha256 (%s)" % (register[h] or h[:16])
+    return None
+
+
+def datastream_members(data):
+    """(name, bytes) of every regular file of every newc cpio archive in a
+    package datastream: the header, then each archive, padded to 512.  Only
+    zero padding may lie between archives: anything else (a compressed
+    part) is a failure, never skipped."""
+    end = data.find(b"# end of header\n")
+    if end < 0:
+        raise Failure("a datastream without its header end")
+    i = data.find(b"070701", end)
+    if data[end + 16:i if i >= 0 else len(data)].strip(b"\0"):
+        raise Failure("a datastream whose first part is not a cpio archive")
+    while 0 <= i:
+        h = data[i:i + 110]
+        try:
+            f = [int(h[6 + 8 * k:14 + 8 * k], 16) for k in range(13)]
+        except ValueError:
+            raise Failure("a datastream cpio header at %d does not parse" % i)
+        mode, fsize, nsize = f[1], f[6], f[11]
+        name = data[i + 110:i + 110 + nsize - 1].decode("latin-1", "replace")
+        p = (i + 110 + nsize + 3) & ~3
+        if p + fsize > len(data):
+            raise Failure("a datastream member %s runs past the end" % name)
+        if name == "TRAILER!!!":
+            i = data.find(b"070701", p)
+            if data[p:i if i >= 0 else len(data)].strip(b"\0"):
+                raise Failure("a datastream part after offset %d is not a cpio archive" % p)
+            continue
+        if mode & 0o170000 == 0o100000:
+            yield name, data[p:p + fsize]
+        i = (p + fsize + 3) & ~3
+        if data[i:i + 6] != b"070701":
+            raise Failure("a datastream archive ends without its trailer after %s" % name)
+
+
+def expand(label, data):
+    """(label, bytes) of a file, and of each member when it is a datastream"""
+    yield label, data
+    if data.startswith(DATASTREAM):
+        for name, body in datastream_members(data):
+            yield "%s!%s" % (label, name), body
+
+
+def image_files(path, raw):
+    """(slice, path, bytes) of every regular file of every ufs slice; each
+    other slice goes to raw(slice, is_swap, bytes) whole"""
+    import rdb
+    import ufs
+    with open(path, "rb") as f:
+        img = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        _, sl = rdb.read_rdb(img[:1 << 20])
+        for s in sl:
+            part = img[s.byte_offset:s.byte_offset + s.byte_size]
+            try:
+                sb = ufs.parse_super(img, s.byte_offset)
+            except ufs.UfsError:
+                raw(s.slot, s.dostype == rdb.DT_SWAP, part)
+                continue
+            for p, d in ufs.walk(part, 0, sb):
+                if d.type == ufs.IFREG:
+                    yield s.slot, p, ufs.read_data(part, sb, d)
+
+
+RAW_CHUNK = 4 << 20             # well under privacy-check's 16 MiB text limit
+STRINGS = re.compile(rb"[\t\x20-\x7e]{6,}")
+
+
+def raw_hits(slot, swap, part, tree):
+    """a slice that is no ufs: a swap slice must be all zero; any such slice
+    is read raw, a Kickstart header at a 512-byte boundary (a file's first
+    block) and its printable strings, which go to the credential test and,
+    in chunks under RAW_CHUNK, to the privacy scan's tree"""
+    out = []
+    if swap:
+        kib = sum(64 for i in range(0, len(part), 65536) if part[i:i + 65536].strip(b"\0"))
+        if kib:
+            out.append("swap s%d: not zeroed, %d KiB written" % (slot, kib))
+    for magic in KS_MAGIC:
+        m = struct.pack(">I", magic)
+        i = part.find(m)
+        while i >= 0:
+            if i % 512 == 0:
+                out.append("rom s%d raw+0x%x: a Kickstart header at a block start" % (slot, i))
+            i = part.find(m, i + 1)
+    chunk, k, size = [], 0, 0
+    lines = (m.group(0) for m in STRINGS.finditer(part))
+    for line in list(lines) + [None]:
+        if line is not None:
+            chunk.append(line)
+            size += len(line) + 1
+        if chunk and (line is None or size >= RAW_CHUNK):
+            text = b"\n".join(chunk) + b"\n"
+            label = "s%d-raw-%03d.txt" % (slot, k)
+            out += credential_hits("/raw/" + label, text)
+            dst = os.path.join(tree, "raw", label)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, "wb") as o:
+                o.write(text)
+            chunk, k, size = [], k + 1, 0
+    return out
+
+
+def iso_files(path, scratch):
+    out = os.path.join(scratch, "iso")
+    try:
+        r = subprocess.run(["xorriso", "-indev", path, "-osirrox", "on", "-extract", "/", out],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except OSError:
+        raise Failure("no xorriso to read %s" % path)
+    if r.returncode != 0:
+        raise Failure("xorriso could not extract %s" % path)
+    yield from dir_files(out)
+
+
+def dir_files(path):
+    """(0, path, bytes) of every regular file under a directory; symbolic
+    links are not followed (a mirror's link points into its own tree)"""
+    for base, dirs, files in os.walk(path):
+        dirs.sort()
+        for fn in sorted(files):
+            full = os.path.join(base, fn)
+            if os.path.isfile(full) and not os.path.islink(full):
+                with open(full, "rb") as fp:
+                    yield 0, "/" + os.path.relpath(full, path), fp.read()
+
+
+def privacy(tree, scratch, patterns):
+    """privacy-check --tree over a directory, classes 1 and 3: [line]"""
+    repo = os.path.join(scratch, "repo")
+    shutil.copytree(tree, repo, symlinks=False)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_AUTHOR_NAME="release-check", GIT_AUTHOR_EMAIL="release-check@invalid",
+               GIT_COMMITTER_NAME="release-check", GIT_COMMITTER_EMAIL="release-check@invalid",
+               GIT_CONFIG_NOSYSTEM="1", HOME=scratch)
+    env.pop("PRIVACY_PATTERNS", None)
+    if patterns:
+        env["PRIVACY_PATTERNS"] = patterns
+    for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
+                ["git", "commit", "-q", "--allow-empty", "-m", "tree"]):
+        r = subprocess.run(cmd, cwd=repo, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            raise Failure("%s: %s" % (" ".join(cmd), r.stderr.decode("utf-8", "replace").strip()[-200:]))
+    allow = os.path.join(scratch, "allow.txt")
+    with open(allow, "w") as o:
+        for f in ALLOW:
+            with open(f) as i:
+                o.write(i.read() + "\n")
+    r = subprocess.run([sys.executable, PRIVACY, "--tree", "HEAD", "--allow", allow], cwd=repo, env=env,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if r.returncode not in (0, 1):
+        raise Failure("privacy-check failed: %s" % r.stdout.strip()[-300:])
+    hits = []
+    for line in r.stdout.splitlines():
+        # "<sha> <class> <path> <detail>"; not the summary line, whose
+        # second word is a count
+        w = line.split(None, 3)
+        if len(w) >= 3 and re.fullmatch(r"[0-9a-f]{7,40}", w[0]) and w[1] in ("1", "3"):
+            hits.append(line)
+    return hits
+
+
+def check(path, register, patterns):
+    scratch = tempfile.mkdtemp(prefix="release-check.")
+    hits, n, raws = [], 0, []
+    isdir = os.path.isdir(path)
+    whole = isdir or path.lower().endswith(".iso")
+    try:
+        tree = os.path.join(scratch, "tree")
+        os.makedirs(tree)
+
+        def raw(slot, swap, part):
+            raws.append(slot)
+            hits.extend(raw_hits(slot, swap, part, tree))
+
+        files = dir_files(path) if isdir else iso_files(path, scratch) if whole else image_files(path, raw)
+        for slot, p0, data0 in files:
+            # the privacy scan: an image's /etc (of its root slice) and its
+            # first-boot payload; every text file of an ISO or a directory
+            scan = whole or (slot == 1 and p0.startswith(("/etc/", "/var/adm/firstboot/")))
+            for p, data in expand(p0, data0):
+                n += 1
+                why = rom_hit(data, register)
+                if why:
+                    hits.append("rom s%d %s: %s" % (slot, p, why))
+                hits += credential_hits(p, data)
+                if not whole:
+                    hits += trace_hits(slot, p, data)
+                if scan and is_text(data):
+                    dst = os.path.join(tree, p.lstrip("/").replace("!", "/"))
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    with open(dst, "wb") as o:
+                        o.write(data)
+        hits += ["privacy " + h for h in privacy(tree, scratch, patterns)]
+    finally:
+        subprocess.run(["chmod", "-R", "u+w", scratch], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        shutil.rmtree(scratch, ignore_errors=True)
+    for h in hits:
+        print("  HIT  %s" % h)
+    where = "the tree" if whole else "/etc, the first-boot payload and %d raw slice(s)" % len(raws)
+    print("release-check: %s: %d files, %s" % (os.path.basename(os.path.normpath(path)), n,
+          "CLEAN (no Kickstart ROM, no private address, name or secret in %s)" % where
+          if not hits else "%d HIT(s)" % len(hits)))
+    return not hits
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(prog="release-check", add_help=True,
+                                 description="What a release file holds that must not be published.")
+    ap.add_argument("--rom-register", metavar="FILE", default=os.environ.get("ROM_MANIFEST"))
+    ap.add_argument("--private-patterns", metavar="FILE", default=os.environ.get("PRIVACY_PATTERNS"))
+    ap.add_argument("--no-rom-register", action="store_true")
+    ap.add_argument("--no-private-patterns", action="store_true")
+    ap.add_argument("paths", nargs="+", metavar="PATH")
+    try:
+        a = ap.parse_args(argv)
+    except SystemExit as e:
+        return 2 if e.code else 0
+    if not a.no_rom_register and not a.rom_register:
+        sys.stderr.write("release-check: no ROM register: --rom-register FILE or ROM_MANIFEST "
+                         "(--no-rom-register checks Kickstart headers only)\n")
+        return 2
+    if not a.no_private_patterns and not a.private_patterns:
+        sys.stderr.write("release-check: no private patterns: --private-patterns FILE or PRIVACY_PATTERNS "
+                         "(--no-private-patterns checks addresses and secrets only)\n")
+        return 2
+    patterns = None if a.no_private_patterns else os.path.abspath(a.private_patterns)
+    if patterns and not os.path.isfile(patterns):
+        sys.stderr.write("release-check: no private patterns file %s\n" % patterns)
+        return 2
+    if not os.path.exists(PRIVACY):
+        sys.stderr.write("release-check: no privacy-check at %s (PRIVACY_CHECK)\n" % PRIVACY)
+        return 2
+    ok = True
+    try:
+        register = {} if a.no_rom_register else load_register(a.rom_register)
+        for p in a.paths:
+            if not os.path.exists(p):
+                raise Failure("%s: no such file or directory" % p)
+            try:
+                ok = check(p, register, patterns) and ok
+            except Exception as e:      # a tool failure is never a clean verdict
+                raise Failure("%s: %s" % (os.path.basename(os.path.normpath(p)), e))
+    except Failure as e:
+        print("release-check: FAILED -- %s" % e)
+        return 2
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
