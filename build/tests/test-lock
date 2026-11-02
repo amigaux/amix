@@ -83,6 +83,13 @@ try:
     write(os.path.join(out, "userland/pkgs/amxbase-1.0-8.pkg"), "base")
     write(os.path.join(out, "userland/catalog"), "cat")
     write(os.path.join(out, "userland/catalog.md5"), hashlib.md5(b"cat").hexdigest() + "  catalog\n")
+    write(os.path.join(out, "apkg/APKG-0.3.6.pkg"), "apkg")
+    write(os.path.join(out, "apkg/names.conf"), "not a datastream")
+    write(os.path.join(out, "release/1.1/catalog"), "rcat")
+    write(os.path.join(out, "release/1.1/catalog.md5"), hashlib.md5(b"rcat").hexdigest() + "  catalog\n")
+    write(os.path.join(out, "release/1.1/pkgs/zlib-1.2.13-8.pkg"), "zlib")
+    write(os.path.join(out, "release/1.1/pkgs/stock/core-2.1.pkg"), "core")
+    write(os.path.join(out, "release/1.1.tmp/catalog"), "a refused run's leftovers")
     write(os.path.join(out, "media/cd/amix.iso"), "iso")
     write(os.path.join(out, "build/userland/zlib.log"), "not in the lock")
 
@@ -111,6 +118,10 @@ try:
         "catalog userland md5 %s sha256 %s" % (hashlib.md5(b"cat").hexdigest(), sha("cat")),
         "pkg userland amxbase-1.0-8.pkg 4 " + sha("base"),
         "pkg userland zlib-1.2.13-8.pkg 4 " + sha("zlib"),
+        "pkg apkg APKG-0.3.6.pkg 4 " + sha("apkg"),
+        "catalog release/1.1 md5 %s sha256 %s" % (hashlib.md5(b"rcat").hexdigest(), sha("rcat")),
+        "pkg release/1.1 stock/core-2.1.pkg 4 " + sha("core"),
+        "pkg release/1.1 zlib-1.2.13-8.pkg 4 " + sha("zlib"),
         "media cd/amix.iso 3 " + sha("iso"),
     ]
     check("inputs and outputs, in their sections, each sorted",

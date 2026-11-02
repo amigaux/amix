@@ -563,14 +563,51 @@ $CC $AMIX_CFLAGS -g -fPIC -shared -o "$T/libdbg.so" "$T/dbg.c" || fail "the debu
 "$OBJDUMP" -h "$T/libdbg.so" | grep -q ' \.debug_loclists ' || fail "libdbg.so has no .debug_loclists"
 out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/libdbg.so") || fail "scan060-g14.py decoded a .debug section of libdbg.so as code: $out"
 echo "$out" | grep 'CLEAN libdbg.so' >/dev/null || fail "scan060-g14.py on libdbg.so: $out"
-sed 's/"-D", "-j", sec, /"-D", /' "$G14S" > "$T/scan060-g14-noj.py"
-[ "$(diff "$G14S" "$T/scan060-g14-noj.py" | grep -c '^>')" = 1 ] ||
-	fail "control: the copy of scan060-g14.py without -j is not one line changed"
+# the control: no -j and every section's listing kept, as -D gives them
+sed 's/^    if sec:$/    if False:/; s/^            keep = line.rstrip("\\n") == .*$/            keep = True/' \
+	"$G14S" > "$T/scan060-g14-noj.py"
+[ "$(diff "$G14S" "$T/scan060-g14-noj.py" | grep -c '^>')" = 2 ] ||
+	fail "control: the copy of scan060-g14.py that keeps every section is not two lines changed"
 if out=$(python3 "$T/scan060-g14-noj.py" --objdump "$OBJDUMP" "$T/libdbg.so"); then
-	fail "control: the scanner without -j passed libdbg.so: it tests nothing: $out"
+	fail "control: the scanner that keeps every section passed libdbg.so: it tests nothing: $out"
 fi
-echo "$out" | grep 'movep' >/dev/null || fail "control: the scanner without -j failed libdbg.so, but not on movep: $out"
-ok "scan060-g14.py decodes only the executable sections of an unstripped shared library; without -j its .debug section reads as movep"
+echo "$out" | grep 'movep' >/dev/null || fail "control: the scanner that keeps every section failed libdbg.so, but not on movep: $out"
+ok "scan060-g14.py decodes only the executable sections of an unstripped shared library; keeping every section -D lists, its .debug section reads as movep"
+
+# A period kernel's section headers: .text's sh_name is 0 and the string
+# table starts ".text", so readelf names it .text and objdump names it ""
+# (`-j .text' finds nothing).  Built here: four nops, then a 64-bit mulsl or
+# not, then rts.
+sh0_probe() {	# sh0_probe <file> <code words, hex>
+	python3 - "$1" "$2" <<'EOF'
+import struct, sys
+code = bytes.fromhex(sys.argv[2])
+strtab = b".text\0.shstrtab\0"
+text_off = 52
+str_off = text_off + len(code)
+sh_off = (str_off + len(strtab) + 3) & ~3
+eh = struct.pack(">16sHHIIIIIHHHHHH", b"\x7fELF\x01\x02\x01" + b"\0" * 9, 2, 4, 1, 0, 0, sh_off, 0,
+                 52, 32, 0, 40, 3, 2)
+shdrs = struct.pack(">10I", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shdrs += struct.pack(">10I", 0, 1, 6, 0, text_off, len(code), 0, 0, 4, 0)
+shdrs += struct.pack(">10I", 6, 3, 0, 0, str_off, len(strtab), 0, 0, 1, 0)
+img = eh + code + strtab
+img += b"\0" * (sh_off - len(img)) + shdrs
+open(sys.argv[1], "wb").write(img)
+EOF
+}
+sh0_probe "$T/sh0" 4e714e714e714e714e75
+sh0_probe "$T/sh0-mul" 4e714e714e714e714c010c024e75
+if "$OBJDUMP" -D -j .text "$T/sh0" >/dev/null 2>&1; then
+	fail "the sh0 probe: objdump -j .text found its code section: it tests nothing"
+fi
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sh0") || fail "scan060-g14.py on the sh0 probe: $out"
+echo "$out" | grep 'CLEAN sh0 (5 insns' >/dev/null || fail "scan060-g14.py did not decode the sh0 probe's 5 insns: $out"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sh0-mul"); then
+	fail "scan060-g14.py passed the sh0 probe's 64-bit mulsl: $out"
+fi
+echo "$out" | grep '0x00000008 mulsl' >/dev/null || fail "scan060-g14.py on the sh0 mulsl probe: $out"
+ok "scan060-g14.py decodes a code section objdump names \"\" (sh_name 0, a string table that starts .text), catches a 64-bit mulsl in it"
 
 # Three more shapes from perl 5.8.9 (2026-10-30), each dispatched the GCC 14
 # way (`addl %d1,%d1; movew %pc@(T,%d1:l),%d1; jmp %pc@(T,%d1:w)'):

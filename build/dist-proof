@@ -29,7 +29,7 @@ sys=$(cd "$sys" && pwd)
 [ ! -e "$work" ] || [ -z "$(ls -A "$work")" ] || { echo "dist-proof: $work is not empty" >&2; exit 2; }
 mkdir -p "$work"
 work=$(cd "$work" && pwd)
-STEPS="kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock"
+STEPS="kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock"
 
 run() {	# run <name> <dir>: one make dist in <dir>/amix, its logs in <dir>
 	git clone -q --no-local "$top" "$2/amix" &&

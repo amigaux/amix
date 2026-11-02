@@ -1,0 +1,11 @@
+# release-allow.txt: public exemptions for tools/release-check, added to
+# privacy-allow.txt's. Same format: <class> <path-glob> [<regex>]. A
+# package's member is checked at <datastream>/<member path>, so a glob
+# starts with "**/". Give every entry a reason above it.
+
+# Python's ipaddress module names the private networks it classifies.
+1 **/opt/amix/lib/python3.*/ipaddress.py ^(10\.0\.0\.0|172\.16\.0\.0|192\.168\.0\.0|fc00:{2})$
+
+# Vim's OpenVMS notes: example addresses in its DECnet and X display
+# instructions.
+1 **/opt/amix/share/vim/vim*/doc/os_vms.txt ^192\.168\.(10\.202|5\.159)$

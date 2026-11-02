@@ -71,7 +71,8 @@ try:
     write(os.path.join(top, "system", "MANIFEST.sha256"), MANIFEST)
     dist = os.path.join(top, "build", "dist.sh")
     base = {k: v for k, v in os.environ.items()
-            if not k.startswith(("AMIX_", "GIT_")) and k not in ("SYSTEM", "GCA", "G14", "DIST_HOST")}
+            if not k.startswith(("AMIX_", "GIT_")) and k not in ("SYSTEM", "GCA", "G14", "DIST_HOST", "STOCK",
+                                                                 "RELEASE_PREVIOUS", "ROM_MANIFEST", "PRIVACY_PATTERNS")}
 
     def run(*steps, where=dist, **env):
         e = dict(base, SYSTEM=sysdir, DIST_HOST="1", GCA="/nonexistent/gca")
@@ -417,6 +418,52 @@ clean:
     check("an image without the stamp: refused before the first step",
           rc == 1 and "predates pin stamps" in out and "=== make dist" not in out, out)
 
+    # apkg and release, with stand-ins for pkgtools' make dist, its host
+    # apkg and engine, and assemble-release.py (which records its arguments)
+    pt = os.path.join(top, "userland", "pkgtools")
+    write(os.path.join(pt, "Makefile"), "dist:\n\tmkdir -p $(OUT)\n\techo a > $(OUT)/APKG-0.3.6.pkg\n"
+          "\techo e > $(OUT)/APKGENG-1.12.6.pkg\n\techo c > $(OUT)/names.conf\n")
+    write(os.path.join(pt, "src", "apkg", "Makefile"), "apkg:\n\techo host > apkg\n")
+    write(os.path.join(pt, "heirloom", "build-host.sh"),
+          "#!/bin/sh\nmkdir -p build-host/bin\nfor t in pkgmk pkgtrans; do printf '#!/bin/sh\\n' > build-host/bin/$t;"
+          " chmod +x build-host/bin/$t; done\n", 0o755)
+    argrel = os.path.join(tmp, "assemble.args")
+    write(os.path.join(pt, "tools", "repo", "assemble-release.py"),
+          "import os, sys\nopen(os.environ['ASSEMBLE_ARGS'], 'w').write('\\n'.join(sys.argv[1:]))\n"
+          "sys.exit(int(os.environ.get('ASSEMBLE_RC', '0')))\n")
+    o = os.path.realpath(os.path.join(top, "out"))
+    rc, out = run("apkg")
+    apkgs = sorted(os.listdir(os.path.join(o, "apkg"))) if os.path.isdir(os.path.join(o, "apkg")) else []
+    check("apkg: pkgtools' make dist into out/apkg, its catalog layer left out",
+          rc == 0 and apkgs == ["APKG-0.3.6.pkg", "APKGENG-1.12.6.pkg"], out + " ".join(apkgs))
+    for d in ("userland", "kspace"):
+        shutil.rmtree(os.path.join(o, d), ignore_errors=True)
+    rc, out = run("release", ASSEMBLE_ARGS=argrel)
+    check("release: no catalogs yet, exit 3, the input named",
+          rc == 3 and "[MISSING] release: out/userland/catalog" in out and not os.path.exists(argrel), out)
+    for d in ("userland", "kspace"):
+        write(os.path.join(o, d, "catalog"), "#apkg-catalog 1\n")
+    stock = os.path.join(tmp, "stock")
+    os.makedirs(stock)
+    rc, out = run("release", ASSEMBLE_ARGS=argrel, STOCK=stock, ASSEMBLE_RC="0")
+    a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
+    want = ["--userland", o + "/userland", "--kspace", o + "/kspace", "--apkg", o + "/apkg",
+            "--stock", stock, "--release", "1.1", "--out", o + "/release/1.1",
+            "--release-check", os.path.realpath(top) + "/tools/release-check",
+            "--apkg-bin", os.path.realpath(top) + "/userland/pkgtools/src/apkg/apkg"]
+    check("release: assemble-release.py over out/{userland,kspace,apkg} and STOCK, into out/release/1.1",
+          rc == 0 and a == want, out + "\n" + " ".join(a))
+    check("release: the host apkg is built for it",
+          os.path.isfile(os.path.join(pt, "src", "apkg", "apkg")), out)
+    rc, out = run("release", ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="3")
+    a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
+    check("release: no STOCK, no --stock, and the tool's exit 3 is the step's",
+          rc == 3 and "--stock" not in a and "--previous" not in a, out + " ".join(a))
+    rc, out = run("release", ASSEMBLE_ARGS=argrel, RELEASE_PREVIOUS=stock, ASSEMBLE_RC="1")
+    a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
+    check("release: RELEASE_PREVIOUS is --previous, and a refusal (exit 1) is the step's",
+          rc == 1 and a[a.index("--previous") + 1] == stock if "--previous" in a else False, out + " ".join(a))
+
     fake = os.path.join(tmp, "bin", "docker")
     # the image's passwd and group, which name no one but root
     write(fake, '#!/bin/sh\nif [ "$4" = cat ]; then\n'
@@ -445,6 +492,24 @@ clean:
     check("and runs the step there, from /src, in AMIX_IMAGE",
           args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))
+    check("no release input set, none mounted", not any("/release-in/" in x for x in args), " ".join(args))
+    reg = os.path.join(tmp, "rom-register")
+    write(reg, "")
+    rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, STOCK=stock, ROM_MANIFEST=reg, AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("STOCK and ROM_MANIFEST go in read-only under /release-in, by those names",
+          rc == 0 and "STOCK=/release-in/STOCK" in args and "%s:/release-in/STOCK:ro" % stock in args
+          and "ROM_MANIFEST=/release-in/ROM_MANIFEST" in args and "%s:/release-in/ROM_MANIFEST:ro" % reg in args
+          and not any("PRIVACY_PATTERNS" in x for x in args)
+          and args.index("STOCK=/release-in/STOCK") < args.index("amix-toolchain:test")
+          and args.index("%s:/release-in/ROM_MANIFEST:ro" % reg) < args.index("amix-toolchain:test")
+          and args[args.index("amix-toolchain:test"):-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "release"],
+          " ".join(args))
+    rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, PRIVACY_PATTERNS=os.path.join(tmp, "nosuch"))
+    check("a release input that does not exist: refused before the container",
+          rc == 1 and "PRIVACY_PATTERNS=%s does not exist" % os.path.join(tmp, "nosuch") in out, out)
 finally:
     shutil.rmtree(tmp)
 

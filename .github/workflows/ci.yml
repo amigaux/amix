@@ -58,9 +58,11 @@ jobs:
       - name: host packages
         run: |
           sudo apt-get -o Acquire::Retries=10 update -q
-          sudo apt-get -o Acquire::Retries=10 install -q -y --no-install-recommends zlib1g-dev
+          sudo apt-get -o Acquire::Retries=10 install -q -y --no-install-recommends zlib1g-dev xorriso
       - name: privacy-check self-test
         run: tools/test-privacy-check
+      - name: release-check self-test
+        run: tools/test-release-check
       - name: kernel/dlm host tests
         run: make -C kernel/dlm test
       - name: kernel/modules monsw host test

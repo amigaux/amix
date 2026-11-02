@@ -31,9 +31,17 @@
 #   userland     every package.sh of userland/packages and userland/base/pkg,
 #                each after the packages its BUILD_DEPENDS names:
 #                out/userland/pkgs/*.pkg, one version per name
+#   apkg         APKG and APKGENG, by pkgtools' make dist: out/apkg/*.pkg
 #   catalogs     both catalogs, by pkgtools' gen-catalog.py over
 #                out/{kspace,userland}/pkgs with their conf layers:
 #                out/{kspace,userland}/{catalog,catalog.md5}
+#   release      the 1.1 repository tree, by pkgtools' assemble-release.py
+#                over out/{userland,kspace,apkg}, the stock packages
+#                (STOCK=<dir>, which stock-1.1.lock names) and the published
+#                tree (RELEASE_PREVIOUS=<dir>, if any), checked by
+#                tools/release-check with ROM_MANIFEST=<file> and
+#                PRIVACY_PATTERNS=<file>: out/release/1.1/; without STOCK or
+#                either file, the step exits 3
 #   media        CD, netinstall, floppies                  not in make dist yet
 #   lock         out/lock, every input and output (release/README.md); with
 #                LOCK=<file>, refuses a build that is not that lock
@@ -69,7 +77,7 @@ usage() {
 [ $# -gt 0 ] || usage
 for s; do
 	case $s in
-	dist|tools|kit|kernel-k30|kernel-k46|modules|drivers|drivers/?*|kspace|userland|recipes/?*|catalogs|media|lock) ;;
+	dist|tools|kit|kernel-k30|kernel-k46|modules|drivers|drivers/?*|kspace|userland|apkg|recipes/?*|catalogs|release|media|lock) ;;
 	*) echo "[FAIL] unknown step: $s" >&2; usage ;;
 	esac
 done
@@ -121,6 +129,16 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	if [ -n "${AMIX_DISTFILES:-}" ]; then
 		set -- -e AMIX_DISTFILES=/distfiles -v "$(cd "$AMIX_DISTFILES" && pwd):/distfiles:ro" "$@"
 	fi
+	# the release step's inputs from outside the checkout, read-only under
+	# /release-in: STOCK and RELEASE_PREVIOUS (directories), ROM_MANIFEST
+	# and PRIVACY_PATTERNS (files, never in this repository)
+	for v in STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS; do
+		eval "p=\${$v:-}"
+		[ -n "$p" ] || continue
+		[ -e "$p" ] || { echo "[FAIL] make dist: $v=$p does not exist" >&2; exit 1; }
+		p=$(cd "$(dirname "$p")" && pwd)/$(basename "$p")
+		set -- -e "$v=/release-in/$v" -v "$p:/release-in/$v:ro" "$@"
+	done
 	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 -e LOCK \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi
@@ -465,6 +483,48 @@ step_kspace() {
 	[ -z "$missing$waiting" ] || exit 3
 }
 
+step_apkg() {
+	rm -rf "${out:?}/apkg"
+	mkdir -p "$out/build"
+	make -C "$top/userland/pkgtools" dist OUT="$out/apkg" STAGE="$out/build/pkgtools" GCA="$GCA" \
+		> "$out/build/apkg.log" 2>&1 || {
+		tail -20 "$out/build/apkg.log" >&2
+		echo "[FAIL] apkg: pkgtools' make dist failed; log out/build/apkg.log" >&2
+		exit 1
+	}
+	# pkgtools' make dist leaves its catalog layer beside the datastreams
+	rm -f "${out:?}/apkg/"*.conf
+	(cd "$out/apkg" && md5sum APKG-*.pkg APKGENG-*.pkg)
+}
+
+release=1.1
+step_release() {
+	for d in userland kspace; do
+		[ -f "$out/$d/catalog" ] || missing_input "out/$d/catalog: make $d catalogs first"
+	done
+	ls "$out/apkg/"APKG-*.pkg >/dev/null 2>&1 || missing_input "out/apkg: make apkg first"
+	host_pkgtools		# AMIX_PKGTRANS, for the tool's scan060
+	mkdir -p "$out/build"
+	make -C "$top/userland/pkgtools/src/apkg" apkg > "$out/build/apkg-host.log" 2>&1 || {
+		tail -20 "$out/build/apkg-host.log" >&2
+		echo "[FAIL] release: the host apkg did not build; log out/build/apkg-host.log" >&2
+		exit 1
+	}
+	rc=0
+	python3 -I "$top/userland/pkgtools/tools/repo/assemble-release.py" \
+		--userland "$out/userland" --kspace "$out/kspace" --apkg "$out/apkg" \
+		${STOCK:+--stock "$STOCK"} ${RELEASE_PREVIOUS:+--previous "$RELEASE_PREVIOUS"} \
+		--release "$release" --out "$out/release/$release" \
+		--release-check "$top/tools/release-check" \
+		--apkg-bin "$top/userland/pkgtools/src/apkg/apkg" || rc=$?
+	exit $rc
+}
+
+missing_input() {	# missing_input <what>
+	echo "[MISSING] release: $1" >&2
+	exit 3
+}
+
 step_userland() {
 	host_pkgtools
 	python3 -I "$here/pkg/pkgmeta" check "$top/userland/packages" "$top/userland/base/pkg" >/dev/null
@@ -487,6 +547,8 @@ run() {
 	drivers/*) mkdir -p "$out/build"; step_drivers "${1#drivers/}" ;;
 	kspace) step_kspace ;;
 	userland) step_userland ;;
+	apkg) step_apkg ;;
+	release) step_release ;;
 	recipes/*)
 		order=$(build_order "${1#recipes/}") || exit 1
 		host_pkgtools
@@ -503,7 +565,7 @@ run() {
 		;;
 	dist)
 		# each step its own process: set -e holds inside it
-		for s in kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock; do
+		for s in kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock; do
 			echo "=== make dist: $s"
 			sh "$0" "$s" || { rc=$?; echo "make dist: stopped at $s" >&2; exit "$rc"; }
 		done
