@@ -69,7 +69,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # and kbootset, kbootset first and the kernel last, the pre-flight over
 # every installed module, a kernel row's kbootset= floor (C2-2 v6), and
 # what to fix after a gate refusal.  0.3.4 (c19cb40f...) stays what it is.
-VER_APKG="0.3.5"
+# 0.3.6 (2026-11-02, not minted yet): `-f install` of an installed package
+# passes instance=overwrite at the same version too (under instance=quit
+# the engine quits on any installed instance), and a kernel-space install
+# over an engine instance with no record (files a bare pkgadd laid) does
+# the same.  0.3.5 (3d2f8737...) stays what it is.
+VER_APKG="0.3.6"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -101,10 +106,10 @@ VER_ENG="1.12.5"
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
-# 2026-10-30 00:00:00 UTC, the day 1.12.5 was set; EPOCH_APKG: 2026-11-01
-# 00:00:00 UTC, the day 0.3.5 was set (0.3.4's was 1793318400).  The other
-# arms roll without one, as before.
-EPOCH_APKG=1793491200
+# 2026-10-30 00:00:00 UTC, the day 1.12.5 was set; EPOCH_APKG: 2026-11-02
+# 00:00:00 UTC, the day 0.3.6 was set (0.3.5's was 1793491200, 0.3.4's
+# 1793318400).  The other arms roll without one, as before.
+EPOCH_APKG=1793577600
 EPOCH_ENG=1793318400
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
@@ -551,6 +556,9 @@ EOF
   # Version 0.3.5 (2026-11-01; minted 2026-11-01).  The apkg binary and apkg.1
   # change (a kernel cut upgrades as one set); every other payload byte is
   # 0.3.4's.
+  # Version 0.3.6 (2026-11-02, not minted).  The apkg binary and apkg.1
+  # change (a reinstall passes instance=overwrite); every other payload
+  # byte is 0.3.5's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

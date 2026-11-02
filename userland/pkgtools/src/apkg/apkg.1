@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.5" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.6" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -525,6 +525,29 @@ must equal
 .B pkginst=
 when the entry gives one.
 .PP
+Kernel-space packages are installed, upgraded and removed only through
+apkg.  The record is apkg's alone: a bare
+.B pkgadd
+or
+.B pkgrm
+never writes or removes it, and a package cannot carry a script that
+would.  kbootset compares every generation member with its record, so a
+file laid by hand or by a bare
+.B pkgadd
+is refused at the next build ("has no apkg record" or "differs from
+what package X installed"), and the committed generation keeps booting.
+From apkg 0.3.6,
+.B "apkg \-f install"
+.I name
+lays the catalog's version again over the installed instance
+(instance=overwrite, the same version too) and writes a new record;
+with no record at all a plain
+.B install
+does the same.  A package not in the repository's catalog goes into a
+local repository (a directory with its catalog, named by
+.BR repo )
+first.
+.PP
 After a transaction that installed or removed kernel space, and only
 when every package in it is done, apkg calls
 .B kbootset build
@@ -558,7 +581,8 @@ change nothing.
 .B \-f
 Force: reinstall the packages
 .I named on the command line
-even when they are already installed.  It does
+even when they are already installed, over the installed instance
+(instance=overwrite, the same version too).  It does
 .B not
 propagate to their dependencies \- an already-satisfied dependency is
 left alone (forcing the whole closure meant re-installing the multi-

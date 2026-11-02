@@ -750,9 +750,13 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         }
         cmp = apkg_vercmp(ent->version, iver);
         if (named && opt_force) {
-            /* deliberate reinstall/replacement of what was asked for */
+            /* deliberate reinstall/replacement of what was asked for.
+             * Always instance=overwrite, the same version too: under
+             * instance=quit pkgadd quits on ANY installed instance
+             * (pkginstall/getinst.c), before its same-version path
+             * (0.3.6) */
             todo[nt] = ent;
-            ow[nt] = (cmp != 0);
+            ow[nt] = 1;
             nt++;
             continue;
         }
@@ -851,6 +855,12 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
         note("staged %s%s", staged, eph ? "" : " (in place)");
         files[i] = staged;
         insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
+        /* kernel space is installed by its record: files a bare pkgadd
+         * laid leave an engine instance and no record, and only
+         * instance=overwrite replaces that instance (0.3.6) */
+        if (todo[i]->kspace && !ow[i] &&
+            installed_version(cf, inst, iver, sizeof(iver)))
+            ow[i] = 1;
     }
 
     /* phase 2: journal, the pkgrm of the other kernel package of a line,
