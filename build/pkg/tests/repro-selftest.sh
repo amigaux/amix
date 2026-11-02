@@ -92,8 +92,8 @@ d none /opt/amix/bin 0755 root sys
 f none /opt/amix/bin/rtest 0755 root bin
 d none /opt/amix/lib 0755 root sys
 f none /opt/amix/lib/librtest.a 0644 root bin
-d none /opt/amix/man 0755 root bin
-d none /opt/amix/man/1 0755 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/rtest 0644 root bin
 f none /opt/amix/man/1/rtest.conf 0644 root bin
 d none /opt/amix/share 0755 root sys
