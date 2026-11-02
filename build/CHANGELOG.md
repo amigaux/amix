@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the build container carries its pins (3a30b19)
+
+The build container carries the pins it was built from in /opt/amix/PINS; make dist runs toolchain/check-image first and stops on an image built from other pins or without the stamp. A stamped image of 33ebadc/43825b2 has the same TOOLCHAIN.sha256 as the unstamped one.
+
 ## 2026-11-02 — scan060-g14 decodes data objects in .text as data (c54a4c7)
 
 scan060-g14 decodes a sized data object in .text (values-Xa.o's _lib_version) as data and runs objdump -D per executable section; under -d the object's hex dump hid the rest of .text and read as instructions.
