@@ -78,9 +78,16 @@ The image holds the AMIX sysroot, so it is built locally from a checkout of
 | `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`, and amix-system's absolute links into `usr/amiga` and `usr/ucblib` (`usr/lib/libscreen.so`, `usr/include/amiga`, `usr/ccs/lib/libdbm.a`, ...) made relative by `sysroot-links`, so they resolve there; `build/sysroot` links to it |
 | `/opt/amix/amix-system/usr` | the AMIX root both were built from |
 | `/opt/amix/TOOLCHAIN.sha256` | the hash list |
+| `/opt/amix/PINS/*.pin` | the pins it was built from |
 
 `GCA` and `G14` are set in the image's environment, and both toolchains are
 on `PATH`.
+
+`toolchain/check-image` compares `/opt/amix/PINS` with the checkout's
+`toolchain/*.pin` (`toolchain/check-image IMAGE` runs it in that image).
+`make dist` runs it first inside the container and stops on any difference,
+so a retagged or stale image cannot change a package's bytes unnoticed;
+rebuild the image (`make tools`) after a pin changes.
 
 ## GCC 14 on the host
 
@@ -191,7 +198,7 @@ not carry as such:
   comparison here reported the FPSP and ISP objects identical; it did not
   hold.
 
-`sh toolchain/test-tools` is the host test of both.
+`sh toolchain/test-tools` is the host test of both and of `check-image`.
 
 ## Updating a pin
 

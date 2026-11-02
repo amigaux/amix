@@ -17,7 +17,8 @@
 #
 # Each toolchain's source is exported with `git archive` at the pinned commit
 # into a scratch directory, so nothing but the tree at that commit reaches
-# the build: no .git, no local edits, no build products.
+# the build: no .git, no local edits, no build products.  The .pin files go
+# into the image as /opt/amix/PINS, which make dist checks (check-image).
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)

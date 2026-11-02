@@ -40,7 +40,7 @@ check "fetch: a cached file that matches is not fetched again" \
 	sh -c 'AMIX_DISTFILES=/nonexistent sh "$0" "$1" "$2" 2>&1 | grep -q "^  cached"' \
 	"$here/fetch-distfile" "$T/thing.pin" "$T/cache"
 printf 'other bytes\n' > "$T/dist/thing-1.0.tgz"
-rm -f "$T/cache/thing-1.0.tgz"
+rm -f "${T:?}/cache/thing-1.0.tgz"
 refused "fetch: other bytes in AMIX_DISTFILES are not taken; the URL is tried" "is not the pinned bytes; fetching the URL" fetch "$T/thing.pin" "$T/cache"
 check "fetch: a refused file is not left in the cache" test ! -e "$T/cache/thing-1.0.tgz" -a ! -e "$T/cache/thing-1.0.tgz.part"
 refused "fetch: a file missing from AMIX_DISTFILES: the URL is tried" "download failed: https://example.invalid/" \
@@ -70,7 +70,7 @@ check "m68k-gnu-bin: every m68k-linux-gnu tool the port calls, linked to gcc14's
 	"$here/m68k-gnu-bin" "$T/g14" "$T/gnu"
 check "m68k-gnu-bin: the port's lookup finds the directory" \
 	sh -c '[ "$(PATH=$0:$PATH; dirname "$(command -v m68k-linux-gnu-nm)")" = "$0" ]' "$T/gnu"
-rm "$T/g14/prefix/bin/m68k-elf-objcopy"
+rm "${T:?}/g14/prefix/bin/m68k-elf-objcopy"
 refused "m68k-gnu-bin: a missing gcc14 tool is refused" "no $T/g14/prefix/bin/m68k-elf-objcopy" \
 	env G14="$T/g14" sh "$here/m68k-gnu-bin" "$T/gnu2"
 refused "m68k-gnu-bin: G14 unset is refused" "G14 is not set" env -u G14 sh "$here/m68k-gnu-bin" "$T/gnu3"
@@ -103,6 +103,35 @@ check "sysroot-links: a second run changes nothing" \
 mkdir -p "$T/oldsys/usr/amiga"
 refused "sysroot-links: a sysroot without usr/ucblib is refused" "has no usr/ucblib" \
 	sh "$here/sysroot-links" "$T/oldsys"
+
+# --- check-image -------------------------------------------------------------------
+mkdir -p "$T/ck/tc" "$T/ck/PINS"
+cp "$here/check-image" "$T/ck/tc/"
+printf 'https://example.invalid/a.git %s\n' 1111111111111111111111111111111111111111 > "$T/ck/tc/a.pin"
+printf 'https://example.invalid/b.git %s\n' 2222222222222222222222222222222222222222 > "$T/ck/tc/b.pin"
+cp "$T/ck/tc/a.pin" "$T/ck/tc/b.pin" "$T/ck/PINS/"
+ck() { AMIX_PINS=$T/ck/PINS sh "$T/ck/tc/check-image" "$@"; }
+check "check-image: the image's pins are the checkout's" \
+	sh -c 'AMIX_PINS=$1 sh "$2" | grep -qx "check-image: the image.s pins are this checkout.s (a.pin b.pin)"' \
+	sh "$T/ck/PINS" "$T/ck/tc/check-image"
+printf 'https://example.invalid/a.git %s\n' 3333333333333333333333333333333333333333 > "$T/ck/PINS/a.pin"
+refused "check-image: a pin that differs is refused, both commits named" "a.pin: image 3333333, checkout 1111111" ck
+cp "$T/ck/tc/a.pin" "$T/ck/PINS/a.pin"; rm "${T:?}/ck/PINS/b.pin"
+refused "check-image: a pin the image lacks is refused" "b.pin: image none, checkout 2222222" ck
+cp "$T/ck/tc/b.pin" "$T/ck/PINS/"; cp "$T/ck/tc/a.pin" "$T/ck/PINS/c.pin"
+refused "check-image: a pin only the image has is refused" "c.pin: image 1111111, checkout none" ck
+refused "check-image: an image without the stamp is refused" "predates pin stamps" \
+	env AMIX_PINS="$T/ck/none" sh "$T/ck/tc/check-image"
+if [ "$(id -u)" != 0 ]; then
+	chmod 0644 "$T/ck/PINS"
+	refused "check-image: a stamp the caller cannot read is refused" "cannot read $T/ck/PINS" ck
+	chmod 0755 "$T/ck/PINS"
+fi
+mkdir -p "$T/ck/bin"
+printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "%s"\n' "$T/ck/args" > "$T/ck/bin/docker"; chmod +x "$T/ck/bin/docker"
+check "check-image IMAGE: runs itself in the image, the toolchain directory read-only" \
+	sh -c 'PATH=$1/bin:$PATH sh "$1/tc/check-image" amix-toolchain:test &&
+		[ "$(tr "\n" " " < "$1/args")" = "run --rm -v $1/tc:/check:ro amix-toolchain:test sh /check/check-image " ]' sh "$T/ck"
 
 echo "$pass/$((pass + fail)) passed"
 [ "$fail" -eq 0 ]
