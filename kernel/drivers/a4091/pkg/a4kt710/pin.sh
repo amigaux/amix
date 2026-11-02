@@ -20,16 +20,20 @@
 # 1.0.0-4 (2026-11-01): the same module 1.0.0-1 and source, built with
 # gcc-cross-amix 33ebadc: .moddata says cc=gcc-2.7.2.3-33ebadc, every other
 # section equals 1.0.0-3's; for kernel-k30-m -68 and kernel-k46-m -56 or later.
+# 1.0.0-5 (2026-11-02): module 1.0.0-2: a4091-wr.c's bus reset before the
+# first command adds up the beam lines that passed, not the counter changes
+# seen (on metal the same 254 ms; under an emulator that runs the CPU in
+# bursts no longer most of a minute).
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-1
-KM_PKG_VERSION=1.0.0-4
+KM_VERSION=1.0.0-2
+KM_PKG_VERSION=1.0.0-5
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=17a3a63473838cd9292ea8bd94b83d30fda863286f1960b612ef189bf0a092ae
-KM_K46_SHA=2607fe5f7450fa531a257daca692cae9e3f2da96737b21723f416485eb180e12
+KM_K30_SHA=f2fd6f05c7529b7c620895e625d64cf48b7845829f88896e88bb76e3e0aaf610
+KM_K46_SHA=cbeeeb903627f715b46b1797842ea80e420cb7cf45aee69e562e79938d90ab16
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -58,4 +62,4 @@ later (a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The
 module is built from src/a4kt710.c and src/a4091-wr.c, part 1 of the NOTICE
 below (MIT); none of the NOTICE's other parts is in the object."
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC

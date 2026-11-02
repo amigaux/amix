@@ -19,7 +19,8 @@ CWARN  := -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function 
 CFLAGS := $(CSTD) $(CWARN) -O0 -g
 BUILD  := build
 DRV    := ../../src/a4091-wr.c
-DRVF   := -DA4091_MODULE -Istubs -I../../src -Dprintf=mock_printf -Dbcopy=mock_bcopy
+DRVF   := -DA4091_MODULE -Istubs -I../../src -Dprintf=mock_printf -Dbcopy=mock_bcopy \
+          -D'A4091_VPOS8()=((unsigned char)mock_vpos8())'
 STUBS  := $(wildcard stubs/*.h stubs/sys/*.h)
 
 .PHONY: all check clean

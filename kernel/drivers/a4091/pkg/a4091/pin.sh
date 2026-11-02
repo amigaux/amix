@@ -17,15 +17,19 @@
 # 1.0.0-8 (2026-11-01): the same module 1.0.0-5 and source, built with
 # gcc-cross-amix 33ebadc: .moddata says cc=gcc-2.7.2.3-33ebadc, every other
 # section equals 1.0.0-7's; for kernel-k30-m -68 and kernel-k46-m -56 or later.
+# 1.0.0-9 (2026-11-02): module 1.0.0-6: the bus reset before a card's first
+# command adds up the beam lines that passed, not the counter changes seen
+# (on metal the same 254 ms; under Amiberry at cpu_speed=max no longer
+# 53-72 s); new global a4091_busreset_chg.
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-5
-KM_PKG_VERSION=1.0.0-8
+KM_VERSION=1.0.0-6
+KM_PKG_VERSION=1.0.0-9
 
-KM_K30_SHA=285c54399df3dc2b3355b20680d8f6c89af1a91d774878797ec78e10ea7ae974
-KM_K46_SHA=a73469a09db980e087c52f59758fdd118e19f27de2af65cc13661f40b306df9f
+KM_K30_SHA=9ca1b96cd8083de56bdaea9c55f8c12ca36a5074d245ce15e3a837e6211b75f3
+KM_K46_SHA=c2d518e4eb59b0dafb3e45f07e3e652f5c0353c68558cd58d797821946d2e277
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -45,4 +49,4 @@ and kernel-k46-m -56 or later (a4091-k46), the kernels built with that
 toolchain.  The module is built from src/a4091-wr.c, part 1 of the NOTICE
 below (MIT); none of the NOTICE's other parts is in the object."
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC

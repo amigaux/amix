@@ -781,16 +781,22 @@ a4091init()
  * in a4091init() resets the chip only, not the bus.
  *
  * Timed by the beam counter, not a CPU loop: the high byte of VHPOSR (0xDFF006)
- * changes once per scanline (63.5 us NTSC, 64 us PAL) on every CPU, while the
- * stock drv_usecwait is a dbf loop sized for the 030.  RST is held for 2 line
- * changes (>= 1 full line, > the 25 us minimum), then 4000 line changes give
- * >= 254 ms (> the 250 ms reset-to-selection time).  Each wait is bounded in
- * reads so a stuck counter cannot hang the boot (a4091_busreset_to counts it).
+ * holds V7..V0 of the scanline (63.5 us NTSC, 64 us PAL) on every CPU, while the
+ * stock drv_usecwait is a dbf loop sized for the 030.  The waits add up the lines
+ * that passed between two reads, not the number of changes seen: on metal every
+ * change is one line, but an emulator running the CPU in bursts (Amiberry at
+ * cpu_speed=max shows one or two values per frame) would turn 4000 changes into
+ * a minute.  Across a wrap (at 256 and at the frame end) only the lines since the
+ * wrap are counted, so the sum never exceeds the lines that really passed.  RST
+ * is held for 2 lines (>= 1 full line, > the 25 us minimum), then 4000 lines give
+ * >= 254 ms (> the 250 ms reset-to-selection time).  Each wait for a change is
+ * bounded in reads so a stuck counter cannot hang the boot (a4091_busreset_to).
  * The first command to each target afterwards gets CHECK CONDITION / UNIT
  * ATTENTION (6/29): dd senses and retries once (one "blk" console line), ct's
  * open starts with REQUEST SENSE, GSIO returns status 2 once to its caller.
  *   a4091_busreset     patchable; 0 skips the reset (the earlier behaviour)
  *   a4091_busreset_n   resets done;  a4091_busreset_to  line waits that timed out
+ *   a4091_busreset_chg counter changes seen by the last reset (4002 on metal)
  *   a4091_rearm_n      resets re-armed by a stuck command (see a4091queue)
  */
 #define	SCNTL1_ESR	0x20		/* enable selection/reselection */
@@ -800,10 +806,14 @@ a4091init()
 #define	RST_HOLD_LINES	2
 #define	RST_SETTLE_LINES 4000
 #define	LINE_READ_BOUND	200000		/* reads per line change before giving up */
+#ifndef	A4091_VPOS8
+#define	A4091_VPOS8()	((uchar)(*(volatile ushort *)VHPOSR >> 8))
+#endif
 
 long	a4091_busreset = 1;
 ulong	a4091_busreset_n;
 ulong	a4091_busreset_to;
+ulong	a4091_busreset_chg;
 ulong	a4091_rearm_n;
 static uchar	a4091_rstdone[A4091_NCARD];
 
@@ -815,20 +825,24 @@ ulong	n;
 	uchar	v, w;
 
 	seen = 0;
-	v = (uchar)(*(volatile ushort *)VHPOSR >> 8);
+	v = A4091_VPOS8();
 	while (seen < n) {
 		reads = 0;
 		w = v;
 		while (w == v && reads < LINE_READ_BOUND) {
-			w = (uchar)(*(volatile ushort *)VHPOSR >> 8);
+			w = A4091_VPOS8();
 			reads = reads + 1;
 		}
 		if (w == v) {
 			a4091_busreset_to++;
 			return;
 		}
+		a4091_busreset_chg = a4091_busreset_chg + 1;
+		if (w > v)
+			seen = seen + (ulong)(w - v);
+		else
+			seen = seen + (ulong)w + 1;	/* wrapped: the lines since 0 */
 		v = w;
-		seen = seen + 1;
 	}
 }
 
@@ -839,6 +853,7 @@ int	card;
 	a4091_rstdone[card] = 1;
 	if (!a4091_busreset)
 		return;
+	a4091_busreset_chg = 0;
 	a4091init();
 	WR8( R_SCNTL1, SCNTL1_ESR | SCNTL1_RST);
 	a4091_lines( (ulong)RST_HOLD_LINES);

@@ -43,6 +43,40 @@ mock_vposr(void)
 	return mock_vposr_val;
 }
 
+/*
+ * The beam as the bus reset reads it (VHPOSR's high byte: V7..V0).  A real
+ * line counter that the reads themselves advance:
+ *   MOCK_BEAM_DENSE  metal: mock_beam_rpl reads per line, every line seen;
+ *   MOCK_BEAM_BURST  an emulator running the CPU in bursts: mock_beam_rpl
+ *                    reads see one value, then half a frame has passed;
+ *   MOCK_BEAM_STUCK  the counter never moves.
+ */
+int		mock_beam_mode;
+unsigned long	mock_beam_frame = 313;	/* lines per frame: 313 PAL, 263 NTSC */
+unsigned long	mock_beam_rpl = 4;
+unsigned long	mock_beam_start;	/* the line of the first read */
+unsigned long	mock_beam_reads;
+unsigned long	mock_beam_line;		/* real lines since the first read */
+
+unsigned char
+mock_vpos8(void)
+{
+	unsigned long r = mock_beam_reads++;
+
+	switch (mock_beam_mode) {
+	case MOCK_BEAM_DENSE:
+		mock_beam_line = r / mock_beam_rpl;
+		break;
+	case MOCK_BEAM_BURST:
+		mock_beam_line = (r / mock_beam_rpl) * mock_beam_frame / 2;
+		break;
+	default:
+		mock_beam_line = 0;
+		break;
+	}
+	return (unsigned char)((mock_beam_start + mock_beam_line) % mock_beam_frame);
+}
+
 void
 mock_reset(void)
 {
@@ -67,6 +101,12 @@ mock_reset(void)
 	mock_rom = NULL;
 	mock_rom_maps = 0;
 	mock_vposr_val = 0x2300;
+	mock_beam_mode = MOCK_BEAM_DENSE;
+	mock_beam_frame = 313;
+	mock_beam_rpl = 4;
+	mock_beam_start = 0;
+	mock_beam_reads = 0;
+	mock_beam_line = 0;
 }
 
 int
