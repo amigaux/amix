@@ -1,3 +1,8 @@
+## 2026-11-02 — assemble-release.py; scan060 section names (a862c0e, c38ab8f)
+
+- assemble-release.py writes one repository tree per release from make dist's catalogs, APKG/APKGENG and the stock datastreams stock-1.1.lock pins; every published version stays (older rows in an #ext older block every apkg skips); a refused check writes nothing.
+- scan060: section names as objdump sees them, so a code section BFD names "" (the k30 kernel's) is decoded instead of failing.
+
 ## 2026-11-02 — scan060 names its code sections (49ef07a)
 
 scan060: every objdump call names its code section (-j), so an unstripped shared library's .debug_* at address 0 is no longer decoded as code (libamixrt.so.1's 2 false movepw hits); other verdicts unchanged.
