@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — a4kt710 refuses an A1200 or A600 Kickstart (5caf1c4)
+
+a4kt710 refuses a Kickstart with a card.resource ROM tag (every A1200 and A600 one) before any $DD access, even with declared=1 (a4kt_gate 5, a4kt_cardoff); checked over every Kickstart image in our ROM store; the A4000T path is unchanged. a4kt710 module 1.0.0-4, package 1.0.0-7; a4091 unchanged.
+
 ## 2026-11-02 — the modules drop investigation leftovers (3968a0c)
 
 No U77 byte-write probe (no per-command knob test on k46), no a4091_dma_off knob (the D42 record's off is 0 for good), no last-command globals; the kstat keeps its 23-long layout and magic; the k46 attach lines read "a4091: board N at 0x..." / "a4kt710: board 0 at 0xdd0000"; the static arms are unchanged. Loaded size k46 a4091 5572 -> 4900 B. a4091 module 1.0.0-7, package 1.0.0-10; a4kt710 module 1.0.0-3, package 1.0.0-6.
