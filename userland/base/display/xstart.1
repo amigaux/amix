@@ -67,10 +67,27 @@ reaches the server alone, through a small script
 writes in
 .B /tmp
 and removes afterwards.
+The server is given the card's
+.B once
+option, so it ends with the session instead of resetting for another
+.RB ( display.d (4)).
 When the session ends, the monitor is switched back; when the server ended
 on its own instead (it crashed or was killed), the card's
 .B restore
 command runs too.
+.PP
+When an X server for the display is still running (one still ending, or
+another session's),
+.B xstart
+says so once and waits for it to end, up to
+.B XSTART_WAIT
+seconds (60 when not set), looking every 2 seconds; when it is still there,
+.B xstart
+starts nothing and exits 1.
+.B \-xdm
+and
+.B \-dtlogin
+wait the same way.
 .PP
 The system's
 .B startx
@@ -80,7 +97,8 @@ is still there and unchanged.
 .B \-n
 say what would be run, and every mistake in
 .B /etc/display
-and the card files, and run nothing.
+and the card files, and run nothing; an X server still running on the
+display is reported.
 .TP
 .B \-xdm \fR|\fP \-dtlogin
 instead of a session, start X11R6's
@@ -100,7 +118,8 @@ or
 .BR \-n :
 when the files hold no mistake); 1 when the display cannot be set up (no
 card answers, a mode or depth the card does not have, no server, no
-.BR xinit );
+.BR xinit ,
+an X server for the display that did not end in time);
 2 on a usage mistake.
 .SH FILES
 .TP
@@ -116,6 +135,11 @@ the default session.
 .BR display (4),
 .BR display.d (4)
 .SH NOTES
+An X11R6.3 server leaves its socket in
+.B /tmp/.X11-unix
+when it ends, however it ends; the next server replaces it, so it needs no
+removing by hand.
+.PP
 The keyboard map under X is not yet derived from the console's
 .BR /etc/default.kmap ;
 a
