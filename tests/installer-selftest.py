@@ -9977,6 +9977,9 @@ def audit_kbootset_cards():
             ("the IDE master on card 2, kbootset -34 names card 1's A4091: stop",
              '[ "$1 $2" = "cards /dev/dsk/c16d0s1" ] && echo "zorro:0202:54 base 0x40800000"', "gayle",
              ["DIE kbootset cards names 'zorro:0202:54' for the IDE master c16d0 (IDE card 2)"], ide2),
+            ("the IDE master on card 1, kbootset -34 refuses ced0s1: the profile's gayle stands",
+             'echo "kbootset: ced0s1: not a disk node" >&2; exit 2', "gayle",
+             ["BOOTDEV=mobo:gayle", "CTL=the profile's TARGET_HBA=gayle"], "IDE_CARD=1\nTARGET_SCSI_ID=e\n"),
         )
         bad = []
         for c in cases:
@@ -9984,8 +9987,9 @@ def audit_kbootset_cards():
             out = run(stub, hba, *c[4:])
             if not all(x in out for x in want):
                 bad.append("%s: %r" % (w, out.strip().splitlines()[-2:]))
-        (fail if bad else ok)("kbootset cards EXECUTED (7 cases: the disk's key wins, Zorro key, no `cards`, a card "
-                              "not in the table, no kbootset, a card-2 IDE master under -35 and under -34 (stops); "
+        (fail if bad else ok)("kbootset cards EXECUTED (8 cases: the disk's key wins, Zorro key, no `cards`, a card "
+                              "not in the table, no kbootset, a card-2 IDE master under -35 and under -34 (stops), "
+                              "a card-1 IDE master under -34 (refused: the profile stands); "
                               "each names its source for the log)%s"
                               % ((": " + "; ".join(bad)) if bad else ""))
     finally:

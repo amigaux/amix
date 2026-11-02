@@ -107,11 +107,14 @@ l11_keys()
 		# one line either way: the key on standard output, or why not on standard error
 		_k=`"$L11/bin/kbootset" cards "/dev/dsk/c${TARGET_SCSI_ID}d0s${TARGET_ROOT_SLICE}" 2>&1`
 		set -- $_k
-		# the interview took the IDE port's card from the same table: the disk's key must be
-		# the IDE's (kbootset -34 and earlier read c10-c17 as card 1 and named its controller)
-		if [ -n "$IDE_CARD" ] && [ "$1" != mobo:gayle ]; then
-			die "kbootset cards names '$1' for the IDE master c${TARGET_SCSI_ID}d0 (IDE card $IDE_CARD): this medium's kbootset misreads the card (kbootset -35 reads c10-c17)"
-		fi
+		# the interview took the IDE port's card from the same table: a key named for its master
+		# must be the IDE's (kbootset -34 and earlier read c10-c17 as card 1 and named that
+		# card's controller; they refuse ca-cf, and then the profile's TARGET_HBA stands)
+		case "$IDE_CARD:$1" in
+			:*|*:mobo:gayle)	;;
+			*:mobo:?*|*:zorro:?*:?*)
+				die "kbootset cards names '$1' for the IDE master c${TARGET_SCSI_ID}d0 (IDE card $IDE_CARD): this medium's kbootset misreads the card (kbootset -35 reads c10-c17)" ;;
+		esac
 		case "$1" in
 			mobo:?*|zorro:?*:?*)
 				KBOOTSET_BOOTDEV="$1"
