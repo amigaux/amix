@@ -1,6 +1,22 @@
 # amix-packagemanager — lab notes
 
-## 2026-11-02 — APKGENG 1.12.6: the engine from master's toolchain pins (NOT MINTED)
+## 2026-11-02 — APKGENG 1.12.6 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container `amix-toolchain:dist` (`843de30`; its gcc wrapper is
+gcc-cross-amix `33ebadc`'s, master's pin) from `c84ded4`; `make repro-check` there: the checkout's
+roll and a `git archive` copy's (another path, umask 077, `SOURCE_DATE_EPOCH=1`) are the same
+bytes:
+
+- **md5 `c1d4831aee4502b4a03a1b11f0463153`**, **sha256
+  `e89a50f8ffbf6b7fcc756ccc70bbf581b50c23f8d7e04c041a04f42cc086db95`**, **2318336 B**. scan060
+  clean (11 binaries, one data object each), link gate OK.
+- Against 1.12.5 (`a49452d8…`): the same 37 files. The 11 programs grow 32 to 176 B (the symbol,
+  its dynamic-table entries, alignment), plus the three `src/formats` pages, `pkginfo` and
+  `pkgmap`.
+- APKG 0.3.6 rolls in the same `make dist` at `f87c02e0…`, the bytes minted in `928b9ae`.
+- Not yet run on a box.
+
+## 2026-11-02 — APKGENG 1.12.6: the engine from master's toolchain pins
 
 1.12.5's bytes (`a49452d8…`) came from a build image with an older gcc-cross-amix wrapper
 (`2ab2b22`'s). Master pins gcc-cross-amix `33ebadc`, whose wrapper links `values-Xa.o` as the

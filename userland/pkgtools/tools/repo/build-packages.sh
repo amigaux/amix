@@ -101,9 +101,10 @@ VER_APKG="0.3.6"
 # shipped commands' pages ship (no ck*, dispgid, dispuid, pkgadm), plus
 # compver(5), copyright(5) and space(5) from src/formats.  1.12.4 is staged with the old payload: one version, one
 # byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
-# 1.12.6 (2026-11-02, not minted yet) -- the same source through master's
-# toolchain pins (gcc-cross-amix 33ebadc), whose gcc wrapper links
-# values-Xa.o as the native cc does: every program carries _lib_version =
+# 1.12.6 (2026-11-02; minted 2026-11-02, md5 c1d4831a...) -- the same
+# source through master's toolchain pins (gcc-cross-amix 33ebadc), whose
+# gcc wrapper links values-Xa.o as the native cc does: every program
+# carries _lib_version =
 # Xa (ANSI mode, libm's error handling among it; the engine calls no libm
 # function), +4 bytes of .text each.  1.12.5's a49452d8 cannot be rolled
 # from master, so the number moves.  NOTES 2026-11-02.
