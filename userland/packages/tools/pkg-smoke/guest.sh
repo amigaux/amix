@@ -1,8 +1,9 @@
 #!/bin/sh
 # guest.sh -- runs ON THE GUEST (Amix, Bourne sh, as root):  sh guest.sh /tmp/pks
 #
-# For each PKGLIST line: stock pkgadd from the datastream (admin file, no
-# questions), pkginfo + pkgchk, the package's tests/smoke.sh, stock pkgrm,
+# For each PKGLIST line: pkgadd from the datastream (admin file, no
+# questions; pkgtools' /usr/apkg/bin/pkgadd when installed, else stock),
+# pkginfo + pkgchk, the package's tests/smoke.sh, stock pkgrm,
 # and proof that the contents database no longer names the package.
 # Written for the 1992 Bourne shell.  Result lines start with "RES ".
 
@@ -16,9 +17,13 @@ while read s n f; do
 done < MANIFEST.sum
 [ $bad -eq 0 ] && echo "RES push all files match MANIFEST.sum"
 C=/var/sadm/install/contents
+# the pkgadd a box with pkgtools installs with; stock where it is missing
+A=pkgadd
+[ -x /usr/apkg/bin/pkgadd ] && A=/usr/apkg/bin/pkgadd
+echo "RES pkgadd is $A"
 while read P F N M; do
 	echo "== $P ($F)"
-	pkgadd -n -a $D/admin -d $D/$F $P > $D/add.$P 2>&1; echo "RES pkgadd $P rc=$?"
+	$A -n -a $D/admin -d $D/$F $P > $D/add.$P 2>&1; echo "RES pkgadd $P rc=$?"
 	pkginfo -l $P 2>&1 | egrep 'PKGINST|VERSION|STATUS'
 	pkgchk $P > $D/chk.$P 2>&1; echo "RES pkgchk $P rc=$?"
 	n=`awk '$2 == "f" { for (i = 10; i <= NF; i++) if ($i == "'$P'") n++ } END { print n + 0 }' $C`
