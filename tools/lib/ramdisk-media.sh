@@ -9,9 +9,11 @@
 #        the Gayle slave; the target on the Z3660, the IDE master or the A4000T's 710),
 #        cdfs (demand class, loaded from the image's /stand/gen/1/mod at the disc's first
 #        mount); rootfs ufs, 32 MiB assumed
-#   k30: ramdisk, a4091, z3660scsi and gayle (root class: an A4000 in 030 mode installs onto its
-#        Z3660 or its IDE master), cdfs (demand class; kern30m links no static cdfs since -17);
-#        rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
+#   k30: ramdisk, a4091, z3660scsi, gayle and a4kt710 (root class: an A4000 in 030 mode installs
+#        onto its Z3660 or its IDE master), cdfs (demand class; kern30m links no static cdfs since
+#        -17); rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
+#   Each line carries every disk controller driver the installed generation carries (the 1.1
+#   profiles' KERNEL_MODPKGS), so the kernel numbers the cards at install as at the first boot.
 #   gayle with `param slave=2`: the ATAPI CD on the IDE slave attaches (the install source), an ATA
 #   disk there never does (a CF as slave is unstable: the target is the master only)
 # K46_MODS / K30_MODS override the module lists. The caller defines die().
@@ -29,7 +31,7 @@ rd_init() {
 	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46 gayle-k46 a4kt710-k46}"
-	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30 gayle-k30}"
+	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30 gayle-k30 a4kt710-k30}"
 	mkdir -p "$W/bin"
 	# the unpacking pkgadd apkg calls: files and directories into -R, the contents file kept
 	cat > "$W/bin/pkgadd" <<P

@@ -64,9 +64,11 @@ while [ $# -gt 0 ]; do case "$1" in
   *) sed -n '2,47p' "$0"; exit 2;;
 esac; done
 L11="${L11_IN:-$repo/work/l11}"
-# the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them)
-export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 z3660eth-k46"
-export K30_MODS="ramdisk-k30 a4091-k30 z3660eth-k30"
+# the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them): every disk
+# controller driver the installed generation carries (so the cards number as at the first boot),
+# and z3660eth for the network the packages come over
+export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46"
+export K30_MODS="ramdisk-k30 a4091-k30 z3660scsi-k30 a4kt710-k30 gayle-k30 z3660eth-k30"
 if [ -n "$BMODS" ]; then
   # step 2: stage each line as its generation will be, and hand out the boot- and demand-class objects
   ws="$(dirname "$repo")"
