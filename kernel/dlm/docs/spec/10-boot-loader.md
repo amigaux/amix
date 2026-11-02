@@ -118,6 +118,12 @@ New in 1.1, read only by kernels that know it:
 - Optionally a **RAM-disk image** placed at the top of a fast-memory region,
   with that region shortened in `memory[]` so the kernel never treats it as
   free memory (§5.4).
+- The **CPU** in AXL1's `cpu` field (+20; 40 or 60 on that line). A k46
+  kernel sets `cputype` from it in `pstart`, after `bootinfo` is copied and
+  before its first `cputype` test (amix-040-060-port 422efc5). Without a valid record
+  (magic, version/length and check as §6), or with `cpu` 30, it keeps its
+  own value; the stock loader sets `cputype` from `AttnFlags` itself. A k46
+  kernel is built with `cputype` 60, so a 68040 needs this record.
 
 ## 3. The two programs
 
@@ -575,7 +581,7 @@ time than it costs to decode.
 |---|---|
 | magic, version/length, check | as RTH1 (negated sum) |
 | loader version, boot2 copy used | which loader booted the box |
-| CPU probe result, `AttnFlags` | both, for diagnosis |
+| CPU probe result, `AttnFlags` | the probe (30, 40 or 60, at +20) is what a k46 kernel takes for `cputype` (§2.2); `AttnFlags` (+24) for diagnosis only |
 | boot device | device name hash, unit, partition start, board base and id (the RTH1 match result, plus the start, so `kbootset` finds its own boot slice without an RDB scan, `40-generations-and-composer.md` §5) |
 | generation id, state as booted | `good`, `trial`, `pristine`, `chosen-in-menu`, `one-shot` |
 | flags | safe mode 0x01, menu used 0x02, try-once fallback taken 0x04, **read-only medium 0x08**, **development load** 0x10 (§7.4). 0x08 is set for every boot from a read-only medium, the CD (`amix-cdboot`, which also gives no boot device: unit 0xFFFFFFFF) and the floppy pair: the generation booted is the medium's, not one of the box's own store, and `kbootset` acts on that (C2-4 §13) |
