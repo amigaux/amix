@@ -144,6 +144,15 @@ program against an image file, so media and boxes cannot drift).
 9. **One boot slice:** the boot disk carries more than one `UNI\0` partition.
 10. **Line:** the kernel's line does not match the box's CPU.
 
+**Known limit: 32 modules a generation.** A manifest holds at most 32
+module records and 32 `param` records (`AXM_MAXMOD`, `AXM_MAXPARAM`,
+`loader/common/manifest.h`; boot2's parser and kbootset's share it), and
+kinfo's module list holds 32 (C2-1). kbootset refuses a 33rd module
+package in `/etc/conf/mod.d` (`more than 32 module packages`). Every
+module installed counts, matched or not: the full 1.1 set is 15 on k30
+(13 driver and service packages, ufs and s5) and 14 on k46. Raising it
+changes boot2 and the kinfo record, so it waits for a loader revision.
+
 ### 3.2 Commit sequence
 
 1. Write a journal record (generation id, target store, extents planned).
