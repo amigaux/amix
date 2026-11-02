@@ -1,5 +1,7 @@
 # release
 
+`NOTICES.md` lists the acknowledgements the release notes must carry.
+
 Lock files: the exact inputs and outputs of each release. None is here yet:
 the lock of record for 1.1 is written when the 1.1 set is frozen.
 `release/amix-<version>.lock` is the lock of the promoted candidate, written
