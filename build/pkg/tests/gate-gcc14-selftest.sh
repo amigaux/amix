@@ -25,7 +25,9 @@
 #     against a memory operand, instead of reading them as code, and still
 #     reports a real movep after either;
 #   - scan060-g14.py takes a data object in .text as data and catches a real
-#     64-bit mulsl after it, where objdump -d's hex dump would hide it;
+#     64-bit mulsl after it, where objdump -d's hex dump would hide it, and
+#     decodes only the executable sections of an unstripped shared library
+#     (its .debug_* sections at address 0 are not code);
 #   - amix-env.sh refuses gcc14 for a recipe that has not opted in;
 #   - the toolchain pin refuses a prefix that is not the pinned one, and the
 #     return-value ABI self-check (pointer in %a0 and %d0, struct via %a0)
@@ -548,6 +550,27 @@ if out=$(python3 "$T/scan060-g14-d.py" --objdump "$OBJDUMP" "$T/obj"); then
 	fail "control: the -d scanner passed the data object probe: it tests nothing: $out"
 fi
 ok "scan060-g14.py decodes a data object in .text as data (a NOTE), catches a real 64-bit mulsl after it; the -d scanner reads the object's hex dump as code"
+
+# An unstripped shared library (libamixrt.so.1 ships so): its .debug_*
+# sections sit at address 0, and one longer than .text's start overlaps
+# .text's address range.  -D with an address range alone decodes it too;
+# its words here read as movep.
+cat > "$T/dbg.c" <<'EOF'
+__asm__(".section .debug_loclists,\"\",@progbits\n\t.fill 0x1000,4,0x038a0401\n\t.previous");
+int dbg(int x) { return x + 1; }
+EOF
+$CC $AMIX_CFLAGS -g -fPIC -shared -o "$T/libdbg.so" "$T/dbg.c" || fail "the debug-section library did not build"
+"$OBJDUMP" -h "$T/libdbg.so" | grep -q ' \.debug_loclists ' || fail "libdbg.so has no .debug_loclists"
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/libdbg.so") || fail "scan060-g14.py decoded a .debug section of libdbg.so as code: $out"
+echo "$out" | grep 'CLEAN libdbg.so' >/dev/null || fail "scan060-g14.py on libdbg.so: $out"
+sed 's/"-D", "-j", sec, /"-D", /' "$G14S" > "$T/scan060-g14-noj.py"
+[ "$(diff "$G14S" "$T/scan060-g14-noj.py" | grep -c '^>')" = 1 ] ||
+	fail "control: the copy of scan060-g14.py without -j is not one line changed"
+if out=$(python3 "$T/scan060-g14-noj.py" --objdump "$OBJDUMP" "$T/libdbg.so"); then
+	fail "control: the scanner without -j passed libdbg.so: it tests nothing: $out"
+fi
+echo "$out" | grep 'movep' >/dev/null || fail "control: the scanner without -j failed libdbg.so, but not on movep: $out"
+ok "scan060-g14.py decodes only the executable sections of an unstripped shared library; without -j its .debug section reads as movep"
 
 # Three more shapes from perl 5.8.9 (2026-10-30), each dispatched the GCC 14
 # way (`addl %d1,%d1; movew %pc@(T,%d1:l),%d1; jmp %pc@(T,%d1:w)'):
