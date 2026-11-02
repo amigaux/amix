@@ -1,5 +1,33 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — assemble-release.py: one tree per release, every version kept
+
+A box reads one repository per `repo=`, while make dist writes two catalogs (userland and
+kspace), and APKG/APKGENG and Commodore's stock datastreams sit outside both.
+`tools/repo/assemble-release.py` writes the release's single tree (design.md section 5.1); make
+dist's `release` step calls it.
+
+- **One live row per name.** apkg 0.3.6 cannot take several rows of one name:
+  - `catalog_find` returns the first row (install, info and dependencies use it);
+  - `upgrade` with no names walks every row, so two newer rows mean two pkgadds, possibly the
+    older one after the newer;
+  - `list` prints both;
+  - gen-catalog refuses a duplicate name.
+  So older published rows go verbatim into an `#ext older 1` block of `#old` lines. Every client
+  since 0.2.x skips them as comments, so every client picks the newest with no change. Installing
+  an older version on purpose would need apkg to read that block (a later `name=version`).
+- **Stock.** `stock-1.1.lock` pins 28 datastreams: the 27 of the 1.0 tree (byte-equal to its
+  stock/ rows) plus m4-2.1, as installng's pins staging has them. The source packages stay; the
+  full set installs them.
+- **Checks.** Input catalog.md5; size and md5 per row (sha256 per #kpkg); clashes between
+  inputs; published bytes; dependencies; scan060 over the live userland rows; amix's
+  tools/release-check; apkg's own `update` and `list` on the tree. On a make dist out/userland,
+  candidate-15f96d8d, APKG 0.3.6, APKGENG 1.12.6 and the stock pins: 65 live rows (29 kernel
+  space), scan060 clean over 19 ELFs, catalog md5 e3a735ba. The same bytes under umask 077 and
+  another TZ. `gen-catalog.py --scan-private` over it: OK, so publish.sh would take it.
+- T34: 30 checks with toy datastreams: a clean tree, reproducibility, each refusal, MISSING
+  inputs, and two follow-on releases over a published one.
+
 ## 2026-11-02 — scan060: the section names objdump uses
 
 The `-j <section>` change failed on the k30 kernel (kern30m -68): `objdump failed ... section

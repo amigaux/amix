@@ -2728,6 +2728,151 @@ for n, l in enumerate(open(sys.argv[1]), 1):
     assert len(k.split()) == 2 and len(v.split()) == 1, (n, l)
 " "$HERE/../../../../../kernel/conf/kbootset.conf"
 
+# ---------------------------------------------------------------- T34 ----
+# assemble-release.py: one release tree from make dist's userland and kspace
+# outputs, APKG/APKGENG and the stock datastreams its lock names; every
+# published version stays (older rows in a block every apkg skips).  Toy
+# datastreams by the host pkgmk; scan060 and release-check are stand-ins
+# (scan060 has its own block, T22); apkg itself reads every tree written.
+echo "T34: assemble-release.py writes one release tree"
+AR="$HERE/../assemble-release.py"
+S34="$WORK/t34"
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
+    mkdir -p "$S34/src" "$S34/ul/pkgs" "$S34/ks/pkgs" "$S34/ap" "$S34/st" "$S34/bin"
+    toy34() {   # toy34 <PKG> <VERSION> <out.pkg> [payload word]
+        printf 'PKG=%s\nNAME=%s toy\nVERSION=%s\nARCH=Amiga\nCATEGORY=system\n' "$1" "$1" "$2" > "$S34/pkginfo"
+        echo "${4:-$1-$2}" > "$S34/src/f"
+        printf 'i pkginfo=%s\nd none /opt 0755 root sys\nf none /opt/%s=%s 0644 root sys\n' \
+            "$S34/pkginfo" "$1" "$S34/src/f" > "$S34/proto"
+        rm -rf "$S34/spool"; mkdir -p "$S34/spool"
+        "$HB/pkgmk" -o -d "$S34/spool" -f "$S34/proto" >/dev/null 2>&1 &&
+            "$HB/pkgtrans" -s "$S34/spool" "$3" "$1" >/dev/null 2>&1
+    }
+    cpconf34() { for c in deps names cats descs; do cp "$HERE/../$c.conf" "$1/"; done; }
+    # userland: make dist's catalogs step (gen-catalog with the conf layers)
+    toy34 zlibt 1.0 "$S34/ul/pkgs/zlibt-1.0.pkg"
+    cpconf34 "$S34/ul/pkgs"
+    python3 "$GEN" --packages-conf none -o "$S34/ul" "$S34/ul/pkgs" >/dev/null 2>&1
+    # kspace: an ordinary row and a #kpkg line
+    toy34 ktool 1.0 "$S34/ks/pkgs/ktool-1.0.pkg"
+    echo "module bytes" > "$S34/ks/pkgs/kmod46-1.0.pkg"
+    {   echo "#apkg-catalog 1"
+        echo "ktool|1.0|ktool|ktool-1.0.pkg|$(md5sum < "$S34/ks/pkgs/ktool-1.0.pkg" | cut -c1-32)|$(wc -c < "$S34/ks/pkgs/ktool-1.0.pkg")|none|system|toy"
+        echo "#ext kpkg 1"
+        echo "#kpkg kmod-k46 1.0 role=module line=k46 kabi=k46.1.0 pin=gcc-x size=$(wc -c < "$S34/ks/pkgs/kmod46-1.0.pkg") sha256=$(sha256sum < "$S34/ks/pkgs/kmod46-1.0.pkg" | cut -c1-64) file=kmod46-1.0.pkg pkginst=kmod46"
+        echo "#end kpkg"; } > "$S34/ks/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/ks/catalog" | cut -c1-32)" > "$S34/ks/catalog.md5"
+    toy34 APKG 0.3.6 "$S34/ap/APKG-0.3.6.pkg"
+    toy34 APKGENG 1.12.6 "$S34/ap/APKGENG-1.12.6.pkg"
+    md5sum < "$S34/ap/APKG-0.3.6.pkg" | cut -c1-32 > "$S34/ap/APKG-0.3.6.pkg.md5"
+    toy34 core 2.1 "$S34/st/core-2.1.pkg"
+    f="$S34/st/core-2.1.pkg"
+    printf '# toy lock\ncore-2.1.pkg %s %s %s\n' "$(wc -c < "$f")" "$(md5sum < "$f" | cut -c1-32)" \
+        "$(sha256sum < "$f" | cut -c1-64)" > "$S34/stock.lock"
+    # scan060 runs as `python3 -I <path>`: the stand-in is Python
+    printf 'import os, sys\nopen("%s/scan.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(int(os.environ.get("SCAN_RC", "0")))\n' \
+        "$S34" > "$S34/bin/scan060"
+    printf '#!/bin/sh\necho "$@" >> %s/rc.log\nexit ${RC_RC:-0}\n' "$S34" > "$S34/bin/release-check"
+    chmod +x "$S34/bin/scan060" "$S34/bin/release-check"
+    : > "$S34/rom"; : > "$S34/pat"
+    ar34() {    # ar34 <out> [extra flags]: assemble with the toy inputs
+        local o="$1"; shift
+        python3 "$AR" --userland "$S34/ul" --kspace "$S34/ks" --apkg "$S34/ap" \
+            --stock "$S34/st" --stock-lock "$S34/stock.lock" --release 1.1 --out "$o" \
+            --scan060 "$S34/bin/scan060" --release-check "$S34/bin/release-check" \
+            --rom-register "$S34/rom" --private-patterns "$S34/pat" --apkg-bin "$APKGH" "$@"
+    }
+    ar34 "$S34/out/1.1" >"$WORK/t34.a" 2>&1
+    check "a clean assembly: rc 0" test $? -eq 0
+    C34="$S34/out/1.1/catalog"
+    check "  ... one catalog: userland, kspace, base/ and stock/ rows, the kpkg line" \
+        bash -c "grep -q '^zlibt|1.0|' '$C34' && grep -q '^ktool|' '$C34' && grep -q '^apkg|0.3.6|APKG|base/APKG-0.3.6.pkg|' '$C34' && grep -q '^apkgeng|1.12.6|' '$C34' && grep -q '|stock/core-2.1.pkg|' '$C34' && grep -q '^#kpkg kmod-k46 1.0 ' '$C34'"
+    check "  ... every file at pkgs/<filename>, byte for byte" \
+        bash -c "cmp -s '$S34/ap/APKG-0.3.6.pkg' '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' && cmp -s '$S34/st/core-2.1.pkg' '$S34/out/1.1/pkgs/stock/core-2.1.pkg' && cmp -s '$S34/ks/pkgs/kmod46-1.0.pkg' '$S34/out/1.1/pkgs/kmod46-1.0.pkg' && test ! -e '$S34/out/1.1/pkgs/deps.conf'"
+    check "  ... catalog.md5 is the catalog's" \
+        test "$(cut -c1-32 "$S34/out/1.1/catalog.md5")" = "$(md5sum < "$C34" | cut -c1-32)"
+    check "  ... apkg reads it as one repository" \
+        grep -q "apkg reads the tree: catalog updated: 5 packages, 1 kernel-space" "$WORK/t34.a"
+    check "  ... scan060 got the userland rows only (no stock/, no #kpkg file)" \
+        bash -c "grep -q 'zlibt-1.0.pkg' '$S34/scan.log' && grep -q 'APKG-0.3.6.pkg' '$S34/scan.log' && ! grep -q 'core-2.1\|kmod46' '$S34/scan.log'"
+    check "  ... release-check got the register, the patterns and the tree" \
+        grep -q -- "--rom-register $S34/rom --private-patterns $S34/pat $S34/out/1.1.tmp" "$S34/rc.log"
+    (umask 077; TZ=Pacific/Kiritimati ar34 "$S34/out2/1.1" >/dev/null 2>&1)
+    check "reproducible: another umask and TZ write the same tree, modes too" \
+        bash -c "diff -r '$S34/out/1.1' '$S34/out2/1.1' >/dev/null && diff <(cd '$S34/out/1.1' && find . -printf '%m %p\n' | sort) <(cd '$S34/out2/1.1' && find . -printf '%m %p\n' | sort) >/dev/null"
+    ar34 "$S34/out/1.1" >/dev/null 2>&1
+    check "an existing tree this run writes again: rc 0" test $? -eq 0
+    printf 'x' >> "$S34/out2/1.1/catalog"
+    ar34 "$S34/out2/1.1" >"$WORK/t34.ex" 2>&1
+    check "an existing tree that differs: refused, rc 1" \
+        bash -c "test $? -eq 1 && grep -q 'is not what this run writes' '$WORK/t34.ex'"
+
+    t34no() {   # t34no <rc> <description> <stderr text> [ar34 flags]: refused, nothing written
+        local want="$1" desc="$2" text="$3"; shift 3
+        rm -rf "$S34/no"
+        ar34 "$S34/no/1.1" "$@" >"$WORK/t34.no" 2>&1
+        local rc=$?
+        if [ "$rc" -eq "$want" ] && grep -q -- "$text" "$WORK/t34.no" && [ ! -e "$S34/no/1.1" ] && [ ! -e "$S34/no/1.1.tmp" ]; then
+            ok "$desc"
+        else
+            bad "$desc (rc $rc)"; sed 's/^/        /' "$WORK/t34.no" | tail -4
+        fi
+    }
+    cp "$S34/ks/catalog.md5" "$S34/ks.md5"; echo "00000000000000000000000000000000  catalog" > "$S34/ks/catalog.md5"
+    t34no 1 "an input whose catalog.md5 differs: refused" "kspace: catalog md5"
+    cp "$S34/ks.md5" "$S34/ks/catalog.md5"
+    cp "$S34/ks/pkgs/kmod46-1.0.pkg" "$S34/kmod.save"; echo tampered > "$S34/ks/pkgs/kmod46-1.0.pkg"
+    t34no 1 "a #kpkg file whose bytes differ: refused" "kmod-k46 1.0: kmod46-1.0.pkg is"
+    cp "$S34/kmod.save" "$S34/ks/pkgs/kmod46-1.0.pkg"
+    cp "$S34/ul/pkgs/zlibt-1.0.pkg" "$S34/zl.save"; printf 'x' >> "$S34/ul/pkgs/zlibt-1.0.pkg"
+    t34no 1 "a row whose file differs: refused" "zlibt 1.0: zlibt-1.0.pkg is"
+    cp "$S34/zl.save" "$S34/ul/pkgs/zlibt-1.0.pkg"
+    echo "deadbeefdeadbeefdeadbeefdeadbeef" > "$S34/ap/APKG-0.3.6.pkg.md5"
+    t34no 1 "an --apkg file its .md5 sidecar disagrees with: refused" "APKG-0.3.6.pkg.md5 says"
+    md5sum < "$S34/ap/APKG-0.3.6.pkg" | cut -c1-32 > "$S34/ap/APKG-0.3.6.pkg.md5"
+    mkdir -p "$S34/ul2/pkgs"; cp -r "$S34/ul/pkgs/." "$S34/ul2/pkgs/"; toy34 ktool 2.0 "$S34/ul2/pkgs/ktool-2.0.pkg"
+    python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
+    t34no 1 "one name in two inputs, another version: refused, naming both" \
+        "name ktool is in two inputs: ktool 2.0 (userland) and ktool 1.0 (kspace)" --userland "$S34/ul2"
+    printf 'zlibt: nosuch\n' > "$S34/ul2/pkgs/deps.conf"; rm -f "$S34/ul2/pkgs/ktool-2.0.pkg"
+    python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
+    t34no 1 "a dependency no live row names: refused" "zlibt 1.0 (userland) depends on nosuch" --userland "$S34/ul2"
+    SCAN_RC=2 t34no 1 "scan060 finding a hit: refused" "scan060 refused the tree"
+    RC_RC=1 t34no 1 "release-check refusing: refused" "release-check refused the tree"
+    t34no 3 "no release-check: [MISSING], rc 3" "\[MISSING\] assemble-release: release-check" --release-check "$S34/nosuch"
+    t34no 3 "no private patterns: [MISSING], rc 3" "\[MISSING\] assemble-release: private patterns" --private-patterns "$S34/nosuch"
+    mv "$S34/st/core-2.1.pkg" "$S34/core.save"
+    t34no 3 "a stock file the lock names, not there: [MISSING], rc 3" "core-2.1.pkg is not in"
+    mv "$S34/core.save" "$S34/st/core-2.1.pkg"
+    t34no 3 "no --userland directory: [MISSING], rc 3" "\[MISSING\] assemble-release: --userland" --userland "$S34/nosuch"
+
+    # the next release: the published tree is an input, and stays
+    rm -f "$S34/ap/APKG-0.3.6.pkg" "$S34/ap/APKG-0.3.6.pkg.md5"; toy34 APKG 0.3.10 "$S34/ap/APKG-0.3.10.pkg"
+    ar34 "$S34/out3/1.1" --previous "$S34/out/1.1" >"$WORK/t34.p" 2>&1
+    check "with --previous and a newer APKG: rc 0" test $? -eq 0
+    C3="$S34/out3/1.1/catalog"
+    check "  ... the live row is the newer one (0.3.10 after 0.3.6, as apkg compares)" \
+        bash -c "grep -q '^apkg|0.3.10|APKG|base/APKG-0.3.10.pkg|' '$C3' && test \$(grep -c '^apkg|' '$C3') = 1"
+    check "  ... the published row is kept verbatim in the older block" \
+        bash -c "grep -qx \"#old \$(grep '^apkg|' '$C34')\" '$C3' && grep -qx '#ext older 1' '$C3' && grep -qx '#end older' '$C3'"
+    check "  ... the published file stays, byte for byte, and every other row is as published" \
+        bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|' '$C34') <(grep -v '^apkg|\|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
+    check "  ... apkg reads one row per name (the older block is skipped)" \
+        grep -q "apkg reads the tree: catalog updated: 5 packages, 1 kernel-space" "$WORK/t34.p"
+    ar34 "$S34/out4/1.1" --previous "$S34/out3/1.1" >/dev/null 2>&1
+    check "a third assembly over that tree keeps the older block: rc 0, same catalog" \
+        bash -c "test $? -eq 0 && cmp -s '$C3' '$S34/out4/1.1/catalog'"
+    toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "$S34/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
+    python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
+    t34no 1 "a published version with other bytes: refused" "is published with other bytes" \
+        --previous "$S34/out/1.1" --userland "$S34/ul2"
+    rm -f "$S34/ap/APKG-0.3.10.pkg"; toy34 APKG 0.3.5 "$S34/ap/APKG-0.3.5.pkg"
+    t34no 1 "a version older than the published one: refused" "older than the published apkg 0.3.6" \
+        --previous "$S34/out/1.1"
+else
+    echo "  skip- assemble-release checks (no host pkgmk/pkgtrans or host apkg)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"
