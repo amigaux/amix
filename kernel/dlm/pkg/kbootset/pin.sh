@@ -12,6 +12,15 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -36 (not minted; the revision for the release): amix f8e9027 -- kbootset
+# inquiry CARD UNIT and kbootset cards --probe ask a unit its type with one
+# read-only SCSI INQUIRY through /dev/scsi (gsioctl) before anything reads it
+# (C2-4 v23), so an installer never reads a CD with dd; gate 1's "differs"
+# line names the reinstall, apkg -f install <name> (14b5853).  Built in
+# amix-toolchain:dist: the box binary 2a2d9016 (163472 bytes);
+# kbootset(1M) 385b4462 (inquiry, cards --probe, gate 1); whatis and rc
+# scripts as -35.
+#
 # -35 (not minted; the revision for the release): amix 2607bbe -- kbootset
 # cards reads a disk node's controller number in hex, as the stock names
 # write it (C2-4 v22): /dev/dsk/ced0s1 is card 1's unit 6, c10-c17 card 2
@@ -225,15 +234,15 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=2607bbe
-KB_SHA=704d14fa4a53a63d9fe8a9778cf05c4ca4d51aacd4dde9478ec5d901b71ce5be
+KB_DLM_COMMIT=f8e9027
+KB_SHA=2a2d90165bc54c192b56495e7a1b3aa1da43330cd8edeacbc16dd16dd869dc66
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
-KB_MAN_SHA=5ab8918c05eba767ccd3a57c82546fbae9ccbabad4f139169f90618e4b9d3fd0
+KB_MAN_SHA=385b4462be408ba054e3b641ada201f31743e2dd2f84f6f1ab677e6655fde424
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 
 # the rc scripts, from the same commit (kernel/dlm/kbootset/rc)
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261102-35
+KB_VERSION=1.1.0.261102-36
 KB_SOURCE_EPOCH=1793577600
