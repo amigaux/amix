@@ -9943,6 +9943,46 @@ def audit_ufs_density():
                           "nbpi=8192%s" % ((": %r" % bad) if bad else ""))
 
 
+def audit_gayle_slave():
+    head("GS. the installed system attaches the IDE slave (gayle param slave=2) only when the install CD "
+         "answered there: CD_SPEC is the gayle card's unit 5")
+    src = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    m = re.search(r"\n(\t# the IDE port's slave: .*?)\n\t# MODREG_LOCAL \(a profile key", src, re.S)
+    if not m:
+        fail("l11.sh: no IDE-slave block before the MODREG_LOCAL block")
+        return
+    cards = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\n"
+             "card 1: c8-cf zorro:0202:54 base 0x40800000\n"
+             "card 2: c10-c17 mobo:gayle\n")
+    cases = [("2,5", "", True, True), ("1,3", "", True, False), ("1,5", "", True, False),
+             ("2,3", "", True, False), ("", "", True, False), ("2,5", "", False, False),
+             ("2,5", "gayle:param slave=2", True, False)]
+    bad = []
+    for spec, ml, kb, want in cases:
+        d = tempfile.mkdtemp(prefix="gslave_")
+        try:
+            os.makedirs(os.path.join(d, "l11", "bin"))
+            if kb:
+                k = os.path.join(d, "l11", "bin", "kbootset")
+                with open(k, "w") as f:
+                    f.write("#!/bin/sh\n[ \"$1\" = cards ] && [ $# = 1 ] && printf '%s'\n" % cards)
+                os.chmod(k, 0o755)
+            t = os.path.join(d, "t")
+            os.makedirs(t)
+            body = ('TARGET=%s\nL11=%s/l11\nCD_SPEC="%s"\nMODREG_LOCAL="%s"\nrun() { "$@"; }\n'
+                    'msg() { echo "MSG $*"; }\ndie() { echo "DIE $*"; exit 3; }\n%s\n' % (t, d, spec, ml, m.group(1)))
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10).stdout
+            g = os.path.join(t, "etc", "conf", "modreg.local.d", "gayle")
+            got = open(g).read() if os.path.exists(g) else ""
+            if got != ("param slave=2\n" if want else "") or "DIE" in out:
+                bad.append((spec, ml, kb, got, out.strip()[-60:]))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    (fail if bad else ok)("IDE slave EXECUTED: slave=2 for the CD at the gayle card's unit 5 only (not a SCSI card's "
+                          "unit 5, not unit 3, no CD_SPEC, no kbootset, or a profile line already there)%s"
+                          % ((": %r" % bad) if bad else ""))
+
+
 def audit_modreg_local():
     head("ML. MODREG_LOCAL: administrator module lines laid before the kbootset build (emulation rigs: "
          "z3660rtg fixed=1); never on a profile for real hardware")
@@ -11122,6 +11162,7 @@ def main():
     audit_pick_at_install()
     audit_ufs_density()
     audit_modreg_local()
+    audit_gayle_slave()
     audit_kbootset_cards()
     audit_swap_stepdown()
     audit_root_lock()

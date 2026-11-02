@@ -319,6 +319,24 @@ l11_bootstore()
 	l11_bootset manual
 	msg "boot store   : laid by the installed kbootset with the loader package's boot1/boot2 (version $_lv), store-id $L11_STORE_ID"
 
+	# the IDE port's slave: gayle leaves it alone by default (slave=0) and attaches it with slave=2
+	# only when it is an ATAPI device (a CF as slave is unstable). The installed system gets slave=2
+	# only when the install CD answered there: CD_SPEC is the gayle card's unit 5 (`kbootset cards`)
+	_cu=`expr "$CD_SPEC" : '[0-9]*,\([0-9]*\)$'`
+	if [ "$_cu" = 5 ] && [ -x "$L11/bin/kbootset" ]; then
+		_cc=`expr "$CD_SPEC" : '\([0-9]*\),'`
+		_ck=`"$L11/bin/kbootset" cards 2>/dev/null | while read _w _n _r _key _rest
+		do
+			[ "$_w" = card ] && [ "$_n" = "$_cc:" ] && { echo "$_key"; break; }
+		done`
+		case "$_ck:$MODREG_LOCAL" in
+			mobo:gayle:*gayle:param\ slave=*)	;;
+			mobo:gayle:*)
+				run mkdir -p "$TARGET/etc/conf/modreg.local.d"
+				echo "param slave=2" >> "$TARGET/etc/conf/modreg.local.d/gayle" || die "cannot write modreg.local.d/gayle"
+				msg "modreg.local: gayle: param slave=2 (the install CD is the IDE slave, cdfs $CD_SPEC)" ;;
+		esac
+	fi
 	# MODREG_LOCAL (a profile key, emulation rigs only): administrator lines for modules, as
 	# "module:line|module:line", laid in /etc/conf/modreg.local.d/<module> before the build so the
 	# generation carries them (e.g. "z3660rtg:param fixed=1" where an emulator's RTG board has no
