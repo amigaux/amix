@@ -35,6 +35,7 @@ int			mock_sptfrees, mock_unmaps;
 unsigned char		*mock_rom;
 int			mock_rom_maps;
 unsigned short		mock_vposr_val = 0x2300;
+char			mock_attach_line[128];
 static struct mock_board	rom_board;
 
 unsigned short
@@ -101,6 +102,7 @@ mock_reset(void)
 	mock_rom = NULL;
 	mock_rom_maps = 0;
 	mock_vposr_val = 0x2300;
+	mock_attach_line[0] = 0;
 	mock_beam_mode = MOCK_BEAM_DENSE;
 	mock_beam_frame = 313;
 	mock_beam_rpl = 4;
@@ -405,6 +407,11 @@ mock_printf(const char *fmt, ...)
 
 	if (!strncmp(fmt, "A4091 slow", 10))
 		mock_trace_lines++;
+	if (strstr(fmt, ": board %d at ")) {	/* the attach line, formatted */
+		va_start(ap, fmt);
+		vsnprintf(mock_attach_line, sizeof mock_attach_line, fmt, ap);
+		va_end(ap);
+	}
 	if (mock_verbose) {
 		va_start(ap, fmt);
 		n = vfprintf(stderr, fmt, ap);

@@ -81,6 +81,7 @@ extern int		mock_beam_mode;
 extern unsigned long	mock_beam_frame, mock_beam_rpl, mock_beam_start;
 extern unsigned long	mock_beam_reads, mock_beam_line;
 unsigned char	mock_vpos8(void);	/* the reset's beam read (VHPOSR >> 8) */
+extern char		mock_attach_line[128];	/* the last "board N at 0x..." line */
 void	mock_chip_done(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff00 */
 void	mock_chip_seltimeout(struct mock_board *b);	/* reads: SIP, SSTAT0 STO */
 void	mock_chip_phase(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff05 */

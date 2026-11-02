@@ -76,7 +76,7 @@ In the "who" column, D means the driver writes the field and the service only re
 
 **Who owns the record.** The controller object owns it. The A4091 keeps one record per sd card in `a4091_dmarec[SDCARDS]`, a global the service or a kmem reader can find by name. The driver fills the identity fields (magic, version, ctlid, unit, off) at attach, before the first transfer. That is the `hat_cm_fb` registration contract: register before first use, never removed. The service never allocates or frees a record.
 
-**The off switch.** The driver copies its patchable knob `a4091_dma_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is the control arm of the emulator coherence test: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate.
+**The off switch.** The driver copies its patchable knob `a4091_dma_off` into `off` before every `prepare`, so one poke switches the seam for every A4091 card. It is the control arm of the emulator coherence test: with the seam off and the data cache live, the emulator's copyback model should show the missing push/invalidate. Only the static 040/060 arm keeps the knob: the module (1.0.0-7 on) sets `off` to 0 at attach and never changes it, since an off record skips the cache maintenance.
 
 **Acceptance invariants** (read by kmem; none of them panics):
 

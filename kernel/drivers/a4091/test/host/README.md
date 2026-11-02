@@ -37,13 +37,14 @@ make -C test/host clean
 | selection timeout is silent | An absent id (ISTAT SIP, SSTAT0 STO, rc -1) fails the command with no `A4091 slow` line; a phase error (DSPS 0xff05, rc -3) still prints one |
 | bus reset: metal (PAL from lines 0, 250 and 311; NTSC) | With one counter change per line (mock beam, `A4091_VPOS8`), the first command's reset lasts exactly 2 + 4000 lines in 4002 changes, with no timeout. The second command does no reset and reads no beam |
 | bus reset: burst beam (PAL, PAL mid-frame, NTSC) | A beam that shows two values a frame, like Amiberry at `cpu_speed=max`: the reset lasts at least 4002 lines and at most three times that, in fewer than 100 changes |
+| module: no U77, no dma_off, no last-command globals | Weak references show that `a4091_bytewrite_probe`, `a4091_dma_off`, `a4091_dsps`, `a4091_resid`, `a4091_rc` and `a4091_stat` are not in the module. The record's `off` is 0 at attach and after a bounced read. The kstat keeps its layout: magic `A4K2`, `bounce_n` at long 18, `seltimeout` at long 22, `bw_*` (longs 8-17) 0. On k46 the attach line is `a4091: board 0 at 0x40000000` |
 | bus reset: stuck beam | Both waits stop at their 200000-read bound (`a4091_busreset_to` 2). The command still runs |
 | queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
 
 ## The a4kt710 arms
 
 `modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
-a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 12/12 cases each:
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 13/13 cases each:
 
 | Case | What it shows |
 |---|---|
@@ -54,6 +55,7 @@ a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`
 | `declared=1` | registers without reading the Kickstart |
 | no chip / the fingerprint fails | `ENXIO`, the area given back (and the pages unmapped) |
 | host ID and halt | host ID 5 from the DIP bank; `_halt` writes DCNTL `0x20` and SCID `1 << 5` directly |
+| module: no U77, no dma_off | The static arm's knobs and last-command globals are absent (weak references); the record's `off` is 0; on k46 the attach line is `a4kt710: board 0 at 0xdd0000` |
 
 The queue path is not repeated: it is the A4091's. This chip's direct writes land where the mock's reads are,
 so a launch's longword writes would overwrite the mock's "command done" state.

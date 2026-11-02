@@ -21,15 +21,18 @@
 # command adds up the beam lines that passed, not the counter changes seen
 # (on metal the same 254 ms; under Amiberry at cpu_speed=max no longer
 # 53-72 s); new global a4091_busreset_chg.
+# 1.0.0-10 (2026-11-02): module 1.0.0-7: no U77 byte-write probe, no
+# a4091_dma_off knob (the D42 record's off is 0 for good), no last-command
+# globals; the k46 attach line reads "a4091: board N at 0x...".
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-6
-KM_PKG_VERSION=1.0.0-9
+KM_VERSION=1.0.0-7
+KM_PKG_VERSION=1.0.0-10
 
-KM_K30_SHA=9ca1b96cd8083de56bdaea9c55f8c12ca36a5074d245ce15e3a837e6211b75f3
-KM_K46_SHA=c2d518e4eb59b0dafb3e45f07e3e652f5c0353c68558cd58d797821946d2e277
+KM_K30_SHA=4bd6e5d32607a09693d0c8bee3904fc3419484f27e1764a8470fe4471582250d
+KM_K46_SHA=8d91ade277d8b627d393ac8ff61203a4ffcebb14bb92abf8336b0aca84aaff37
 KM_K30_DEPS=
 KM_K46_DEPS=
 
