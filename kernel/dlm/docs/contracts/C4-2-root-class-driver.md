@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 6
+# C4-2 — what a root-class driver changes, version 7
 
 - **Status:** agreed 2026-10-26, version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -11,7 +11,8 @@
   (§1.1); version 5 (2026-10-27): §1.1's example names the mechanism, a
   dirty copyback line written back over the board's data; version 6
   (2026-10-27): the A4000T onboard 53C710's gate is the running
-  Kickstart's `NCR scsi.device` resident (§8.1).
+  Kickstart's `NCR scsi.device` resident (§8.1); version 7 (2026-11-02):
+  what the root-context confirmation covers, line by line (§2.1).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -95,7 +96,33 @@ U1 found to be the same context. **A root-class probe module confirms
 each one on both lines**, showing that it returns at level 7
 with the clock stopped. Until that test passes, a driver port may build on
 them but not ship. A name of context *proc* not listed here waits for the
-deferred call (§3).
+deferred call (§3). §2.1 records what has been shown.
+
+### 2.1 What the confirmation covers (version 7)
+
+- **Returns at level 7 with the clock stopped:** `autocon`, `bprobe`,
+  `sptalloc`/`sptfree`, `dev_kvmap`/`dev_kvunmap` (k46) and
+  `kmem_alloc`/`kmem_free`, in emulation on both lines (the root-context
+  probe `tests/bench/s4-71`, 2026-10-27). `bprobe` again with the
+  `tests/bench/bprobe` modules, 2026-11-02: in emulation on k46 -57 and
+  k30 -68, and on metal on k46 -57 (a real 68LC060 on the Z3660) and k30
+  -68 (the Z3660's emulated 68030).
+- **`bprobe` catches a real bus error: k46 only.** On the real 68LC060
+  (Z3660 real-CPU mode, A4000D) a read of the empty Zorro III address
+  0x20000000 returns 1 after 283–295 ms (Buster's timeout), in the root
+  pass at level 7 and in the boot pass at levels 0, 4 and 7, and the boot
+  goes on. A k46 driver may guard a fixed-address probe with `bprobe`.
+- **Not shown:**
+  - k30 on a real 68030. The rows that ran k30 have no bus error to catch:
+    the Z3660's emulated 68030 ends an empty Zorro III read at once with
+    0xFF, and Amiberry with 0x00.
+  - Other CPU cards' bus paths, and a 68040.
+  - Where the fault catch is unproven, `bprobe` returns 0 for an empty
+    window, so a k30 driver's fixed-address probe must also check an
+    identity the open bus cannot fake (neither 0x00 nor 0xFF).
+  - The probe's address must be below `VSECT1`: the 2026-10-27 probe's 1 at
+    0x7fff0000 was a translation fault (no mapping above the identity
+    map), not a bus error.
 
 ## 3. Interrupts: the deferred call
 
