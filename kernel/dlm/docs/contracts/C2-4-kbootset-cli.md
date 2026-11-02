@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 22
+# C2-4 — `kbootset` as a called program, version 23
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17); version 23 (2026-11-02): `kbootset inquiry CARD UNIT` and `kbootset cards --probe`, one read-only SCSI INQUIRY per unit through `/dev/scsi`, so an installer knows a unit's type before anything reads it (§18). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -529,3 +529,59 @@ picks instead of from a profile per controller.
   says `kbootset: the running kernel registered no sd cards` on standard
   error and exits 0.
 - **The host test** is `tests/host/kcards.sh`.
+
+## 18. `kbootset inquiry` and `cards --probe`: what a unit is (version 23)
+
+An installer must know whether a unit is a disk or a CD before it reads
+it: a 512-byte read through `dd` of a CD behind an A4091 or A4092 wedges
+the bus. These two forms ask each unit its type with one SCSI INQUIRY,
+read-only, before anything opens it.
+
+- **The command** is one INQUIRY (6-byte CDB `12 00 00 00 24 00`: LUN 0,
+  36 bytes back) through the stock raw passthrough `/dev/scsi` (char major
+  11, `scsi.c` `gsioctl`: `ioctl` `'GSIO'` with a `struct sdcom` carrying
+  the card, the unit and the CDB). No other command is sent, nothing is
+  written, and no disk node is opened, so `sd` and `dd` never see the unit.
+  Neither form reads the store or the root; `-R` and `--image` change
+  nothing.
+- **`kbootset inquiry CARD UNIT`**: `CARD` is the card number `cards`
+  prints (0–3; card 1 is `c8`–`cf`), `UNIT` the target id (0–7). On an
+  answer it prints one line, with no `kbootset: ` prefix, and exits 0:
+  `type <n> <vendor> <product> <revision>`.
+  - `<n>` is the peripheral device type, byte 0 & 0x1f, in decimal: 0 a
+    disk, 5 a CD or DVD drive.
+  - vendor is bytes 8–15, product 16–31, revision 32–35. Each has its
+    trailing blanks and NULs trimmed and its inner blanks turned into `_`;
+    a byte that is not printable reads `?`; a field that is all blank reads
+    `-`. So the line is always five words.
+  - Only the bytes the unit says it sent are read (5 + byte 4, the
+    additional length): the kernel bounces the data through a static
+    buffer it never clears, and a short answer leaves the last command's
+    bytes behind it. A field past the end reads `-`.
+- **No unit**, exit 1: nothing on standard output and one line on
+  standard error, `kbootset: card <c> unit <u>: <why>`. That is the case
+  for a qualifier other than 0 (byte 0 >> 5; 3 is "no device on this
+  LUN"), type 0x1f, a command that failed or was not answered (a selection
+  timeout), a card the running kernel did not register (`gsioctl`'s
+  `sdopen` refuses it), and a missing `/dev/scsi` (the line names
+  `mknod /dev/scsi c 11 0`).
+- **Usage**, exit 2: a card outside 0–3, a unit outside 0–7, or not two
+  numbers.
+- **`kbootset cards --probe`** prints the `cards` lines of §17 and, under
+  each card, one line per unit that answers: `  unit <u>: type <n>
+  <vendor> <product> <revision>` (two blanks, then the five words of
+  `inquiry`). It asks units 0–7 of every card in the table. A unit that
+  does not answer prints nothing. Exit 0 whatever the units answer; the
+  card lines and their statuses are as in §17. `cards --probe` takes no
+  disk name.
+- **How long it takes** depends on each controller module: `gsioctl`
+  waits for the controller's own completion, with no timeout of its own,
+  so an empty unit costs that controller's selection timeout. Every 1.1
+  root-class controller module (z3660scsi, a4091, a4kt710, gayle) ends an
+  empty unit's command with a failure, which the rows of the version-23
+  host and emulator tests show.
+- **One at a time.** `gsioctl` keeps its command and its buffer in
+  static storage, so two processes must not use `/dev/scsi` at once.
+- **The host test** is `tests/host/kinq.sh`: `KBOOTSET_SCSIDIR` names a
+  directory whose file `<card>.<unit>` is the answer (no file, no unit), in
+  place of `/dev/scsi`.
