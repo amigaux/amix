@@ -154,7 +154,9 @@ data cache is effectively off in every validated config. Nothing to configure.
 there is no `Z3660ETH_CACHE_FLUSH` `#ifdef`: the push/invalidate paths are always compiled and
 gated at run time by the tunable `long z3660eth_cache` — **0 = off, the shipping default**, `40` =
 68040 data cache, `60` = 68060. Arming it is a `/dev/kmem` poke, not a build flag, so the same
-`relocunix` serves both lines. Read back through `/dev/kmem` after attach:
+`relocunix` serves both lines. This is the static driver's: the loadable module (section 9) leaves
+the whole block out, since nothing can set the tunable there, and its calls are no-ops. Read back
+through `/dev/kmem` after attach:
 
 | symbol | meaning |
 |--------|---------|
@@ -207,7 +209,7 @@ the module's own names: `ifnet` and `rawintrq`, from the stock `<net/if.h>`.
 
 `make -C module static` compiles the static driver (no `-DZ3660ETH_MODULE`) against
 each kit's headers; the hashes must stay those of the static objects of record
-(NOTES.md "Module form"; changed last by ZS-05, NOTES.md "ZS-05"). `make -C module
+(NOTES.md "Module form", which lists every change of them). `make -C module
 zs05` checks every object's board register accesses (`module/check-zs05.py`).
 Parameters: `intr` (0 polled, the default; 6 INT6 receive) and `intrl2` (with
 intr=6: 1 drain in a level-2 handler, the default; 0 in the poll tick).

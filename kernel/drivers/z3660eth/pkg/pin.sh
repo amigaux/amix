@@ -21,15 +21,19 @@
 # bprobe (a box without a Z3660 gets ENXIO, not a bus error, in _load), and
 # the MAC probe checks MAC_HI's shape (no open-bus pattern passes).
 # Built in amix-toolchain:dist at amix 8653b72 (gcc-cross-amix 33ebadc).
+# 1.0.0-13 (2026-11-02): module 1.0.0-7, the 040/060 cache block left out of
+# the module form (it could never arm there) and two kmem-only diagnostics
+# gone; no change in what the driver does.  Built in amix-toolchain:dist at
+# amix b566cb4 (gcc-cross-amix 33ebadc).
 
 KM_NAME=z3660eth
 KM_SHORT=zeth
 KM_REPO=kernel/drivers/z3660eth
-KM_VERSION=1.0.0-6
-KM_PKG_VERSION=1.0.0-12
+KM_VERSION=1.0.0-7
+KM_PKG_VERSION=1.0.0-13
 
-KM_K30_SHA=149582a65af09e81cd1eda4416f23cdff4e7749d90ccb13c527f99cd8f7032c4
-KM_K46_SHA=46df59d84caee64123d7045c37123a401848ef51478d37a7f7607aea1cca710f
+KM_K30_SHA=7fb5a3e0ea41c0c2b5c7f24a37ce10ea7b90c7d9446334cf4a4fc1405d928840
+KM_K46_SHA=92d67894488ccb5576efabdd40f50ddd28189fdbe25e5722ecc4a45821e29b27
 KM_K30_DEPS=
 KM_K46_DEPS=
 
