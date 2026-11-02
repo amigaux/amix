@@ -77,6 +77,7 @@ CLEAN = {
 ROMBYTES = bytes((i * 37 + 11) & 0xFF for i in range(4096))
 KICK = struct.pack(">I", 0x11144EF9) + b"\0" * (262144 - 4)
 PRIV_ADDR = ".".join(("10", "20", "30", "40"))
+NNTP = ".".join(("10", "0", "0", "78"))
 PEM = "-----BEGIN " + "RSA PRIVATE" + " KEY-----\nMIIBOgIBAAJBAK\n-----END " + "RSA PRIVATE" + " KEY-----\n"
 DES = "aBfIg3" + "itnYv/A"
 MD5 = "$" + "1$abcdefgh$" + "0123456789abcdefghijkl"
@@ -107,6 +108,18 @@ CASES = [
         ("root/opt/amix/lib/python3.11/ipaddress.py", ".".join(("10", "0", "0", "0")) + "/8\n")])}, None, False),
     ("not-allowed", {"pkgs/python3-3.11-1.pkg": datastream("python3", [
         ("root/opt/amix/lib/python3.11/other.py", ".".join(("10", "0", "0", "0")) + "/8\n")])}, "privacy", False),
+    # the stock exemptions: the NNTP example address in its own file, a
+    # local-name hit in an exempt X source; the same text elsewhere hits
+    ("stock-allowed", {"pkgs/stock/pubsrc-2.1.pkg": datastream("pubsrc", [
+        ("root/usr/src/pub/news/nntp/xmit/get_tcp_conn.c", "/* " + NNTP + " */\n")]),
+        "pkgs/stock/Xsource-2.1.pkg": datastream("Xsource", [
+            ("root/usr/src/X/contrib/clients/xpostit/note.c", "/* secretbox */\n")])}, None, False),
+    ("stock-other-value", {"pkgs/stock/pubsrc-2.1.pkg": datastream("pubsrc", [
+        ("root/usr/src/pub/news/nntp/xmit/get_tcp_conn.c", "/* " + PRIV_ADDR + " */\n")])}, "privacy", False),
+    ("stock-other-file", {"pkgs/stock/pubsrc-2.1.pkg": datastream("pubsrc", [
+        ("root/usr/src/pub/news/nntp/xmit/other.c", "/* " + NNTP + " */\n")])}, "privacy", False),
+    ("stock-other-name", {"pkgs/stock/Xsource-2.1.pkg": datastream("Xsource", [
+        ("root/usr/src/X/contrib/clients/xpostit/other.c", "/* secretbox */\n")])}, "privacy", False),
 ]
 
 
