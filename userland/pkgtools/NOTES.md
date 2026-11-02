@@ -1,5 +1,25 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — scan060: the section names objdump uses
+
+The `-j <section>` change failed on the k30 kernel (kern30m -68): `objdump failed ... section
+'.text' mentioned in a -j option, but not found`, exit 1. Its `.shstrtab` starts with `.text`
+(no leading NUL), and its code section's name offset is 0. readelf prints `.text`; BFD reads
+offset 0 as no name and prints "Disassembly of section :". The failure was closed (no
+verdict), but no package with that layout could be scanned.
+
+- Each executable section's name now comes from `objdump -h`, matched by address and size.
+  - A section BFD names "" is decoded over its range without `-j`, and only its own block of
+    the listing is kept, so `.rel.boot` and `.debug_*` stay out.
+- T22 gains a stripped program rewritten to that layout: the clean one passes, and one with the
+  trap is one hit.
+- Unchanged, byte for byte against the previous scanner: libamixrt.so.1 and amixrt, APKGENG
+  1.12.6, the 843de30 pkgadd, the older verdicts (928b9ae rolls, kbootset -35, modtools), and
+  kern46m -57, zeth46 and zscsi30.
+- The k30 kernel now scans: 254365 insns and 213 hits, as before the data-object change. It
+  is the 68030 line, which the 060 check does not apply to. kern46m's 19 hits sit in
+  `fpsp060_image`.
+
 ## 2026-11-02 — scan060: objdump names each code section (-j)
 
 The data-object change (`objdump -D` over each executable section's address range) had a

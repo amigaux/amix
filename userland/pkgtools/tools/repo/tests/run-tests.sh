@@ -1740,6 +1740,41 @@ if command -v m68k-linux-gnu-objdump >/dev/null 2>&1 &&
     python3 "$SCAN060" "$S22/libsohit.so" >"$WORK/t22.sohit" 2>&1
     check "  ... and a trap in its .text is still one hit, in .text, rc 2" \
         bash -c "test $? -eq 2 && grep -q 'HITS 1 ' '$WORK/t22.sohit' && grep -q '<f>' '$WORK/t22.sohit' && ! grep -q debug '$WORK/t22.sohit'"
+    # a section BFD names "": the k30 kernel's .shstrtab starts with ".text"
+    # (no leading NUL) and its code section's name offset is 0, so objdump
+    # prints "Disassembly of section :" and `-j .text` matches nothing
+    cat > "$S22/shname0.py" <<'EOF'
+import struct, sys
+d = bytearray(open(sys.argv[1], "rb").read())
+shoff = struct.unpack(">I", d[32:36])[0]
+ent, num, stx = struct.unpack(">HHH", d[46:52])
+hd = lambda i: list(struct.unpack(">IIIIII", d[shoff + i * ent:shoff + i * ent + 24]))
+st = hd(stx)
+old = bytes(d[st[4]:st[4] + st[5]])
+new = b".text\0.shstrtab\0"
+d[st[4]:st[4] + st[5]] = new + b"\0" * (len(old) - len(new))
+for i in range(num):
+    h = hd(i)
+    h[0] = {b"": 0, b".text": 0, b".shstrtab": 6}[old[h[0]:old.index(b"\0", h[0])]]
+    d[shoff + i * ent:shoff + i * ent + 24] = struct.pack(">IIIIII", *h)
+open(sys.argv[2], "wb").write(d)
+EOF
+    for v in clean hit; do
+        { printf '\t.text\n\t.globl _start\n_start:\t'
+          [ $v = hit ] && printf '.short 0x4c6e,0x1c02,0x0010\n\t'
+          printf 'mulsl #10,%%d0\n\trts\n'; } > "$S22/n$v.s"
+        m68k-linux-gnu-as -m68020 -o "$S22/n$v.o" "$S22/n$v.s" &&
+            m68k-linux-gnu-ld -e _start -o "$S22/n$v" "$S22/n$v.o" &&
+            m68k-linux-gnu-strip "$S22/n$v" &&
+            python3 "$S22/shname0.py" "$S22/n$v" "$S22/n0$v"
+    done
+    check "fixture: objdump names the code section \"\"" \
+        bash -c "m68k-linux-gnu-objdump -h '$S22/n0clean' | grep -Eq '^ +0 +[0-9a-f]{8} '"
+    python3 "$SCAN060" "$S22/n0clean" >"$WORK/t22.n0" 2>&1
+    check "a code section BFD names \"\" is decoded, not refused: clean, rc 0" test $? -eq 0
+    python3 "$SCAN060" "$S22/n0hit" >"$WORK/t22.n0hit" 2>&1
+    check "  ... and its trap is one hit, rc 2" \
+        bash -c "test $? -eq 2 && grep -q 'HITS 1 ' '$WORK/t22.n0hit'"
     mkdir -p "$S22/tree/sub"; cp "$S22/hit.o" "$S22/tree/sub/"
     python3 "$SCAN060" "$S22/tree" >/dev/null 2>&1
     check "a directory walk finds the hit too, rc 2" test $? -eq 2
