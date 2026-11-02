@@ -10,13 +10,14 @@
 #                             [--volid ID] [--mirror-from MASTER.iso --mirror DIR]
 #
 # The chain this disc ends (each step's own header has the details):
-#   1. tools/build-install-iso.sh --profile <the two l11 profiles> --set full --four-card
+#   1. tools/build-install-iso.sh --profile universal-k46 --profile universal-k30 --set full --four-card
 #        --stage STAGE --keep-stage --out MASTER.iso   (the installer tree and the full set)
 #   2. this tool, --boot-mods DIR: each line's boot- and demand-class module objects at DIR/<line>/<name>
 #        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
 #        (S5-33) and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
 #   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5120 [--fp-patch] --net
-#        --install STAGE --apkg-http work/l11/apkg/apkg-http --mod NAME=DIR/<line>/NAME (each)
+#        --install STAGE --apkg-http work/l11/apkg/apkg-http --kbootset work/l11/dlm/build/box/kbootset
+#        --mod NAME=DIR/<line>/NAME (each)   (the universal interview reads the cards with it)
 #        ...   (one image per line)
 #   4. this tool, with the two images
 # --mirror-from MASTER.iso --mirror DIR: also writes the repository snapshot the matrix's

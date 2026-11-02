@@ -617,6 +617,8 @@ if [ "$SOURCE_KIND" = cdfs ] && [ -s "$SETUP_CDSPEC" ]; then
 	esac
 fi
 SETUP_KBOOTSET="${SETUP_KBOOTSET:-$INST/l11/bin/kbootset}"
+# the netinstall image's /install carries no l11/bin: the RAM disk's own kbootset then answers
+[ -x "$SETUP_KBOOTSET" ] || [ ! -x /sbin/kbootset ] || SETUP_KBOOTSET=/sbin/kbootset
 IDE_CARD=
 # ide_card -- the card number of the IDE port in the running kernel's sd card table, or ""
 ide_card()
