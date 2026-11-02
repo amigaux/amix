@@ -69,8 +69,9 @@ fi
 
 # fork_full <name> <pin file> -- a cache repository holding the pinned
 # commit with its whole history (fetched by hash, not shallow), its branch
-# `pin` and HEAD at that commit so that a clone of it has the history too;
-# prints it
+# `pin` and HEAD at that commit, checked out, so that a clone of it has the
+# history too and the cut can run the fork's own tools from it (since -60 its
+# tools/lint-rm-guard.sh); prints it
 fork_full() {
 	read -r _ff_u _ff_c < "$2"
 	_ff_r=$SRC/$1-repo
@@ -81,6 +82,7 @@ fork_full() {
 		echo "[FAIL] $1: no commit $_ff_c in $_ff_r or at $_ff_u" >&2; exit 1; }
 	git -C "$_ff_r" update-ref refs/heads/pin "$_ff_c"
 	git -C "$_ff_r" symbolic-ref HEAD refs/heads/pin
+	git -C "$_ff_r" checkout -q -f pin >&2
 	echo "$_ff_r"
 }
 read -r _ PORT_PIN < "$AMIX_TOP/kernel/port/port.pin"
