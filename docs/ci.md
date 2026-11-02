@@ -10,7 +10,7 @@ finding to fix, not a gate.
 |-----|------|---------|
 | privacy | the privacy check over the new commits | `tools/privacy-check --range BASE..HEAD` |
 | tests | the privacy check's self-test | `tools/test-privacy-check` |
-| tests | the release content check's self-test (directories, datastreams, ISOs) | `tools/test-release-check` |
+| tests | the release content check's self-test (directories, datastreams, ISOs, and two ufs disk images fetched as distfiles) | `tools/test-release-check` |
 | tests | kernel/dlm host tests | `make -C kernel/dlm test` |
 | tests | kernel/modules monsw host test | `make -C kernel/modules/monsw/module test` |
 | tests | kernel/modules ramdisk host test | `make -C kernel/modules/ramdisk/module test` |

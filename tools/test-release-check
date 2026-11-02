@@ -10,6 +10,8 @@
 # hashes, the host key name, a Kickstart header) is assembled at run time and
 # never written whole in this file, so this file passes the push check.
 # Package datastreams are built here too: their members are checked.
+# Two ufs disk image fixtures come as distfiles (release-check-fixture-*),
+# fetched into out/cache; AMIX_DISTFILES=<dir> serves them offline.
 # Prints "N/N passed"; exits non-zero on any failure.
 
 import hashlib
@@ -232,6 +234,38 @@ try:
         got = rc_mod.trace_hits(slot, p, data)
         check("image trace s%d %s: %s" % (slot, p, want or "none"),
               (not got) if want is None else (len(got) == 1 and want in got[0]), repr(got))
+
+    # image mode on a real ufs: two fixtures, an RDB with s1 a ufs made by
+    # the box's own mkfs (invented /etc and first-boot files), s2 swap (zero)
+    # and s3 a boot store; "planted" adds a shadow hash and a private address.
+    # They are disk images, which privacy-check keeps out of commits: they are
+    # distfiles (tools/release-check-fixture-*.distfile), fetched into
+    # out/cache by toolchain/fetch-distfile (AMIX_DISTFILES for an offline run).
+    import gzip
+    top = os.path.dirname(HERE)
+    for name, want in (
+            ("clean", None),
+            ("planted", ["HIT  credential /etc/shadow: a crypt-style password hash for root",
+                         "1 etc/inet/hosts private IPv4 address " + ".".join(("10", "11", "12", "13")) + " at line 3",
+                         "3 etc/shadow password hash in a shadow file at line 1"])):
+        r = subprocess.run(["sh", os.path.join(top, "toolchain", "fetch-distfile"),
+                            os.path.join(HERE, "release-check-fixture-%s.distfile" % name),
+                            os.path.join(top, "out", "cache")], capture_output=True, text=True)
+        gz = r.stdout.strip().splitlines()[-1] if r.returncode == 0 and r.stdout.strip() else ""
+        check("fixture-%s.hdf.gz fetched by its pin" % name, r.returncode == 0 and os.path.isfile(gz),
+              r.stdout + r.stderr)
+        if not os.path.isfile(gz):
+            continue
+        img = os.path.join(tmp, "fixture-%s.hdf" % name)
+        with open(img, "wb") as fp:
+            fp.write(gzip.decompress(open(gz, "rb").read()))
+        rc, out = run(flags + [img], env)
+        if want is None:
+            check("ufs fixture clean: CLEAN, its 4 files and both raw slices read",
+                  rc == 0 and "4 files, CLEAN" in out and "2 raw slice(s)" in out, out)
+        else:
+            check("ufs fixture planted: exactly the shadow hash and the address",
+                  rc == 1 and "3 HIT(s)" in out and all(w in out for w in want), out)
 
     # the register and the patterns come by environment as well
     rc, out = run([os.path.join(tmp, "t", "register")], dict(env, ROM_MANIFEST=reg, PRIVACY_PATTERNS=pat))

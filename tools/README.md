@@ -48,5 +48,8 @@ upstream software ships are in `release-allow.txt`, each with its reason.
 It exits 0 clean, 1 on hits and 2 on any failure. The media build and the
 package repository's assembly call it. `test-release-check` builds trees that
 hold one thing each, as directories, datastreams and ISOs, and passes only
-when each is refused or passed as it should be; it needs xorriso.
+when each is refused or passed as it should be; it needs xorriso. Its two
+ufs disk image fixtures, a clean one and one with a planted password hash and
+private address, are distfiles (`release-check-fixture-*.distfile`) that it
+fetches into `out/cache`, since disk images never enter this repository.
 `lib/rdb.py` and `lib/ufs.py` are the RDB and ufs readers it uses.
