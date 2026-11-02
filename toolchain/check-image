@@ -1,0 +1,45 @@
+#!/bin/sh
+# check-image: is the build container built from this checkout's toolchain
+# pins?
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: toolchain/check-image [IMAGE]
+#   no IMAGE  inside the container: /opt/amix/PINS against toolchain/*.pin
+#   IMAGE     the same check, run in that image (CONTAINER: docker or podman)
+# Environment:
+#   AMIX_PINS  the stamp directory (default /opt/amix/PINS)
+#
+# container-build.sh's image carries the .pin files it was built from in
+# /opt/amix/PINS.  make dist runs this first and stops on a difference, so a
+# retagged or stale image cannot change a package's bytes unnoticed.  Exit 0
+# the same pins; 1 a pin differs, is missing, or the image has no stamp.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+if [ $# -gt 0 ]; then
+	exec "${CONTAINER:-docker}" run --rm -v "$here:/check:ro" "$1" sh /check/check-image
+fi
+stamp=${AMIX_PINS:-/opt/amix/PINS}
+[ -d "$stamp" ] || {
+	echo "[FAIL] check-image: the image has no $stamp, so it predates pin stamps;" >&2
+	echo "       rebuild it from this checkout (make tools)" >&2
+	exit 1
+}
+[ -r "$stamp" ] && [ -x "$stamp" ] || {
+	echo "[FAIL] check-image: cannot read $stamp as $(id -un 2>/dev/null || id -u)" >&2
+	exit 1
+}
+commit() { [ -f "$1" ] && { read -r _u c < "$1"; printf %.7s "$c"; } || echo none; }
+bad=0 seen=
+for f in "$here"/*.pin "$stamp"/*.pin; do
+	[ -f "$f" ] || continue
+	n=${f##*/}
+	cmp -s "$here/$n" "$stamp/$n" 2>/dev/null && continue
+	case " $seen " in *" $n "*) continue ;; esac
+	seen="$seen $n"
+	echo "[FAIL] check-image: $n: image $(commit "$stamp/$n"), checkout $(commit "$here/$n")" >&2
+	bad=1
+done
+[ $bad = 0 ] || { echo "       the image is not built from this checkout's pins; rebuild it (make tools)" >&2; exit 1; }
+echo "check-image: the image's pins are this checkout's ($(cd "$stamp" && ls *.pin | tr '\n' ' '| sed 's/ $//'))"

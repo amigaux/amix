@@ -4,7 +4,7 @@
 # MIT licence, see LICENSE at the top of the repository.
 # A throwaway checkout holds dist.sh with what it reads before any step:
 # layout.sh, system/check-amix-system with an empty manifest, and the
-# toolchain pins. Nothing is built: the preconditions, the steps that are
+# toolchain pins and check-image. Nothing is built: the preconditions, the steps that are
 # not in make dist yet, the order `dist` stops in, and the container's
 # command line (through a stand-in docker) are checked. Prints "N/N passed";
 # exits non-zero on any failure.
@@ -51,7 +51,7 @@ try:
               "userland/pkgtools/tools/repo/gen-catalog.py",
               "userland/pkgtools/tools/repo/deps.conf", "userland/pkgtools/tools/repo/names.conf",
               "userland/pkgtools/tools/repo/cats.conf", "userland/pkgtools/tools/repo/descs.conf",
-              "toolchain/gcc-cross-amix.pin", "toolchain/gcc14-cross-amix.pin"):
+              "toolchain/gcc-cross-amix.pin", "toolchain/gcc14-cross-amix.pin", "toolchain/check-image"):
         os.makedirs(os.path.dirname(os.path.join(top, f)), exist_ok=True)
         shutil.copy2(os.path.join(TOP, f), os.path.join(top, f))
     write(os.path.join(top, "system", "MANIFEST.sha256"), "")
@@ -394,6 +394,28 @@ clean:
     check("dist: kit first, and stops at the first step that fails",
           rc != 0 and "=== make dist: kit" in out and "make dist: stopped at kit" in out
           and "=== make dist: kernel-k30" not in out, out)
+
+    # inside the container: the image's pins (its /opt/amix/PINS) must be
+    # the checkout's before any step runs
+    home = os.path.join(tmp, "home")
+    os.makedirs(home)
+    stamp = os.path.join(tmp, "PINS")
+    shutil.copytree(os.path.join(top, "toolchain"), stamp, ignore=shutil.ignore_patterns("check-image"))
+    inside = dict(DIST_HOST=None, AMIX_IN_CONTAINER="1", HOME=home, AMIX_PINS=stamp)
+    rc, out = run("media", **inside)
+    check("inside the container, an image of the checkout's pins: the steps run",
+          rc == 3 and "check-image: the image's pins are this checkout's" in out
+          and "[MISSING] media: not in make dist yet" in out, out)
+    gca = open(os.path.join(top, "toolchain", "gcc-cross-amix.pin")).read().split()[1]
+    write(os.path.join(stamp, "gcc-cross-amix.pin"), "https://example.invalid/gca.git %s\n" % ("8949028" + "0" * 33))
+    rc, out = run("dist", **inside)
+    check("an image of other pins: refused before the first step",
+          rc == 1 and "[FAIL] check-image: gcc-cross-amix.pin: image 8949028, checkout %s" % gca[:7] in out
+          and "=== make dist" not in out, out)
+    shutil.rmtree(stamp)
+    rc, out = run("dist", **inside)
+    check("an image without the stamp: refused before the first step",
+          rc == 1 and "predates pin stamps" in out and "=== make dist" not in out, out)
 
     fake = os.path.join(tmp, "bin", "docker")
     # the image's passwd and group, which name no one but root

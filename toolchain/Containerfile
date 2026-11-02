@@ -10,6 +10,8 @@
 # path of the machine that builds it ends up in the toolchains; dates come from
 # SOURCE_DATE_EPOCH, and archive members are normalised to it.
 # /opt/amix/TOOLCHAIN.sha256 lists every installed file, to compare two builds.
+# /opt/amix/PINS holds the .pin files the image was built from; make dist
+# refuses an image whose pins are not the checkout's (check-image).
 
 FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS base
 
@@ -153,4 +155,8 @@ COPY --from=norm /opt /opt
 ENV GCA=/opt/amix/gcc-cross-amix/build \
     G14=/opt/amix/gcc14-cross-amix/build \
     PATH=/opt/amix-cross/bin:/opt/amix/gcc14-cross-amix/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# last, so a stamp of the same pins reuses every toolchain layer; readable
+# by the calling user make dist runs as
+COPY *.pin /opt/amix/PINS/
+RUN chmod 0755 /opt/amix/PINS && chmod 0644 /opt/amix/PINS/*.pin
 WORKDIR /src

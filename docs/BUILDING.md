@@ -25,8 +25,10 @@ make dist  SYSTEM=../amix-system
 Every step runs in the build container, as you, with this checkout at `/src`
 and the system input read-only at `/system`. The fixed path is what makes the
 period compiler (gcc 2.7.2.3, which cannot remap paths) build the same bytes
-on every machine. `AMIX_IMAGE` names another image, and `CONTAINER=podman`
-uses podman. `DIST_HOST=1` runs the steps on your host instead, with the
+on every machine. The image carries the toolchain pins it was built from, and
+make dist stops before any step if they are not this checkout's
+(`toolchain/check-image`): after a pin changes, run `make tools` again.
+`AMIX_IMAGE` names another image, and `CONTAINER=podman` uses podman. `DIST_HOST=1` runs the steps on your host instead, with the
 toolchains `build/pkg/layout.sh` finds; that is for development, and a release
 is built in the container.
 

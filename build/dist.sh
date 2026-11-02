@@ -126,6 +126,8 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 fi
 if [ "$AMIX_IN_CONTAINER" = 1 ]; then
 	git config --global --add safe.directory /src
+	# the image is built from this checkout's toolchain pins, or nothing runs
+	sh "$top/toolchain/check-image" || exit 1
 fi
 
 # --- the steps -------------------------------------------------------------------
