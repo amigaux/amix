@@ -1,6 +1,6 @@
-# C2-1 — the `kinfo` record, version 3
+# C2-1 — the `kinfo` record, version 4
 
-- **Status:** agreed 2026-10-25, version 2 (2026-10-26): the memory sizes at 528 and 532, so the module list moves by 8 (gate 6, 40 §3.1); version 3 (2026-10-26): the loader's bootdata block at 536, where the kernel was bound, for the namelist (40 §4.2), so the module list moves by 40. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25, version 2 (2026-10-26): the memory sizes at 528 and 532, so the module list moves by 8 (gate 6, 40 §3.1); version 3 (2026-10-26): the loader's bootdata block at 536, where the kernel was bound, for the namelist (40 §4.2), so the module list moves by 40; version 4 (2026-11-02): motherboard id 2 names the A1200 IDE as well as the A4000 IDE (§2.1). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/40-generations-and-composer.md` §4, `70-static-floor.md` (`kinfo` in the floor), `20-module-format-and-abi.md` §6 (major 53)
 - **Built by:** the kernels of both lines: the 040/060 families (amix-040-060-port) and the 030 families (amix-kerntools), the static kernels of stage 2 included
 - **Read by:** `kbootset` (the booted generation, the boot disk, the namelist), apkg 0.3 (line, kabi), the installer
@@ -55,9 +55,15 @@ modules loaded, the record lists the first 32 the core reports
 | Id | Controller |
 |---|---|
 | 1 | A3000 WD33C93 (`a3000-wd`) |
-| 2 | Gayle IDE (`gayle`) |
+| 2 | Gayle IDE (`gayle`): the A4000 and A4000T IDE, which sd holds as `A4000 IDE`, and (version 4) the A1200 IDE, `A1200 IDE` |
 | 3 | A4000T onboard 53C710 (`a4000t-710`) |
 | 4 | the Z3660 window (`z3660-window`) |
+
+kinfo gives a card with no AutoConfig board its code by the name sd
+holds for it (k30: `kinfo030.c`; k46: the port's kinfo). Both
+`A4000 IDE` and `A1200 IDE` give 2, so a box has at most one Gayle card
+and a root or swap record on it is `sd id=00000002` on either machine
+(C4-1 §5.2).
 
 The two kinds cannot collide. kbootset turns an id into the match key the
 gates use (C2-3, 10 §5.1):
