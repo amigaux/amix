@@ -2732,29 +2732,37 @@ for n, l in enumerate(open(sys.argv[1]), 1):
 # assemble-release.py: one release tree from make dist's userland and kspace
 # outputs, APKG/APKGENG and the stock datastreams its lock names; every
 # published version stays (older rows in a block every apkg skips).  Toy
-# datastreams by the host pkgmk; scan060 and release-check are stand-ins
-# (scan060 has its own block, T22); apkg itself reads every tree written.
+# datastreams by the host pkgmk; the scanners and release-check are
+# stand-ins (scan060 has its own block, T22); apkg itself reads every tree.
 echo "T34: assemble-release.py writes one release tree"
 AR="$HERE/../assemble-release.py"
 S34="$WORK/t34"
 if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     mkdir -p "$S34/src" "$S34/ul/pkgs" "$S34/ks/pkgs" "$S34/ap" "$S34/st" "$S34/bin"
-    toy34() {   # toy34 <PKG> <VERSION> <out.pkg> [payload word]
-        printf 'PKG=%s\nNAME=%s toy\nVERSION=%s\nARCH=Amiga\nCATEGORY=system\n' "$1" "$1" "$2" > "$S34/pkginfo"
+    toy34() {   # toy34 <PKG> <VERSION> <out.pkg> [payload word] [ELF to ship as /opt/<PKG>.elf] [pkginfo line]
+        printf 'PKG=%s\nNAME=%s toy\nVERSION=%s\nARCH=Amiga\nCATEGORY=system\n%s\n' "$1" "$1" "$2" "${6:-}" > "$S34/pkginfo"
         echo "${4:-$1-$2}" > "$S34/src/f"
         printf 'i pkginfo=%s\nd none /opt 0755 root sys\nf none /opt/%s=%s 0644 root sys\n' \
             "$S34/pkginfo" "$1" "$S34/src/f" > "$S34/proto"
+        [ -z "${5:-}" ] || printf 'f none /opt/%s.elf=%s 0755 root sys\n' "$1" "$5" >> "$S34/proto"
         rm -rf "$S34/spool"; mkdir -p "$S34/spool"
         "$HB/pkgmk" -o -d "$S34/spool" -f "$S34/proto" >/dev/null 2>&1 &&
             "$HB/pkgtrans" -s "$S34/spool" "$3" "$1" >/dev/null 2>&1
     }
     cpconf34() { for c in deps names cats descs; do cp "$HERE/../$c.conf" "$1/"; done; }
+    # two m68k ELFs: a period one, and one whose .comment names GCC 14
+    printf '\t.text\n\t.globl _start\n_start:\tmulsl #10,%%d0\n\trts\n' > "$S34/p.s"
+    { cat "$S34/p.s"; printf '\t.section .comment\n\t.string "GCC: (GNU) 14.2.0"\n'; } > "$S34/g.s"
+    for e in p g; do
+        m68k-linux-gnu-as -m68020 -o "$S34/$e.o" "$S34/$e.s" && m68k-linux-gnu-ld -e _start -o "$S34/$e.elf" "$S34/$e.o"
+    done
     # userland: make dist's catalogs step (gen-catalog with the conf layers)
-    toy34 zlibt 1.0 "$S34/ul/pkgs/zlibt-1.0.pkg"
+    toy34 zlibt 1.0 "$S34/ul/pkgs/zlibt-1.0.pkg" "" "$S34/p.elf"
+    toy34 ufst 1.0 "$S34/ul/pkgs/ufst-1.0.pkg" "" "" "APKG_FSTYPE=ufs"   # gen-catalog's #ext fstype block
     cpconf34 "$S34/ul/pkgs"
     python3 "$GEN" --packages-conf none -o "$S34/ul" "$S34/ul/pkgs" >/dev/null 2>&1
     # kspace: an ordinary row and a #kpkg line
-    toy34 ktool 1.0 "$S34/ks/pkgs/ktool-1.0.pkg"
+    toy34 ktool 1.0 "$S34/ks/pkgs/ktool-1.0.pkg" "" "$S34/g.elf"
     echo "module bytes" > "$S34/ks/pkgs/kmod46-1.0.pkg"
     {   echo "#apkg-catalog 1"
         echo "ktool|1.0|ktool|ktool-1.0.pkg|$(md5sum < "$S34/ks/pkgs/ktool-1.0.pkg" | cut -c1-32)|$(wc -c < "$S34/ks/pkgs/ktool-1.0.pkg")|none|system|toy"
@@ -2765,13 +2773,17 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     toy34 APKG 0.3.6 "$S34/ap/APKG-0.3.6.pkg"
     toy34 APKGENG 1.12.6 "$S34/ap/APKGENG-1.12.6.pkg"
     md5sum < "$S34/ap/APKG-0.3.6.pkg" | cut -c1-32 > "$S34/ap/APKG-0.3.6.pkg.md5"
-    toy34 core 2.1 "$S34/st/core-2.1.pkg"
+    toy34 core 2.1 "$S34/st/core-2.1.pkg" "" "$S34/p.elf"
     f="$S34/st/core-2.1.pkg"
     printf '# toy lock\ncore-2.1.pkg %s %s %s\n' "$(wc -c < "$f")" "$(md5sum < "$f" | cut -c1-32)" \
         "$(sha256sum < "$f" | cut -c1-64)" > "$S34/stock.lock"
-    # scan060 runs as `python3 -I <path>`: the stand-in is Python
-    printf 'import os, sys\nopen("%s/scan.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(int(os.environ.get("SCAN_RC", "0")))\n' \
+    # the scanners run as `python3 -I <path>`: the stand-ins are Python.
+    # scan060: a hit (exit 2) on an ELF whose path holds $SCAN_HIT;
+    # scan060-g14: exit $G14_RC for a verdict, $G14X_RC for --explain
+    printf 'import os, sys\nopen("%s/scan.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nh = os.environ.get("SCAN_HIT")\nsys.exit(2 if h and any(h in x for x in sys.argv[1:]) else 0)\n' \
         "$S34" > "$S34/bin/scan060"
+    printf 'import os, sys\nopen("%s/g14.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(int(os.environ.get("G14X_RC" if "--explain" in sys.argv else "G14_RC", "0")))\n' \
+        "$S34" > "$S34/bin/scan060-g14"
     printf '#!/bin/sh\necho "$@" >> %s/rc.log\nexit ${RC_RC:-0}\n' "$S34" > "$S34/bin/release-check"
     chmod +x "$S34/bin/scan060" "$S34/bin/release-check"
     : > "$S34/rom"; : > "$S34/pat"
@@ -2779,7 +2791,8 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         local o="$1"; shift
         python3 "$AR" --userland "$S34/ul" --kspace "$S34/ks" --apkg "$S34/ap" \
             --stock "$S34/st" --stock-lock "$S34/stock.lock" --release 1.1 --out "$o" \
-            --scan060 "$S34/bin/scan060" --release-check "$S34/bin/release-check" \
+            --scan060 "$S34/bin/scan060" --scan060-g14 "$S34/bin/scan060-g14" \
+            --release-check "$S34/bin/release-check" \
             --rom-register "$S34/rom" --private-patterns "$S34/pat" --apkg-bin "$APKGH" "$@"
     }
     ar34 "$S34/out/1.1" >"$WORK/t34.a" 2>&1
@@ -2789,12 +2802,22 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         bash -c "grep -q '^zlibt|1.0|' '$C34' && grep -q '^ktool|' '$C34' && grep -q '^apkg|0.3.6|APKG|base/APKG-0.3.6.pkg|' '$C34' && grep -q '^apkgeng|1.12.6|' '$C34' && grep -q '|stock/core-2.1.pkg|' '$C34' && grep -q '^#kpkg kmod-k46 1.0 ' '$C34'"
     check "  ... every file at pkgs/<filename>, byte for byte" \
         bash -c "cmp -s '$S34/ap/APKG-0.3.6.pkg' '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' && cmp -s '$S34/st/core-2.1.pkg' '$S34/out/1.1/pkgs/stock/core-2.1.pkg' && cmp -s '$S34/ks/pkgs/kmod46-1.0.pkg' '$S34/out/1.1/pkgs/kmod46-1.0.pkg' && test ! -e '$S34/out/1.1/pkgs/deps.conf'"
+    check "  ... the userland catalog's fstype block is carried, after the rows and before the kpkg block" \
+        bash -c "grep -A1 -x '#ext fstype 1' '$C34' | grep -qx '#fstype ufst ufs' && test \$(grep -n -x '#ext fstype 1' '$C34' | cut -d: -f1) -gt \$(grep -n '^zlibt|' '$C34' | cut -d: -f1) && test \$(grep -n -x '#ext fstype 1' '$C34' | cut -d: -f1) -lt \$(grep -n -x '#ext kpkg 1' '$C34' | cut -d: -f1)"
     check "  ... catalog.md5 is the catalog's" \
         test "$(cut -c1-32 "$S34/out/1.1/catalog.md5")" = "$(md5sum < "$C34" | cut -c1-32)"
     check "  ... apkg reads it as one repository" \
-        grep -q "apkg reads the tree: catalog updated: 5 packages, 1 kernel-space" "$WORK/t34.a"
-    check "  ... scan060 got the userland rows only (no stock/, no #kpkg file)" \
-        bash -c "grep -q 'zlibt-1.0.pkg' '$S34/scan.log' && grep -q 'APKG-0.3.6.pkg' '$S34/scan.log' && ! grep -q 'core-2.1\|kmod46' '$S34/scan.log'"
+        grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.a"
+    check "  ... the period ELF went to scan060.py, the GCC 14 one to scan060-g14.py (and scan060.py)" \
+        bash -c "grep -q 'zlibt.elf' '$S34/scan.log' && grep -q 'ktool.elf' '$S34/g14.log' && grep -q 'ktool.elf' '$S34/scan.log' && ! grep -q 'zlibt.elf' '$S34/g14.log' && ! grep -q -- '--explain' '$S34/g14.log'"
+    check "  ... no stock/ ELF and no #kpkg file was scanned" \
+        bash -c "! grep -q 'core.elf\|kmod46' '$S34/scan.log' '$S34/g14.log'"
+    check "  ... a package with no ELF (APKG here) is no failure" \
+        grep -q "68060 scan: 5 package(s), 1 period ELF(s), 1 GCC 14 ELF(s): clean" "$WORK/t34.a"
+    : > "$S34/g14.log"
+    SCAN_HIT=ktool.elf ar34 "$S34/outx/1.1" >"$WORK/t34.x" 2>&1
+    check "scan060.py hits on a GCC 14 ELF that scan060-g14.py explains: rc 0" \
+        bash -c "test $? -eq 0 && grep -q -- '--explain .*ktool.elf.scan060 .*ktool.elf' '$S34/g14.log'"
     check "  ... release-check got the register, the patterns and the tree" \
         grep -q -- "--rom-register $S34/rom --private-patterns $S34/pat $S34/out/1.1.tmp" "$S34/rc.log"
     (umask 077; TZ=Pacific/Kiritimati ar34 "$S34/out2/1.1" >/dev/null 2>&1)
@@ -2837,8 +2860,21 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     printf 'zlibt: nosuch\n' > "$S34/ul2/pkgs/deps.conf"; rm -f "$S34/ul2/pkgs/ktool-2.0.pkg"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a dependency no live row names: refused" "zlibt 1.0 (userland) depends on nosuch" --userland "$S34/ul2"
-    SCAN_RC=2 t34no 1 "scan060 finding a hit: refused" "scan060 refused the tree"
+    SCAN_HIT=zlibt.elf t34no 1 "scan060.py finding a hit in a period ELF: refused" "scan060 refused the tree"
+    G14_RC=1 t34no 1 "scan060-g14.py finding a hit in a GCC 14 ELF: refused" "scan060-g14 refused the tree"
+    G14_RC=3 t34no 1 "scan060-g14.py unable to size a table: refused" "scan060-g14 refused the tree (exit 3)"
+    SCAN_HIT=ktool.elf G14X_RC=1 t34no 1 "a scan060.py hit scan060-g14.py cannot explain: refused" \
+        "scan060-g14 --explain refused the tree"
     RC_RC=1 t34no 1 "release-check refusing: refused" "release-check refused the tree"
+    cp "$S34/ks/catalog" "$S34/ks.cat"
+    kmd5() { printf '%s  catalog\n' "$(md5sum < "$S34/ks/catalog" | cut -c1-32)" > "$S34/ks/catalog.md5"; }
+    { cat "$S34/ks.cat"; printf '#ext bogus 1\n#bogus ktool 1\n'; } > "$S34/ks/catalog"; kmd5
+    t34no 1 "an #ext block of a kind the tool does not know: refused" "a line this tool does not know: #ext bogus 1"
+    { cat "$S34/ks.cat"; printf '#ext fstype 1\n#fstype zlibt ufs\n'; } > "$S34/ks/catalog"; kmd5
+    t34no 1 "a #fstype line naming a package its catalog does not carry: refused" "#fstype names zlibt, which is not in this catalog"
+    { cat "$S34/ks.cat"; printf '#ext fstype 1\n#fstype ktool ufs\n#fstype ktool s5\n'; } > "$S34/ks/catalog"; kmd5
+    t34no 1 "two #fstype lines for one package: refused" "a second #fstype line for ktool"
+    cp "$S34/ks.cat" "$S34/ks/catalog"; cp "$S34/ks.md5" "$S34/ks/catalog.md5"
     t34no 3 "no release-check: [MISSING], rc 3" "\[MISSING\] assemble-release: release-check" --release-check "$S34/nosuch"
     t34no 3 "no private patterns: [MISSING], rc 3" "\[MISSING\] assemble-release: private patterns" --private-patterns "$S34/nosuch"
     mv "$S34/st/core-2.1.pkg" "$S34/core.save"
@@ -2858,10 +2894,21 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     check "  ... the published file stays, byte for byte, and every other row is as published" \
         bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|' '$C34') <(grep -v '^apkg|\|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
     check "  ... apkg reads one row per name (the older block is skipped)" \
-        grep -q "apkg reads the tree: catalog updated: 5 packages, 1 kernel-space" "$WORK/t34.p"
+        grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.p"
     ar34 "$S34/out4/1.1" --previous "$S34/out3/1.1" >/dev/null 2>&1
     check "a third assembly over that tree keeps the older block: rc 0, same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C3' '$S34/out4/1.1/catalog'"
+    # a newer UFS-only package: the published row moves with its #fstype line
+    mkdir -p "$S34/ul3/pkgs"; cp -r "$S34/ul/pkgs/." "$S34/ul3/pkgs/"; rm -f "$S34/ul3/pkgs/ufst-1.0.pkg"
+    toy34 ufst 2.0 "$S34/ul3/pkgs/ufst-2.0.pkg" "" "" "APKG_FSTYPE=ufs"
+    python3 "$GEN" --packages-conf none -o "$S34/ul3" "$S34/ul3/pkgs" >/dev/null 2>&1
+    ar34 "$S34/out5/1.1" --previous "$S34/out3/1.1" --userland "$S34/ul3" >"$WORK/t34.5" 2>&1
+    C5="$S34/out5/1.1/catalog"
+    check "a newer UFS-only package: live 2.0 with its #fstype, the older row followed by its own" \
+        bash -c "test $? -eq 0 && grep -q '^ufst|2.0|' '$C5' && grep -qx '#fstype ufst ufs' '$C5' && grep -A1 '^#old ufst|1.0|' '$C5' | grep -qx '#old #fstype ufst ufs'"
+    ar34 "$S34/out6/1.1" --previous "$S34/out5/1.1" --userland "$S34/ul3" >/dev/null 2>&1
+    check "  ... and an assembly over that tree reads the #old #fstype line back: same catalog" \
+        bash -c "test $? -eq 0 && cmp -s '$C5' '$S34/out6/1.1/catalog'"
     toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "$S34/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a published version with other bytes: refused" "is published with other bytes" \

@@ -1,5 +1,34 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — assemble-release: GCC 14 ELFs by the D4 rule, fstype/isize blocks carried
+
+**The 68060 scan.** On make dist's userland at 69a05e6, scan060.py reported 1,637 hits in
+heirtar's tar and in 25 x11r63 6.3-6 programs, so the assembly was refused. All of them were
+GCC 14 switch-table data:
+- scan060.py sizes a table by gcc 2.7's layout. On GCC 14 output it reads the table as code and
+  resumes decoding at odd addresses (38 of tar's 39 hits are odd; a plain objdump listing of
+  tar has no odd address at all).
+- build/pkg's D4 gate already scans GCC 14 binaries with scan060-g14.py, which sizes each table
+  from its bound check, and requires every scan060.py hit to be one it explains.
+The tool now applies that rule per ELF:
+- it unpacks each live userland datastream;
+- a `.comment` naming GCC 14 sends the ELF to scan060-g14.py for the verdict, and then
+  `--explain` for scan060.py's hits;
+- period ELFs stay with scan060.py;
+- a package without an ELF has nothing to scan (syslog is all scripts; scan060.py calls a
+  datastream with no ELF "NOTHING INSPECTED").
+On the same inputs: 12 packages, 15 period ELFs and 36 GCC 14 ELFs clean. Every scan060.py hit
+on the 26 is explained, e.g. xterm's 577: 10 in sized tables and 567 at odd addresses.
+
+**Blocks.** make dist's userland catalog carries gen-catalog's `#ext fstype 1` block
+(amixrt, python3, vim and x11r6.3 are UFS-only), which the tool refused as unknown.
+- The per-name blocks (fstype, and the opt-in isize) are now carried with their row. Like
+  gen-catalog, they have no end line.
+- An older row keeps its own as `#old #fstype`.
+- A line naming a package its catalog lacks, a second line for one package, and any other #ext
+  kind are refused.
+- The e3a735ba run gives the same catalog. T34: 41 checks.
+
 ## 2026-11-02 — assemble-release.py: one tree per release, every version kept
 
 A box reads one repository per `repo=`, while make dist writes two catalogs (userland and

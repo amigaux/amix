@@ -357,13 +357,19 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   #end older
   ```
 
+  gen-catalog's per-name blocks (`#ext fstype 1`, `#ext isize 1`) are carried with the row they
+  describe. The live ones follow the entries in gen-catalog's order. An older row keeps its own
+  as `#old #fstype …` after it.
+
   The tool refuses, and writes nothing, when:
   - a catalog.md5, size or hash differs;
   - a name, pkginst or filename is in two inputs (no newest-wins between inputs);
   - a published version would change bytes, or a version would go backwards;
   - a dependency names no live row;
-  - scan060 finds a hit in a live userland row (stock/ is vendor code; kernel-space files have
-    kernel space's own gates);
+  - a live userland row's ELF has a 68060-unimplemented instruction, by build/pkg's D4 rule: a
+    period ELF's verdict is scan060.py's; a GCC 14 ELF's is scan060-g14.py's, and every
+    scan060.py hit on it must be one scan060-g14.py explains. stock/ is vendor code, and
+    kernel-space files have kernel space's own gates;
   - amix's `tools/release-check` refuses the tree;
   - apkg does not read the tree as one repository.
 
