@@ -10165,6 +10165,54 @@ def audit_universal_cards():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_root_lock():
+    head("RL. a published medium carries no root password hash (FB_ROOT_SHADOW=none): the first boot "
+         "LOCKS root until the dialog sets one (stock 2.1's /etc/shadow gives root an EMPTY password)")
+    fb = open(FIRSTBOOT, encoding="latin-1").read()
+    iso = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
+    drv = open(DRIVER, encoding="latin-1").read()
+    (ok if "grep -q '^FB_ROOT_SHADOW=none$'" in iso and 'rm -f "${STAGE:?}/firstboot/root.shadow"' in iso else fail)(
+        "build-install-iso.sh stages no root.shadow for FB_ROOT_SHADOW=none")
+    (ok if 'if [ -f "$INST/firstboot/root.shadow" ]; then' in drv else fail)(
+        "install.sh lays root.shadow only when the medium carries one")
+    for prof in ("universal-k46", "universal-k30", "image-k46-4g", "image-k30-4g"):
+        t = open(os.path.join(REPO, "profiles", prof + ".profile"), encoding="latin-1").read()
+        (ok if re.search(r'(?m)^FB_ROOT_SHADOW=none$', t) else fail)("%s: FB_ROOT_SHADOW=none" % prof)
+    i = fb.find('if [ "$FB_DIALOG" = y ] && [ -z "$DIALOG_PENDING" ]; then\n\techo "firstboot: root password was set')
+    j = fb.find("\nfi\n", i)
+    if i < 0 or j < 0:
+        fail("firstboot.sh: the root password step is missing")
+        return
+    block = fb[i:j + 4]
+    d = tempfile.mkdtemp(prefix="rootlock.")
+    try:
+        sh = os.path.join(d, "shadow")
+        blk = block.replace("/etc/shadow", sh)
+        def run(start, payload, dialog, pending):
+            if os.path.exists(sh):
+                os.chmod(sh, 0o600)     # the step leaves it 0400, as on the box
+            open(sh, "w").write(start)
+            fbdir = os.path.join(d, "fb"); shutil.rmtree(fbdir, ignore_errors=True); os.makedirs(fbdir)
+            if payload:
+                open(os.path.join(fbdir, "root.shadow"), "w").write("root:ROOT_HASH_PLACEHOLDER:::::::\n")
+            subprocess.run(["/usr/bin/dash", "-c", "FBDIR=%s FB_DIALOG=%s DIALOG_PENDING=%s\n%s" % (fbdir, dialog, pending, blk)],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20, cwd=d)
+            return open(sh).read().splitlines()[0]
+        stock = "root::0:0:::::\ndaemon::0:0:::::\n"
+        steps = (
+            ("no payload hash, the dialog not done yet: root LOCKED (not stock's empty one)", stock, False, "y", "y", "root:*LK*:::::::"),
+            ("the dialog then sets a password and completes: left as it set it (unlocked)", "root:Zq9newhashxx:::::::\n", False, "y", "", "root:Zq9newhashxx:::::::"),
+            ("an interrupted dialog (still pending, no payload): root stays LOCKED", "root:*LK*:::::::\n", False, "y", "y", "root:*LK*:::::::"),
+            ("no dialog armed and no payload hash: LOCKED, never empty", stock, False, "n", "", "root:*LK*:::::::"),
+            ("a bench medium's payload hash (never published): applied", stock, True, "y", "y", "root:ROOT_HASH_PLACEHOLDER:::::::"),
+        )
+        for what, start, payload, dialog, pending, want in steps:
+            got = run(start, payload, dialog, pending)
+            (ok if got == want else fail)("root password: %s%s" % (what, "" if got == want else " -- got %r" % got))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
          "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
@@ -11026,6 +11074,7 @@ def main():
     audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()
+    audit_root_lock()
     audit_universal_cards()
     audit_cd_candidates()
     audit_boot_pri()

@@ -449,6 +449,13 @@ if [ -n "$_seed_pw" ]; then
   chmod 0600 "$STAGE/firstboot/root.shadow"
   echo "build-install-iso: FB_ROOT_SEED_PW set (profile ${PROFILES[0]}) -- regenerated root.shadow (throwaway seed; firstboot still forces a new password)"
 fi
+# FB_ROOT_SHADOW=none (a published medium's profile): no payload root hash at all -- the first boot
+# locks root until the dialog sets a password (firstboot.sh), so the disc carries no credential
+if grep -q '^FB_ROOT_SHADOW=none$' "$_base_profile_file" 2>/dev/null; then
+  [ -z "$_seed_pw" ] || { echo "STOP: profile ${PROFILES[0]} sets both FB_ROOT_SHADOW=none and FB_ROOT_SEED_PW" >&2; exit 1; }
+  rm -f "${STAGE:?}/firstboot/root.shadow"
+  echo "build-install-iso: FB_ROOT_SHADOW=none (profile ${PROFILES[0]}) -- the medium carries no root password hash"
+fi
 
 # --- /install/fpfix (BLIZZARD F2-M1; installed-tree ufs FP patch) -------------
 # The 040/060 line runs a UFS root, and on an FPU-less 68060 (the LC060) the
@@ -785,10 +792,12 @@ if [ -n "$_want_l11" ]; then
     cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"; chmod 0755 "$STAGE/l11/bin/kbootset"
   fi
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
-  cp "$L11_IN/INPUTS" "$STAGE/l11/INPUTS"
+  # the medium's copy names every input relative to the workspace: the build host's own paths
+  # (its user and directories) are no business of a published disc
+  sed "s|$(dirname "$repo")/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
   # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
   if [ -n "$CDBOOT" ]; then
-    echo "cd-boot $CDBOOT, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
+    echo "cd-boot ${CDBOOT#$(dirname "$repo")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
   else
     echo "# cd-boot: none -- the install kernel boots from the floppy pair; amix-dlm D-3 §10 (option B) adds the CD boot tree (S3-31 part 3)" >> "$STAGE/l11/INPUTS"
   fi

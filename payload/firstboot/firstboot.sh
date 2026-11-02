@@ -1299,8 +1299,20 @@ chmod 644 /etc/tz.index 2>/dev/null
 # payload hash here would undo it silently, so the shadow write is skipped once
 # the dialog has completed. If the dialog did NOT complete, the payload hash IS
 # the right answer: the box would otherwise come up with core's shipped root hash.
+# A published medium or image carries NO payload hash (its profile's FB_ROOT_SHADOW=none). Root
+# is then LOCKED here until the dialog has set a password: stock 2.1's /etc/shadow (amix-system,
+# etc/shadow) gives root -- and daemon, bin, sys, adm, uucp, sync, the menu logins -- an EMPTY
+# password, so leaving it would bring a box up with root open to anyone. The dialog stays pending
+# and asks again at every boot until it has set one; `passwd root` (as root) replaces the lock.
 if [ "$FB_DIALOG" = y ] && [ -z "$DIALOG_PENDING" ]; then
 	echo "firstboot: root password was set by the first-boot dialog -- not touching /etc/shadow"
+elif [ ! -f "$FBDIR/root.shadow" ]; then
+	if [ -f /etc/shadow ]; then
+		(umask 077; sed "s|^root:[^:]*:.*|root:*LK*:::::::|" /etc/shadow > /etc/shadow.fb$$) \
+			&& mv /etc/shadow.fb$$ /etc/shadow
+		chmod 400 /etc/shadow
+	fi
+	echo "firstboot: no root password yet -- root is LOCKED until the configuration dialog sets one"
 elif [ -f "$FBDIR/root.shadow" ]; then
 	newhash=`sed -n 's/^root:\([^:]*\):.*/\1/p' "$FBDIR/root.shadow"`
 	if [ -n "$newhash" ] && [ -f /etc/shadow ]; then

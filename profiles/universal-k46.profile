@@ -56,6 +56,8 @@ FB_SYSLOG=y
 FB_REPO_HOST=pkg.amigaux.org
 FB_REPO_IP=
 FB_REPO_URL=http://pkg.amigaux.org/1.1
+# a published medium: no root password hash; the first boot locks root until the dialog sets one
+FB_ROOT_SHADOW=none
 INSTALL_CPU=040
 MINIROOT_FP_PATCH=yes
 # a published medium: it carries only the profiles it was mastered with
