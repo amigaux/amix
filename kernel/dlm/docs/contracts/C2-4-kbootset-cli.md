@@ -574,6 +574,10 @@ read-only, before anything opens it.
   does not answer prints nothing. Exit 0 whatever the units answer; the
   card lines and their statuses are as in §17. `cards --probe` takes no
   disk name.
+- **Each line is flushed as it is printed**, a card's line before its
+  units are asked, so output sent to a file is complete up to the moment
+  of a stall: when a probe never returns, the last `card N:` line is the
+  card whose controller it is waiting on.
 - **How long it takes** depends on each controller module: `gsioctl`
   waits for the controller's own completion, with no timeout of its own,
   so an empty unit costs that controller's selection timeout. Every 1.1
