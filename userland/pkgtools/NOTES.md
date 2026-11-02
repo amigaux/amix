@@ -1,5 +1,25 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — scan060 decodes data objects in .text as data
+
+gcc-cross-amix `33ebadc`'s wrapper links `values-Xa.o` into every program, as the native cc does;
+it defines `_lib_version`, a 4-byte STT_OBJECT in `.text`, exported in `.dynsym`. In a stripped
+program `objdump -d` printed that symbol's range as a hex dump up to the next symbol, which was
+the rest of `.text`. scan060 read the dump's 8-word lines as instructions: 7 of APKGENG's 11
+binaries flagged ("64-bit product" at `<_lib_version>`), and the code after the symbol was never
+decoded (pkgadd: 14032 insns instead of 37824).
+
+- objdump now runs with `-D` per executable section, and every sized STT_OBJECT symbol (from
+  `.symtab` and `.dynsym`) inside one is skipped like a switch table and counted
+  ("N data objects").
+- T22 gains a linked program stripped to one data object whose bytes are the trap encoding:
+  clean; with the trap in the code after the object, one hit, at `<d+0x8>`. The old scanner
+  flagged the object in the clean program and missed that instruction.
+- Old verdicts are unchanged: over the 928b9ae rolls (APKG 0.3.5, 0.3.6, APKGENG 1.12.5) the
+  output is byte-identical. kbootset and modadmin (843de30) stay clean, with 10 and 4 data
+  objects. The 843de30 roll of APKGENG 1.12.5 goes from 7 binaries with hits to 11 clean, with
+  the same instruction counts as the 928b9ae roll.
+
 ## 2026-11-02 — APKG 0.3.6 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container from `a687496`, `VER_APKG="0.3.6"`, `EPOCH_APKG=1793577600`;

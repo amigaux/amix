@@ -1698,6 +1698,26 @@ if command -v m68k-linux-gnu-objdump >/dev/null 2>&1 &&
     python3 "$SCAN060" "$S22/tab.o" >"$WORK/t22.tab" 2>&1
     check "a switch table that decodes as movep is skipped, rc 0" test $? -eq 0
     check "  ... and the skip is reported" grep -q '1 switch tables skipped' "$WORK/t22.tab"
+    # a sized data object in .text (values-Xa.o's _lib_version) in a program
+    # stripped to that one symbol: objdump -d would print the rest of .text
+    # as its hex dump.  Its bytes are the trap encoding; dhit has the real
+    # trap in the code after it.
+    for v in hit ok; do
+        { printf '\t.text\n\t.globl _start\n_start:\tnop\n\trts\n\t.type d,@object\n\t.size d,8\n'
+          printf 'd:\t.short 0x4c6e,0x1c02,0x0010,0x4e71\n'
+          [ $v = hit ] && printf '\t.short 0x4c6e,0x1c02,0x0010\n'
+          printf '\tmulsl #10,%%d0\n\trts\n'; } > "$S22/d$v.s"
+        m68k-linux-gnu-as -m68020 -o "$S22/d$v.o" "$S22/d$v.s" &&
+            m68k-linux-gnu-ld -e _start -o "$S22/d$v" "$S22/d$v.o" &&
+            m68k-linux-gnu-strip --keep-symbol=d "$S22/d$v"
+    done
+    python3 "$SCAN060" "$S22/dok" >"$WORK/t22.dok" 2>&1
+    check "a data object in .text whose bytes are the trap is skipped, rc 0" test $? -eq 0
+    check "  ... and reported as a data object" grep -q '1 data objects' "$WORK/t22.dok"
+    python3 "$SCAN060" "$S22/dhit" >"$WORK/t22.dhit" 2>&1
+    check "the code after a data object is still decoded: its trap is a hit, rc 2" test $? -eq 2
+    check "  ... the one hit is the instruction after it, not the object" \
+        bash -c "grep -q '<d+0x8> divsl' '$WORK/t22.dhit' && grep -q 'HITS 1 ' '$WORK/t22.dhit'"
     mkdir -p "$S22/tree/sub"; cp "$S22/hit.o" "$S22/tree/sub/"
     python3 "$SCAN060" "$S22/tree" >/dev/null 2>&1
     check "a directory walk finds the hit too, rc 2" test $? -eq 2
