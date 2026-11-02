@@ -504,6 +504,13 @@ step_release() {
 	done
 	ls "$out/apkg/"APKG-*.pkg >/dev/null 2>&1 || missing_input "out/apkg: make apkg first"
 	host_pkgtools		# AMIX_PKGTRANS, for the tool's scan060
+	# scan060-g14 takes the stock members' tables in .text as data by their
+	# sha256 in the GCC 14 sysroot (libcrypt's DES tables, which dropbear
+	# links), as the D4 gate does when the package is rolled
+	AMIX_SYSROOT=$("${G14:?release: G14 is not set (the build container sets it)}/prefix/bin/m68k-elf-gcc" -print-sysroot) &&
+		[ -d "$AMIX_SYSROOT/usr/lib" ] || {
+		echo "[FAIL] release: no GCC 14 sysroot from $G14/prefix/bin/m68k-elf-gcc" >&2; exit 1; }
+	export AMIX_SYSROOT
 	mkdir -p "$out/build"
 	make -C "$top/userland/pkgtools/src/apkg" apkg > "$out/build/apkg-host.log" 2>&1 || {
 		tail -20 "$out/build/apkg-host.log" >&2
