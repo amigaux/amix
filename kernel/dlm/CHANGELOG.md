@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — tests/bench/bprobe reads MAC_HI as a long (3bdf89d)
+
+tests/bench/bprobe reads the Z3660's MAC_HI as a long, as the register is 32 bits (a word read gave its high half, 0).
+
 ## 2026-11-02 — C4-2 v7 §2.1: what the bprobe confirmation covers (9407b0f)
 
 C4-2 version 7 §2.1 records what the root-context bprobe confirmation covers: a level-7 return on both lines; a caught bus error on k46 on a real 68LC060 (an empty Zorro III read, 283–295 ms, at levels 0, 4 and 7); k30 on a real 68030 not shown, so a k30 fixed-address probe also needs an identity check.
