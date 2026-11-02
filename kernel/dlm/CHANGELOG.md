@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — kbootset -36: inquiry and cards --probe (14b5853, f8e9027, 662cc98, 26b2432, 61a213c)
+
+`kbootset inquiry <card> <unit>` and `kbootset cards --probe` ask each unit its type with one read-only SCSI INQUIRY through /dev/scsi before anything reads it, so the installer never reads a CD with dd (C2-4 v23 §18; each line flushed so a stall names its card). Gate 1's "differs" line names the reinstall, `apkg -f install <name>`. Package kbootset -36 e2e6f5bd. Emulator proofs on z3660scsi, a4091, a4kt710 and gayle, both lines; the A4091's first command of a boot waits out its bus-reset settle in emulation (a driver matter). Every rm and mv of a variable path in tests and tools takes "${var:?}".
+
 ## 2026-11-02 — tests/bench/bprobe (beeec86, 3958e6a, e0b698f)
 
 Test modules bproot (root pass, level 7) and bpboot (boot pass at levels 0, 4 and 7) for k30 and k46. They bprobe an empty Zorro III address below VSECT1 and print whether the read faulted, returned data or hung, timed by CIA-B's TOD: the metal proof the Z3660 drivers' guarded window probes need. Emulator good path passes on k46 -57 and k30 -68. The 2026-10-27 rprobe "1" at 0x7fff0000 was an MMU fault, not a bus error.
