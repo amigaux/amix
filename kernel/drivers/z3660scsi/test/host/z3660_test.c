@@ -47,6 +47,7 @@ extern unsigned long	z3660_sig_rd[5];
 extern unsigned char	z3660_present;
 extern long		z3660_cache;
 extern void		z3660_test_unmap();
+extern unsigned long	z3660_fixed_ram, z3660_fixed_berr;	/* fixed-window gate */
 
 /* CD units on this mock bus: 6 = CD-ROM (also the detection-probe unit), 0 = disk. */
 #define U_CD	6
@@ -446,6 +447,81 @@ static void test_stock_fw_bad_geometry()
 	/* restore: those units were unmapped (bs 0, 0 blocks) for later tests */
 	for (k = 0; k < (int)(sizeof cases / sizeof cases[0]); k++)
 		mock_set_geom( cases[k].unit, 0x00, 0UL, 0UL);
+}
+
+/* ====================================================================== */
+/* GATING: INQUIRY per unit -- a unit with no drive is no device.          */
+/* ====================================================================== */
+
+/*
+ * The driver builds the INQUIRY answer itself, so an unmapped unit must not
+ * answer as a disk: it answers peripheral qualifier 3 / type 0x1F (the SCSI
+ * "no device" byte, 0x7F), completed GOOD, so a /dev/scsi caller gets the
+ * data copied out.  A mapped disk stays type 0 and a mapped CD type 5 (from
+ * the firmware's pdt).  Absence is not cached: a unit mapped later answers
+ * with its own type.
+ */
+static void test_inquiry_unit_types()
+{
+	static const uchar nodev[36] = {
+		0x7F,0x00,0x02,0x02,0x1F,0x00,0x00,0x00
+	};
+	uchar	cdb[6], buf[36];
+	int	u;
+
+	printf("\n=== GATE: INQUIRY per unit -- mapped disk 0, CD 5, unmapped no device ===\n");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x12; cdb[4] = 36;
+
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_DISK, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x00,
+	       "INQUIRY mapped disk: GOOD, byte 0 = 0x00 (direct access)");
+
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_CD, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x05,
+	       "INQUIRY mapped CD: GOOD, byte 0 = 0x05 (from the firmware pdt)");
+
+	for (u = 0; u < 8; u++) {
+		char	msg[120];
+
+		if (u == U_DISK || u == U_CD)
+			continue;
+		memset( buf, 0xEE, sizeof buf);
+		run_cmd( u, cdb, 6, buf, 36);
+		sprintf( msg, "INQUIRY unmapped unit %d: GOOD, 7F 00 02 02 1F + zeros (PQ 3 / type 0x1F)", u);
+		CHECK( g_okay && g_status == 0 && memcmp( buf, nodev, 36) == 0, msg);
+	}
+
+	/* a bad block size (stock firmware's stale unit) is no device too */
+	mock_set_geom( U_EMPTY, 0x00, 0x300UL, 100UL);
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && memcmp( buf, nodev, 36) == 0,
+	       "INQUIRY bad-geometry unit: no device (0x7F)");
+	mock_set_geom( U_EMPTY, 0x00, 0UL, 0UL);
+}
+
+/*
+ * Absence is not cached: a unit mapped after a no-device answer answers the
+ * next INQUIRY with its own type.  Leaves U_EMPTY mapped (the driver caches
+ * a mapped unit), so it runs after every cell that needs U_EMPTY empty.
+ */
+static void test_inquiry_late_map()
+{
+	uchar	cdb[6], buf[36];
+
+	printf("\n=== GATE: INQUIRY after a late mapping -- absence not cached ===\n");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x12; cdb[4] = 36;
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x7F,
+	       "INQUIRY unit 3 before mapping: no device (0x7F)");
+	mock_set_geom( U_EMPTY, 0x05, 2048UL, 64UL);
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x05,
+	       "INQUIRY unit 3 mapped later: type 5 (absence not cached)");
 }
 
 /* ====================================================================== */
@@ -1420,6 +1496,10 @@ static void test_fault_knob()
 /* value <=1.                                                              */
 /* ====================================================================== */
 
+/* the fixed-window gate's inputs for the next zs_cell (cleared after use) */
+static unsigned long	zs_mem_lo, zs_mem_hi;
+static int		zs_berr;
+
 static int zs_cell( autocon_base, vposr, bus)
 unsigned long	autocon_base;
 unsigned short	vposr;
@@ -1433,6 +1513,11 @@ int		bus;
 	mock_autocon_base = autocon_base;
 	mock_vposr = vposr;
 	mock_bus_mode = bus;
+	mock_mem_lo[3] = zs_mem_lo;		/* one boot memory region, slot 3 */
+	mock_mem_hi[3] = zs_mem_hi;
+	mock_bprobe_fault = zs_berr;
+	zs_mem_lo = zs_mem_hi = 0;
+	zs_berr = 0;
 	g_probe_base = 0;
 	return z3660present( &g_probe_base);
 }
@@ -1555,6 +1640,36 @@ static void test_zs02_detection()
 	CHECK( z3660_sig_ok == 1 && z3660_skipmask == 0xBE && z3660_skip_msgs == 6
 	       && mock_sptalloc_calls == 2,
 	       "ZS-02 ConfigDev, answering: the deferred sweep ran once and named only the 6 empty units");
+
+	/* 9. the fixed window's gate, before the signature's first write */
+	zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x18000000UL;	/* RAM across the window */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_present == 0 && z3660_fixed_ram == 1 && z3660_fixed_berr == 0
+	       && mock_trips == 0 && mock_bprobe_calls == 0,
+	       "fixed gate: a boot memory region over the window -> refused with zero accesses");
+	zs_mem_lo = 0x1008FFFCUL; zs_mem_hi = 0x10090004UL;	/* overlaps the top cell */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_fixed_ram == 1 && mock_trips == 0 && mock_bprobe_calls == 0,
+	       "fixed gate: a region over the window's last bytes -> refused with zero accesses");
+	zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x10000000UL;	/* RAM up to the window */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_fixed_ram == 0 && z3660_sig_ok == 1 && mock_bprobe_calls == 1
+	       && mock_bprobe_addr == 0x10002024UL && mock_bprobe_v == -1,
+	       "fixed gate: RAM ending at the window -> one read-only bprobe of 0x10002024, attached");
+	zs_mem_lo = 0x10090000UL; zs_mem_hi = 0x10100000UL;	/* RAM from the window top */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_fixed_ram == 0 && z3660_sig_ok == 1,
+	       "fixed gate: RAM starting at the window top -> attached");
+	zs_berr = 1;						/* empty Zorro III space */
+	r = zs_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && z3660_present == 0 && z3660_fixed_berr == 1 && mock_bprobe_calls == 1
+	       && mock_trips == 0 && mock_trips_wr == 0 && z3660_sig_fails == 0,
+	       "fixed gate: the probe read faults -> refused, zero writes, no signature attempt");
+	zs_berr = 1; zs_mem_lo = 0x08000000UL; zs_mem_hi = 0x18000000UL;
+	r = zs_cell( 0x10000000UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 1 && z3660_sig_ok == 1 && mock_bprobe_calls == 0 && z3660_fixed_ram == 0
+	       && mock_vposr_reads == 0,
+	       "fixed gate: a ConfigDev board never meets it (AutoConfig proved the board)");
 }
 
 /* ====================================================================== */
@@ -1766,6 +1881,8 @@ int main()
 
 	test_tur_both();
 
+	test_inquiry_unit_types();
+
 	test_hotpath_trip_budget();
 	test_unmapped_unit_not_cached();
 	test_stock_fw_bad_geometry();
@@ -1783,6 +1900,8 @@ int main()
 	CHECK( mock_div0 == 0,
 	       "whole run: no BLOCKS read of a block-size-0 unit (stock fw div0 never hit)");
 	printf("       whole-run div0=%lu\n", mock_div0);
+
+	test_inquiry_late_map();	/* leaves unit 3 mapped */
 
 	/* ZS-02 cells reset the mock (and so mock_div0): run them last */
 	test_zs02_detection();

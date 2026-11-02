@@ -24,4 +24,9 @@ extern unsigned short z3660_mock_vposr(void);
 #define RDLONG(cmd)	z3660_mock_rdlong((unsigned int)(cmd))
 /* the machine gate's Agnus/Alice id read ($DFF004), a real deref on metal */
 #define RDVPOSR()	z3660_mock_vposr()
+/* the boot's memory regions (bootinfo.memory[i].mh_Lower / mh_Upper) */
+extern unsigned long z3660_mock_memlo(int i);
+extern unsigned long z3660_mock_memhi(int i);
+#define BI_MEMLO(i)	z3660_mock_memlo(i)
+#define BI_MEMHI(i)	z3660_mock_memhi(i)
 #endif
