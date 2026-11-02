@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — tests/bench/bprobe (beeec86, 3958e6a, e0b698f)
+
+Test modules bproot (root pass, level 7) and bpboot (boot pass at levels 0, 4 and 7) for k30 and k46. They bprobe an empty Zorro III address below VSECT1 and print whether the read faulted, returned data or hung, timed by CIA-B's TOD: the metal proof the Z3660 drivers' guarded window probes need. Emulator good path passes on k46 -57 and k30 -68. The 2026-10-27 rprobe "1" at 0x7fff0000 was an MMU fault, not a bus error.
+
 ## 2026-11-02 — spec 40: the 32-module manifest limit (b566bba)
 
 spec 40 §3.1 names the 32-module, 32-parameter manifest limit (AXM_MAXMOD, AXM_MAXPARAM) as a known limit: every installed module counts, matched or not; raising it needs a loader revision.
