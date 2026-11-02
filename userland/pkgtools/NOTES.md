@@ -1,5 +1,21 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — APKGENG 1.12.6: the engine from master's toolchain pins (NOT MINTED)
+
+1.12.5's bytes (`a49452d8…`) came from a build image with an older gcc-cross-amix wrapper
+(`2ab2b22`'s). Master pins gcc-cross-amix `33ebadc`, whose wrapper links `values-Xa.o` as the
+native cc does. Each engine program gains `_lib_version` (+4 bytes of `.text`), so 1.12.5
+cannot be rolled from master, and the version moves.
+
+- Same source, a version bump only: `VER_ENG="1.12.6"`, `EPOCH_ENG=1793577600` (2026-11-02), and
+  the three `src/formats` pages' headers.
+- The programs now run with `_lib_version` = Xa (ANSI mode) instead of the c_issue_4 default the
+  unset global gave. In SVR4 that selects libm's error handling among other things. The engine
+  calls no libm function (no `pow`, `floor`, `strtod`, `atof`, ... in libadm, libgendb, libpkg,
+  libinst or pkgcmds), so no engine path is expected to change.
+- APKG is untouched: its apkg and contents-fsck are linked with ld directly (no wrapper start
+  files), and APKG 0.3.6 rolls the same bytes (`f87c02e0…`) in both images.
+
 ## 2026-11-02 — scan060 decodes data objects in .text as data
 
 gcc-cross-amix `33ebadc`'s wrapper links `values-Xa.o` into every program, as the native cc does;

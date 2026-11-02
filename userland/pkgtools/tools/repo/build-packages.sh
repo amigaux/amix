@@ -95,23 +95,31 @@ VER_APKG="0.3.6"
 # token (75be235), so `removef PKG -` removes the listed paths.  Own staging
 # dir (build/repo-staging-apkgeng1124), NOT published; 1.12.3
 # (88a177e5...) stays what it is.  NOTES 2026-10-26.
-# 1.12.5 (2026-10-30, not minted yet) -- /usr/apkg/doc gains FNMATCH.LIC and
+# 1.12.5 (2026-10-30; rolled a49452d8... in an older build image, never
+# minted from master's pins) -- /usr/apkg/doc gains FNMATCH.LIC and
 # SNPRINTF.LIC; pkgrm takes ENOTEMPTY as "not empty" (035ca80); only the
 # shipped commands' pages ship (no ck*, dispgid, dispuid, pkgadm), plus
 # compver(5), copyright(5) and space(5) from src/formats.  1.12.4 is staged with the old payload: one version, one
 # byte set, so 1.12.4 is never rebuilt.  NOTES 2026-10-30.
-VER_ENG="1.12.5"
+# 1.12.6 (2026-11-02, not minted yet) -- the same source through master's
+# toolchain pins (gcc-cross-amix 33ebadc), whose gcc wrapper links
+# values-Xa.o as the native cc does: every program carries _lib_version =
+# Xa (ANSI mode, libm's error handling among it; the engine calls no libm
+# function), +4 bytes of .text each.  1.12.5's a49452d8 cannot be rolled
+# from master, so the number moves.  NOTES 2026-11-02.
+VER_ENG="1.12.6"
 # EPOCH_APKG, EPOCH_ENG: each version's own epoch: every
 # time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
-# 2026-10-30 00:00:00 UTC, the day 1.12.5 was set; EPOCH_APKG: 2026-11-02
+# 2026-11-02 00:00:00 UTC, the day 1.12.6 was set (1.12.5's was
+# 1793318400); EPOCH_APKG: 2026-11-02
 # 00:00:00 UTC, the day 0.3.6 was set (0.3.5's was 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793577600
-EPOCH_ENG=1793318400
+EPOCH_ENG=1793577600
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"
