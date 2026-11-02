@@ -76,6 +76,11 @@ extern unsigned char	*mock_rom;		/* the Kickstart at 0xF80000, or 0 */
 extern int		mock_rom_maps;
 extern unsigned short	mock_vposr_val;		/* VPOSR: 0x2300 = AGA Alice */
 unsigned short	mock_vposr(void);
+enum { MOCK_BEAM_DENSE, MOCK_BEAM_BURST, MOCK_BEAM_STUCK };
+extern int		mock_beam_mode;
+extern unsigned long	mock_beam_frame, mock_beam_rpl, mock_beam_start;
+extern unsigned long	mock_beam_reads, mock_beam_line;
+unsigned char	mock_vpos8(void);	/* the reset's beam read (VHPOSR >> 8) */
 void	mock_chip_done(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff00 */
 void	mock_chip_seltimeout(struct mock_board *b);	/* reads: SIP, SSTAT0 STO */
 void	mock_chip_phase(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff05 */

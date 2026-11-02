@@ -133,7 +133,11 @@ self-test.
 The queue path's polls are bounded by a read count. The once-per-card SCSI
 bus reset before a board's first command is timed by the beam
 counter (VHPOSR), not by the clock. So sd's first open (`rth1_apply`, still
-in the root pass) can drive the board at level 7.
+in the root pass) can drive the board at level 7. The reset adds up the lines
+that passed between reads, not the changes it saw: 2 + 4000 lines, about
+254 ms. Under Amiberry at `cpu_speed=max` the CPU sees one or two counter
+values a frame, and counting changes took 53 s (68060) and 72 s (68030).
+`a4091_busreset_chg` holds the changes the last reset saw: 4002 on metal.
 
 ## The line status (2026-10-27)
 

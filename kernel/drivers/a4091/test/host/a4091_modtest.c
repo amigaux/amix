@@ -54,6 +54,7 @@ struct ds_mirror {
 extern int		a4091_load();
 extern void		a4091_halt();
 extern long		a4091_busreset;
+extern unsigned long	a4091_busreset_n, a4091_busreset_to, a4091_busreset_chg;
 extern int		a4091_nboards;
 extern unsigned long	a4091_halted;
 extern void		*a4091_da;
@@ -83,7 +84,7 @@ static void
 setup(void)
 {
 	mock_reset();
-	a4091_busreset = 0;	/* the bus reset reads VHPOSR (0xDFF006): metal only */
+	a4091_busreset = 0;	/* the bus reset cases turn it on, with the mock beam */
 	intr_calls = 0;
 }
 
@@ -500,6 +501,90 @@ t_seltimeout_silent(void)
 	CHECK(mock_trace_lines == 1, "phase error: one trace line");
 }
 
+/*
+ * The bus reset before a card's first command: RST held 2 lines, then 4000
+ * lines of settle, timed by the lines that passed (the beam), not by the
+ * number of changes seen.  RESET_LINES is the least real time it may take.
+ */
+#define RESET_LINES	4002UL
+
+static void
+reset_run(int mode, unsigned long frame, unsigned long rpl, unsigned long start)
+{
+	struct mock_board *b;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	a4091_busreset = 1;
+	mock_beam_mode = mode;
+	mock_beam_frame = frame;
+	mock_beam_rpl = rpl;
+	mock_beam_start = start;
+	mock_beam_reads = 0;
+	mock_chip_seltimeout(b);
+	CHECK(run_status(0, 1, NULL, 0, 0x12) == -1, "the first command (an absent id) fails");
+	CHECK(a4091_busreset_n == 1, "one bus reset before it");
+	if (mock_verbose)
+		printf("    beam: %lu lines, %lu changes, %lu reads, %lu timeouts\n",
+		    mock_beam_line, a4091_busreset_chg, mock_beam_reads, a4091_busreset_to);
+}
+
+/* the second command runs without a second reset or a beam read */
+static void
+reset_once(void)
+{
+	unsigned long reads = mock_beam_reads;
+
+	CHECK(run_status(0, 1, NULL, 0, 0x12) == -1, "the second command fails the same");
+	CHECK(a4091_busreset_n == 1 && mock_beam_reads == reads, "no second reset");
+}
+
+static void
+dense(unsigned long frame, unsigned long start)
+{
+	reset_run(MOCK_BEAM_DENSE, frame, 4, start);
+	CHECK(a4091_busreset_to == 0, "metal: no line wait times out");
+	CHECK(mock_beam_line == RESET_LINES, "metal: exactly 2 + 4000 lines");
+	CHECK(a4091_busreset_chg == RESET_LINES, "metal: one change per line");
+	reset_once();
+}
+
+static void t_reset_pal(void) { dense(313, 0); }
+static void t_reset_pal_256(void) { dense(313, 250); }
+static void t_reset_pal_end(void) { dense(313, 311); }
+static void t_reset_ntsc(void) { dense(263, 200); }
+
+/* an emulator that shows the CPU two beam values a frame: the reset still
+ * lasts at least 4002 lines and at most three times that, in a few dozen
+ * changes (counting changes took 4002 of them: half a minute and more) */
+static void
+burst(unsigned long frame, unsigned long start)
+{
+	reset_run(MOCK_BEAM_BURST, frame, 1000, start);
+	CHECK(a4091_busreset_to == 0, "burst: no line wait times out");
+	CHECK(mock_beam_line >= RESET_LINES, "burst: never shorter than 4002 lines");
+	CHECK(mock_beam_line <= 3 * RESET_LINES, "burst: at most three times 4002 lines");
+	CHECK(a4091_busreset_chg < 100, "burst: a few dozen changes, not 4002");
+	reset_once();
+}
+
+static void t_reset_burst_pal(void) { burst(313, 0); }
+static void t_reset_burst_pal_mid(void) { burst(313, 200); }
+static void t_reset_burst_ntsc(void) { burst(263, 100); }
+
+/* a counter that never moves: each of the two waits gives up at its read
+ * bound, the reset ends and the command still runs */
+static void
+t_reset_stuck(void)
+{
+	reset_run(MOCK_BEAM_STUCK, 313, 4, 0);
+	CHECK(a4091_busreset_to == 2, "stuck: both waits time out");
+	CHECK(mock_beam_reads == 2 * 200001UL, "stuck: 200000 reads per wait, plus the first");
+	CHECK(a4091_busreset_chg == 0, "stuck: no change seen");
+	reset_once();
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -519,6 +604,14 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "queue: out of reach (dma_addr 0)", t_queue_noreach },
 	{ "status under force-bounce", t_forcebounce_status },
 	{ "selection timeout is silent", t_seltimeout_silent },
+	{ "bus reset: metal, PAL", t_reset_pal },
+	{ "bus reset: metal, PAL, from line 250", t_reset_pal_256 },
+	{ "bus reset: metal, PAL, from line 311", t_reset_pal_end },
+	{ "bus reset: metal, NTSC", t_reset_ntsc },
+	{ "bus reset: burst beam, PAL", t_reset_burst_pal },
+	{ "bus reset: burst beam, PAL, mid-frame start", t_reset_burst_pal_mid },
+	{ "bus reset: burst beam, NTSC", t_reset_burst_ntsc },
+	{ "bus reset: stuck beam", t_reset_stuck },
 };
 
 int

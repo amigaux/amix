@@ -35,6 +35,9 @@ make -C test/host clean
 | queue: zero length / WRITE | No data DMA call (`drv_zero`); `TO_DEVICE` on the caller's address, no bounce. Either way, the data step is followed by the cache-clearing sync: prepare and complete FROM_DEVICE over a 16-aligned 16-byte clear line in the area that overlaps neither the status nor the message bytes (C4-5 v5 §5.4). An aligned or bounced READ has none: its own complete clears the cache |
 | status under force-bounce | The mock models the k30 hook: the chip's GOOD status (0x00) lands before any complete, then a FROM complete copies a stale bounce (0x5a) over its segment. WRITE, TUR and READ must all return status 0x00. 1.0.0-3, which synced the status line itself, reads 0x5a |
 | selection timeout is silent | An absent id (ISTAT SIP, SSTAT0 STO, rc -1) fails the command with no `A4091 slow` line; a phase error (DSPS 0xff05, rc -3) still prints one |
+| bus reset: metal (PAL from lines 0, 250 and 311; NTSC) | With one counter change per line (mock beam, `A4091_VPOS8`), the first command's reset lasts exactly 2 + 4000 lines in 4002 changes, with no timeout. The second command does no reset and reads no beam |
+| bus reset: burst beam (PAL, PAL mid-frame, NTSC) | A beam that shows two values a frame, like Amiberry at `cpu_speed=max`: the reset lasts at least 4002 lines and at most three times that, in fewer than 100 changes |
+| bus reset: stuck beam | Both waits stop at their 200000-read bound (`a4091_busreset_to` 2). The command still runs |
 | queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
 
 ## The a4kt710 arms
@@ -74,8 +77,10 @@ The mutation check: each of these makes a case fail on both lines.
   shadow (+0x40), where the checks read them.
 - Each case runs in its own child process, because the driver keeps
   per-board state in statics, as it does in the kernel.
-- The SCSI bus reset reads the beam counter at 0xDFF006, so the harness sets
-  `a4091_busreset = 0`.
+- The SCSI bus reset reads the beam counter at 0xDFF006. The harness builds
+  the driver with `A4091_VPOS8()` reading the mock beam instead, sets
+  `a4091_busreset = 0` for every case, and turns it on only in the bus reset
+  cases.
 
 ## Mutation check (2026-10-27)
 
