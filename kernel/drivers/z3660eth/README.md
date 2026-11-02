@@ -135,7 +135,9 @@ from the module registry (`kbootset major z3660eth`). The file formats are in
 
 ## How it works (one paragraph)
 Discovery mirrors `z3660.c`: `autocon(0x144B0001)`, else (AGA only) the fixed combo
-base `0x10000000`, verified via the firmware MAC register. When the whole window
+base `0x10000000`, first touched by one `bprobe` byte read (a bus error there is
+absence, not a panic), then verified via the firmware MAC register: MAC_HI must hold
+bytes 0–1 in its low half, nothing above, unicast, so no open-bus pattern passes. When the whole window
 lies below `VSECT1` (`0x40000000`) the physical base is used as the kernel VA
 directly — AMIX's section‑0 early‑termination identity map, no `sptalloc`; only a
 board at or above `VSECT1` takes the `sptalloc` arm, which the 040/060 cache work

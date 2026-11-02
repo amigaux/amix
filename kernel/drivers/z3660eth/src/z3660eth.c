@@ -55,9 +55,11 @@
  * is effectively off in every validated config.
  * See docs/BLIZZARD-F3.md and ETHERNET-SCOPING.md sections 5/10.
  *
- * Detection mirrors z3660.c exactly: autocon(0x144B0001) first; on a miss, and
- * only on AGA (VPOSR>=0x22, so the ECS build box never touches it), probe the
- * fixed combo base 0x10000000 and verify the firmware MAC register answers.  On
+ * Detection mirrors z3660.c: autocon(0x144B0001) first; on a miss, and only on
+ * AGA (VPOSR>=0x22, so the ECS build box never touches it), probe the fixed
+ * combo base 0x10000000 -- one bprobe byte read first, so the empty Zorro III
+ * space of a box without a Z3660 is a caught bus error and ENXIO -- and verify
+ * the firmware MAC register answers.  On
  * the WinUAE build box (which emulates an a2065, not the Z3660 GEM) detection
  * misses and open() returns ENXIO -- the compile/link/boot/register gate.
  *
@@ -621,6 +623,21 @@ z3660eth_sync()
     z3660eth_sync_n++;
 }
 
+/*
+ * Is hi a MAC_HI word the firmware can return?  It puts MAC bytes 0 and 1 in
+ * the low half and nothing above, and a station address is unicast (byte 0,
+ * bit 0 clear) and not 00:00.  An open bus reads 0xFF or 0x00 in every lane,
+ * a partly floating one a mix of the two; none of them passes.  The address
+ * itself is a firmware setting, so no vendor prefix is checked.
+ * module/test-mac.sh runs this text on the host.
+ */
+static int
+z3660eth_machi_ok(hi)
+unsigned long hi;
+{
+    return (hi & 0xFFFF0000) == 0 && (hi & 0x0100) == 0 && (hi & 0xFFFF) != 0;
+}
+
 /* ----------------------------------------------------------------------------
  * Discovery + mapping.  Fills board->z3660eth_info {board_base, regs, frame,
  * txwin, paddress}.  0 on success; ENXIO when no Z3660 is present; ENOMEM on a
@@ -693,6 +710,16 @@ int board_index;
 	    /* ECS/OCS build box -- no Z3660 here */
 	    return z3660eth_absent(board_index, ENXIO, "not AGA", 0);
 	base = Z3660_FIXED;		/* AGA: probe the fixed combo window */
+	/*
+	 * No AutoConfig entry vouches for this address: on an A4000 without
+	 * a Z3660 it is empty Zorro III space, and a plain read there is a
+	 * bus error.  One byte read with the fault caught first; the window
+	 * is below VSECT1, so the physical address is the kernel VA.  A pure
+	 * read: the RDA probe below re-arms its own address.
+	 */
+	if (bprobe((caddr_t)phystokv((paddr_t)base + ZZ_ETH_MAC_HI), -1))
+	    return z3660eth_absent(board_index, ENXIO,
+				   "bus error at the fixed window", 0);
     }
 
     info->board_base = base;
@@ -750,7 +777,7 @@ int board_index;
     Z3660ETH_RDA(info->regs, ZZ_ETH_MAC_LO, lo);	/* is anyone's; $198->$19C rises */
     z3660eth_machi = hi;
     z3660eth_maclo = lo;
-    if (hi == 0xFFFFFFFF || (hi & 0xFFFF) == 0)	/* open bus / not a Z3660 window */
+    if (!z3660eth_machi_ok(hi))		/* open bus / not a Z3660 window */
 	return z3660eth_absent(board_index, ENXIO, "MAC reads", 1);
 
     info->paddress[0] = (unsigned char)(hi >> 8);
