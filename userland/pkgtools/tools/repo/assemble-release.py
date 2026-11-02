@@ -8,7 +8,7 @@
 #                       [--previous DIR] --release 1.1 --out OUT
 #                       [--release-check PATH] [--rom-register FILE]
 #                       [--private-patterns FILE] [--scan060 PATH]
-#                       [--apkg-bin PATH]
+#                       [--scan060-g14 PATH] [--apkg-bin PATH]
 #
 # OUT gets the layout publish.sh pushes and a box reads as ONE repository:
 #
@@ -45,15 +45,17 @@
 # Refused (exit 1, nothing written):
 #   - an input catalog whose catalog.md5 differs, a row whose file is missing
 #     or whose size or md5 (#kpkg: sha256) differs, a malformed line, an #ext
-#     block other than kpkg (and older, in --previous);
+#     block other than kpkg, fstype and isize (and older, in --previous), a
+#     #fstype or #isize line naming a package its catalog does not carry;
 #   - two inputs carrying one name, pkginst or filename, whatever the
 #     versions: no newest-wins between inputs;
 #   - against --previous: a published name and version whose bytes differ,
 #     a version older than the published live one, a row that changes kind;
 #   - a dependency that names no live row;
-#   - scan060 finding a 68060-unimplemented instruction in a live ordinary
-#     row's file (stock/ is vendor code, as scan060 has it, and kernel-space
-#     files have kernel space's own gates);
+#   - a 68060-unimplemented instruction in an ELF of a live ordinary row,
+#     by build/pkg's D4 rule: scan060.py for period ELFs; for GCC 14 ELFs
+#     scan060-g14.py, with every scan060.py hit explained by it (stock/ is
+#     vendor code, and kernel-space files have kernel space's own gates);
 #   - tools/release-check refusing the tree;
 #   - apkg itself not reading the tree as one repository (`update`, `list`).
 # The tree is written to OUT.tmp and renamed into place only after every
@@ -69,6 +71,7 @@ import hashlib
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -138,6 +141,7 @@ class Entry:
         self.line = line
         self.src = src              # the input it came from, for messages
         self.pkgsdir = pkgsdir
+        self.ann = {}               # per-name block lines: {"fstype": line, ...}
         if kind == "row":
             f = line.split("|")
             if len(f) != 9:
@@ -218,11 +222,22 @@ def read_catalog(tree, src, previous=False):
     if not lines or lines[0] != MAGIC:
         raise Refused("%s: catalog does not start with %r" % (src, MAGIC))
     live, older = [], []
+    anns = []                   # (kind, name, line, where) of the live part
     block = None
     for n, line in enumerate(lines[1:], 2):
         where = "%s: catalog line %d" % (src, n)
         if line == "":
             continue
+        if block in ANN:
+            # gen-catalog closes these blocks with nothing: the next #ext
+            # header or the end of the catalog ends them
+            if line.startswith(ANN[block]):
+                anns.append((block, ann_name(line, where), line, where))
+                continue
+            if line == "#end " + block:
+                block = None
+                continue
+            block = None
         if block == "kpkg":
             if line == "#end kpkg":
                 block = None
@@ -237,6 +252,13 @@ def read_catalog(tree, src, previous=False):
                 block = None
             elif line.startswith("#old #kpkg "):
                 older.append(Entry("kpkg", line[5:], src, pkgs))
+            elif any(line.startswith("#old " + pre) for pre in ANN.values()):
+                kind = [k for k, pre in ANN.items() if line.startswith("#old " + pre)][0]
+                nm = ann_name(line[5:], where)
+                if not older or older[-1].name != nm or kind in older[-1].ann:
+                    raise Refused("%s: %s does not follow its own older row"
+                                  % (where, line[:60]))
+                older[-1].ann[kind] = line[5:]
             elif line.startswith("#old ") and not line.startswith("#old #"):
                 older.append(Entry("row", line[5:], src, pkgs))
             else:
@@ -247,14 +269,38 @@ def read_catalog(tree, src, previous=False):
             block = "kpkg"
         elif line == "#ext older 1" and previous:
             block = "older"
+        elif line[5:-2] in ANN and line == "#ext %s 1" % line[5:-2]:
+            block = line[5:-2]
         elif line.startswith("#"):
             raise Refused("%s: a line this tool does not know: %s"
                           % (where, line[:60]))
         else:
             live.append(Entry("row", line, src, pkgs))
-    if block is not None:
+    if block is not None and block not in ANN:
         raise Refused("%s: the %s block is not closed" % (src, block))
+    byname = {e.name: e for e in live}
+    for kind, nm, line, where in anns:
+        e = byname.get(nm)
+        if e is None:
+            raise Refused("%s: #%s names %s, which is not in this catalog"
+                          % (where, kind, nm))
+        if kind in e.ann:
+            raise Refused("%s: a second #%s line for %s" % (where, kind, nm))
+        e.ann[kind] = line
     return live, older
+
+
+# the per-name blocks gen-catalog writes after the entries, in its order:
+# {kind: line prefix}.  Comment lines to every apkg; carried with the row of
+# the name they describe.
+ANN = {"isize": "#isize ", "fstype": "#fstype "}
+
+
+def ann_name(line, where):
+    t = line.split()
+    if len(t) != 3:
+        raise Refused("%s: malformed line: %s" % (where, line[:60]))
+    return t[1]
 
 
 def gen_rows(files, src, scratch):
@@ -367,7 +413,7 @@ def merge(inputs, prev_live, prev_older):
                 raise Refused("%s: version %s is published with other bytes "
                               "(%s, md5 %s); a published version never changes"
                               % (e.who(), e.version, p.filename, p.file_md5))
-            if p.line != e.line:
+            if p.line != e.line or p.ann != e.ann:
                 notes.append("%s: the row text differs from the published "
                              "one; the published row is kept" % e.who())
             continue
@@ -406,12 +452,18 @@ def render(live, older):
     rows = sorted((e for e in live.values() if e.kind == "row"), key=lambda e: e.name)
     kp = sorted((e for e in live.values() if e.kind == "kpkg"), key=lambda e: e.name)
     out = [MAGIC] + [e.line for e in rows]
+    for kind in ANN:
+        lines = [e.ann[kind] for e in rows + kp if kind in e.ann]
+        if lines:
+            out += ["#ext %s 1" % kind] + lines
     if kp:
         out += ["#ext kpkg 1"] + [e.line for e in kp] + ["#end kpkg"]
     if older:
         old = sorted(older, key=lambda e: (e.name, _vkey(e.version), e.version))
         out += ["#ext older 1"]
-        out += [("#old " + e.line) for e in old]
+        for e in old:
+            out.append("#old " + e.line)
+            out += ["#old " + e.ann[k] for k in ANN if k in e.ann]
         out += ["#end older"]
     return ("\n".join(out) + "\n").encode("utf-8")
 
@@ -430,6 +482,94 @@ def run_check(argv, what, refuse_rc):
         raise Refused("%s refused the tree (exit %d)" % (what, r.returncode))
     if r.returncode != 0:
         raise ToolError("%s failed (exit %d)" % (what, r.returncode))
+
+
+def m68k_elf(path):
+    try:
+        with open(path, "rb") as fp:
+            h = fp.read(20)
+    except OSError:
+        return False
+    return len(h) == 20 and h[:4] == b"\x7fELF" and h[5] == 2 and h[18:20] == b"\x00\x04"
+
+
+def built_by_gcc14(path):
+    """GCC 14's ident in the ELF's .comment: that toolchain's switch tables
+    are sized by scan060-g14.py, not scan060.py (build/pkg's D4 gate)."""
+    with open(path, "rb") as fp:
+        d = fp.read()
+    try:
+        shoff = struct.unpack(">I", d[32:36])[0]
+        ent, num, stx = struct.unpack(">HHH", d[46:52])
+        sh = [struct.unpack(">IIIIII", d[shoff + i * ent:shoff + i * ent + 24])
+              for i in range(num)]
+        so = sh[stx][4]
+        for nm, _t, _f, _a, off, size in sh:
+            if d[so + nm:d.index(b"\0", so + nm)] == b".comment":
+                return b"GCC: (GNU) 14." in d[off:off + size]
+    except (struct.error, IndexError, ValueError):
+        pass
+    return False
+
+
+def objdump_tool():
+    t = os.environ.get("OBJDUMP")
+    if t:
+        return t
+    for t in ("m68k-linux-gnu-objdump", "m68k-elf-objdump", "m68k-cbm-sysv4-objdump"):
+        if shutil.which(t):
+            return shutil.which(t)
+    raise Missing("no m68k objdump on PATH (or OBJDUMP=)")
+
+
+def scan_userland(files, a, work):
+    """The 68060 scan over the ELFs of the live userland rows, by the rule
+    build/pkg's D4 gate applies at roll time: a period ELF's verdict is
+    scan060.py's; a GCC 14 ELF's is scan060-g14.py's, and every hit
+    scan060.py reports on it must be one scan060-g14.py explains (inside a
+    sized switch table, or at an odd address: scan060.py sizes tables by gcc
+    2.7's layout and reads GCC 14's as code).  A package without an ELF has
+    nothing to scan.  -> (period ELFs, gcc14 ELFs) counted."""
+    pkgtrans = os.environ.get("AMIX_PKGTRANS") or os.path.join(
+        PKGTOOLS, "heirloom", "build-host", "bin", "pkgtrans")
+    if not os.access(pkgtrans, os.X_OK):
+        raise Missing("pkgtrans for the scan: %s (AMIX_PKGTRANS=)" % pkgtrans)
+    objdump = objdump_tool()
+    period, g14 = [], []
+    for i, f in enumerate(files):
+        with open(f, "rb") as fp:
+            head = fp.read(512).split(b"\n")
+        if len(head) < 2 or not head[0].startswith(b"# PaCkAgE DaTaStReAm"):
+            raise Refused("%s: not an SVR4 datastream" % os.path.basename(f))
+        inst = head[1].split()[0].decode("ascii")
+        d = os.path.join(work, "u%d" % i)
+        os.makedirs(d)
+        r = subprocess.run([pkgtrans, "-o", f, d, inst], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise ToolError("pkgtrans %s: %s" % (os.path.basename(f), r.stderr.strip()[:200]))
+        for root, dirs, names in os.walk(d):
+            dirs.sort()
+            for n in sorted(names):
+                p = os.path.join(root, n)
+                if os.path.isfile(p) and not os.path.islink(p) and m68k_elf(p):
+                    (g14 if built_by_gcc14(p) else period).append(p)
+    if period:
+        run_check([sys.executable, "-I", a.scan060] + period, "scan060", (2,))
+    if g14:
+        run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump] + g14,
+                  "scan060-g14", (1, 3))
+        for p in g14:
+            hits = p + ".scan060"
+            with open(hits, "w") as fp:
+                r = subprocess.run([sys.executable, "-I", a.scan060, p], stdout=fp,
+                                   stderr=subprocess.STDOUT, text=True)
+            if r.returncode == 0:
+                continue
+            if r.returncode != 2:
+                raise ToolError("scan060 failed on %s (exit %d)" % (p, r.returncode))
+            run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump,
+                       "--explain", hits, p], "scan060-g14 --explain", (1, 3))
+    return len(period), len(g14)
 
 
 def apkg_reads(apkg_bin, tree, n_rows, n_k):
@@ -472,6 +612,8 @@ def main():
     ap.add_argument("--rom-register", default=os.environ.get("ROM_MANIFEST"))
     ap.add_argument("--private-patterns", default=os.environ.get("PRIVACY_PATTERNS"))
     ap.add_argument("--scan060", default=os.path.join(HERE, "scan060.py"))
+    ap.add_argument("--scan060-g14", default=os.path.join(
+        TOP, "build", "pkg", "common", "gcc14", "scan060-g14.py"))
     ap.add_argument("--apkg-bin", default=os.path.join(PKGTOOLS, "src", "apkg", "apkg"))
     a = ap.parse_args()
     if not re.match(r"^[0-9]+\.[0-9]+$", a.release):
@@ -482,8 +624,8 @@ def main():
     try:
         # the check tools first: a missing one is MISSING, not a skipped check
         for what, p in (("release-check", a.release_check), ("scan060", a.scan060),
-                        ("apkg (host build)", a.apkg_bin)):
-            if not os.access(p, os.X_OK) and not (what == "scan060" and os.path.isfile(p)):
+                        ("scan060-g14", a.scan060_g14), ("apkg (host build)", a.apkg_bin)):
+            if not os.access(p, os.X_OK) and not (what.startswith("scan060") and os.path.isfile(p)):
                 raise Missing("%s: %s" % (what, p))
         for what, p in (("rom register", a.rom_register),
                         ("private patterns", a.private_patterns)):
@@ -547,7 +689,13 @@ def main():
         scan = sorted(os.path.join(tmp, "pkgs", e.filename) for e in live.values()
                       if e.kind == "row" and not e.filename.startswith("stock/"))
         if scan:
-            run_check([sys.executable, "-I", a.scan060] + scan, "scan060", (2,))
+            sw = tempfile.mkdtemp(prefix="assemble-release-scan.")
+            try:
+                np, ng = scan_userland(scan, a, sw)
+            finally:
+                shutil.rmtree(sw, ignore_errors=True)
+            print("68060 scan: %d package(s), %d period ELF(s), %d GCC 14 ELF(s): clean"
+                  % (len(scan), np, ng))
         run_check([a.release_check, "--rom-register", a.rom_register,
                    "--private-patterns", a.private_patterns, tmp],
                   "release-check", (1,))
