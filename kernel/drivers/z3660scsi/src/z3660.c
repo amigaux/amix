@@ -60,7 +60,8 @@
  *
  *   INQUIRY / READ_CAPACITY / MODE_SENSE / TEST_UNIT_READY are interpreted *here*
  *   (the firmware only does block read/write + geometry queries) -- mirroring
- *   piscsi_scsi() in z3660_scsi.c.
+ *   piscsi_scsi() in z3660_scsi.c.  A unit with no drive mapped answers INQUIRY
+ *   with the SCSI "no device" byte (peripheral qualifier 3, type 0x1F).
  *
  * z3660queue() plugs into Amix sd.c exactly like a4091queue(): sd.c gives us a CDB
  * in cp->cdb, target in cp->unit, buffer in cp->addr, length in cp->nbyte; we run
@@ -1805,7 +1806,22 @@ struct sdcom	*cp;
 	case C_INQUIRY:
 		if (data) {
 			for (i = 0; i < (int)cp->nbyte; ++i) data[i] = 0;
-			if (pdt == 0x05) {
+			if (!g->valid) {
+				/*
+				 * No drive mapped (or no signature yet): the
+				 * SCSI "no device" answer, peripheral qualifier
+				 * 3 / type 0x1F, completed GOOD.  A failed
+				 * command would copy no data out through
+				 * /dev/scsi, and a caller that reads the
+				 * buffer anyway sees a disk.
+				 */
+				if (cp->nbyte >= 5) {
+					data[0] = 0x7F;		/* PQ 3, type 0x1F        */
+					data[2] = 0x02;		/* SCSI-2                 */
+					data[3] = 0x02;		/* response data format 2 */
+					data[4] = 0x1F;		/* additional length (36) */
+				}
+			} else if (pdt == 0x05) {
 				/*
 				 * CD-ROM -- byte-match the a3000_scsi Path B
 				 * mirror: 05 80 02 02 1F 00 00 00, vendor

@@ -43,6 +43,10 @@ Gating (mount-critical, gate the exit code):
   behavior **frozen** as the current driver emits it (the real box boots on
   this path; the oracle's disk strings do *not* apply here).
 - TEST UNIT READY GOOD for both.
+- INQUIRY per unit (`test_inquiry_unit_types()`, `test_inquiry_late_map()`):
+  a mapped disk answers type 0 and a mapped CD type 5; an unmapped or
+  bad-geometry unit answers `7F 00 02 02 1F` (peripheral qualifier 3, type
+  0x1F, no device), GOOD; a unit mapped later answers with its own type.
 - **ZS-02 detection** (`test_zs02_detection()`, run last): an absent board on an
   all-zero, all-ones, address-echo, last-value-latch or RAM bus is refused with
   nothing swept, named or rung; the real signature attaches at the fixed base;

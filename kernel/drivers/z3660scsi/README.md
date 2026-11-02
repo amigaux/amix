@@ -46,7 +46,8 @@ Since that milestone — every item below has a dated entry in
 
 - **CD-ROM units are answered.** A unit the firmware flags `pdt 0x05` gets a CD-ROM
   INQUIRY, READ CAPACITY, MODE SENSE(6)/(10) and a DATA PROTECT rejection for writes
-  — which is what the Amix CD filesystem port (`amix-cdfs`) mounts.
+  — which is what the Amix CD filesystem port (`amix-cdfs`) mounts. A unit with no
+  drive mapped answers INQUIRY as no device (peripheral qualifier 3, type 0x1F).
 - **Completion is delivered synchronously, in-context.** No `timeout()` deferral: a
   driver-owned FIFO flattens the completion→re-issue chain instead of recursing one
   kernel-stack frame per I/O. This fixed a mount panic caused by touching a caller's

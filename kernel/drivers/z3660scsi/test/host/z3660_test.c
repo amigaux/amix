@@ -450,6 +450,81 @@ static void test_stock_fw_bad_geometry()
 }
 
 /* ====================================================================== */
+/* GATING: INQUIRY per unit -- a unit with no drive is no device.          */
+/* ====================================================================== */
+
+/*
+ * The driver builds the INQUIRY answer itself, so an unmapped unit must not
+ * answer as a disk: it answers peripheral qualifier 3 / type 0x1F (the SCSI
+ * "no device" byte, 0x7F), completed GOOD, so a /dev/scsi caller gets the
+ * data copied out.  A mapped disk stays type 0 and a mapped CD type 5 (from
+ * the firmware's pdt).  Absence is not cached: a unit mapped later answers
+ * with its own type.
+ */
+static void test_inquiry_unit_types()
+{
+	static const uchar nodev[36] = {
+		0x7F,0x00,0x02,0x02,0x1F,0x00,0x00,0x00
+	};
+	uchar	cdb[6], buf[36];
+	int	u;
+
+	printf("\n=== GATE: INQUIRY per unit -- mapped disk 0, CD 5, unmapped no device ===\n");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x12; cdb[4] = 36;
+
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_DISK, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x00,
+	       "INQUIRY mapped disk: GOOD, byte 0 = 0x00 (direct access)");
+
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_CD, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x05,
+	       "INQUIRY mapped CD: GOOD, byte 0 = 0x05 (from the firmware pdt)");
+
+	for (u = 0; u < 8; u++) {
+		char	msg[120];
+
+		if (u == U_DISK || u == U_CD)
+			continue;
+		memset( buf, 0xEE, sizeof buf);
+		run_cmd( u, cdb, 6, buf, 36);
+		sprintf( msg, "INQUIRY unmapped unit %d: GOOD, 7F 00 02 02 1F + zeros (PQ 3 / type 0x1F)", u);
+		CHECK( g_okay && g_status == 0 && memcmp( buf, nodev, 36) == 0, msg);
+	}
+
+	/* a bad block size (stock firmware's stale unit) is no device too */
+	mock_set_geom( U_EMPTY, 0x00, 0x300UL, 100UL);
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && memcmp( buf, nodev, 36) == 0,
+	       "INQUIRY bad-geometry unit: no device (0x7F)");
+	mock_set_geom( U_EMPTY, 0x00, 0UL, 0UL);
+}
+
+/*
+ * Absence is not cached: a unit mapped after a no-device answer answers the
+ * next INQUIRY with its own type.  Leaves U_EMPTY mapped (the driver caches
+ * a mapped unit), so it runs after every cell that needs U_EMPTY empty.
+ */
+static void test_inquiry_late_map()
+{
+	uchar	cdb[6], buf[36];
+
+	printf("\n=== GATE: INQUIRY after a late mapping -- absence not cached ===\n");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x12; cdb[4] = 36;
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x7F,
+	       "INQUIRY unit 3 before mapping: no device (0x7F)");
+	mock_set_geom( U_EMPTY, 0x05, 2048UL, 64UL);
+	memset( buf, 0xEE, sizeof buf);
+	run_cmd( U_EMPTY, cdb, 6, buf, 36);
+	CHECK( g_okay && g_status == 0 && buf[0] == 0x05,
+	       "INQUIRY unit 3 mapped later: type 5 (absence not cached)");
+}
+
+/* ====================================================================== */
 /* GATING: CD-ROM (pdt=0x05) -- the cdfs mount path.                       */
 /* ====================================================================== */
 
@@ -1806,6 +1881,8 @@ int main()
 
 	test_tur_both();
 
+	test_inquiry_unit_types();
+
 	test_hotpath_trip_budget();
 	test_unmapped_unit_not_cached();
 	test_stock_fw_bad_geometry();
@@ -1823,6 +1900,8 @@ int main()
 	CHECK( mock_div0 == 0,
 	       "whole run: no BLOCKS read of a block-size-0 unit (stock fw div0 never hit)");
 	printf("       whole-run div0=%lu\n", mock_div0);
+
+	test_inquiry_late_map();	/* leaves unit 3 mapped */
 
 	/* ZS-02 cells reset the mock (and so mock_div0): run them last */
 	test_zs02_detection();
