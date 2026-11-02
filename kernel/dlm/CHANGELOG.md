@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the A1200 IDE in the contracts (4f7cefd)
+
+Gayle's gate takes the A1200 by its Kickstart's card.resource before any local-I/O access, and the A1200 IDE is motherboard id 2 (`mobo:gayle`) as the A4000 IDE is (C2-1 v4, C3-5 v23, C4-1 v8, C4-2 v8, spec 20 §6); spec 10 §6 plans an AXL1 machine identity for the A600.
+
 ## 2026-11-02 — C2-4 v24 §18: the A3000 WD and INQUIRY (c8096e6)
 
 The A3000 onboard WD (mobo:a3000-wd) is a known limit of `kbootset inquiry` and `cards --probe`: the stock a3091 sets the chip up on its first command and can stop for the boot when that command comes from process context, so an installer leaves the card out.
