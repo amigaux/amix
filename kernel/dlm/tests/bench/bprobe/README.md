@@ -39,7 +39,8 @@ Each pass reads one byte with `bprobe(addr, -1)` at:
    not probed when a board in the boot list covers it, or when it is at or
    above `VSECT1` (a fault there would be the MMU's again);
 3. **the Z3660's `MAC_HI`** (window base + `0x198`), when `autocon`
-   finds the Z3660 below `VSECT1`, then the word itself: the read a guarded
+   finds the Z3660 below `VSECT1`, then the register itself as a long (it
+   is 32 bits wide; a word read gives its high half, 0): the read a guarded
    window probe makes.
 
 A line `probing <what> at <addr>` comes before every access that can
@@ -160,7 +161,7 @@ reads did not reach the CIA, and the times are void, but not the
 results.
 
 `good=` must be `ok` and, for `bproot`, `level=ok` (it is `FAIL` when a
-call left level 7 or `lbolt` moved). `z3660=ok` with `MAC_HI word 0080`
+call left level 7 or `lbolt` moved). `z3660=ok` with `MAC_HI long 80`
 on a Z3660 whose MAC starts `00:80` shows the guarded identity read works.
 
 **Emulation proves the good path only.** In Amiberry an empty Zorro III
@@ -175,7 +176,10 @@ behaviour, which is what 1.1 gets on that configuration.
 
 | Object | File bytes | SHA-256 |
 |---|---|---|
-| `root/build/k30/mod.d/bproot` | 5355 | `5285f23fb749605caf917a1631a742ae2839e747565c48736445c9181f394770` |
-| `boot/build/k30/mod.d/bpboot` | 5549 | `6f0d98021852e48efb65dc62c3cc6cdb540ba6e3794ec39c4ce6bbd14a1a6b81` |
-| `root/build/k46/mod.d/bproot` | 5327 | `07c71d1f8e4d242bfb8e3aabb953754b9e7f7121e8053857029673a6bf13bcd6` |
-| `boot/build/k46/mod.d/bpboot` | 5521 | `c9f8334322db2d527f490260e68358844bd95ecc7dd710e478b354b5b7ef968f` |
+| `root/build/k30/mod.d/bproot` | 5351 | `393956944b2cc30f611e6cdbc09816a87f7d38771012f692532392d8312be865` |
+| `boot/build/k30/mod.d/bpboot` | 5545 | `2d27e4bd02fa809a822f6f38df060a82bc8e2838fd36dbed28994e14b0f7b299` |
+| `root/build/k46/mod.d/bproot` | 5323 | `eae9dd5bf4e4f1d5b5a76d27e3105408f435a2ed01f856a200477e9f63e7816d` |
+| `boot/build/k46/mod.d/bpboot` | 5517 | `1f0bef5ae69a2c1aa9693eb1a58613dc8543c6803452f8a14e15496448ff74a5` |
+
+The 2026-11-02 metal rows ran the previous build (k30 5285f23f/6f0d9802, k46
+07c71d1f/c9f83343), which read MAC_HI as a word and printed its high half, 0.

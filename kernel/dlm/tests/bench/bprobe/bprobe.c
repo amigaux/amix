@@ -18,7 +18,8 @@
  *      skipped when a board in the boot list covers it;
  *   3. with a Z3660 whose window lies below 0x40000000 (autocon
  *      0x144b0001), its MAC_HI register (base + 0x198), then the word
- *      itself: the read a guarded window probe makes.
+ *      itself as a long (a 32-bit register; a word read gives its high
+ *      half, 0): the read a guarded window probe makes.
  * A line "probing ..." comes before every bus access that can fault, so
  * a hang names its address.  Each probe is timed with CIA-B's TOD
  * counter, which counts horizontal syncs (64 us on PAL, 63.56 us on
@@ -66,6 +67,7 @@ static long	lb0;
 
 #define	R8(a)	(*(volatile unsigned char *)(a))
 #define	R16(a)	(*(volatile unsigned short *)(a))
+#define	R32(a)	(*(volatile unsigned long *)(a))
 
 static int
 level()
@@ -212,8 +214,9 @@ pass(name, params)
 	if (autocon(Z3660, 0, &base, &size) && base && base < VSECT1) {
 		z = probe(name, "Z3660 MAC_HI", (unsigned long)base + MAC_HI);
 		if (z == 0)
-			printf("%s: %s: Z3660 MAC_HI word %x\n", TAG, name,
-			    (int)R16((unsigned long)base + MAC_HI));
+			/* a 32-bit register: its high word is 0, the long 0x00000080 */
+			printf("%s: %s: Z3660 MAC_HI long %x\n", TAG, name,
+			    (int)R32((unsigned long)base + MAC_HI));
 	} else
 		printf("%s: %s: no Z3660 window below %x (autocon base %x)\n", TAG, name,
 		    VSECT1, base);
