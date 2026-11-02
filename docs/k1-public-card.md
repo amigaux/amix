@@ -1,4 +1,4 @@
-# The public K1 card (`Amix/cards/k1-public`)
+# The public K1 card (the workspace's `cards/k1-public`)
 
 The distributable Amix card for an A4000/A4000T with a Z3660 and a real 68060 (P-15 I2). The card
 directory is gitignored (it holds the disk images); this file and `profiles/cards/k1-public.card`
