@@ -7,8 +7,9 @@ The X Window System, release 6.3, under `/opt/amix/X11R6`:
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
-**X needs an FPU or the kernel's FP emulation** (68LC040/68LC060: emulated, slow, untested on 1.1). A
-68030 with a 68881/68882, or a full 68040 or 68060, runs it at full speed.
+**X needs an FPU or the kernel's FP emulation** (68LC040/68LC060: emulated and slow; on a
+68LC060 the server starts in about 25 s; the 68LC040 is untested). A 68030 with a 68881/68882,
+or a full 68040 or 68060, runs it at full speed.
 
     sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
@@ -37,7 +38,7 @@ MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with 
   (amix-userland, patch 00);
 - **the Z3660 work in patch 00** (the Z3660 modes, the raster-op and window copy fixes, fills
   and copies on the card's blitter, the monitor switch, the keyboard hand-back), from
-  amix-z3660rtg, and **patches 01–27**, among them `zz9000screen.c` on cfb16: ours, MIT.
+  amix-z3660rtg, and **patches 01–28**, among them `zz9000screen.c` on cfb16: ours, MIT.
 
 ## Source
 
@@ -76,6 +77,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `25-zz9000-screen-on-cfb16.patch` | Ours: the ZZ9000/Z3660 screen is X's own 16-bit framebuffer code, `cfb16ScreenInit`, instead of the hand-built screen, GC and drawing layer: cfb owns validation, all drawing (planemask, dashed and wide lines, pixmaps, depth-1 pixmaps through mfb), windows, colormaps and text. TrueColor only, the visual set to the card's RGB565 (cfb's depth-16 default is 6-5-5 red-low). The card's blitter comes in at four points: window-to-window CopyArea (cfb's own BitBlt with a blitter doBitBlt), CopyWindow, solid GXcopy PolyFillRect and solid PaintWindow, each flushing before it returns; a 16-bit PutImage into a window keeps the direct path. `zz9000win.c`, `zz9000cmap.c`, `zz9000pix.c` and `zz9000cursor.c` go. Xzz9000's text grows by 115 KB (cfb16's line, glyph and fill code instead of mi's generic paths). `cfb/cfbglblt8.c` joins the `-fno-jump-tables` files. |
 | `26-rtg-provenance-headers.patch` | Ours: a comment at the top of each `rtg/` source, which had none, saying what the file is and where it comes from (the rtg/ layer and the ZZ9000 driver based on Antti Sokero's xrtg-amix, the ZZ9000 version Ignacio Soriano's, the Z3660 and Amix changes ours; `zz9000screen.c` our own). Comments only: the compiled server is unchanged. |
 | `27-amix-fork-not-vfork.patch` | Ours: the build uses fork, not vfork (`HasVFork NO`; Imake gave YES to anything not SystemV). Amix's libc keeps `signal()`'s handlers in a table in the process's own data, which a vfork child shares with its parent: xinit's child set SIGUSR1 to SIG_IGN before exec'ing the server, and the server's "ready" SIGUSR1 then sent the parent to address 1 (Bus Error). xinit, xdmshell and xmh use fork. |
+| `28-font-path-fewer-fpu.patch` | Ours: font path setup with fewer floating-point instructions, same results. Each XLFD bitmap font in `fonts.dir` has eight matrix values rounded by `xlfd_round_double` (sprintf `%.3lg`, then atof) and asks `GetClientResolutions` for 75 or 100 dpi; on a 68LC060 every FPU instruction is emulated, about 160,000 per start and per reset. `xlfd_round_double` keeps 64 results keyed on the argument's bits, and the 88 dpi test is done in integers (`<=`, as 25.4 as a double is a little under 25.4). An A4000D (68LC060) is ready in about 24 s instead of 44 s (79,259 emulated instructions instead of 160,618); the font list and font properties are byte-identical. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
