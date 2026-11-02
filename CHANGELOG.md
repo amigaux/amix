@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-02 — the universal 1.1 install CD (2879b23..d7d0602)
+
+- One install CD for every 1.1 machine and both kernel lines (amix-1.1-install.iso), booted from the CD, from the floppy pairs (amix-1.1-boot-k46/-k30-1/-2.adf) or from a Z3660 boot disk (amix-1.1-boot-z3660.hdf). The installer finds the controllers, the CD and the disks at run time; each disk is shown with its controller and what it holds, and the disk is chosen by its id.
+- The probe asks each unit once, bounded in time; a controller that does not answer is set aside, and the A3000's onboard SCSI is read without a raw probe.
+- A root on any controller boots: the install lays the four-card disk nodes, and every disk-controller driver is in the installed system and on the RAM disk.
+- The network install uses the same profiles and runs in two stages: a minimal system from the RAM disk, the rest of the chosen set from the repository at the first boot, with retries and resume.
+- Published media carry no addresses and no root password (root is locked until the first-boot dialog sets one); a no to the system-accounts password question is confirmed; the IDE slave is attached only when the CD was found there.
+- Images of record ship with empty /tmp and /var/tmp and a zeroed swap slice; release files are plain zips with SHA256SUMS and pass amix's tools/release-check; the repository tree is written by assemble-release.
+- Userland from make dist with pinned bytes (amix-base, amixrt, dhcp-client, syslog, heirloom-tar as the system tar, X11R6.3); the A1200's IDE port is recognised.
+- Every rm and mv on a variable path is guarded with ${var:?}.
+
 ## 2026-11-02 — 1.1 set from make dist; IDE and A4000T targets; test disks; swap in steps (81aabd8..496d7f6)
 
 The 1.1 set takes userland packages from make dist and kspace 055a4cd9 (dist f286c88), with cdfs in every 1.1 profile.
