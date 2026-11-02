@@ -6042,8 +6042,11 @@ W_BENCH_DIOC = 'echo "A3000 Internal SCSI"'
 
 def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
              matrix_marker=True, sets=None, extra_orders=None, machine=None,
-             base_lines=None, kinfo_line=None):
+             base_lines=None, kinfo_line=None, kbootset=None):
     """disks: {id: (mb, has_rdb, [(name, start, len), ...])}
+
+    kbootset:     the text `kbootset cards --probe` prints (a universal medium's card table),
+                  served by a stub at the medium's l11/bin/kbootset; None = no kbootset
 
     sets:         text of the medium's /install/sets table (W3b), or None for a
                   pre-W3b medium that has none (the interview must still show
@@ -6082,6 +6085,13 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
             open(fp, "w").write(
                 (_W_ROMSIZE_STUB if name == "romsize" else _W_DIOC_STUB) % body)
             os.chmod(fp, 0o755)
+    if kbootset is not None:
+        os.makedirs(os.path.join(root, "cdrom/install/l11/bin"), exist_ok=True)
+        fp = os.path.join(root, "cdrom/install/l11/bin/kbootset")
+        open(fp, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") cat <<\'EOF\'\n%sEOF\n;;\n"cards ") cat <<\'EOF\'\n%sEOF\n;;\n'
+                            '*) exit 2 ;;\nesac\n' % (kbootset, "".join(l + "\n" for l in kbootset.splitlines()
+                                                                         if l.startswith("card "))))
+        os.chmod(fp, 0o755)
     fp = os.path.join(root, "cdrom/install/bin/install.sh")
     open(fp, "w").write('#!/bin/sh\necho "STUB-INSTALL-ARG=$1"\nexit 0\n')
     os.chmod(fp, 0o755)
@@ -6121,6 +6131,7 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
           "/dev/kinfo": root + "/dev/kinfo",
           "/dev/rdsk/": root + "/dev/rdsk/",
           "/tmp/setup.": root + "/tmp/setup.",
+          "/tmp/cd.spec": root + "/tmp/cd.spec",
           "/tmp/answers.profile": root + "/tmp/answers.profile",
           "/matrix.": root + "/matrix."}
     # ONE pass, longest literal first: no substituted text can be re-matched.
@@ -6182,6 +6193,11 @@ def audit_w2_interview():
     multi = {5: (200, True, [("UNIX_Root", 128, 300000)]),
              6: (100, True, W_BENCH_PARTS)}
     p_multi = W_PROFILE + 'INSTALLABLE_IDS="5 6"\n'
+    # a universal medium: no controller, no target, no disk size of its own
+    p_uni = W_PROFILE.replace("TARGET_DISK_MB=108", "TARGET_DISK_MB=") + "TARGET_HBA=auto\n"
+    uni_probe = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\n"
+                 "card 1: c8-cf zorro:0202:54 base 0x40800000\n  unit 3: type 5 ZuluSCSI CDROM 2.0\n"
+                 "card 2: c10-c17 mobo:gayle\n  unit 5: type 5 UAE-ATAPI CD-ROM 0.1\n  unit 6: type 0 UAE IDE -\n")
     p_src = W_PROFILE + "SRC_SCSI_ID=0\n"
     p_blank = W_PROFILE.replace("TARGET_DISK_MB=108", "TARGET_DISK_MB=")
     p_dds = p_blank.replace("DDSIZE_SAFE=n", "DDSIZE_SAFE=y")
@@ -6488,6 +6504,28 @@ def audit_w2_interview():
           "but you have selected to install 79 MB.",
           "Go ahead with the installation anyway? [n] "], [],
          ["TARGET_ROOT_FSTYPE=ufs", "TARGET_ROOT_MB=79"]),
+
+        # ---- a universal medium (TARGET_HBA=auto): every card's disks, by what they hold ----
+        ("universal: two disks (a blank one on the Z3660, AmigaOS on the IDE master behind it) -- "
+         "both shown with their controller and contents, the id question asked",
+         {6: (100, False, []), 16: (500, True, [("DH0", 128, 409600), ("Work", 409728, 614400)])},
+         ["6", "100", "", "", "", "", ""],
+         {"profile": p_uni, "kbootset": uni_probe},
+         ["SCSI id 6  Z3660 SCSI", "blank", "disk 16 (c16d0: card 2, SCSI id 6)  IDE", "AmigaOS: DH0 Work",
+          "What is the SCSI id of the disk you want to install? "], [],
+         ["TARGET_SCSI_ID=6", "TARGET_HBA=z3660scsi", "ROOTDEV=0x00480016"]),
+        ("universal: a single disk holding an Amix layout is chosen by typing its id, and the erase "
+         "question names its partitions",
+         {6: (108, True, W_BENCH_PARTS)}, ["6", "y", "", "", "", "", ""],
+         {"profile": p_uni, "kbootset": "card 0: c0-c7 zorro:144b:01 base 0x40000000\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\n"},
+         ["What is the SCSI id of the disk you want to install? ",
+          "SCSI id 6 holds Amix: UNIX_Root UNIX_Swap UNIX_Boot.  All of it will be erased.",
+          "Are you sure you want to erase this disk? "], [],
+         ["TARGET_SCSI_ID=6", "TARGET_HBA=z3660scsi"]),
+        ("universal: a single BLANK disk keeps today's flow (no id question)",
+         {6: (100, False, [])}, ["100", "", "", "", "", ""],
+         {"profile": p_uni, "kbootset": "card 0: c0-c7 zorro:144b:01 base 0x40000000\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\n"},
+         ["SCSI id 6  Z3660 SCSI"], ["What is the SCSI id"], ["TARGET_SCSI_ID=6", "TARGET_HBA=z3660scsi"]),
     ]
 
     npass = 0
@@ -10074,6 +10112,59 @@ def audit_cd_candidates():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_universal_cards():
+    head("UC. a universal medium (TARGET_HBA=auto) scans every card the kernel registered: with "
+         "`kbootset cards --probe` only the units that answer as disks, else units 0-6 of each card; "
+         "each disk is named by its controller")
+    setup = open(SETUP, encoding="latin-1").read()
+    def fn(name):
+        f = _extract_func(setup, name)
+        if not f:
+            fail("setup.sh: no %s()" % name)
+        return f or ""
+    body = "\n".join(fn(n) for n in ("hexval", "hexname", "read_cards", "card_key", "card_name", "card_hba",
+                                      "card_units", "id_card"))
+    for need, what in (('UNIVERSAL=y', "the universal block sets UNIVERSAL"),
+                       ('INSTALLABLE_IDS="${SCAN_IDS:-none}"', "every disk found is installable"),
+                       ('[ -n "$UNIVERSAL" ] && [ -s "$TOK_F.held" ] && UNI_ASK=y',
+                        "a disk that holds partitions is chosen by typing its id"),
+                       ('echo "TARGET_HBA=${UNI_HBA:-auto}"', "the answers carry the chosen disk's controller"),
+                       ('holds `disk_contents $SCSI`.  All of it will be erased.', "the erase question names what the disk holds")):
+        (ok if need in setup else fail)("setup.sh: %s" % what)
+    d = tempfile.mkdtemp(prefix="unicards.")
+    try:
+        cards = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n"
+                 "card 2: c10-c17 mobo:gayle\\n")
+        probe = ("card 0: c0-c7 zorro:144b:01 base 0x40000000\\n  unit 0: type 0 ZuluSCSI SD -\\n"
+                 "  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n"
+                 "  unit 3: type 5 ZuluSCSI CDROM 2.0\\ncard 2: c10-c17 mobo:gayle\\n  unit 5: type 5 UAE-ATAPI CD-ROM 0.1\\n"
+                 "  unit 6: type 0 UAE IDE -\\n")
+        def run(prc, script):
+            kb = os.path.join(d, "kb")
+            open(kb, "w").write('#!/bin/sh\ncase "$1 $2" in\n"cards --probe") [ %d = 0 ] && printf "%%b" "%s"; exit %d;;\n'
+                                '"cards ") printf "%%b" "%s";;\nesac\n' % (prc, probe, prc, cards))
+            os.chmod(kb, 0o755)
+            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=%s CARDS_F=%s/cards CARDS_PROBED=\n%s\n%s"
+                                % (kb, d, body, script)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            return " ".join(r.stdout.decode().split())
+        for prc, script, want, what in (
+                (0, 'read_cards; echo "P=$CARDS_PROBED"; card_units', "P=y 0 6 16",
+                 "-36: the disks only (Z3660 0 and 6, the IDE master c16); the CD units are not scanned"),
+                (2, 'read_cards; echo "P=$CARDS_PROBED"; card_units',
+                 "P= 0 1 2 3 4 5 6 8 9 a b c d e 10 11 12 13 14 15 16", "before -36: units 0-6 of every card"),
+                (0, 'read_cards; for i in 6 b 16; do card_name "`card_key \\`id_card $i\\``"; done',
+                 "Z3660 SCSI A4091 SCSI IDE", "each id is named by its card's controller"),
+                (0, 'read_cards; for i in 6 b 16; do card_hba "`card_key \\`id_card $i\\``"; done',
+                 "z3660scsi a4091 gayle", "and given the profile word l11.sh's key table knows")):
+            got = run(prc, script)
+            (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=%s/none CARDS_F=%s/cards\n%s\nread_cards; echo rc=$?"
+                            % (d, d, body)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+        (ok if r.stdout.decode().strip().endswith("rc=1") else fail)("universal cards: no kbootset: read_cards fails (the card-0 scan stands)")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
          "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
@@ -10935,6 +11026,7 @@ def main():
     audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()
+    audit_universal_cards()
     audit_cd_candidates()
     audit_boot_pri()
     audit_guarded_rm_mv()

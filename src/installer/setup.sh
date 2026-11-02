@@ -411,6 +411,89 @@ scsi_label() {
 	echo "disk $1 (c${1}d0: card $_c, SCSI id $_u)"
 }
 
+# --- the machine's disk cards, from the running kernel (a universal medium: TARGET_HBA=auto) ---
+# CARDS_F holds `kbootset cards --probe` (kbootset -36: under each card a line per unit that
+# answers a read-only INQUIRY) or, before -36, `kbootset cards`. CARDS_PROBED=y when the unit lines
+# are there: the scan then opens only the units that answer as disks (device type 0), so a CD
+# drive behind an A4091/A4092 never gets a dd-layer read.
+CARDS_F=/tmp/setup.cards
+CARDS_PROBED=
+read_cards()
+{
+	cp /dev/null "$CARDS_F"
+	[ -x "$SETUP_KBOOTSET" ] || return 1
+	if "$SETUP_KBOOTSET" cards --probe > "$CARDS_F" 2>/dev/null && [ -s "$CARDS_F" ]; then
+		# (a redirected loop runs in a subshell on this shell: its answer comes back as output)
+		_pu=`while read _a _rest; do [ "$_a" = unit ] && { echo y; break; }; done < "$CARDS_F"`
+		[ -n "$_pu" ] && CARDS_PROBED=y
+		return 0
+	fi
+	"$SETUP_KBOOTSET" cards > "$CARDS_F" 2>/dev/null && [ -s "$CARDS_F" ]
+}
+# card_key K -- the match key of card K (zorro:MMMM:PP or mobo:NAME), or ""
+card_key()
+{
+	while read _w _k _r _key _rest
+	do
+		[ "$_w" = card ] && [ "$_k" = "$1:" ] && { echo "$_key"; break; }
+	done < "$CARDS_F"
+}
+# card_name KEY -- how the interview names a controller
+card_name()
+{
+	case "$1" in
+		zorro:144b:01)		echo "Z3660 SCSI" ;;
+		zorro:0202:54)		echo "A4091 SCSI" ;;
+		zorro:c0de:01)		echo "A4092 SCSI" ;;
+		mobo:a3000-wd)		echo "A3000 SCSI" ;;
+		mobo:a4000t-710)	echo "A4000T SCSI" ;;
+		mobo:gayle)		echo "IDE" ;;
+		"")			echo "" ;;
+		*)			echo "$1" ;;
+	esac
+}
+# card_hba KEY -- the profile word for a controller (TARGET_HBA: l11.sh's fallback key table)
+card_hba()
+{
+	case "$1" in
+		zorro:144b:01)		echo z3660scsi ;;
+		zorro:0202:54)		echo a4091 ;;
+		zorro:c0de:01)		echo a4092 ;;
+		mobo:a3000-wd)		echo a3000 ;;
+		mobo:a4000t-710)	echo a4000t ;;
+		mobo:gayle)		echo gayle ;;
+	esac
+}
+# card_units -- the ids to scan on every card the kernel registered: with the probe, the units
+# that answer as disks (type 0); without it, units 0-6 of each card (scan_safe_ids then drops
+# the CD's unit and the hosts)
+card_units()
+{
+	_cur=
+	while read _a _b _c _d _rest
+	do
+		if [ "$_a" = card ]; then
+			_cur=`expr "$_b" : '\([0-3]\):$'`
+			[ -n "$_cur" ] || continue
+			if [ -z "$CARDS_PROBED" ]; then
+				for _u in 0 1 2 3 4 5 6
+				do
+					hexname `expr $_cur \* 8 + $_u`
+				done
+			fi
+		elif [ "$_a" = unit ] && [ -n "$CARDS_PROBED" ] && [ -n "$_cur" ]; then
+			_u=`expr "$_b" : '\([0-7]\):$'`
+			[ -n "$_u" ] && [ "$_c $_d" = "type 0" ] && hexname `expr $_cur \* 8 + $_u`
+		fi
+	done < "$CARDS_F"
+}
+# id_card ID -- the card number of controller id ID
+id_card()
+{
+	_v=`hexval "$1"`
+	[ -n "$_v" ] && expr "$_v" / 8
+}
+
 # ---------------------------------------------------------------------------
 # 0. THE BASE PROFILE
 # ---------------------------------------------------------------------------
@@ -569,6 +652,21 @@ if [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && [ "$TARGET_HBA" = gayle ]; then
 	else
 		echo "$PROG: the running kernel names no IDE card (kbootset cards): the profile's SCSI id $TARGET_SCSI_ID stands"
 	fi
+fi
+# --- a universal medium (TARGET_HBA=auto): the disks of every card the kernel registered ---
+# The profile names no controller and no target: the scan covers every card `kbootset cards`
+# lists (with -36's probe only the units that answer as disks), every disk found is installable
+# (a 1.1 kernel is the same for any target), and the chosen disk's own card gives TARGET_HBA,
+# ROOTDEV and (l11.sh) the boot and root keys. Without a kbootset the card-0 scan stands.
+UNIVERSAL=
+if [ "$TARGET_HBA" = auto ]; then
+	UNIVERSAL=y
+	TARGET_SCSI_ID=
+	if read_cards; then
+		SCAN_IDS=`card_units`
+		SCAN_IDS=`echo $SCAN_IDS`
+	fi
+	INSTALLABLE_IDS="${SCAN_IDS:-none}"
 fi
 [ -n "$INSTALLABLE_IDS" ] || INSTALLABLE_IDS="$TARGET_SCSI_ID"
 [ -n "$INSTALLABLE_IDS" ] || die "base profile $PROFILE_FILE declares neither INSTALLABLE_IDS nor TARGET_SCSI_ID -- no id could ever be installable"
@@ -795,7 +893,35 @@ rdb_extent_mb()
 	expr "$emax" / "$BLOCKS_PER_MB"
 }
 
+# disk_contents ID -- what a disk holds, for the table: "blank" (no RDB), else its partitions'
+# names from the RDB, as "Amix: ..." when they are an Amix layout (UNIX_*), else "AmigaOS: ..."
+disk_contents()
+{
+	rdb_present "$1" || { echo blank; return 0; }
+	cdev="/dev/dsk/c${1}d0s0"
+	cnp=`/etc/rdb -h 5 "$cdev" 2>/dev/null`
+	cnames=
+	camix=
+	if is_num "$cnp" && [ "$cnp" -gt 0 ]; then
+		for p in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+		do
+			[ "$p" -le "$cnp" ] || break
+			/etc/rdb -p "$p" "$cdev" > "$SCAN_F.c" 2>/dev/null
+			[ -s "$SCAN_F.c" ] || continue
+			set -- `cat "$SCAN_F.c"`
+			cnames="$cnames $1"
+			case "$1" in UNIX_*) camix=y ;; esac
+		done
+		rm -f "${SCAN_F:?}.c"
+	fi
+	[ -n "$cnames" ] || { echo "an RDB without partitions"; return 0; }
+	if [ -n "$camix" ]; then echo "Amix:$cnames"; else echo "AmigaOS:$cnames"; fi
+}
+
 # choose_disk -- print the table, pick an id. Sets SCSI + DISK_MB, or restarts.
+# On a universal medium every disk is shown with its controller and what it holds, and only a
+# single BLANK disk is taken without asking: a disk that holds partitions is chosen by typing its
+# id, and the erase question then names those partitions.
 choose_disk()
 {
 	if scan_disks; then
@@ -820,6 +946,7 @@ choose_disk()
 	# The eligible ids, collected in the PARENT: the loop below is fed by a
 	# redirect and therefore runs in a subshell, so it may only append.
 	cp /dev/null "$TOK_F"
+	cp /dev/null "$TOK_F.held"
 	while read sid sstate ssize
 	do
 		case "$sid" in ""|\#*) continue ;; esac
@@ -827,6 +954,16 @@ choose_disk()
 			stext="size unknown"
 		else
 			stext="$ssize megabytes"
+		fi
+		if [ -n "$UNIVERSAL" ] && [ "$sstate" = ok ]; then
+			scard=`id_card $sid`
+			skey=`card_key $scard`
+			sctl=`card_name "$skey"`
+			shold=`disk_contents $sid`
+			echo "`scsi_label $sid`${sctl:+  $sctl}		$stext	$shold"
+			echo "$sid" >> "$TOK_F"
+			[ "$shold" = blank ] || echo "$sid" >> "$TOK_F.held"
+			continue
 		fi
 		case "$sstate" in
 			ok)		echo "`scsi_label $sid`		$stext"
@@ -846,7 +983,11 @@ choose_disk()
 		restart
 	fi
 
-	if [ "$#" -gt 1 ]; then
+	# a universal medium takes a single disk without asking only when it is blank
+	UNI_ASK=
+	[ -n "$UNIVERSAL" ] && [ -s "$TOK_F.held" ] && UNI_ASK=y
+	rm -f "${TOK_F:?}.held"
+	if [ "$#" -gt 1 ] || [ -n "$UNI_ASK" ]; then
 		ELIGIBLE="$*"
 		SCSI=
 		while [ "$SCSI" = "" ]
@@ -918,6 +1059,7 @@ choose_disk()
 	# P-36: 1.1 supports clean installs only -- a disk that holds Amix gets this
 	# question too, never an upgrade.
 	if rdb_present "$SCSI"; then
+		[ -n "$UNIVERSAL" ] && echo "\n`scsi_label $SCSI` holds `disk_contents $SCSI`.  All of it will be erased."
 		echo "\nWARNING:  The following existing data on disk will be destroyed.\n"
 		/etc/rdb -V "/dev/dsk/c${SCSI}d0s0" 2>/dev/null
 		while :
@@ -2146,6 +2288,14 @@ DONE=
 while [ "$DONE" = "" ]
 do
 	choose_disk
+	# a universal medium: the chosen disk's own card names the controller and the root device
+	UNI_HBA=
+	if [ -n "$UNIVERSAL" ]; then
+		_ucard=`id_card $SCSI`
+		_ukey=`card_key $_ucard`
+		UNI_HBA=`card_hba "$_ukey"`
+		ROOTDEV=`rootdev_of $SCSI ${TARGET_ROOT_SLICE:-1}`
+	fi
 	# Right where stock ran it: after the disk is chosen (the controller
 	# probe needs a raw node) and before a single size is asked for.
 	check_old_boot
@@ -2221,6 +2371,11 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "# win over the base profile's -- that is the whole merge mechanism."
 	echo "# install set: $SET_LABEL"
 	echo "TARGET_SCSI_ID=$SCSI"
+	# a universal medium: the controller and the root device of the disk the user chose
+	if [ -n "$UNIVERSAL" ]; then
+		echo "TARGET_HBA=${UNI_HBA:-auto}"
+		echo "ROOTDEV=$ROOTDEV"
+	fi
 	# the IDE port's card came from the running kernel: its CD unit and root device go with it
 	if [ -n "$IDE_CARD" ]; then
 		echo "IDE_CARD=$IDE_CARD"
