@@ -18,14 +18,16 @@
 #                kernel/port/build/cuts/<id>/ (where kern46m reads it); its sums
 #                in out/kernels/k46.list
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
+#                (the module directories that hold files git tracks)
 #   drivers      every driver module on both lines, on the kit:
 #                kernel/drivers/{a4091,z3660scsi,z3660eth}/module and
 #                the forks at their pins (cdfs, gayle-ide, paula, z3660rtg):
 #                out/modules/<line>/<name>
 #   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
 #                provider before consumer (dlm, k30, port, the modules, the
-#                drivers), into out/kspace/pkgs, one version per name; a
-#                directory without one yet is named, and the step exits 3
+#                drivers: the directories that hold files git tracks), into
+#                out/kspace/pkgs, one version per name; a directory without
+#                one yet is named, and the step exits 3
 #   userland     every package.sh of userland/packages and userland/base/pkg,
 #                each after the packages its BUILD_DEPENDS names:
 #                out/userland/pkgs/*.pkg, one version per name
@@ -162,15 +164,29 @@ step_kit() {
 	cat "$out/kit/kit.digests"
 }
 
+# tracked_names <dir> [<sub>]: each <name> whose <dir>/<name>[/<sub>] holds a
+# file git tracks, in C order; a leftover untracked directory (a removed
+# driver's gitignored build output) is not a recipe
+tracked_names() {
+	_tn=$(git -C "$top" ls-files -- "$1") || {
+		echo "[FAIL] git ls-files $1 failed in $top" >&2; return 1; }
+	printf '%s\n' "$_tn" | sed -n "s|^$1/\([^/]*\)/${2:+$2/}.*|\1|p" | LC_ALL=C sort -u
+}
+
 step_modules() {
 	[ -f "$top/kernel/dlm/build/kit.digests" ] || step_kit
-	( . "$GCA/env.sh"; for m in "$top"/kernel/modules/*/module; do make -C "$m" clean; make -C "$m"; done )
+	mods=$(tracked_names kernel/modules module) || exit 1
+	( . "$GCA/env.sh"; for m in $mods; do
+		make -C "$top/kernel/modules/$m/module" clean; make -C "$top/kernel/modules/$m/module"; done )
 	rm -rf "${out:?}/modules"
-	for obj in "$top"/kernel/modules/*/build/*/mod.d/*; do
-		line=$(basename "$(dirname "$(dirname "$obj")")")
-		mkdir -p "$out/modules/$line"
-		cp "$obj" "$out/modules/$line/"
-		echo "module $line $(basename "$obj") $(sha256sum < "$obj" | cut -c1-64)"
+	for m in $mods; do
+		for obj in "$top/kernel/modules/$m"/build/*/mod.d/*; do
+			[ -f "$obj" ] || continue
+			line=$(basename "$(dirname "$(dirname "$obj")")")
+			mkdir -p "$out/modules/$line"
+			cp "$obj" "$out/modules/$line/"
+			echo "module $line $(basename "$obj") $(sha256sum < "$obj" | cut -c1-64)"
+		done
 	done
 }
 
@@ -389,12 +405,10 @@ kspace_dirs() {
 	for d in kernel/dlm kernel/k30 kernel/port; do
 		[ -d "$top/$d" ] && echo "$d"
 	done
-	for d in "$top"/kernel/modules/*/module; do
-		[ -d "$d" ] && echo "kernel/modules/$(basename "$(dirname "$d")")"
-	done
-	for d in "$top"/kernel/drivers/*/; do
-		[ -d "$d" ] && echo "kernel/drivers/$(basename "$d")"
-	done
+	_kd_m=$(tracked_names kernel/modules module) || return 1
+	_kd_d=$(tracked_names kernel/drivers) || return 1
+	for d in $_kd_m; do echo "kernel/modules/$d"; done
+	for d in $_kd_d; do echo "kernel/drivers/$d"; done
 	return 0
 }
 
@@ -417,7 +431,8 @@ step_kspace() {
 		git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$_pc"
 	export AMIX_PORT_URL AMIX_PORT_REPO
 	missing= waiting=
-	for d in $(kspace_dirs); do
+	kdirs=$(kspace_dirs) || exit 1
+	for d in $kdirs; do
 		if [ ! -f "$top/$d/pkg/build.sh" ]; then
 			missing="$missing $d"
 			continue
