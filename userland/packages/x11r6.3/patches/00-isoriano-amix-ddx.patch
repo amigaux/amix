@@ -2,6 +2,20 @@ isoriano's Amiga X server (Ignacio Soriano, MIT; amix-userland components/x11/x1
 unchanged: the hw/amix DDX with the rtg/zz9000 framebuffer driver (Xzz9000) and Xamix(1),
 and his mfbimage.c, which builds depth-1 images in a stack pixmap for that DDX.
 
+Where its parts come from (LICENSE.ddx has the notices):
+- hw/amix's input and screen framework (amixInit.c, amixIo.c, amixKbd.c, amixMouse.c,
+  amix.h): the 1987 Sun X server through Commodore's Amix X server, with the UC Regents'
+  and Sun's notices in each file;
+- the rtg/ layer and the ZZ9000 driver: based on Antti Sokero's xrtg-amix (its rtg/ layer
+  and VA2000 driver), MIT, Copyright (c) 2025-2026 Antti Sokero; the ZZ9000 version is
+  Ignacio Soriano's;
+- the Z3660 work it carries (the Z3660 modes, the raster-op and window copy fixes, fills and
+  copies on the card's blitter, the monitor switch, the keyboard hand-back): amix-z3660rtg's
+  patch series, MIT, Copyright (c) 2026 Jussi Alanärä;
+- mfbimage.c, the A3000 + Z3660 series (CopyWindow box order, tiled and stippled fills, the
+  bell, the direct 16-bit PutImage, the ZZ9K-SOFT3D extension) and the rest: Ignacio
+  Soriano's.
+
 --- a/programs/Xserver/hw/amix/amixCursor.c
 +++ b/programs/Xserver/hw/amix/amixCursor.c
 @@ -0,0 +1,44 @@

@@ -12,11 +12,6 @@ XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrd
 	xlsfonts xhost xauth iceauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf
 	smproxy rstart"
 
-# the LL printf gate scans the whole file with strings(1): in Xzz9000 (and X,
-# its link) it matches "%Lo$E" in .text, an absolute address operand followed
-# by opcode bytes, not a format; X11R6.3 has no long long conversion
-AMIX_LL_PRINTF_REVIEWED="Xzz9000's only match is instruction bytes in .text (an address operand and opcodes), not a format string; X11R6.3 formats no long long"
-
 # compiled with -fno-jump-tables, these files only: a GCC 14 switch table in each that
 # scan060-g14 (the D4 gate) cannot size, though the code bounds it
 XNOJT="lib/font/bitmap/bdfutils.c	bdfSpecialProperty: the bound is on the index before a shift

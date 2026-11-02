@@ -1,7 +1,7 @@
 # x11r6.3 — X11R6.3 for Amix
 
 The X Window System, release 6.3, under `/opt/amix/X11R6`:
-- the `Xzz9000` server for the ZZ9000 and the Z3660 RTG (isoriano's Amiga DDX);
+- the `Xzz9000` server for the ZZ9000 and the Z3660 RTG (the Amiga DDX; who wrote it: below);
 - the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (static) with their headers;
 - xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart.
 
@@ -19,7 +19,25 @@ NEEDED gate until it accepts `/usr/amiga/lib/libscreen.so`, the library's own SO
 stock user records (infra 118a966).
 
 Package: `x11r63`, category `x11`, set `extra`. Licence: the X Consortium's (`X11`) for X11R6.3,
-MIT for isoriano's Amiga DDX (patch 00). Built with GCC 14 (`-m68020-60 -mno-strict-align -O2`).
+MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with GCC 14
+(`-m68020-60 -mno-strict-align -O2`).
+
+## Who wrote the server
+
+`Xzz9000` is X11R6.3's device-independent server with the Amiga DDX, `hw/amix`
+(`LICENSE.ddx` has the notices and says which part each covers):
+- **hw/amix's input and screen framework** (`amixInit.c`, `amixIo.c`, `amixKbd.c`,
+  `amixMouse.c`, `amix.h`): the 1987 Sun X server through Commodore's Amix X server, under the
+  UC Regents' and Sun's notices in each file;
+- **the rtg/ layer and the ZZ9000 driver**: based on Antti Sokero's
+  [xrtg-amix](https://github.com/asokero/xrtg-amix) (its rtg/ layer and VA2000 driver), MIT,
+  Copyright (c) 2025-2026 Antti Sokero;
+- **the ZZ9000 version**, `mfbimage.c` and the A3000 + Z3660 series (CopyWindow box order, tiled
+  and stippled fills, the bell, the direct 16-bit PutImage): Ignacio Soriano, MIT
+  (amix-userland, patch 00);
+- **the Z3660 work in patch 00** (the Z3660 modes, the raster-op and window copy fixes, fills
+  and copies on the card's blitter, the monitor switch, the keyboard hand-back), from
+  amix-z3660rtg, and **patches 01–26**, among them `zz9000screen.c` on cfb16: ours, MIT.
 
 ## Source
 
@@ -36,7 +54,7 @@ directory that holds both; the default is the sysroot's `usr`.
 
 | Patch | What |
 |---|---|
-| `00-isoriano-amix-ddx.patch` | **isoriano's code, used unchanged apart from comments** (Ignacio Soriano, MIT; amix-userland `components/x11/x11r6.3/overlay`): the `hw/amix` DDX with the `rtg/zz9000` framebuffer driver (`Xzz9000`) and `Xamix(1)`, and his `mfbimage.c`, which builds depth-1 images in a stack pixmap for that DDX. It already carries the Z3660 RTG work (the Z3660 modes, the card blitter, the monitor switch, the keyboard hand-back) and his soft3D and CDE fixes. |
+| `00-isoriano-amix-ddx.patch` | **isoriano's tree, used unchanged apart from comments** (Ignacio Soriano, MIT; amix-userland `components/x11/x11r6.3/overlay`): the `hw/amix` DDX with the `rtg/zz9000` framebuffer driver (`Xzz9000`) and `Xamix(1)`, and his `mfbimage.c`, which builds depth-1 images in a stack pixmap for that DDX. Its rtg/ layer and ZZ9000 driver are based on Antti Sokero's xrtg-amix (MIT). It already carries amix-z3660rtg's Z3660 work (the Z3660 modes, the card blitter, the monitor switch, the keyboard hand-back) and his soft3D and CDE fixes; who wrote which part: above. |
 | `01-amix-platform.patch` | Ours: the Amix platform. `Imake.cf` selects our own `amix.cf` (the platform's facts and what the package builds); imake's cpp gets `-DAMIX -DSVR4 -Dm68k`; `servermd.h` has Amix's byte and bit order; the server Imakefile has an `Xzz9000` target; mfb uses the portable bit-field code; `Xos.h` takes the two-argument `gettimeofday`; `site.def` includes `host.def`. It follows isoriano's analysis of mfb's 68020 bit-field asm, of Xaw without `wctype.h`, and of how imake must be told about AMIX. |
 | `02-implicit-int-externs.patch` | Ours: 197 extern declarations in 4 headers had no return type (`extern XClipBox(...)`). Each gets its `int`, so no client hits gcc 14's implicit-int error. |
 | `03-allocator-declarations.patch` | Ours: K&R `char *malloc();`-style declarations that collide with `<stdlib.h>` become comments; xinit's own `shutdown()` becomes `xinit_shutdown()`. |
@@ -56,6 +74,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `23-zz9000-no-soft3d.patch` | Ours: the ZZ9K-SOFT3D extension goes, and with it the probe of ioctl 18 at every start, a call our card driver leaves unassigned. |
 | `24-amix-no-mitshm.patch` | Ours: MIT-SHM is not built. ShmAttach attached any segment a client named with the server's root rights, and R6.3 cannot check a client's uid against the segment. |
 | `25-zz9000-screen-on-cfb16.patch` | Ours: the ZZ9000/Z3660 screen is X's own 16-bit framebuffer code, `cfb16ScreenInit`, instead of the hand-built screen, GC and drawing layer: cfb owns validation, all drawing (planemask, dashed and wide lines, pixmaps, depth-1 pixmaps through mfb), windows, colormaps and text. TrueColor only, the visual set to the card's RGB565 (cfb's depth-16 default is 6-5-5 red-low). The card's blitter comes in at four points: window-to-window CopyArea (cfb's own BitBlt with a blitter doBitBlt), CopyWindow, solid GXcopy PolyFillRect and solid PaintWindow, each flushing before it returns; a 16-bit PutImage into a window keeps the direct path. `zz9000win.c`, `zz9000cmap.c`, `zz9000pix.c` and `zz9000cursor.c` go. Xzz9000's text grows by 115 KB (cfb16's line, glyph and fill code instead of mi's generic paths). `cfb/cfbglblt8.c` joins the `-fno-jump-tables` files. |
+| `26-rtg-provenance-headers.patch` | Ours: a comment at the top of each `rtg/` source, which had none, saying what the file is and where it comes from (the rtg/ layer and the ZZ9000 driver based on Antti Sokero's xrtg-amix, the ZZ9000 version Ignacio Soriano's, the Z3660 and Amix changes ours; `zz9000screen.c` our own). Comments only: the compiled server is unchanged. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
