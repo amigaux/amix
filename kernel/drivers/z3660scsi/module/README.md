@@ -25,10 +25,10 @@ later; 1.0.0-2 was built with KIT_REV 230a1e8, which stamps `k30.1.2` /
 `mod_miscops`, `printf`, `sd_register`, `sptalloc`) is a kabi 1.0 name. The
 pinned cross tools (`m68k-cbm-sysv4-*`) and `python3` must be on `PATH`.
 
-`make static`'s k30 sum is the static object's (`0e15a363…`). The 040/060
-static object is built by the driver-line relink with its own flags and
-4 KiB-page source rewrite, so the kit's k46 compile is not that object; its
-pin (`b43e36e7…`) is checked by that relink.
+`make static`'s k30 sum is the static object's (`a3c7a9d3…`, module 1.0.0-4
+on the 33ebadc kit). The 040/060 static object is built by the driver-line
+relink with its own flags and 4 KiB-page source rewrite, so the kit's k46
+compile is not that object; its pin (`b43e36e7…`) is checked by that relink.
 
 ## The module
 
@@ -124,18 +124,28 @@ transaction, as the static driver does at the same point today.
 ## Known limits of the fixed-window gate
 
 The `mobo:` match key always matches, so `_load` runs on every AGA box, and
-on one without a Z3660 the fixed window is probed. The gate makes the empty
-Zorro III window and the kernel's own memory safe; two cases it cannot see:
+on one without a Z3660 the fixed window is probed. With no ConfigDev, the
+memory-region refusal and the `bprobe` read stand before the signature's
+first write; then the signature (ZS-02) refuses anything that is not the
+piscsi mailbox, before a unit is trusted. Which of them refuses an empty
+window depends on how the CPU card ends a Zorro III cycle that no board
+answers. Measured on the Z3660, reading empty Zorro III space:
+
+| CPU | Empty Zorro III read | Refused by | Cost in the root pass |
+|---|---|---|---|
+| the Z3660's 68060 | bus error, caught by `bprobe`, after 283–295 ms; no hang at level 0, 4 or 7 | the gate (`z3660_fixed_berr`) | one bus timeout, about 290 ms |
+| the Z3660's emulated 68030 | no fault, reads `0xFF`, in about 64 µs | the signature (`z3660_sig_fails`): all ones matches neither key | one probe read, then the signature's writes and reads |
+
+Two cases the gate cannot see:
 
 - `bprobe` catches a bus error, not a cycle that nothing terminates. On a
   CPU card with no bus timeout for `0x10000000` the probe read hangs the
-  box. Which accelerators (A1200 030 cards, A4000 040/060 cards) end that
-  access with a bus error is not measured.
+  box. Other accelerators (A1200 030 cards, A4000 040/060 cards) are not
+  measured.
 - A device other than memory the boot listed, answering at `0x10000000`,
   still receives the signature's writes: two longs at `0x10002024` and
-  `0x10002244`, and two at `0x10002090`.
-
-On an empty window the probe costs one bus timeout in the root pass.
+  `0x10002244`, and two at `0x10002090`. On a card whose empty reads do not
+  fault, the same writes go to the empty window.
 
 ## Package (C3-5)
 

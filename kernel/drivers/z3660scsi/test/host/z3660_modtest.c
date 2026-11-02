@@ -39,6 +39,7 @@ extern void		z3660_test_unmap();
 extern unsigned char	z3660_present;
 extern unsigned long	z3660_sig_deferred, z3660_nest_depth, z3660_nest_hits;
 extern unsigned long	z3660_halted, z3660_halt_busy;
+extern unsigned long	z3660_sig_ok, z3660_sig_fails, z3660_fixed_berr, z3660_fixed_ram;
 extern long		z3660_cache;
 extern unsigned long	z3660_ci_ok, z3660_push_n;
 /* weak until the arm exists, so the matrix runs red instead of not linking */
@@ -256,6 +257,14 @@ int main()
 	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_ZERO);	/* AGA, open bus */
 	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0,
 	       "AGA, fixed window with no mailbox: ENXIO, silent (no console line), nothing registered");
+
+	/* AGA, an empty window that reads 0xFF with no fault (the emulated 030):
+	 * the probe read passes the gate, the signature refuses */
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_ONES);
+	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0
+	       && mock_bprobe_calls == 1 && z3660_fixed_berr == 0 && z3660_fixed_ram == 0
+	       && z3660_sig_ok == 0 && z3660_sig_fails == 1 && mock_doorbells[0] == 0,
+	       "AGA, fixed window reading all ones, no fault: gate passes, signature refuses, ENXIO, silent");
 
 	r = load_cell2( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD, 1, 0UL, 0UL);
 	CHECK( r == ENXIO_ && sr_calls == 0 && cap[0] == 0 && z3660_present == 0
