@@ -107,6 +107,12 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   scan skips every candidate unit the medium's profile cannot install to (`scan_safe_ids`).
   With `0,5` in the list that includes SCSI id 5 (and `d`, card 1 unit 5): a disk at id 5 is
   not offered as a target unless the profile's `INSTALLABLE_IDS` names it.
+- **Boot priority.** The installer writes the target's UNIX_Boot slice bootable at
+  `TARGET_BOOT_BOOTPRI` (default 2, the stock value). Kickstart boots the bootable partition
+  with the highest priority on any disk, so an AmigaOS disk at the usual 0 loses to the new
+  install, and any other bootable disk above 2 wins: a disk behind an A4092, an IDE disk, an
+  older Amix install. Change the other disk's priority, or this key. The test disks set 20.
+  `l11-target-check.py --expect-boot-pri` reads it back.
 - **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
   the old cap was 1024); `docs/l11-disk.md`.
 - **The pre-installed images**: `tools/build-preinstalled.sh` masters the image
@@ -3297,6 +3303,7 @@ mandatory on this SVR4. It fires only when the dialog collected a gateway
 |---|---|---|
 | `FIRSTBOOT_DIALOG` | profile / `setup.sh` | arm the dialog? Default `n`. |
 | `FIRSTBOOT_DIALOG_INTERACTIVE` | profile | `n`: an interactive install leaves the dialog off too (disks configured before they ship) |
+| `TARGET_BOOT_BOOTPRI` | profile | the UNIX_Boot slice's boot priority, 0-127; default 2 (stock). The test disks use 20 |
 | `FB_DIALOG` | the driver | the tier, recorded in `firstboot.conf` |
 | `FB_ROOT_TELNET` | profile, then the dialog | `y` = `#CONSOLE=` (default) |
 | `FB_SYSLOG` | profile, then the dialog | `n` restores the vendor `exit`, in place |

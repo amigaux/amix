@@ -763,6 +763,10 @@ esac
 #                                 040/060 target kernel goes in UNCOMPRESSED, so
 #                                 2 MB is 92.7% full before anything grows.
 #   TARGET_SWAP_MB   <empty>      stock-default swap sizing (plan_partitions)
+#   TARGET_BOOT_BOOTPRI 2         the UNIX_Boot slice's boot priority, 0-127 (stock 2).
+#                                 Kickstart boots the bootable partition with the highest
+#                                 priority on any disk: an AmigaOS disk at the usual 0 loses,
+#                                 another disk above it wins. The test disks use 20.
 #   SWAP_ADD_MB      <line's>     how much of the swap slice is added before mkfs: sizes in MiB
 #                                 (`all` = the whole slice) tried in order, the first the kernel
 #                                 takes; default 30 on the 68030 line, all on the 68040/68060 line
@@ -1115,6 +1119,9 @@ ensure_disk_nodes()
 	done
 	return 0
 }
+TARGET_BOOT_BOOTPRI="${TARGET_BOOT_BOOTPRI:-2}"
+{ is_num "$TARGET_BOOT_BOOTPRI" && [ "$TARGET_BOOT_BOOTPRI" -le 127 ]; } \
+	|| die "TARGET_BOOT_BOOTPRI='$TARGET_BOOT_BOOTPRI' is not a boot priority (0-127)"
 [ -n "`hexval "$ID"`" ] || die "TARGET_SCSI_ID='$ID' is not a controller number (0-f, 10-1f)"
 case "$ID" in
 	7|f|F|17|1f|1F)	die "TARGET_SCSI_ID=$ID is a host adapter's own id -- never a target" ;;
@@ -1575,7 +1582,7 @@ build_target_author() {
 	# slice order, partition N is slice N, which is exactly the identity the
 	# stock script relies on when it uses $ROOTPART both as `-p` argument and as
 	# the sN suffix of $UPART. So the profile's slice numbers ARE the -p numbers.
-	run /etc/rdb -p "$TARGET_BOOT_SLICE" -M -B -C 2 -P 2 -F 0x554e4900 "$DISK_RAW"
+	run /etc/rdb -p "$TARGET_BOOT_SLICE" -M -B -C 2 -P "$TARGET_BOOT_BOOTPRI" -F 0x554e4900 "$DISK_RAW"
 	run /etc/rdb -p "$TARGET_ROOT_SLICE" -m -F 0x554e4901 "$DISK_RAW"
 	run /etc/rdb -p "$TARGET_SWAP_SLICE" -m -F 0x72657376 "$DISK_RAW"
 	if [ "$INSTALL_LAYOUT" = 1.1 ]; then

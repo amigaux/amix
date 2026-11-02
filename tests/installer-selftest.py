@@ -9938,6 +9938,34 @@ def audit_kbootset_cards():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_boot_pri():
+    head("BP. the target's UNIX_Boot boot priority is the profile's TARGET_BOOT_BOOTPRI (default 2, "
+         "0-127), checked before the disk is touched; the test disks ship at 20")
+    src = open(DRIVER, encoding="utf-8").read()
+    i_chk = src.find('TARGET_BOOT_BOOTPRI="${TARGET_BOOT_BOOTPRI:-2}"')
+    i_rdb = src.find('-P "$TARGET_BOOT_BOOTPRI" -F 0x554e4900')
+    i_part = src.find('run /etc/rdb -a "$DISK_RAW" UNIX_Root')
+    (ok if 0 <= i_chk < i_part < i_rdb else fail)(
+        "install.sh: TARGET_BOOT_BOOTPRI defaults to 2 and is validated before the first rdb -a; "
+        "the UNIX_Boot slice is stamped with it")
+    (ok if "-P 2 -F 0x554e4900" not in src.replace("#   /etc/rdb -p $BOOTPART -M -B -C 2 -P 2", "") else fail)(
+        "install.sh: no hardcoded -P 2 left on a UNIX_Boot stamp")
+    m = re.search(r'\n(TARGET_BOOT_BOOTPRI="\$\{TARGET_BOOT_BOOTPRI:-2\}"\n.*?\n\t\|\| die [^\n]*)\n', src, re.S)
+    if not m:
+        fail("install.sh: cannot extract the TARGET_BOOT_BOOTPRI check")
+    else:
+        body = (_extract_func(src, "is_num") or "") + "\ndie() { echo DIE; exit 1; }\n" + m.group(1) + "\necho PRI=$TARGET_BOOT_BOOTPRI"
+        for env, want in (("", "PRI=2"), ("TARGET_BOOT_BOOTPRI=20", "PRI=20"), ("TARGET_BOOT_BOOTPRI=127", "PRI=127"),
+                          ("TARGET_BOOT_BOOTPRI=128", "DIE"), ("TARGET_BOOT_BOOTPRI=-1", "DIE"), ("TARGET_BOOT_BOOTPRI=x", "DIE")):
+            r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s" % (env, body)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            got = r.stdout.decode().strip()
+            (ok if got == want else fail)("TARGET_BOOT_BOOTPRI %r -> %s (got %r)" % (env or "unset", want, got))
+    for t in sorted(os.path.join(REPO, "profiles", f) for f in os.listdir(os.path.join(REPO, "profiles")) if f.startswith("test-") and f.endswith(".profile")):
+        v = re.findall(r'(?m)^TARGET_BOOT_BOOTPRI=(.*)$', open(t, encoding="latin-1").read())
+        (ok if v == ["20"] else fail)("%s: TARGET_BOOT_BOOTPRI=20 (got %r)" % (os.path.basename(t), v))
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
          "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
@@ -10799,6 +10827,7 @@ def main():
     audit_modreg_local()
     audit_kbootset_cards()
     audit_swap_stepdown()
+    audit_boot_pri()
     audit_guarded_rm_mv()
     audit_ufs_rootcap()
     audit_l11()
