@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — module 1.0.0-7, packages 1.0.0-13: the cache block leaves the module form (856f2ae)
+
+The 040/060 cache-maintenance block is compiled out of the module form, where nothing could arm it (module 13657 -> 12345 bytes); the static driver keeps it. Two kmem-only diagnostics (z3660eth_last_off, z3660eth_last_rc) and an unused DELAY macro removed. No change in behaviour. Packages zeth30 9966780b, zeth46 b6334e4e.
+
 ## 2026-11-02 — module 1.0.0-6, packages 1.0.0-12: the fixed-window probe is guarded (4147d70)
 
 On an A4000 without an AutoConfig Z3660, one bprobe byte read at the fixed window 0x10000000 comes first, so an empty slot gives ENXIO, not a bus error (on a real 68060 the empty Zorro III read faults in about 290 ms and bprobe catches it); then the MAC probe requires MAC_HI's firmware shape (bytes 0-1 in the low half, unicast), so no open-bus pattern passes; host test module/test-mac.sh. Packages zeth30 bebb1e38, zeth46 a851757f.
