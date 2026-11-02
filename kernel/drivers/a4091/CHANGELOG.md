@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — the modules drop investigation leftovers (3968a0c)
+
+No U77 byte-write probe (no per-command knob test on k46), no a4091_dma_off knob (the D42 record's off is 0 for good), no last-command globals; the kstat keeps its 23-long layout and magic; the k46 attach lines read "a4091: board N at 0x..." / "a4kt710: board 0 at 0xdd0000"; the static arms are unchanged. Loaded size k46 a4091 5572 -> 4900 B. a4091 module 1.0.0-7, package 1.0.0-10; a4kt710 module 1.0.0-3, package 1.0.0-6.
+
 ## 2026-11-02 — the first command's bus reset counts beam lines (3197019)
 
 The bus reset before a card's first command adds up the beam lines that passed, not the counter changes seen: unchanged on metal (2 + 4000 lines, 254 ms), no longer 53 s / 72 s under Amiberry at cpu_speed=max (one or two counter values a frame); new global a4091_busreset_chg; host cases for metal, burst and stuck beams. a4091 module 1.0.0-6, package 1.0.0-9; a4kt710 module 1.0.0-2, package 1.0.0-5.
