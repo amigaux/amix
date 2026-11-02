@@ -1,17 +1,17 @@
 PKG=a4kt71046
-NAME=a4kt710-k46 1.0.0-6 - A4000T onboard SCSI (NCR 53C710) module (root class), k46 line
+NAME=a4kt710-k46 1.0.0-7 - A4000T onboard SCSI (NCR 53C710) module (root class), k46 line
 ARCH=Amiga
-VERSION=1.0.0-6
+VERSION=1.0.0-7
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-a4kt71046-1.0.0-6
+PSTAMP=amix-a4kt71046-1.0.0-7
 # Kernel space (amix-dlm C2-2, C3-5 sec 1, C4-2): a role=module entry of the
 # #ext kpkg block (line=k46, kabi=k46.1.2), class root, never an ordinary
 # entry.  Catalog name a4kt710-k46, pkginst a4kt71046; VERSION is the
 # module's own release (kernel/drivers/a4091/module/a4kt710/VERSION), the same on both
 # lines.
-# 1.0.0-6 carries module 1.0.0-3 (no U77 probe, no dma_off knob, no
-# last-command globals), built with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc).
-APKG_DESC=A4000T onboard SCSI (NCR 53C710) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (-56 or later) (kabi k46.1.2): /etc/conf/mod.d/a4kt710. Gated on the Kickstart's NCR scsi.device tag; param declared=0 in modreg.local.d disables it.
-DESC=The A4000T's onboard NCR 53C710, the a4091 driver built as its second target, as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, match mobo:a4000t-710, one controller at 0xDD0000 registered with sd at rank mobo (after z3660 and zorro, before ide); polled, never unloaded.  The gate (amix-dlm C4-2 v6 sec 8.1): nothing under 0xDD0000 is touched unless the running Kickstart has the A4000T's cold-start NCR scsi.device ROM tag, the chipset is AGA and a read-only probe of the chip answers; otherwise the load returns ENXIO, silent.  Parameter declared (int, default -1): -1 the tag decides, 0 never touch the window, 1 touch it without the tag.  The package sets no parameter: param declared=0 in /etc/conf/modreg.local.d/a4kt710 disables the controller.  DMA through the core's DDI 1.2 (C4-5); on k46 the provider is the identity, so the 710 must reach the Z3660's memory: an A4000T with a Z3660 has booted with its root on the onboard bus through this module.  Needs kernel-k46-m -56 or later, whose pin is the module's cc=gcc-2.7.2.3-33ebadc.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4kt710 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.
+# 1.0.0-7 carries module 1.0.0-4 (an A1200 or A600 Kickstart, card.resource,
+# is refused before any $DD access), built with gcc-cross-amix 33ebadc (cc=gcc-2.7.2.3-33ebadc).
+APKG_DESC=A4000T onboard SCSI (NCR 53C710) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (-56 or later) (kabi k46.1.2): /etc/conf/mod.d/a4kt710. Gated on the Kickstart's NCR scsi.device tag (never on an A1200 or A600); param declared=0 in modreg.local.d disables it.
+DESC=The A4000T's onboard NCR 53C710, the a4091 driver built as its second target, as an amix-dlm kernel module for the 68040/68060 line (kabi k46.1.2): root class, match mobo:a4000t-710, one controller at 0xDD0000 registered with sd at rank mobo (after z3660 and zorro, before ide); polled, never unloaded.  The gate (amix-dlm C4-2 v6 sec 8.1): nothing under 0xDD0000 is touched unless the running Kickstart has the A4000T's cold-start NCR scsi.device ROM tag and no card.resource ROM tag (an A1200 or A600 has one; declared=1 does not override that), the chipset is AGA and a read-only probe of the chip answers; otherwise the load returns ENXIO, silent.  Parameter declared (int, default -1): -1 the tag decides, 0 never touch the window, 1 touch it without the tag.  The package sets no parameter: param declared=0 in /etc/conf/modreg.local.d/a4kt710 disables the controller.  DMA through the core's DDI 1.2 (C4-5); on k46 the provider is the identity, so the 710 must reach the Z3660's memory: an A4000T with a Z3660 has booted with its root on the onboard bus through this module.  Needs kernel-k46-m -56 or later, whose pin is the module's cc=gcc-2.7.2.3-33ebadc.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/a4kt710 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

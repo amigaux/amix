@@ -27,16 +27,19 @@
 # 1.0.0-6 (2026-11-02): module 1.0.0-3: no U77 byte-write probe, no
 # a4091_dma_off knob (the D42 record's off is 0 for good), no last-command
 # globals; the k46 attach line reads "a4kt710: board 0 at 0xdd0000".
+# 1.0.0-7 (2026-11-02): module 1.0.0-4: a Kickstart with a card.resource ROM
+# tag (A1200, A600) is refused before any $DD access, even with declared=1;
+# declared=1 now reads the Kickstart once for that tag.
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-3
-KM_PKG_VERSION=1.0.0-6
+KM_VERSION=1.0.0-4
+KM_PKG_VERSION=1.0.0-7
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=12b70948470bb8667639c1b7e069dd75cc6b96a73b23864831b59c64c1de892e
-KM_K46_SHA=ce656da818770504cf5d48fb3fbf4724a62e399a5aae4e244e60445da2031db5
+KM_K30_SHA=04ec15f0c083fec6bb8ad7221780745a0f958588ea92136d2623ff5aab9027b1
+KM_K46_SHA=a5546a47e9b80b7426dda79be2f7acaa474e0f446ce803920f81a7ad9c658eee
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -51,8 +54,9 @@ nothing there unless the running Kickstart carries the A4000T's cold-start
 NCR scsi.device ROM tag (amix-dlm C4-2 v6 sec 8.1), the chipset is AGA and
 a read-only probe of the chip answers; otherwise it returns ENXIO, silent.
 The parameter declared (default -1, the tag decides; 0 never; 1 without the
-tag) overrides it: param declared=0 in /etc/conf/modreg.local.d/a4kt710
-disables the controller.  On the 68030 line (a4kt710-k30) the DMA goes
+tag) overrides that tag: param declared=0 in /etc/conf/modreg.local.d/a4kt710
+disables the controller.  A Kickstart with a card.resource ROM tag (every
+A1200 and A600 one) is refused before any access, whatever declared says.  On the 68030 line (a4kt710-k30) the DMA goes
 through the module core's 030 provider, a bounce pool below 0x08000000
 (boot2 at amix-dlm 4003c9f or later); it is not supported with a Z3660 in
 030 mode and is untested on metal.  On the

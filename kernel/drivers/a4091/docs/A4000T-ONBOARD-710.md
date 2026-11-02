@@ -431,11 +431,18 @@ negative). A `mobo:` key always matches at load (C4-4 §1, `dlm_plat_match`), so
     cold-start tag before the strap, so the tag means the chip was initialised. An A4000T on an A4000 Kickstart
     (A4kOS323) has no tag and is refused.
   - No loader bytes and no DDI name: kabi stays 1.2.
-  - **The parameter `declared`** (int, default -1): -1, the scan decides; 0, never touch the window; 1, touch it
-    without the scan (a manual override).
+  - **The parameter `declared`** (int, default -1): -1, the scan decides; 0, never touch the window (the
+    Kickstart is not read either); 1, touch it without the NCR tag (a manual override, still subject to GM).
   - **Known limit, unmeasured:** an A4000 running a T ROM passes the scan. `declared=0` is its override.
-  - kmem: `a4kt_declared`, `a4kt_tagoff` (the tag's offset), `a4kt_gate` (which gate said no: 1 G-D, 2 G0, 3 the
-    map or G1, 4 G2).
+  - kmem: `a4kt_declared`, `a4kt_tagoff` (the tag's offset), `a4kt_cardoff` (GM's tag offset), `a4kt_gate` (which
+    gate said no: 1 G-D, 2 G0, 3 the map or G1, 4 G2, 5 GM).
+- **GM, the machine (module 1.0.0-4, 2026-11-02).** The same scan looks for a valid ROM tag named exactly
+  `card.resource` (any flags). Every A1200 and A600 Kickstart in the ROM store has one (9 A1200 and 7 A600 images,
+  3.0 to 3.2.2, plus the A500/A600/CDTV 3.2 combined ROMs), and no A3000 (23), A4000 (14) or A4000T (6) image does.
+  Found: `ENXIO`, silent, before any `$DD` access and even with `declared=1`, since on an A1200 `$DD0000` is not
+  an A4000T's 53C710 and its decode and termination there are unknown. Under the module's own gate code, a sweep
+  of every image in the store gives: A1200 and A600 refused at GM with zero `$DD` accesses (default and
+  `declared=1`); A4000T registered; A3000 and A4000 refused at G-D as before.
 - **G0, chipset.** VPOSR AGA. Not AGA means no access at all, which keeps the A3000's WD33C93 untouched.
 - **G1, G2: read-only, after G-D.** `bprobe` of ISTAT `$DD0062` (byte), then the fingerprint, all byte reads:
   - ISTAT reserved bits 0 and not `0xff`;

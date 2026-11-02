@@ -10,6 +10,10 @@
  *     a near-miss tag, with declared=0, on a non-AGA chipset: ENXIO and ZERO
  *     accesses under $DD0000 (no map, no probe, no DMA area);
  *   - declared=1 passes without the tag (a manual override);
+ *   - the machine (GM): a Kickstart with a "card.resource" ROM tag (every A1200
+ *     and A600 one) is refused before any $DD access, with or without the NCR
+ *     tag and with declared=1; a card.resource string that is not a valid tag
+ *     does not count;
  *   - a passing gate: one registration (c 0, $DD0000, rank mobo), the attach
  *     quiesce, the host ID from the DIP bank, the D42 record's ctlid 3;
  *   - no chip, or a chip that fails the fingerprint: ENXIO, the area given back;
@@ -36,7 +40,7 @@ extern int		a4091_nboards;
 extern void		*a4091_da;
 extern struct dma_rec	a4091_dmarec[];
 extern int		a4kt_hostid;
-extern unsigned long	a4kt_gate, a4kt_tagoff;
+extern unsigned long	a4kt_gate, a4kt_tagoff, a4kt_cardoff;
 extern int		mock_verbose;
 /* the static arm's diagnostics, absent from the module: weak, so a missing
  * name links as a null address */
@@ -58,6 +62,8 @@ no_static_diag(void)
 #define ROMLEN		0x80000UL
 #define TAGOFF		0x1234UL	/* even */
 #define NAMEOFF		0x5000UL
+#define CARDOFF		0x3456UL	/* even, after TAGOFF */
+#define CARDNAME	0x6000UL
 
 static int fails, checks;
 #define CHECK(cond, what) do { checks++; if (!(cond)) { fails++; \
@@ -91,6 +97,24 @@ mkrom(int tag, int how)
 	be32(t + 18, ROMBASE + NAMEOFF + 0x20);
 	strcpy((char *)rom + NAMEOFF, how == 2 ? "NCR scsi.devic" : "NCR scsi.device");
 	strcpy((char *)rom + NAMEOFF + 0x20, "A4000T_scsidisk 47.4");
+}
+
+/* a "card.resource" ROM tag at CARDOFF (as an A1200 Kickstart has); how = 0
+ * a valid tag, 1 the name only (no tag), 2 rt_MatchTag not its own address */
+static void
+add_card(int how)
+{
+	unsigned char *t = rom + CARDOFF;
+
+	strcpy((char *)rom + CARDNAME, "card.resource");
+	if (how == 1)
+		return;
+	t[0] = 0x4a; t[1] = 0xfc;
+	be32(t + 2, how == 2 ? ROMBASE + CARDOFF + 4 : ROMBASE + CARDOFF);
+	be32(t + 6, ROMBASE + CARDOFF + 26);
+	t[10] = 0x01;
+	t[11] = 40; t[12] = 8; t[13] = 48;
+	be32(t + 14, ROMBASE + CARDNAME);
 }
 
 static void
@@ -180,8 +204,38 @@ t_declared_1(void)
 	setup(0, 0);
 	mock_add_a4kt();
 	CHECK(a4kt710_load("declared=1") == 0, "declared=1: load returns 0 without the tag");
-	CHECK(mock_rom_maps == 0 && mock_nreg == 1, "the Kickstart not read, one registration");
+	CHECK(mock_rom_maps == 1 && mock_nreg == 1,
+	    "the Kickstart read once (for card.resource), one registration");
 }
+
+/* GM: an A1200 or A600 Kickstart (card.resource) is never an A4000T */
+static void
+a1200(int ncr, const char *params)
+{
+	setup(ncr, 0);
+	add_card(0);
+	mock_add_a4kt();
+	CHECK(a4kt710_load((char *)params) == 6, "card.resource: ENXIO");
+	nothing_touched();
+	CHECK(a4kt_gate == 5 && a4kt_cardoff == CARDOFF, "a4kt_gate 5 (GM), the tag's offset");
+	CHECK(mock_rom_maps == 1 && mock_sptfrees + mock_unmaps == 1, "the Kickstart mapped once, unmapped");
+}
+static void t_a1200(void) { a1200(0, NULL); }
+static void t_a1200_declared_1(void) { a1200(0, "declared=1"); }
+static void t_a1200_with_ncr(void) { a1200(1, NULL); }
+
+/* the name alone, or a tag that fails rt_MatchTag, is no card.resource */
+static void
+card_miss(int how)
+{
+	setup(1, 0);
+	add_card(how);
+	mock_add_a4kt();
+	CHECK(a4kt710_load(NULL) == 0, "not a card.resource tag: the A4000T registers");
+	CHECK(a4kt_gate == 0 && a4kt_cardoff == 0 && mock_nreg == 1, "a4kt_gate 0, no card.resource offset");
+}
+static void t_card_name_only(void) { card_miss(1); }
+static void t_card_bad_matchtag(void) { card_miss(2); }
 
 static void
 t_no_chip(void)
@@ -248,6 +302,11 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "not AGA", t_not_aga },
 	{ "tag found: attach and register", t_found },
 	{ "declared=1 without the tag", t_declared_1 },
+	{ "A1200 Kickstart (card.resource)", t_a1200 },
+	{ "A1200 Kickstart, declared=1", t_a1200_declared_1 },
+	{ "card.resource and the NCR tag", t_a1200_with_ncr },
+	{ "card.resource as a name only", t_card_name_only },
+	{ "card.resource tag, wrong rt_MatchTag", t_card_bad_matchtag },
 	{ "tag found, no chip", t_no_chip },
 	{ "tag found, fingerprint fails", t_fingerprint_fails },
 	{ "host ID and halt", t_hostid_halt },
