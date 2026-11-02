@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — C2-4 §18: the A3000 WD limit is the passthrough's only (028c27a)
+
+The A3000 WD's first-command hang is the passthrough's only (gsioctl queues at level 0; the block path at level 2 is safe), and kernels whose sdqueue raises to level 2 (k30 -70, k46 -60) are not affected.
+
 ## 2026-11-02 — the A1200 IDE in the contracts (4f7cefd)
 
 Gayle's gate takes the A1200 by its Kickstart's card.resource before any local-I/O access, and the A1200 IDE is motherboard id 2 (`mobo:gayle`) as the A4000 IDE is (C2-1 v4, C3-5 v23, C4-1 v8, C4-2 v8, spec 20 §6); spec 10 §6 plans an AXL1 machine identity for the A600.
