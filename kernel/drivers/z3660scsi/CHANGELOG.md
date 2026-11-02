@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — module 1.0.0-5, packages 1.0.0-8: DI-1 diagnostics only with Z3660_DIAG (94f1f04, 5535da0)
+
+The DI-1 page-cross ring and fault knob compile only with -DZ3660_DIAG (make -C module DIAG=1); the shipped object has neither (.data -540 bytes), and the census counter z3660_pagecross_n stays. Units with no drive mapped are named on one console line ("z3660: units 1-5,7: no drive mapped"). Host check runs the default and DIAG builds (225/0 and 255/0, module 46/0). Objects k30 36578277, k46 2e6f0e6b; zscsi30 caa18a69, zscsi46 c7d48c8d.
+
 ## 2026-11-02 — module 1.0.0-3/-4, packages 1.0.0-6/-7: the fixed window is gated; unmapped units answer as no device (1a3fa61, 1486bba, b80abd6, d6bc7ba, 8db19ff)
 
 - The fixed window 0x10000000 is gated before its first write: no access when it overlaps a boot memory region, and a read-only bprobe of 0x10002024 refuses a bus error (z3660_fixed_ram, z3660_fixed_berr).
