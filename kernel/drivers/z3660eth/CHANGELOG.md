@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — module 1.0.0-6, packages 1.0.0-12: the fixed-window probe is guarded (4147d70)
+
+On an A4000 without an AutoConfig Z3660, one bprobe byte read at the fixed window 0x10000000 comes first, so an empty slot gives ENXIO, not a bus error (on a real 68060 the empty Zorro III read faults in about 290 ms and bprobe catches it); then the MAC probe requires MAC_HI's firmware shape (bytes 0-1 in the low half, unicast), so no open-bus pattern passes; host test module/test-mac.sh. Packages zeth30 bebb1e38, zeth46 a851757f.
+
 ## 2026-11-01 — package 1.0.0-11 on the gcc-cross-amix 33ebadc kit (f18df25)
 
 The objects rebuilt on the kit with cc=gcc-2.7.2.3-33ebadc, which the k30 -68 and k46 -56 module kernels require. Module release 1.0.0-5, source unchanged. Modules k30 e1caab15, k46 d8b292ba; packages zeth30 44f74bed, zeth46 8230250e.
