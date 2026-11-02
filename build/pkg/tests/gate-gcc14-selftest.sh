@@ -247,6 +247,22 @@ if amix_gate_g14_llprintf "$T/ll" >/dev/null 2>&1; then fail "ll-printf gate pas
 AMIX_LL_PRINTF_REVIEWED="selftest" amix_gate_g14_llprintf "$T/ll" >/dev/null 2>&1 || fail "ll-printf gate ignored AMIX_LL_PRINTF_REVIEWED"
 amix_gate_g14_llprintf "$T/llsn" >/dev/null 2>&1 || fail "ll-printf gate rejected snprintf-only use"
 ok "ll-printf gate rejects printf(\"%lld\"), honours a review, passes snprintf-only"
+# only the data sections count: "%lld" as bytes in .text (code read as text)
+# passes, the same in .data fails, and a file without section headers is
+# read whole
+printf '#include <stdio.h>\n__asm__(".text\\n.ascii \\"x%%lldx\\"\\n.even");\nint main(int c, char **v) { printf("%%d\\n", c); return 0; }\n' > "$T/lltext.c"
+printf '#include <stdio.h>\nchar fmt[] = "%%lld\\n";\nint main(int c, char **v) { printf(fmt, (long long)c); return 0; }\n' > "$T/lldata.c"
+$CC $AMIX_CFLAGS -o "$T/lltext" "$T/lltext.c"
+$CC $AMIX_CFLAGS -o "$T/lldata" "$T/lldata.c"
+LC_ALL=C strings -a "$T/lltext" | grep -q '%lld' || fail "ll-printf: the .text test program carries no %lld bytes"
+amix_gate_g14_llprintf "$T/lltext" >/dev/null 2>&1 || fail "ll-printf gate read %lld in .text as a conversion"
+if amix_gate_g14_llprintf "$T/lldata" >/dev/null 2>&1; then fail "ll-printf gate passed %lld in .data"; fi
+python3 -c '
+import sys; d = bytearray(open(sys.argv[1], "rb").read())
+d[0x20:0x24] = bytes(4); d[0x30:0x34] = bytes(4)	# e_shoff, e_shnum, e_shstrndx
+open(sys.argv[2], "wb").write(d)' "$T/lltext" "$T/lltext-nosh"
+if amix_gate_g14_llprintf "$T/lltext-nosh" >/dev/null 2>&1; then fail "ll-printf gate did not read a file without section headers whole"; fi
+ok "ll-printf gate reads only .rodata*/.data*: %lld bytes in .text pass, in .data fail, no section headers: the whole file"
 
 # FPU: -mcpu=68060 emits fdmul/fdadd for double arithmetic, which a
 # 68881/68882 lacks (SIGSYS on a 68030 with a 68882); the recipe flags do not.
