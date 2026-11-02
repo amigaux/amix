@@ -27,6 +27,12 @@ Commands:
                             PATH is a catalog file or a directory of *.pkg
                             datastreams; refused if one package name or
                             instance appears with two versions
+  dirs PATH...              the shared directories in prototypes: every
+                            PATH is a prototype file, or a tree whose
+                            prototype* files under a pkg/ directory (not
+                            tests/) are read (the kernel-space recipes);
+                            refused on a shared directory that is not
+                            0755 root sys
   build-order ROOT... [--for NAME]...
                             the recipes of the ROOTs, one directory a line,
                             each after every package its BUILD_DEPENDS names
@@ -145,6 +151,45 @@ OBJECT_TYPES = "fevdxlspcb"
 # a package's), S20-S29 devices and modules, S69 network, S70-S89 daemons,
 # S90-S98 late, S99z* the mark-good step.
 RC_LINK_RE = re.compile(r"^/etc/rc[0-6S]\.d/([^/]+)$")
+
+# The directories many packages declare: stock pkgadd -n stops on any
+# attribute that differs from the one the registry holds, and under apkg the
+# last package installed sets them, so every package declares them alike.
+SHARED_DIR_RE = re.compile(
+    r"^/opt(/amix(/doc|/man(/\d\w*|/whatis\.d|/replaces\.d)?)?)?$")
+SHARED_DIR_ATTRS = ("0755", "root", "sys")
+
+
+def shared_dir_problems(proto):
+    """The d lines of the prototype file PROTO that declare a shared
+    directory with other than 0755 root sys."""
+    out = []
+    with open(proto, encoding="latin-1") as fp:
+        for n, line in enumerate(fp, 1):
+            f = line.split()
+            if f and f[0].isdigit():    # an optional part number first
+                f = f[1:]
+            if len(f) < 3 or f[0] != "d" or not SHARED_DIR_RE.match(f[2]):
+                continue
+            if tuple(f[3:6]) != SHARED_DIR_ATTRS:
+                out.append("prototype line %d: d %s %s: a shared directory is "
+                           "%s" % (n, f[2], " ".join(f[3:6]) or "(no attributes)",
+                                   " ".join(SHARED_DIR_ATTRS)))
+    return out
+
+
+def kspace_prototypes(tree):
+    """The prototype files under TREE: prototype or prototype.<x> in a pkg/
+    directory or below one, not under tests/."""
+    out = []
+    for root, dirs, files in os.walk(tree):
+        dirs[:] = sorted(d for d in dirs if d != "tests" and not d.startswith("."))
+        rel = os.path.relpath(root, tree).split(os.sep)
+        if "pkg" not in rel:
+            continue
+        out += [os.path.join(root, f) for f in sorted(files)
+                if re.match(r"^prototype(\.[\w-]+)?$", f)]
+    return out
 
 
 def prototype_objects(recipe):
@@ -290,6 +335,8 @@ def prototype_problems(recipe, m):
     for c in conf:
         if c.startswith("/") and not c.startswith(("/etc/", "/var/")):
             out.append("CONFFILES: %s is not under /etc or /var" % c)
+    if objs is not None:
+        out += shared_dir_problems(os.path.join(recipe, "prototype"))
     out += layout_problems(m, objs or ())
     out += stock_problems(m, objs or ())
     for ftype, _, path, _ in objs or ():
@@ -812,6 +859,8 @@ def main(argv):
     p.add_argument("whatis")
     p = sub.add_parser("guard")
     p.add_argument("paths", nargs="+")
+    p = sub.add_parser("dirs")
+    p.add_argument("paths", nargs="+")
     p = sub.add_parser("build-order")
     p.add_argument("roots", nargs="+")
     p.add_argument("--for", dest="names", action="append")
@@ -898,6 +947,20 @@ def main(argv):
     elif a.cmd == "stock-pages":
         with open(a.whatis, "rb") as fp:
             sys.stdout.write(stock_pages_list(fp.read()))
+    elif a.cmd == "dirs":
+        protos = []
+        for path in a.paths:
+            protos += [path] if os.path.isfile(path) else kspace_prototypes(path)
+        bad = 0
+        for proto in protos:
+            for why in shared_dir_problems(proto):
+                sys.stderr.write("pkgmeta: %s: %s\n" % (proto, why))
+                bad += 1
+        if bad:
+            raise Refused("%d shared director%s not %s" % (
+                bad, "y is" if bad == 1 else "ies are", " ".join(SHARED_DIR_ATTRS)))
+        print("pkgmeta: %d prototype(s), every shared directory %s"
+              % (len(protos), " ".join(SHARED_DIR_ATTRS)))
     elif a.cmd == "guard":
         entries = []
         for path in a.paths:

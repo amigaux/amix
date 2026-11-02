@@ -9,13 +9,17 @@
 # catalog. Every package.sh passes pkgmeta check, one version each over all
 # of them, and the generated files of the first directory are current:
 # INDEX.md (pkgmeta index) and the catalog fragments in conf/ (pkgmeta
-# fragments). A directory that does not exist is skipped. Nothing to check,
+# fragments). Without arguments, the kernel-space recipes' prototypes under
+# kernel/ pass pkgmeta dirs too: every shared directory (/opt, /opt/amix and
+# its doc and man directories) is 0755 root sys in every package. A directory
+# that does not exist is skipped. Nothing to check,
 # and exit 0, while none of them holds a package.sh.
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
 top=$(cd "$here/../.." && pwd)
-[ $# -gt 0 ] || set -- "$top/userland/packages" "$top/userland/base/pkg"
+kspace=
+[ $# -gt 0 ] || { set -- "$top/userland/packages" "$top/userland/base/pkg"; kspace=$top/kernel; }
 out=$1
 pkgmeta() { python3 -I "$here/pkgmeta" "$@"; }
 
@@ -34,5 +38,6 @@ done
 	exit 0
 }
 pkgmeta check "$@"
+[ -z "$kspace" ] || [ ! -d "$kspace" ] || pkgmeta dirs "$kspace"
 pkgmeta index "$@" -o "$out/INDEX.md" --check
 pkgmeta fragments "$@" -o "$out/conf" --check

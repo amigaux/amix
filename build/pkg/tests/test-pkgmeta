@@ -518,6 +518,52 @@ try:
     refused("index --check refuses a missing INDEX.md", ("index", gen, "--check"),
             "INDEX.md is out of date")
 
+    # --- shared directories: 0755 root sys in every package -----------------------------
+    SHARED = ("d none /opt 0755 root sys\n"
+              "d none /opt/amix 0755 root sys\n"
+              "d none /opt/amix/bin 0755 bin bin\n"
+              "d none /opt/amix/doc 0755 root sys\n"
+              "d none /opt/amix/man 0755 root sys\n"
+              "d none /opt/amix/man/1m 0755 root sys\n"
+              "d none /opt/amix/man/whatis.d 0755 root sys\n"
+              "d none /opt/amix/man/replaces.d 0755 root sys\n")
+
+    def shared(name, proto):
+        r = recipe(os.path.join(tmp, "shared"), name)
+        write(os.path.join(r, "prototype"), PROTO + proto)
+        return r
+
+    rc, out, err = run("check", shared("sgood", SHARED))
+    check("shared directories 0755 root sys pass; /opt/amix/bin is not one (control)",
+          rc == 0, err)
+    for name, old, new, needle in (
+            ("smode", "/opt/amix/man 0755", "/opt/amix/man 0775",
+             "d /opt/amix/man 0775 root sys"),
+            ("sgroup", "/opt/amix 0755 root sys", "/opt/amix 0755 root bin",
+             "d /opt/amix 0755 root bin"),
+            ("sowner", "/opt/amix/man/1m 0755 root", "/opt/amix/man/1m 0755 bin",
+             "d /opt/amix/man/1m 0755 bin sys"),
+            ("sdoc", "/opt/amix/doc 0755 root sys", "/opt/amix/doc ? ? ?",
+             "d /opt/amix/doc ? ? ?"),
+            ("srepl", "replaces.d 0755 root sys", "replaces.d 0755 bin bin",
+             "d /opt/amix/man/replaces.d 0755 bin bin")):
+        refused("check refuses a shared directory with other attributes (%s)" % needle.split()[1],
+                ("check", shared(name, SHARED.replace(old, new))),
+                needle + ": a shared directory is 0755 root sys")
+    kt = os.path.join(tmp, "ktree")
+    write(os.path.join(kt, "drivers", "x", "pkg", "prototype"), "i pkginfo\n" + SHARED)
+    write(os.path.join(kt, "dlm", "pkg", "y", "prototype.k46"), "i pkginfo\n" + SHARED)
+    write(os.path.join(kt, "drivers", "x", "pkg", "tests", "prototype"),
+          "d none /opt 0700 bin bin\n")
+    write(os.path.join(kt, "drivers", "x", "prototype"), "d none /opt 0700 bin bin\n")
+    rc, out, err = run("dirs", kt)
+    check("dirs reads prototype* under pkg/, not tests/ or outside pkg/ (control)",
+          rc == 0 and "2 prototype(s)" in out, err or out)
+    write(os.path.join(kt, "dlm", "pkg", "y", "prototype.k46"),
+          "i pkginfo\n" + SHARED.replace("/opt/amix/man/whatis.d 0755", "/opt/amix/man/whatis.d 0777"))
+    refused("dirs refuses a kernel-space prototype's shared directory",
+            ("dirs", kt), "prototype.k46: prototype line 8: d /opt/amix/man/whatis.d 0777 root sys")
+
     # --- check-packages: CI's check of userland/packages --------------------------------
     def check_packages(root):
         p = subprocess.run(["sh", CHECK_PACKAGES, root], stdout=subprocess.PIPE,

@@ -12,7 +12,7 @@ so each fact about a package is written in one place.
 | `common/` | the harness: environment, fetcher, gates and roll |
 | `pkgmeta` | checks `package.sh` and writes pkginfo, the catalog line, our catalog configuration lines and the index; also the one-version guard |
 | `stock-pages` | the page names of the stock man index (names only), for the man-page warning; `pkgmeta stock-pages <whatis>` writes it |
-| `check-packages` | CI's check of `userland/packages` and `userland/base/pkg` |
+| `check-packages` | CI's check of `userland/packages` and `userland/base/pkg`, and of the shared directories in `kernel/`'s prototypes |
 | `tests/` | the host tests, `make -C build test` |
 
 ## The package directory
@@ -76,6 +76,7 @@ build/pkg/pkgmeta fragments <packages dir>... [-o DIR [--check]]
 build/pkg/pkgmeta index <packages dir>... [-o FILE] [--check]
 build/pkg/pkgmeta stock-pages <stock /usr/share/man/whatis>
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
+build/pkg/pkgmeta dirs <prototype>|<tree>...
 ```
 
 - `check` also reads the prototype. It refuses an object outside `PREFIX`,
@@ -99,6 +100,15 @@ build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
   of a directory it is in (`link.d(4)` covers `/etc/inet/link.d/aen`), and a
   `STOCK_ETC` file by the stock page of its name (`inittab(4)`), listed in
   `stock-pages`.
+- `check` and `dirs` refuse a shared directory that is not `d … 0755 root
+  sys`: `/opt`, `/opt/amix`, `/opt/amix/doc`, `/opt/amix/man`, its sections
+  (`/opt/amix/man/1`, `1m`, …), `whatis.d` and `replaces.d`. Many packages
+  declare them, stock `pkgadd -n` stops on any attribute that differs from
+  the one already registered, and under apkg the last package installed sets
+  them. `dirs` reads a prototype file, or every `prototype*` file in a `pkg/`
+  directory of a tree (not under `tests/`): the kernel-space recipes, whose
+  prototypes are not `package.sh` recipes. `check-packages` runs it on
+  `kernel/`, and so does make dist's kspace step.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one
   amix-packagemanager's `gen-catalog.py` writes for the rolled package:

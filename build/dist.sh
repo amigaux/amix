@@ -400,6 +400,8 @@ kspace_dirs() {
 
 step_kspace() {
 	host_pkgtools
+	# every shared directory alike in every kernel-space prototype
+	python3 -I "$here/pkg/pkgmeta" dirs "$top/kernel" >/dev/null
 	rm -rf "${out:?}/kspace" "${out:?}/build/kspace"
 	mkdir -p "$out/build/kspace/kspace/pkg" "$out/kspace/pkgs"
 	# the port's headers at each recipe's own pinned commit (dlm-src.sh):
