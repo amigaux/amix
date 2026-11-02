@@ -99,6 +99,14 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   Without the key, 30 MiB on the 68030 line and the whole slice on the 68040/68060 line. The
   same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
   `swap -l` shows what is in use.
+- **The CD probe.** The miniroot looks for the install CD at cdfs `1,3`, `0,3`, `0,2`, `1,2`,
+  `0,5`, `1,5`, mounting each address once (`CD_CANDIDATES` in `src/miniroot/profile`, equal to
+  `MINIROOT_CD_CANDIDATES` in `setup.sh`). `0,5` and `1,5` are an ATAPI drive on the IDE slave
+  (gayle unit 5), the IDE port as card 0 or as card 1 beside the Z3660 SCSI card.
+  **Limitation:** the miniroot does not say which address answered, so the interview's disk
+  scan skips every candidate unit the medium's profile cannot install to (`scan_safe_ids`).
+  With `0,5` in the list that includes SCSI id 5 (and `d`, card 1 unit 5): a disk at id 5 is
+  not offered as a target unless the profile's `INSTALLABLE_IDS` names it.
 - **Slice sizes.** A ufs slice may be up to 2047 MiB (4194303 blocks, measured on k46;
   the old cap was 1024); `docs/l11-disk.md`.
 - **The pre-installed images**: `tools/build-preinstalled.sh` masters the image

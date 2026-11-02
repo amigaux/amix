@@ -6216,11 +6216,18 @@ def audit_w2_interview():
          multi, ["9", "6", "y", "", "", "", "", "", ""], {"profile": p_multi},
          ["Choose one of the following:"], [], ["TARGET_SCSI_ID=6"]),
         ("the source disk is excluded and a kernel-less id is annotated",
+         {0: (500, True, [("Payload", 128, 900000)]), 1: (80, False, []),
+          6: (100, True, W_BENCH_PARTS)},
+         ["y", "", "", "", "", ""], {"profile": p_src},
+         ["source -- not installable", "no kernel on this medium for id 1"],
+         [], ["TARGET_SCSI_ID=6"]),
+        # id 5 is a miniroot CD candidate too (0,5: an ATAPI drive on the IDE slave)
+        ("a non-installable CD-candidate id (5) is never scanned",
          {0: (500, True, [("Payload", 128, 900000)]), 5: (80, False, []),
           6: (100, True, W_BENCH_PARTS)},
          ["y", "", "", "", "", ""], {"profile": p_src},
-         ["source -- not installable", "no kernel on this medium for id 5"],
-         [], ["TARGET_SCSI_ID=6"]),
+         ["source -- not installable"],
+         ["for id 5"], ["TARGET_SCSI_ID=6"]),
         # route B (2026-10-08): ids 2/3 are miniroot CD candidates -- never opened when not installable
         ("a non-installable CD-candidate id (3) is never scanned",
          {0: (500, True, [("Payload", 128, 900000)]), 3: (80, False, []),
@@ -7260,11 +7267,12 @@ def audit_w4_miniroot_profile():
     # that recovers a media change is the retry that kills the box. The scan
     # therefore touches each address ONCE, stops at the first answer, and gates
     # every RAW candidate on the one probe proven harmless (a bounded dd).
-    if re.search(r'^CD_CANDIDATES="1,3 0,3 0,2 1,2"$', code, re.M):
-        ok("the cdfs probe order is pinned 1,3 -> 0,3 -> 0,2 -> 1,2 (hardcoded HERE: it "
-           "cannot come from the medium it is looking for; 0,3 = a sole A4091 as card 0)")
+    if re.search(r'^CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5"$', code, re.M):
+        ok("the cdfs probe order is pinned 1,3 -> 0,3 -> 0,2 -> 1,2 -> 0,5 -> 1,5 (hardcoded "
+           "HERE: it cannot come from the medium it is looking for; 0,3 = a sole A4091 as "
+           "card 0; 0,5 / 1,5 = an ATAPI drive on the IDE slave)")
     else:
-        fail("CD_CANDIDATES must be exactly \"1,3 0,3 0,2 1,2\"")
+        fail("CD_CANDIDATES must be exactly \"1,3 0,3 0,2 1,2 0,5 1,5\"")
     if re.search(r'^RAW_CANDIDATES="/dev/dsk/c0d0s4 /dev/dsk/c5d0s1 /dev/dsk/c5d0s4"$', code, re.M):
         ok("the RAW payload-slice probe list is pinned (metal 5-slice s4, bench "
            "2-slice s1, the Gayle IDE slave's s4)")
@@ -8945,14 +8953,16 @@ def audit_cd2_card1_target():
         fn(setup, f) for f in ("hexval", "hexname", "cd_unit_id", "spec_id", "scan_safe_ids"))
     body += "\nSD_BMAJ=18\nSD_CMAJ=40\n" + fn(setup, "ensure_disk_nodes").replace("/bin/mknod", "echo MKNOD")
     cases = [
-        ("CD_SPEC=1,3 INSTALLABLE_IDS=9", "scan_safe_ids 8 9 a b c d e f", "8 9 c d e",
-         "card-1 scan drops the CD (b), the other card-1 CD candidate (a) and the host (f)"),
-        ("CD_SPEC=1,3 INSTALLABLE_IDS=6", "scan_safe_ids 0 1 2 3 5 6", "0 1 5 6",
-         "route B: public classic (CD_SPEC 1,3, the CD found at 0,3) never opens card-0 ids 2/3"),
-        ("CD_SPEC=0,3 INSTALLABLE_IDS=6", "scan_safe_ids 0 1 2 3 5 6", "0 1 5 6", "bench A4000/030 (CD_SPEC 0,3): same scan"),
+        ("CD_SPEC=1,3 INSTALLABLE_IDS=9", "scan_safe_ids 8 9 a b c d e f", "8 9 c e",
+         "card-1 scan drops the CD (b), the other card-1 CD candidates (a, d) and the host (f)"),
+        ("CD_SPEC=1,3 INSTALLABLE_IDS=6", "scan_safe_ids 0 1 2 3 5 6", "0 1 6",
+         "route B: public classic (CD_SPEC 1,3, the CD found at 0,3) never opens card-0 ids 2/3/5"),
+        ("CD_SPEC=0,3 INSTALLABLE_IDS=6", "scan_safe_ids 0 1 2 3 5 6", "0 1 6", "bench A4000/030 (CD_SPEC 0,3): same scan"),
         ('CD_SPEC=1,3 INSTALLABLE_IDS="0 1 2 3 4 5"', "scan_safe_ids 0 1 2 3 5 6 4", "0 1 2 3 5 6 4",
          "K1 (units 0-5 installable): candidate ids 2/3 that are installable stay"),
-        ("CD_SPEC=0,2 INSTALLABLE_IDS=0", "scan_safe_ids 0 1 2 3 5 6", "0 1 5 6", "a Z3660 CD (0,2) is dropped from the card-0 scan"),
+        ("CD_SPEC=0,2 INSTALLABLE_IDS=0", "scan_safe_ids 0 1 2 3 5 6", "0 1 6", "a Z3660 CD (0,2) is dropped from the card-0 scan"),
+        ("CD_SPEC=0,5 INSTALLABLE_IDS=6", "scan_safe_ids 0 5 6", "0 6", "an IDE-slave CD (0,5) is dropped from the scan"),
+        ("CD_SPEC=1,5", "spec_id 0,5; spec_id 1,5", "5\nd", "spec_id: 0,5 -> 5, 1,5 -> d"),
         ("CD_SPEC= INSTALLABLE_IDS=0", "scan_safe_ids 0 7 9 f", "0 9", "no CD candidate among them: only the host ids go"),
         ("CD_SPEC=1,3", "spec_id 0,3; spec_id 1,2", "3\na", "spec_id: 0,3 -> 3, 1,2 -> a"),
         ("CD_SPEC=1,3", "cd_unit_id", "b", "cdfs 1,3 is controller digit b"),
@@ -8988,7 +8998,7 @@ def audit_cd2_card1_target():
                  "public K1 (INSTALLABLE_IDS 0-5): unit 4 joins the scan"),
                 ('SCAN_IDS="9"; INSTALLABLE_IDS="9"; CD_SPEC=1,3', "9",
                  "CD-2: the profile-named id only"),
-                ('SCAN_IDS="0 1 2 3 5 6"; INSTALLABLE_IDS="6 b"; CD_SPEC=1,3', "0 1 5 6",
+                ('SCAN_IDS="0 1 2 3 5 6"; INSTALLABLE_IDS="6 b"; CD_SPEC=1,3', "0 1 6",
                  "an installable id that IS the CD's unit is still dropped; non-installable CD candidates go")):
             r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s\n%s\necho \"$SCAN_IDS\"" % (env, body, m.group(0))],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)

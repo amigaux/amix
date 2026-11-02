@@ -321,7 +321,7 @@ cd_unit_id()
 # profile's CD_SPEC is only where the medium EXPECTS the CD. On an A4000/030 whose
 # only host is the A4091 the CD answers 0,3 while the public classic profile says
 # 1,3, and the scan would dd the CD (route B).
-MINIROOT_CD_CANDIDATES="1,3 0,3 0,2 1,2"
+MINIROOT_CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5"
 
 # spec_id SPEC -- cdfs <card>,<unit> -> the controller digit c<card*8+unit>, or "".
 spec_id()

@@ -103,6 +103,9 @@ SCAN_IDS="0 1 2 3 5 6"
 #        it on AGA machines (P-15 I1, E20b)
 #   0,2  the A4000+Z3660 rig (profiles/metal-a4000-z3660.profile CD_SPEC)
 #   1,2  a second-HBA drive at unit 2
+#   0,5  an ATAPI drive on the IDE slave, the IDE port the only card (the
+#        A4000/030 IDE kit: gayle unit 5)
+#   1,5  the same drive with the IDE port as card 1 (beside the Z3660 SCSI card)
 # RAW_CANDIDATES -- the source-disk slice-4 devices the auto-probe reads, in
 # order. It is MEDIUM-SPECIFIC, not a fixed order, because a card-0 device may not
 # be safe to touch: on the real 68060 (amix_mode NO) SCSI card 0 is the phantom
@@ -136,7 +139,7 @@ do
 	case "$_x" in [89aAbBcCdDeEfF]) _c1=1 ;; esac
 done
 [ -n "$_c1" ] && SCAN_IDS="8 9 a b c d e f"
-CD_CANDIDATES="1,3 0,3 0,2 1,2"
+CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5"
 
 # ---------------------------------------------------------------------------
 # stock helpers, verbatim
