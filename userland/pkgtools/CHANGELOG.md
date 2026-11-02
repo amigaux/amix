@@ -1,3 +1,8 @@
+## 2026-11-02 — scan060 skips data objects in .text; APKGENG 1.12.6 minted (5c00ef4, c84ded4, ba9d84b)
+
+- scan060: a sized data object in .text (values-Xa.o's _lib_version) is skipped as data and objdump -D runs per executable section, so the code after it is decoded; the old verdicts are unchanged and APKGENG's 7 false hits are gone.
+- APKGENG 1.12.6 minted from master's toolchain pins (gcc-cross-amix 33ebadc): the same source, whose programs now carry _lib_version = Xa; md5 c1d4831a, staged, not published. 1.12.5 (a49452d8) cannot be rolled from master.
+
 ## 2026-11-02 — apkg 0.3.6: a reinstall passes instance=overwrite; APKG 0.3.6 minted (a687496, 7e57c29)
 
 `apkg -f install` of an installed package passes instance=overwrite at the same version too (the engine quit with exit 4 under instance=quit), as does a kernel-space install over files a bare pkgadd laid; a test against the real host engine; apkg.1: kernel-space packages install only through apkg, with the remedy. APKG 0.3.6 minted, md5 f87c02e0, staged, not published.
