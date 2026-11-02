@@ -6,15 +6,22 @@ emulator. Catches CDB-shape regressions (the kind that only surface at a real
 `mount`) in a sub-second host build.
 
 ```sh
-make -C test/host check     # build + run; exit 0 == all gating assertions pass
+make -C test/host check     # the default build, then the DIAG build; exit 0 == all pass
+make -C test/host check-diag   # the DIAG build only (-DZ3660_DIAG, in build-diag)
 make -C test/host clean
 ```
 
+`check` runs twice. The default build compiles the driver as it ships, without
+the DI-1 diagnostics, and gates that neither the page-cross ring nor the fault
+knob is in the object while `z3660_pagecross_n` still counts. The DIAG build
+(`-DZ3660_DIAG`) adds `test_pagecross_ring()` and `test_fault_knob()`.
+
 ## What it exercises
 
-Current run: **230 gating assertions passed, 0 failed**, plus 6/6 stretch parity
-against the firmware's CD oracle; then `z3660_modtest`, the root-class module
-form (`-DZ3660SCSI_MODULE`, a mock `sd_register`): **42 passed, 0 failed**
+Current run: **225 gating assertions passed, 0 failed** in the default build
+(255 in the DIAG build), plus 6/6 stretch parity against the firmware's CD
+oracle; then `z3660_modtest`, the root-class module form
+(`-DZ3660SCSI_MODULE`, a mock `sd_register`): **46 passed, 0 failed**
 (`module/README.md`), 31 of them the ZS-06 cache arm: `cputype` 30/40/60 ×
 `cache=` absent, -1, 0, 40, 60, 99 and not a number, the parser's shape, and
 on the 060 with no parameter `z3660_ci_ok` 1 and a READ that pushes. Mutation
@@ -43,6 +50,9 @@ Gating (mount-critical, gate the exit code):
   behavior **frozen** as the current driver emits it (the real box boots on
   this path; the oracle's disk strings do *not* apply here).
 - TEST UNIT READY GOOD for both.
+- Console: the units with no drive mapped are named on one line after the
+  attach sweep (`z3660: units 1-5,7: no drive mapped`, `test_nodrv_line()`);
+  a bad geometry keeps its own line.
 - INQUIRY per unit (`test_inquiry_unit_types()`, `test_inquiry_late_map()`):
   a mapped disk answers type 0 and a mapped CD type 5; an unmapped or
   bad-geometry unit answers `7F 00 02 02 1F` (peripheral qualifier 3, type

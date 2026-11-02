@@ -10,8 +10,10 @@ with kmemdump, adb or READ_MEM.
 never read by the driver. The ZS-04 guard (`blocks > nbyte/bs` → EIO, no doorbell) runs
 earlier, in `z3660queue()`, so a refused request never reaches the census or the ring.
 
-**Which kernels carry it.** Driver objects built from this repo's source at or after the commit
-that added the ring. The shipping KD060-Z object predates it and has no ring. kerntools cuts a
+**Which kernels carry it.** Only objects built with `-DZ3660_DIAG` (module 1.0.0-5 and
+later; `make -C module DIAG=1`). The counter `z3660_pagecross_n` is in every build. Before
+1.0.0-5, driver objects built from this repo's source at or after the commit that added the
+ring carry it. The shipping KD060-Z object predates it and has no ring. kerntools cuts a
 `-CD` sibling that carries it, for the diagnostic boot only.
 
 ## Symbols

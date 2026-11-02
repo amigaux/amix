@@ -633,6 +633,14 @@ ulong	z3660_bounce_rd_n;			/* READ came back via the bounce       */
 ulong	z3660_pagecross_n;			/* chunks spanning a page boundary     */
 ulong	z3660_range_ovf;			/* impossible range refused            */
 
+#ifdef	Z3660_DIAG
+/*
+ * Z3660_DIAG -- the DI-1 diagnostics below (the page-cross ring and the fault
+ * knob) are compiled only with -DZ3660_DIAG, for a diagnostic cut.  The
+ * shipped object has neither: no ring memory, no knob, no test on the I/O
+ * path.  z3660_pagecross_n, the census counter, stays in every build.
+ */
+
 /*
  * PAGE-CROSS RING (DI-1 diagnostic, read-only).  z3660_pagecross_n says HOW MANY
  * chunks crossed a page edge; this says WHICH.  Every crossing the census counts
@@ -739,6 +747,7 @@ ulong	z3660_fault_lba   = 0;			/* 0 = off; else the WRITE LBA */
 ulong	z3660_fault_mode  = 0;			/* 0 REFUSE, 1 SHIFT           */
 ulong	z3660_fault_n     = 0;			/* times fired                 */
 long	z3660_fault_shift = 4;			/* SHIFT: blocks added, signed */
+#endif	/* Z3660_DIAG */
 
 #ifndef	HOST_TEST
 #define	Z3660_CPUSHL(p)	__asm__ __volatile__( ".word 0xf468" : : "a" (p) : "memory")
@@ -1295,10 +1304,14 @@ static struct z3660_unitgeom	z3660_geom_absent = { 512, 0, 0x00, 0 };
  * answer (bs 512, 0 blocks, pdt 0 -- byte-identical to what the fork firmware's
  * 0-block unit always produced), and every data command to it is refused
  * before a doorbell.  A valid block size with a 0 block count is skipped the
- * same way.  Each skipped unit is named on the console once per boot.
+ * same way.  Each skipped unit is named on the console once per boot: the
+ * units with no drive mapped (block size 0) together on one line after the
+ * sweep, "z3660: units 1-5,7: no drive mapped"; a bad geometry on a line of
+ * its own.
  */
 ulong	z3660_skipmask;		/* bit n: unit n was skipped (and reported)   */
 ulong	z3660_skip_msgs;	/* console lines emitted by the skip path     */
+static ulong	z3660_nodrv_new;	/* units skipped as unmapped, not yet named */
 ulong	z3660_skip_recovered;	/* skipped units that later answered valid    */
 
 /* the only block sizes a real piscsi unit reports: 512 (disk) .. 2048 (CD) */
@@ -1321,13 +1334,53 @@ ulong	bs, nb;
 	z3660_geom[unit].valid   = 0;
 	if ((z3660_skipmask & (1UL << unit)) == 0) {
 		z3660_skipmask |= 1UL << unit;
+		if (bs == 0) {
+			z3660_nodrv_new |= 1UL << unit;	/* named by z3660_nodrv_say() */
+			return;
+		}
 		z3660_skip_msgs++;
-		if (bs == 0)
-			printf( "z3660: unit %d: no drive mapped, skipped\n", unit);
-		else
-			printf( "z3660: unit %d: bad geometry (blocksize 0x%x, blocks 0x%x), skipped\n",
-				unit, (int)bs, (int)nb);
+		printf( "z3660: unit %d: bad geometry (blocksize 0x%x, blocks 0x%x), skipped\n",
+			unit, (int)bs, (int)nb);
 	}
+}
+
+/*
+ * Name the units newly skipped with no drive mapped, on one line: runs of
+ * three or more as a range ("units 1-5,7", "unit 3").  Unit numbers are one
+ * digit (Z3660_NUNITS 8), so the line is built in place without sprintf.
+ */
+static void
+z3660_nodrv_say()
+{
+	char	b[2 * Z3660_NUNITS + 1];
+	int	i, j, n, k;
+
+	if (z3660_nodrv_new == 0)
+		return;
+	n = k = 0;
+	for (i = 0; i < Z3660_NUNITS; i = j) {
+		if ((z3660_nodrv_new & (1UL << i)) == 0) {
+			j = i + 1;
+			continue;
+		}
+		for (j = i + 1; j < Z3660_NUNITS && (z3660_nodrv_new & (1UL << j)); ++j)
+			;
+		if (k)
+			b[k++] = ',';
+		b[k++] = '0' + i;
+		n += j - i;
+		if (j - i >= 3) {
+			b[k++] = '-';
+			b[k++] = '0' + (j - 1);
+		} else if (j - i == 2) {
+			b[k++] = ',';
+			b[k++] = '0' + (j - 1);
+		}
+	}
+	b[k] = 0;
+	z3660_nodrv_new = 0;
+	z3660_skip_msgs++;
+	printf( "z3660: unit%s %s: no drive mapped\n", n > 1 ? "s" : "", b);
 }
 
 /*
@@ -1382,6 +1435,7 @@ z3660_geom_sweep()
 
 	for (i = 0; i < Z3660_NUNITS; ++i)
 		z3660_geom_fill( i);
+	z3660_nodrv_say();
 }
 
 /*
@@ -1412,6 +1466,7 @@ int	unit;
 			return &z3660_geom[unit];
 		}
 		z3660_geom_fill( unit);
+		z3660_nodrv_say();
 	}
 	return &z3660_geom[unit];
 }
@@ -1436,6 +1491,7 @@ z3660_test_unmap()
 	z3660_sig_deferred = 0;
 	z3660_skipmask = 0;
 	z3660_skip_msgs = 0;
+	z3660_nodrv_new = 0;
 	z3660_skip_recovered = 0;
 	z3660_map_fails = 0;
 	z3660_fixed_ram = 0;
@@ -1511,10 +1567,13 @@ int	unit, write;
 ulong	block, blocks, bs;
 uchar	*data;
 {
-	ulong	chunk, len, i, perchunk, pa, req, reqlen;
+	ulong	chunk, len, i, perchunk, pa;
+#ifdef	Z3660_DIAG
+	ulong	req, reqlen;
 
 	req    = (ulong)data;			/* page-cross ring context only */
 	reqlen = blocks * bs;
+#endif
 	perchunk = MAXXFER / bs;
 	if (perchunk == 0)
 		perchunk = 1;
@@ -1540,13 +1599,15 @@ uchar	*data;
 		 * The counter decides, in either direction: 0 across a boot and an
 		 * install makes the guard a permanent refusal; non-zero means the
 		 * shipping path needs the chunk SPLIT at the page boundary, not
-		 * refused.  Each counted crossing is also copied into
-		 * z3660_pagecross_ring (record only), so the addresses behind a
-		 * non-zero count can be read off a running kernel.
+		 * refused.  With Z3660_DIAG each counted crossing is also copied
+		 * into z3660_pagecross_ring (record only), so the addresses
+		 * behind a non-zero count can be read off a running kernel.
 		 */
 		if ((pa & (ulong)(NBPP - 1)) + len > (ulong)NBPP) {
 			z3660_pagecross_n++;
+#ifdef	Z3660_DIAG
 			z3660_pcr_note( unit, write, block, len, pa, req, reqlen);
+#endif
 		}
 
 		if (write) {
@@ -1965,6 +2026,7 @@ struct sdcom	*cp;
 			cp->status = 0xff; cp->okay = FALSE;
 			break;
 		}
+#ifdef	Z3660_DIAG
 		/* DI-1 fault knob, diagnostic cuts only (see z3660_fault_lba) */
 		if (z3660_fault_lba != 0 && write && block == z3660_fault_lba) {
 			long	to;
@@ -1982,6 +2044,7 @@ struct sdcom	*cp;
 			cp->status = 0xff; cp->okay = FALSE;	/* as a map failure */
 			break;
 		}
+#endif
 		if (z3660_rw( unit, write, block, blocks, bs, data)) {
 			cp->status = 0xff; cp->okay = FALSE;	/* ZS-05: EIO */
 		}

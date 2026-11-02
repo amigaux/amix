@@ -5,6 +5,7 @@ work/
 tmp/
 assets/
 build/
+build-diag/
 core
 *~
 .DS_Store
