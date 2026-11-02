@@ -6,4 +6,6 @@
 # switch back to polled I/O is the line
 #   param intr=0
 # in /etc/conf/modreg.local.d/gayle, which no package owns (local settings
-# belong there), then kbootset build and commit.
+# belong there), then kbootset build and commit.  The same file takes
+#   param board=1        (or 2)
+# to choose the A4000 (or A1200) port without reading the Kickstart ROM.
