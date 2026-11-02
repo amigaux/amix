@@ -35,6 +35,13 @@
 # is wrong in one direction or the other.  (Same rule as amix-kerntools'
 # scan060.py, which this re-implements for whole binaries and datastreams.)
 #
+# DATA OBJECTS.  A sized STT_OBJECT symbol in .text (values-Xa.o's
+# _lib_version, linked into every program by the period cc and gcc) is data:
+# its range is skipped like a switch table.  objdump runs with -D over each
+# executable section: -d prints a data symbol's range as a hex dump up to the
+# next symbol, the rest of .text in a stripped program, and its 8-word lines
+# would be read as instructions.
+#
 # BLINDNESS.  objdump disassembles .text linearly; a jump table or literal in
 # .text could decode as one of these words.  Every hit is printed with its
 # address and enclosing symbol so it can be checked by hand.  A CAS on a
@@ -177,10 +184,28 @@ def table_ranges(listing, data, secs):
     return out
 
 
-def run_objdump(objdump, path, lo=None, hi=None):
-    cmd = [objdump, "-d", "-m", "m68k:68020"]
-    if lo is not None:
-        cmd += ["--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
+def data_objects(data, secs):
+    """[(start, end)] of every sized STT_OBJECT symbol, from .symtab and
+    .dynsym, that lies inside an executable section."""
+    shoff = struct.unpack(">I", data[32:36])[0]
+    shentsize, shnum = struct.unpack(">HH", data[46:50])
+    out = set()
+    for i in range(shnum):
+        sh = data[shoff + i * shentsize: shoff + (i + 1) * shentsize]
+        _n, typ, _f, _a, off, size, _l, _i, _al, ent = struct.unpack(">10I", sh[:40])
+        if typ not in (2, 11) or ent < 16:              # SHT_SYMTAB, SHT_DYNSYM
+            continue
+        for k in range(size // ent):
+            _nm, val, sz, info = struct.unpack(">IIIB", data[off + k * ent: off + k * ent + 13])
+            if info & 0xf == 1 and sz and any(sa <= val and val + sz <= sa + ssz
+                                              for sa, _o, ssz in secs):
+                out.add((val, val + sz))
+    return out
+
+
+def run_objdump(objdump, path, lo, hi):
+    cmd = [objdump, "-D", "-m", "m68k:68020",
+           "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
     r = subprocess.run(cmd + [path], capture_output=True, text=True,
                        errors="replace")
     if r.returncode != 0:
@@ -199,8 +224,9 @@ def scan_elf(path, objdump):
     with open(path, "rb") as fp:
         data = fp.read()
     secs = exec_sections(data)
-    listing = run_objdump(objdump, path)
-    skip = set(table_ranges(listing, data, secs))
+    listing = "".join(run_objdump(objdump, path, sa, sa + sz) for sa, _o, sz in secs)
+    objs = data_objects(data, secs)
+    skip = set(table_ranges(listing, data, secs)) | objs
     for _round in range(6):
         if not skip:
             break
@@ -218,7 +244,7 @@ def scan_elf(path, objdump):
             break
         skip |= new
     total, hits = scan_listing(listing)
-    return total, hits, len(skip)
+    return total, hits, len(skip - objs), len(objs)
 
 
 def datastream_pkginst(path):
@@ -333,11 +359,12 @@ def main(argv):
                 rc = 2
                 continue
             for rel, e in elfs:
-                total, hits, ntab = scan_elf(e, objdump)
+                total, hits, ntab, nobj = scan_elf(e, objdump)
                 n_elf += 1
                 verdict = "CLEAN" if not hits else "HITS %d" % len(hits)
-                print("  %-9s %s!%s (%d insns, %d switch tables skipped)"
-                      % (verdict, label, rel, total, ntab))
+                print("  %-9s %s!%s (%d insns, %d switch tables skipped%s)"
+                      % (verdict, label, rel, total, ntab,
+                         ", %d data objects" % nobj if nobj else ""))
                 for addr, sym, mnem, ops, why in hits:
                     print("      %s <%s> %s %s  -- %s"
                           % (addr, sym, mnem, ops, why))

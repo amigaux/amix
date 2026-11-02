@@ -1,5 +1,57 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — APKGENG 1.12.6 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container `amix-toolchain:dist` (`843de30`; its gcc wrapper is
+gcc-cross-amix `33ebadc`'s, master's pin) from `c84ded4`; `make repro-check` there: the checkout's
+roll and a `git archive` copy's (another path, umask 077, `SOURCE_DATE_EPOCH=1`) are the same
+bytes:
+
+- **md5 `c1d4831aee4502b4a03a1b11f0463153`**, **sha256
+  `e89a50f8ffbf6b7fcc756ccc70bbf581b50c23f8d7e04c041a04f42cc086db95`**, **2318336 B**. scan060
+  clean (11 binaries, one data object each), link gate OK.
+- Against 1.12.5 (`a49452d8…`): the same 37 files. The 11 programs grow 32 to 176 B (the symbol,
+  its dynamic-table entries, alignment), plus the three `src/formats` pages, `pkginfo` and
+  `pkgmap`.
+- APKG 0.3.6 rolls in the same `make dist` at `f87c02e0…`, the bytes minted in `928b9ae`.
+- Not yet run on a box.
+
+## 2026-11-02 — APKGENG 1.12.6: the engine from master's toolchain pins
+
+1.12.5's bytes (`a49452d8…`) came from a build image with an older gcc-cross-amix wrapper
+(`2ab2b22`'s). Master pins gcc-cross-amix `33ebadc`, whose wrapper links `values-Xa.o` as the
+native cc does. Each engine program gains `_lib_version` (+4 bytes of `.text`), so 1.12.5
+cannot be rolled from master, and the version moves.
+
+- Same source, a version bump only: `VER_ENG="1.12.6"`, `EPOCH_ENG=1793577600` (2026-11-02), and
+  the three `src/formats` pages' headers.
+- The programs now run with `_lib_version` = Xa (ANSI mode) instead of the c_issue_4 default the
+  unset global gave. In SVR4 that selects libm's error handling among other things. The engine
+  calls no libm function (no `pow`, `floor`, `strtod`, `atof`, ... in libadm, libgendb, libpkg,
+  libinst or pkgcmds), so no engine path is expected to change.
+- APKG is untouched: its apkg and contents-fsck are linked with ld directly (no wrapper start
+  files), and APKG 0.3.6 rolls the same bytes (`f87c02e0…`) in both images.
+
+## 2026-11-02 — scan060 decodes data objects in .text as data
+
+gcc-cross-amix `33ebadc`'s wrapper links `values-Xa.o` into every program, as the native cc does;
+it defines `_lib_version`, a 4-byte STT_OBJECT in `.text`, exported in `.dynsym`. In a stripped
+program `objdump -d` printed that symbol's range as a hex dump up to the next symbol, which was
+the rest of `.text`. scan060 read the dump's 8-word lines as instructions: 7 of APKGENG's 11
+binaries flagged ("64-bit product" at `<_lib_version>`), and the code after the symbol was never
+decoded (pkgadd: 14032 insns instead of 37824).
+
+- objdump now runs with `-D` per executable section, and every sized STT_OBJECT symbol (from
+  `.symtab` and `.dynsym`) inside one is skipped like a switch table and counted
+  ("N data objects").
+- T22 gains a linked program stripped to one data object whose bytes are the trap encoding:
+  clean; with the trap in the code after the object, one hit, at `<d+0x8>`. The old scanner
+  flagged the object in the clean program and missed that instruction.
+- Old verdicts are unchanged: over the 928b9ae rolls (APKG 0.3.5, 0.3.6, APKGENG 1.12.5) the
+  output is byte-identical. kbootset and modadmin (843de30) stay clean, with 10 and 4 data
+  objects. The 843de30 roll of APKGENG 1.12.5 goes from 7 binaries with hits to 11 clean, with
+  the same instruction counts as the 928b9ae roll.
+
 ## 2026-11-02 — APKG 0.3.6 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container from `a687496`, `VER_APKG="0.3.6"`, `EPOCH_APKG=1793577600`;
