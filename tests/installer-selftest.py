@@ -9987,6 +9987,38 @@ def audit_syspass_confirm():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_ni_base():
+    head("NB. the netinstall image carries the base packages every set takes (base/order), never a "
+         "set's own extras (base/o.<set>: x11r63, 34 MB)")
+    src = open(os.path.join(REPO, "tools", "build-ramdisk-miniroot.sh"), encoding="utf-8").read()
+    m = re.search(r'\n(  if \[ -f "\$ITREE/l11/base/order" \]; then\n.*?\n  fi)\n', src, re.S)
+    if not m:
+        fail("build-ramdisk-miniroot.sh: no base/order copy block")
+        return
+    d = tempfile.mkdtemp(prefix="nibase_")
+    try:
+        b = os.path.join(d, "stage", "l11", "base")
+        os.makedirs(b)
+        for n, c in (("order", "amxbase\nsyslog\n"), ("o.full", "x11r63\n"), ("o.x11", "x11r63\n"), ("seed.sh", ":\n"),
+                     ("amxbase.pkg", "a"), ("amxbase.cf", "etc/x\n"), ("syslog.pkg", "s"), ("syslog.cf", ""),
+                     ("x11r63.pkg", "x"), ("x11r63.cf", "")):
+            open(os.path.join(b, n), "w").write(c)
+        it = os.path.join(d, "it")
+        os.makedirs(os.path.join(it, "l11"))
+        body = 'ITREE=%s/stage\nit=%s\ndie() { echo "DIE $*"; exit 3; }\n%s\n' % (d, it, m.group(1))
+        r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=10)
+        got = sorted(os.listdir(os.path.join(it, "l11", "base"))) if os.path.isdir(os.path.join(it, "l11", "base")) else []
+        want = ["amxbase.cf", "amxbase.pkg", "order", "seed.sh", "syslog.cf", "syslog.pkg"]
+        (ok if got == want and r.returncode == 0 else fail)(
+            "netinstall base EXECUTED: order, seed.sh and the every-set packages; no x11r63, no o.<set> (%s)" % " ".join(got))
+        os.remove(os.path.join(b, "syslog.pkg"))
+        r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=10)
+        (ok if "DIE" in r.stdout and r.returncode == 3 else fail)(
+            "netinstall base EXECUTED: a package of base/order missing from the stage stops the build")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_gayle_slave():
     head("GS. the installed system attaches the IDE slave (gayle param slave=2) only when the install CD "
          "answered there: CD_SPEC is the gayle card's unit 5")
@@ -11207,6 +11239,7 @@ def main():
     audit_ufs_density()
     audit_modreg_local()
     audit_gayle_slave()
+    audit_ni_base()
     audit_syspass_confirm()
     audit_kbootset_cards()
     audit_swap_stepdown()
