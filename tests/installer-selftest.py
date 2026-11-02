@@ -7267,12 +7267,12 @@ def audit_w4_miniroot_profile():
     # that recovers a media change is the retry that kills the box. The scan
     # therefore touches each address ONCE, stops at the first answer, and gates
     # every RAW candidate on the one probe proven harmless (a bounded dd).
-    if re.search(r'^CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5"$', code, re.M):
-        ok("the cdfs probe order is pinned 1,3 -> 0,3 -> 0,2 -> 1,2 -> 0,5 -> 1,5 (hardcoded "
-           "HERE: it cannot come from the medium it is looking for; 0,3 = a sole A4091 as "
-           "card 0; 0,5 / 1,5 = an ATAPI drive on the IDE slave)")
+    if re.search(r'^CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5 2,5 3,5"$', code, re.M):
+        ok("the cdfs probe order is pinned 1,3 -> 0,3 -> 0,2 -> 1,2 -> 0,5 -> 1,5 -> 2,5 -> 3,5 "
+           "(hardcoded HERE: it cannot come from the medium it is looking for; 0,3 = a sole "
+           "A4091 as card 0; k,5 = an ATAPI drive on the IDE slave, the IDE port as card k)")
     else:
-        fail("CD_CANDIDATES must be exactly \"1,3 0,3 0,2 1,2 0,5 1,5\"")
+        fail("CD_CANDIDATES must be exactly \"1,3 0,3 0,2 1,2 0,5 1,5 2,5 3,5\"")
     if re.search(r'^RAW_CANDIDATES="/dev/dsk/c0d0s4 /dev/dsk/c5d0s1 /dev/dsk/c5d0s4"$', code, re.M):
         ok("the RAW payload-slice probe list is pinned (metal 5-slice s4, bench "
            "2-slice s1, the Gayle IDE slave's s4)")
@@ -8987,6 +8987,48 @@ def audit_cd2_card1_target():
             ok("CD2 behaviour: %s" % what)
         else:
             fail("CD2 behaviour: %s -- got %r, want %r" % (what, got, want))
+    # the IDE port's card from the running kernel (`kbootset cards`, a stub here): the master
+    # is unit 6 of the card reporting mobo:gayle, the CD on the slave unit 5
+    mi = re.search(r'(?ms)^(SETUP_KBOOTSET=.*?\n)(?=\[ -n "\$INSTALLABLE_IDS" \] \|\| INSTALLABLE_IDS=)', setup)
+    if not mi:
+        fail("setup.sh: the IDE card block (SETUP_KBOOTSET .. before the INSTALLABLE_IDS default) is missing")
+    else:
+        stubdir = tempfile.mkdtemp(prefix="idecard.")
+        try:
+            tables = {
+                "alone": "card 0: c0-c7 mobo:gayle\n",
+                "z3660": "card 0: c0-c7 zorro:144b:01 base 0x40000000\ncard 1: c8-cf mobo:gayle\n",
+                "z3660a4091": ("card 0: c0-c7 zorro:144b:01 base 0x40000000\n"
+                               "card 1: c8-cf zorro:0202:54 base 0x40800000\ncard 2: c10-c17 mobo:gayle\n"),
+                "noide": "card 0: c0-c7 zorro:144b:01 base 0x40000000\n",
+            }
+            for k, t in tables.items():
+                with open(os.path.join(stubdir, k), "w") as f:
+                    f.write('#!/bin/sh\n[ "$1" = cards ] || exit 2\nprintf \'%s\'\n' % t.replace("\n", "\\n"))
+                os.chmod(os.path.join(stubdir, k), 0o755)
+            ibody = "\n".join(fn(setup, f) for f in ("hexval", "hexname")) + "\nPROG=setup.sh\n" + mi.group(1)
+            base = "INSTALL_LAYOUT=1.1 TARGET_HBA=gayle CD_HBA=gayle TARGET_SCSI_ID=e CD_SPEC=1,5 ROOTDEV=0x0048001e TARGET_ROOT_SLICE=1"
+            show = '\necho "$TARGET_SCSI_ID|$INSTALLABLE_IDS|$CD_SPEC|$ROOTDEV|$IDE_CARD"'
+            for table, env, want, what in (
+                    ("alone", base, "6|6|0,5|0x00480016|0", "the IDE port alone: card 0, the master c6, the CD 0,5"),
+                    ("z3660", base, "e|e|1,5|0x0048001e|1", "beside a Z3660: card 1, the master ce, the CD 1,5"),
+                    ("z3660a4091", base, "16|16|2,5|0x00480096|2",
+                     "beside a Z3660 and an A4091: card 2, the master c16 (rootdev minor 0x96), the CD 2,5"),
+                    ("noide", base, "e||1,5|0x0048001e|", "no IDE card in the table: the profile's values stand"),
+                    ("z3660a4091", base.replace("TARGET_HBA=gayle", "TARGET_HBA=z3660scsi"), "e||1,5|0x0048001e|",
+                     "a target not on the IDE port: untouched"),
+                    ("z3660a4091", base.replace("CD_HBA=gayle", "CD_HBA=a4091"), "16|16|1,5|0x00480096|2",
+                     "the CD on another controller keeps its CD_SPEC"),
+                    ("missing", base, "e||1,5|0x0048001e|", "no kbootset on the medium: the profile's values stand")):
+                envs = "%s SETUP_KBOOTSET=%s" % (env, os.path.join(stubdir, table))
+                r = subprocess.run(["/usr/bin/dash", "-c", "%s\n%s%s" % (envs.replace(" ", "\n"), ibody, show)],
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+                got = r.stdout.decode().strip().splitlines()[-1] if r.stdout.strip() else ""
+                (ok if got == want else fail)("IDE card: %s -> %s%s" % (what, want, "" if got == want else " (got %r)" % got))
+        finally:
+            shutil.rmtree(stubdir, ignore_errors=True)
+    ia = re.search(r'(?ms)^\tif \[ -n "\$IDE_CARD" \]; then\n\t\techo "IDE_CARD=\$IDE_CARD"\n\t\techo "CD_SPEC=\$CD_SPEC"\n\t\techo "ROOTDEV=\$ROOTDEV"\n\tfi\n', setup)
+    (ok if ia else fail)("setup.sh: the answers carry IDE_CARD, CD_SPEC and ROOTDEV when the IDE card came from the kernel")
     # D-2 (r6): every installable id is added to the scan (then filtered), so the
     # picker can offer unit 4 and card-1 ids the miniroot ships no node for.
     m = re.search(r'(?ms)^for _id in \$INSTALLABLE_IDS\ndo\n\tcase " \$SCAN_IDS ".*?^SCAN_IDS=`scan_safe_ids \$SCAN_IDS`$', setup)

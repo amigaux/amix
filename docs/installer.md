@@ -100,13 +100,22 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
   `swap -l` shows what is in use.
 - **The CD probe.** The miniroot looks for the install CD at cdfs `1,3`, `0,3`, `0,2`, `1,2`,
-  `0,5`, `1,5`, mounting each address once (`CD_CANDIDATES` in `src/miniroot/profile`, equal to
-  `MINIROOT_CD_CANDIDATES` in `setup.sh`). `0,5` and `1,5` are an ATAPI drive on the IDE slave
-  (gayle unit 5), the IDE port as card 0 or as card 1 beside the Z3660 SCSI card.
+  `0,5`, `1,5`, `2,5`, `3,5`, mounting each address once (`CD_CANDIDATES` in
+  `src/miniroot/profile`, equal to `MINIROOT_CD_CANDIDATES` in `setup.sh`). `k,5` is an ATAPI
+  drive on the IDE slave (gayle unit 5) with the IDE port as card k.
   **Limitation:** the miniroot does not say which address answered, so the interview's disk
   scan skips every candidate unit the medium's profile cannot install to (`scan_safe_ids`).
-  With `0,5` in the list that includes SCSI id 5 (and `d`, card 1 unit 5): a disk at id 5 is
+  With `k,5` in the list that includes SCSI id 5 (and `d`, `15`, `1d`): a disk at id 5 is
   not offered as a target unless the profile's `INSTALLABLE_IDS` names it.
+- **The IDE port's card.** A four-card kernel numbers the sd cards by class (z3660 < zorro <
+  mobo < ide), so the IDE port is card 0 alone, card 1 beside a Z3660 or one Zorro SCSI card,
+  card 2 beside both. For a profile with `TARGET_HBA=gayle` the interview reads
+  `kbootset cards` (the running kernel's card table from kinfo; it opens no disk): the target
+  is the IDE master, unit 6 of the card that reports `mobo:gayle`, and the only installable
+  id; with `CD_HBA=gayle` the CD is the slave, unit 5 (`CD_SPEC`). The answers carry
+  `IDE_CARD`, `CD_SPEC` and `ROOTDEV`. Without a kbootset or an IDE card in the table the
+  profile's own values stand. `l11.sh` stops when `kbootset cards` names another controller
+  for that master (kbootset -34 and earlier misread `c10`-`c17`).
 - **Boot priority.** The installer writes the target's UNIX_Boot slice bootable at
   `TARGET_BOOT_BOOTPRI` (default 2, the stock value). Kickstart boots the bootable partition
   with the highest priority on any disk, so an AmigaOS disk at the usual 0 loses to the new

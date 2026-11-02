@@ -321,7 +321,7 @@ cd_unit_id()
 # profile's CD_SPEC is only where the medium EXPECTS the CD. On an A4000/030 whose
 # only host is the A4091 the CD answers 0,3 while the public classic profile says
 # 1,3, and the scan would dd the CD (route B).
-MINIROOT_CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5"
+MINIROOT_CD_CANDIDATES="1,3 0,3 0,2 1,2 0,5 1,5 2,5 3,5"
 
 # spec_id SPEC -- cdfs <card>,<unit> -> the controller digit c<card*8+unit>, or "".
 spec_id()
@@ -514,6 +514,51 @@ L11_STORE_MB=64
 [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && BOOTSIZE="$L11_STORE_MB"
 [ -n "$DDSIZE_SAFE" ] || DDSIZE_SAFE=n
 [ -n "$ANSWERS_ECHO_PATH" ] || ANSWERS_ECHO_PATH=/matrix.ans
+# --- the IDE port's card, from the running kernel ---------------------------
+# A four-card kernel numbers the sd cards by class (z3660 < zorro < mobo < ide), so the IDE port
+# is card 0 alone, card 1 beside a Z3660 or one Zorro SCSI card, card 2 beside both. A profile
+# whose target is on the IDE port (TARGET_HBA=gayle) therefore takes the card from the kernel:
+# `kbootset cards` lists the cards the running kernel registered with their controllers' keys,
+# from kinfo alone (it opens no disk). The target is the IDE master, unit 6 of the card that
+# reports mobo:gayle, and the only installable id; a CD on the IDE (CD_HBA=gayle) is the
+# slave, unit 5. Without a kbootset or an IDE card the profile's own values stand.
+SETUP_KBOOTSET="${SETUP_KBOOTSET:-$INST/l11/bin/kbootset}"
+IDE_CARD=
+# ide_card -- the card number of the IDE port in the running kernel's sd card table, or ""
+ide_card()
+{
+	[ -x "$SETUP_KBOOTSET" ] || return 0
+	"$SETUP_KBOOTSET" cards 2>/dev/null | while read _w _k _r _key _rest
+	do
+		if [ "$_w" = card ] && [ "$_key" = mobo:gayle ]; then
+			expr "$_k" : '\([0-3]\):$'
+			break
+		fi
+	done
+}
+# rootdev_of ID SLICE -- the sd block device of slice SLICE of controller ID: 18 << 18 | minor,
+# minor = slice*16 + (ID mod 16), plus 128 on cards 2-3 (C4-1 2.1)
+rootdev_of()
+{
+	_v=`hexval "$1"`
+	_mn=`expr $2 \* 16 + $_v % 16`
+	[ "$_v" -ge 16 ] && _mn=`expr $_mn + 128`
+	_hi=`expr $_mn / 16`
+	_lo=`expr $_mn % 16`
+	echo "0x004800`hexname $_hi``hexname $_lo`"
+}
+if [ "${INSTALL_LAYOUT:-1.0}" = 1.1 ] && [ "$TARGET_HBA" = gayle ]; then
+	IDE_CARD=`ide_card`
+	if [ -n "$IDE_CARD" ]; then
+		TARGET_SCSI_ID=`hexname \`expr $IDE_CARD \* 8 + 6\``
+		INSTALLABLE_IDS="$TARGET_SCSI_ID"
+		ROOTDEV=`rootdev_of $TARGET_SCSI_ID ${TARGET_ROOT_SLICE:-1}`
+		[ "$CD_HBA" = gayle ] && CD_SPEC="$IDE_CARD,5"
+		echo "$PROG: the IDE port is card $IDE_CARD: the master is SCSI id $TARGET_SCSI_ID${CD_SPEC:+, the install CD $CD_SPEC}"
+	else
+		echo "$PROG: the running kernel names no IDE card (kbootset cards): the profile's SCSI id $TARGET_SCSI_ID stands"
+	fi
+fi
 [ -n "$INSTALLABLE_IDS" ] || INSTALLABLE_IDS="$TARGET_SCSI_ID"
 [ -n "$INSTALLABLE_IDS" ] || die "base profile $PROFILE_FILE declares neither INSTALLABLE_IDS nor TARGET_SCSI_ID -- no id could ever be installable"
 
@@ -2165,6 +2210,12 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "# win over the base profile's -- that is the whole merge mechanism."
 	echo "# install set: $SET_LABEL"
 	echo "TARGET_SCSI_ID=$SCSI"
+	# the IDE port's card came from the running kernel: its CD unit and root device go with it
+	if [ -n "$IDE_CARD" ]; then
+		echo "IDE_CARD=$IDE_CARD"
+		echo "CD_SPEC=$CD_SPEC"
+		echo "ROOTDEV=$ROOTDEV"
+	fi
 	echo "TARGET_DISK_MB=$DISK_MB"
 	echo "TARGET_ROOT_MB=$ANS_ROOT"
 	echo "TARGET_SWAP_MB=$ANS_SWAP"
