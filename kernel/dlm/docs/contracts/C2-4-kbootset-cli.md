@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 20
+# C2-4 — `kbootset` as a called program, version 22
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -486,7 +486,9 @@ picks instead of from a profile per controller.
 
 - **The source** is kinfo's sd card table (C2-1 §2): per card its number
   `k`, the controller id and the board base. The disks of card `k` are
-  `c<8k>` to `c<8k+7>` in the `cNdMsK` names (C4-1 §2.4). The id becomes
+  `c<8k>` to `c<8k+7>` in the `cNdMsK` names (C4-1 §2.4), `N` in
+  lowercase hex as the stock `/dev/dsk` names and `kbootset nodes` write
+  it: card 1 is `c8`–`cf`, card 2 `c10`–`c17` (version 22). The id becomes
   the match key exactly as gate 3 and the root record make it (C2-1 §2.1):
   `zorro:MMMM:PP` for a Zorro board, `mobo:<name>` for a motherboard
   controller.
@@ -496,8 +498,8 @@ picks instead of from a profile per controller.
 - **What it prints**, with no `kbootset: ` prefix (the lines are for a
   script), one line per card in the table's order:
   - `card 0: c0-c7 zorro:144b:01 base 0x40000000` (the Z3660);
-  - `card 1: c8-c15 mobo:gayle`;
-  - `card 2: c16-c23 mobo:a4000t-710`;
+  - `card 1: c8-cf mobo:gayle`;
+  - `card 2: c10-c17 mobo:a4000t-710`;
   - a Zorro board carries `base 0x<8 hex digits>`, its board base, which
     tells two boards of the same key apart; a motherboard controller has
     none;
@@ -505,8 +507,14 @@ picks instead of from a profile per controller.
     `unknown controller id 0x<8 hex digits>` in place of the key.
 - **`kbootset cards <disk>`** takes `/dev/dsk/cNdMsK`, `/dev/rdsk/cNdMsK`
   or the name alone and prints only the key of card `N / 8`:
-  `kbootset cards /dev/dsk/c8d0s1` prints `mobo:gayle`. The node is not
-  opened; the name is enough.
+  `kbootset cards /dev/dsk/c8d0s1` prints `mobo:gayle`, and so does
+  `/dev/dsk/ced0s1` (unit 6 of card 1); `/dev/dsk/c10d0s0` is card 2.
+  `N` is one or two lowercase hex digits; since `d` is one of them, the
+  name is read from the right (`s` and the slice, `d` and the unit). The
+  node is not opened; the name is enough.
+- Version 21 read `N` as decimal: it refused `ca`–`cf` and gave card 1's
+  key for `c10`–`c17` (kbootset 1.1.0.261101-34 and earlier; fixed in
+  -35).
 - **Only what the running kernel registered.** A card is in the table when
   its driver is linked and registered with sd in this boot (a static
   driver, or a root-class module the generation placed). On an install

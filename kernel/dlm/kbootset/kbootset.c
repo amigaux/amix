@@ -435,10 +435,34 @@ usage(void)
 }
 
 /*
+ * The controller number of a disk node's name cNdMsK, or -1.  N is hex, as
+ * the stock /dev/dsk names and kbootset nodes write it (C4-1 §2.4): c10d0s0
+ * is card 2's unit 0, ced0s1 card 1's unit 6.  'd' is a hex digit too, so
+ * the name is read from the right: s and the slice, d and the unit, and
+ * what is left after the c is N, one or two lowercase hex digits.
+ */
+static long
+disknode(const char *b)
+{
+	const char *s, *d;
+	long c = 0;
+
+	if (b[0] != 'c' || (s = strrchr(b, 's')) == 0 || !s[1] || strspn(s + 1, "0123456789") != strlen(s + 1))
+		return -1;
+	for (d = s; d > b + 1 && d[-1] >= '0' && d[-1] <= '9'; d--)
+		;
+	if (d == s || d[-1] != 'd' || --d - (b + 1) < 1 || d - (b + 1) > 2)
+		return -1;
+	for (b++; b < d; b++)
+		c = 16 * c + (*b >= '0' && *b <= '9' ? *b - '0' : *b >= 'a' && *b <= 'f' ? *b - 'a' + 10 : -1000);
+	return c < 0 ? -1 : c;
+}
+
+/*
  * `cards [DEV]` (C2-4 §17): the sd cards of the running kernel, from the
  * card table of the kinfo record at path (C2-1 §2), each with the match key
  * of its controller; or, given a disk node, the key of that disk's card,
- * c<8k + unit> on card k.  It reads nothing else and writes nothing; kp is
+ * c<8k + unit> (hex) on card k.  It reads nothing else and writes nothing; kp is
  * main's kinfo buffer.
  */
 static int
@@ -453,19 +477,7 @@ cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 		usage();
 	if (n == 1) {			/* /dev/dsk/cNdMsK, /dev/rdsk/..., or the name alone */
 		b = (p = strrchr(a[0], '/')) != 0 ? p + 1 : a[0];
-		if (b[0] == 'c' && b[1] >= '0' && b[1] <= '9') {
-			c = strtol(b + 1, (char **)&p, 10);
-			if (*p++ != 'd' || *p < '0' || *p > '9')
-				c = -1;
-			while (c >= 0 && *p >= '0' && *p <= '9')
-				p++;
-			if (c >= 0 && (*p++ != 's' || *p < '0' || *p > '9'))
-				c = -1;
-			while (c >= 0 && *p >= '0' && *p <= '9')
-				p++;
-			if (*p)
-				c = -1;
-		}
+		c = disknode(b);
 		if (c < 0) {
 			fprintf(stderr, "kbootset: %s is not a disk node (cNdMsK)\n", a[0]);
 			return 2;
@@ -481,9 +493,9 @@ cards(const char *path, int n, char **a, struct kb_kinfo *kp)
 		kb_matchkey(kp->card[i].id, key);
 		if (n == 0) {
 			if (key[0])
-				printf("card %lu: c%lu-c%lu %s", k, 8 * k, 8 * k + 7, key);
+				printf("card %lu: c%lx-c%lx %s", k, 8 * k, 8 * k + 7, key);
 			else
-				printf("card %lu: c%lu-c%lu unknown controller id 0x%08lx", k, 8 * k, 8 * k + 7,
+				printf("card %lu: c%lx-c%lx unknown controller id 0x%08lx", k, 8 * k, 8 * k + 7,
 				    (unsigned long)kp->card[i].id);
 			if (kp->card[i].base)
 				printf(" base 0x%08lx", (unsigned long)kp->card[i].base);

@@ -346,7 +346,13 @@ The disks of card
 .I k
 are c(8\fIk\fP) to c(8\fIk\fP+7) in the
 .BI c n d m s k
-names, and
+names,
+.I n
+in lowercase hex as the stock names write it
+.RB ( c8 \- cf
+for card 1,
+.BR c10 \- c17
+for card 2), and
 .I key
 is the controller's match key, the value
 .B build
@@ -359,6 +365,7 @@ and
 .BR mobo:a4000t-710 .
 Given a disk node
 .RB ( /dev/dsk/c8d0s1 ,
+.BR /dev/dsk/ced0s1 ,
 .BR /dev/rdsk/... ,
 or the name alone), it prints only the key of that disk's card.
 A card is listed only when its driver is linked and registered with sd in
