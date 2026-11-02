@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — shared directories are 0755 root sys in every prototype (80570cc)
+
+pkgmeta check refuses a recipe whose prototype declares a shared directory (/opt, /opt/amix, /opt/amix/doc, /opt/amix/man and its sections, whatis.d, replaces.d) with other than 0755 root sys. The new pkgmeta dirs applies the same rule to the kernel-space prototypes; check-packages (CI) and make dist's kspace step run it.
+
 ## 2026-11-02 — the LLPRINTF gate reads only data sections (2647684)
 
 The LLPRINTF gate reads strings only from an ELF's .rodata* and .data* sections, one section at a time, and reads a file without section headers whole, so code bytes no longer count as format strings (the cfb16 Xzz9000 matched "%Lo" in .text). The gcc14 env exports OBJCOPY.
