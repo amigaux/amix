@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — C2-4 v24 §18: the A3000 WD and INQUIRY (c8096e6)
+
+The A3000 onboard WD (mobo:a3000-wd) is a known limit of `kbootset inquiry` and `cards --probe`: the stock a3091 sets the chip up on its first command and can stop for the boot when that command comes from process context, so an installer leaves the card out.
+
 ## 2026-11-02 — core 0052: an empty interrupt chain costs two instructions (6c6afef)
 
 Each interrupt chain keeps its handler count, and the level-2 walk and the level-6 wrapper skip the chain when it is empty. The empty level-2 walk cost about 390 cycles (15.6 µs on a 25 MHz 68030) on every level-2 interrupt; now 2 instructions.
