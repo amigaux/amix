@@ -37,10 +37,11 @@
 #
 # DATA OBJECTS.  A sized STT_OBJECT symbol in .text (values-Xa.o's
 # _lib_version, linked into every program by the period cc and gcc) is data:
-# its range is skipped like a switch table.  objdump runs with -D over each
-# executable section: -d prints a data symbol's range as a hex dump up to the
-# next symbol, the rest of .text in a stripped program, and its 8-word lines
-# would be read as instructions.
+# its range is skipped like a switch table.  objdump runs with -D on each
+# executable section by name (-j), never over .debug_* or other non-code:
+# -d prints a data symbol's range as a hex dump up to the next symbol, the
+# rest of .text in a stripped program, and its 8-word lines would be read
+# as instructions.
 #
 # BLINDNESS.  objdump disassembles .text linearly; a jump table or literal in
 # .text could decode as one of these words.  Every hit is printed with its
@@ -146,6 +147,17 @@ def exec_sections(data):
     return out
 
 
+def exec_section_names(data):
+    """The names of exec_sections(data)'s sections, in the same order."""
+    shoff = struct.unpack(">I", data[32:36])[0]
+    shentsize, shnum, shstrndx = struct.unpack(">HHH", data[46:52])
+    shdrs = [struct.unpack(">IIIIII", data[shoff + i * shentsize: shoff + i * shentsize + 24])
+             for i in range(shnum)]
+    stroff = shdrs[shstrndx][4] if shstrndx < shnum else 0
+    return [data[stroff + nm:data.index(b"\0", stroff + nm)].decode("latin1")
+            for nm, typ, flags, _a, _o, size in shdrs if typ == 1 and flags & 0x4 and size]
+
+
 # gcc's switch dispatch: "jmp %pc@(T,%dN:w)" (4efb), a word table at T of
 # signed offsets from T.  The table is DATA inside .text; decoded linearly it
 # reads as movep/andi/bset noise -- every movep hit in the first cut of this
@@ -203,8 +215,10 @@ def data_objects(data, secs):
     return out
 
 
-def run_objdump(objdump, path, lo, hi):
-    cmd = [objdump, "-D", "-m", "m68k:68020",
+def run_objdump(objdump, path, sec, lo, hi):
+    # -j: an address range alone also selects the non-alloc sections at
+    # address 0 (.debug_*), which -D would decode too
+    cmd = [objdump, "-D", "-m", "m68k:68020", "-j", sec,
            "--start-address=0x%x" % lo, "--stop-address=0x%x" % hi]
     r = subprocess.run(cmd + [path], capture_output=True, text=True,
                        errors="replace")
@@ -224,21 +238,23 @@ def scan_elf(path, objdump):
     with open(path, "rb") as fp:
         data = fp.read()
     secs = exec_sections(data)
-    listing = "".join(run_objdump(objdump, path, sa, sa + sz) for sa, _o, sz in secs)
+    names = exec_section_names(data)
+    listing = "".join(run_objdump(objdump, path, n, sa, sa + sz)
+                      for (sa, _o, sz), n in zip(secs, names))
     objs = data_objects(data, secs)
     skip = set(table_ranges(listing, data, secs)) | objs
     for _round in range(6):
         if not skip:
             break
         listing = ""
-        for sa, _so, sz in secs:
+        for (sa, _so, sz), n in zip(secs, names):
             lo, hi = sa, sa + sz
             for s, e in sorted(r for r in skip if sa <= r[0] < hi):
                 if s > lo:
-                    listing += run_objdump(objdump, path, lo, s)
+                    listing += run_objdump(objdump, path, n, lo, s)
                 lo = max(lo, e)
             if lo < hi:
-                listing += run_objdump(objdump, path, lo, hi)
+                listing += run_objdump(objdump, path, n, lo, hi)
         new = set(table_ranges(listing, data, secs)) - skip
         if not new:
             break

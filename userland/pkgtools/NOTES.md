@@ -1,5 +1,31 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-02 — scan060: objdump names each code section (-j)
+
+The data-object change (`objdump -D` over each executable section's address range) had a
+regression. An address range alone also selects the non-alloc sections at address 0. In an
+unstripped shared library, whose `.text` sits at a low address, `-D` then decoded
+`.debug_loclists` as code. libamixrt.so.1 got 2 false hits (`<.debug_loclists+0x11a4> movepw`),
+so the userland gate refused amixrt.
+
+- Every objdump call now names its section with `-j` (`exec_section_names`, in
+  `exec_sections`' order).
+- T22 gains a shared library whose `.debug_loclists`, filled with the trap encoding, overlaps
+  `.text`'s range:
+  - control: objdump over that range without `-j` decodes `.debug_loclists`;
+  - the scanner says clean, rc 0;
+  - a trap in its `.text` is still exactly one hit, in `.text`.
+- libamixrt.so.1 (alone and in amixrt-1.0-1.pkg) is clean again, at 3787 insns, as before the
+  data-object change.
+- Unchanged, byte for byte against the previous scanner: APKGENG 1.12.6's output (11 binaries
+  clean), the 843de30 pkgadd, and the older verdicts (the 928b9ae rolls, kbootset -35,
+  modadmin).
+- The scanner is not in any payload; APKG 0.3.6 and APKGENG 1.12.6 keep their bytes.
+
+APKGENG 1.12.6 checked on the emulated k46 box: every engine command (pkgadd, pkgchk and
+pkgchk -n, installf/removef, pkgtrans both ways, pkgproto, pkgmk, pkgparam, pkginfo, pkgrm), and
+`apkg -f install` at the same version. pkgmk needs an existing output directory, as 1.12.5 did.
+
 ## 2026-11-02 — APKGENG 1.12.6 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (`843de30`; its gcc wrapper is

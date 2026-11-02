@@ -1718,6 +1718,28 @@ if command -v m68k-linux-gnu-objdump >/dev/null 2>&1 &&
     check "the code after a data object is still decoded: its trap is a hit, rc 2" test $? -eq 2
     check "  ... the one hit is the instruction after it, not the object" \
         bash -c "grep -q '<d+0x8> divsl' '$WORK/t22.dhit' && grep -q 'HITS 1 ' '$WORK/t22.dhit'"
+    # an unstripped shared library: .text sits at a low VMA, and .debug_*
+    # (non-alloc, VMA 0) overlaps its address range with trap-encoding
+    # bytes.  An address range alone selects that section too; -j does not.
+    for v in clean hit; do
+        { printf '\t.text\n\t.globl f\nf:\t'
+          [ $v = hit ] && printf '.short 0x4c6e,0x1c02,0x0010\n\t'
+          printf 'mulsl #10,%%d0\n\trts\n\t.section .debug_loclists,"",@progbits\n'
+          printf '\t.rept 400\n\t.short 0x4c6e,0x1c02,0x0010,0x4e71\n\t.endr\n'; } > "$S22/so$v.s"
+        m68k-linux-gnu-as -m68020 -o "$S22/so$v.o" "$S22/so$v.s" &&
+            m68k-linux-gnu-ld -shared -o "$S22/libso$v.so" "$S22/so$v.o"
+    done
+    TX=$(m68k-linux-gnu-objdump -h "$S22/libsoclean.so" | awk '$2 == ".text" {print $4, $3}')
+    TLO=$((0x${TX% *})); THI=$((TLO + 0x${TX#* }))
+    m68k-linux-gnu-objdump -D -m m68k:68020 --start-address=$TLO --stop-address=$THI \
+        "$S22/libsoclean.so" > "$WORK/t22.noj" 2>&1
+    check "control: without -j, .text's address range decodes .debug_loclists as code" \
+        bash -c "grep -q '<.debug_loclists' '$WORK/t22.noj' && grep -q divsl '$WORK/t22.noj'"
+    python3 "$SCAN060" "$S22/libsoclean.so" >"$WORK/t22.so" 2>&1
+    check "an unstripped shared library whose .debug_* overlaps .text is clean, rc 0" test $? -eq 0
+    python3 "$SCAN060" "$S22/libsohit.so" >"$WORK/t22.sohit" 2>&1
+    check "  ... and a trap in its .text is still one hit, in .text, rc 2" \
+        bash -c "test $? -eq 2 && grep -q 'HITS 1 ' '$WORK/t22.sohit' && grep -q '<f>' '$WORK/t22.sohit' && ! grep -q debug '$WORK/t22.sohit'"
     mkdir -p "$S22/tree/sub"; cp "$S22/hit.o" "$S22/tree/sub/"
     python3 "$SCAN060" "$S22/tree" >/dev/null 2>&1
     check "a directory walk finds the hit too, rc 2" test $? -eq 2
