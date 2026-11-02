@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-02 — scan060-g14 decodes data objects in .text as data (c54a4c7)
+
+scan060-g14 decodes a sized data object in .text (values-Xa.o's _lib_version) as data and runs objdump -D per executable section; under -d the object's hex dump hid the rest of .text and read as instructions.
+
 ## 2026-11-02 — make dist lists only tracked module and driver directories (d818fd4)
 
 make dist lists module and driver directories by the files git tracks there (git ls-files). A leftover untracked directory under kernel/drivers or kernel/modules, such as a removed driver's gitignored build output, is no longer a recipe: the kspace step does not name it or exit 3 over it, and the modules step neither builds it nor takes its objects. Rolled bytes are unchanged.
