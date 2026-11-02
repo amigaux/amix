@@ -17,16 +17,18 @@
 # the earlier 1.1.0-4, first rolled from amix.
 # 1.1.0-6 (2026-11-01): the same module 1.1.0-3, built with the kit of toolchain
 # pin gcc-2.7.2.3-33ebadc: the objects differ from 1.1.0-5 only in that tag.
+# 1.1.0-7 (2026-11-02): the module 1.1.0-4 (fork d320430): the investigation
+# symbols are built only with IDE_DIAG.
 
 KM_NAME=gayle
 KM_SHORT=gayle
 KM_REPO=kernel/drivers/gayle-ide
-KM_VERSION=1.1.0-3
-KM_PKG_VERSION=1.1.0-6
+KM_VERSION=1.1.0-4
+KM_PKG_VERSION=1.1.0-7
 KM_VERSION_FILE=out/cache/forks/gayle-ide/module/VERSION
 
-KM_K30_SHA=5833325d72f1fe4917a8cf3a0af835f5a9d0928bc8e2331d0f7c47dcff13d561
-KM_K46_SHA=f0ad33a8dadef1dd5ff4e463aa448905a4ec7ad2ac8683e937be1360227927ce
+KM_K30_SHA=afbf757f081f413c60382d2c3ddf7512f6e027627b96cd2201e3f55b651916fb
+KM_K46_SHA=eb35c041eb3c49ce21a2c079a5c413b4a6d6809d7868a801d03f917e1bb25baa
 
 KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
@@ -39,4 +41,4 @@ polled I/O if the test fails.  The line \`param intr=0\` in
 /etc/conf/modreg.local.d/gayle selects polled I/O.  Only the A4000 Gayle is
 driven (match mobo:gayle); the A1200/A600 rows are not in the module."
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC

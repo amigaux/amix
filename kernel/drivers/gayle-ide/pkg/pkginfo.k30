@@ -1,15 +1,15 @@
 PKG=gayle30
-NAME=gayle-k30 1.1.0-6 - A4000 Gayle IDE driver module (root class), k30 line
+NAME=gayle-k30 1.1.0-7 - A4000 Gayle IDE driver module (root class), k30 line
 ARCH=Amiga
-VERSION=1.1.0-6
+VERSION=1.1.0-7
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-gayle30-1.1.0-6
+PSTAMP=amix-gayle30-1.1.0-7
 # Kernel space (amix-dlm C2-2, C3-5 v9 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k30, kabi=k30.1.2), class root, never an ordinary
 # entry.  Catalog name gayle-k30, pkginst gayle30; VERSION is the package's:
-# 1.1.0-6 is the module's 1.1.0-3 (the fork's module/VERSION at
+# 1.1.0-7 is the module's 1.1.0-4 (the fork's module/VERSION at
 # kernel/drivers/gayle-ide/gayle-ide.pin), its object built with the
 # gcc-2.7.2.3-33ebadc kit, rolled from amix.
 APKG_DESC=A4000 Gayle IDE as a root-class kernel module for the 68030 root-class module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/gayle, interrupt I/O by default (param intr=0: polled).

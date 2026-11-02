@@ -15,16 +15,18 @@
 # as the earlier 1.1.0-4 package, first rolled from amix.
 # 1.1.0-6 (2026-11-01): the same module 1.1.0-4, built with the kit of toolchain
 # pin gcc-2.7.2.3-33ebadc: the objects differ from 1.1.0-5 only in that tag.
+# 1.1.0-7 (2026-11-02): the module 1.1.0-5 (fork 215936f): memset by bzero,
+# no CDDA and no read-ahead on the AMIX kernel.
 
 KM_NAME=cdfs
 KM_SHORT=cdfs
 KM_REPO=kernel/drivers/cdfs
-KM_VERSION=1.1.0-4
-KM_PKG_VERSION=1.1.0-6
+KM_VERSION=1.1.0-5
+KM_PKG_VERSION=1.1.0-7
 KM_VERSION_FILE=out/cache/forks/cdfs/platform/amix-kernel/module/VERSION
 
-KM_K30_SHA=25233427a1530ac0ddfec61cd44100c246b85d0c494ba4175a3e290f3bcae832
-KM_K46_SHA=07b2800e5def614ee76278c481acf06cbf37afc3a49e09abc8189afe6169f95f
+KM_K30_SHA=01c02625064bb3b320418bfa5da1b338b88713a17ffab1b297b532c09ae4692e
+KM_K46_SHA=75c9d3f53f2b072ed3ee4c51d26a48ea52b99aeef1e317813aef7b352f76e77a
 
 KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
 
@@ -46,4 +48,4 @@ The module is built from amix-cdfs's portable core and backends and its
 platform/amix-kernel glue (BSD 2-clause, LICENSE below); the optional
 3rdparty/libcodesets is not linked in."
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
