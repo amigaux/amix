@@ -1,0 +1,53 @@
+Poly1305 without 64-bit multiplies.  Each 16-byte block took 25
+32x32->64 products, each a call to libgcc's __muldi3 on the
+68020-68060 (the 68060 has no 64-bit MULU.L, so -m68020-60 never emits
+one).  They are now 16x16->32 products (MULU.W) of the operands' 16-bit
+halves: with the limbs under 2^27 and r and 5r under 2^29, the cross and
+high sums fit 32 bits and only the low sum needs 64.  The same values,
+the same tags, constant time.
+
+--- a/libtomcrypt/src/mac/poly1305/poly1305.c
++++ b/libtomcrypt/src/mac/poly1305/poly1305.c
+@@ -16,6 +16,25 @@
+ 
+ #ifdef LTC_POLY1305
+ 
++/* d = a0*b0 + ... + a4*b4 from 16x16->32 products, which the 68020-68060
++ * do in one instruction (MULU.W), instead of five 32x32->64 products: GCC
++ * calls libgcc's __muldi3 for each of those, as the 68060 has no 64-bit
++ * MULU.L.  Each a < 2^27 (a 26-bit limb plus a message limb) and each
++ * b < 2^29 (r or 5r, r < 2^26), so the high halves are under 2^11 and
++ * 2^13: the five high*high terms sum below 2^27 and the ten cross terms
++ * below 2^32, and only the low*low sum needs 64 bits.  The same value as
++ * the 64-bit products, in constant time. */
++#define P_W(a,b) ((ulong32)(unsigned short)(a) * (ulong32)(unsigned short)(b))
++#define P_LO(a,b) P_W((a) & 0xffff, (b) & 0xffff)
++#define P_X(a,b) (P_W((a) & 0xffff, (b) >> 16) + P_W((a) >> 16, (b) & 0xffff))
++#define P_HH(a,b) P_W((a) >> 16, (b) >> 16)
++#define D(d,a0,b0,a1,b1,a2,b2,a3,b3,a4,b4) do { \
++      ulong32 x_ = P_X(a0,b0) + P_X(a1,b1) + P_X(a2,b2) + P_X(a3,b3) + P_X(a4,b4); \
++      ulong32 hh_ = P_HH(a0,b0) + P_HH(a1,b1) + P_HH(a2,b2) + P_HH(a3,b3) + P_HH(a4,b4); \
++      d = (ulong64)P_LO(a0,b0) + P_LO(a1,b1) + P_LO(a2,b2) + P_LO(a3,b3) + P_LO(a4,b4); \
++      d += ((ulong64)x_ << 16) + ((ulong64)hh_ << 32); \
++   } while (0)
++
+ /* internal only */
+ static void _poly1305_block(poly1305_state *st, const unsigned char *in, unsigned long inlen)
+ {
+@@ -53,11 +72,11 @@
+       LOAD32L(tmp, in+12); h4 += (tmp >> 8) | hibit;
+ 
+       /* h *= r */
+-      d0 = ((ulong64)h0 * r0) + ((ulong64)h1 * s4) + ((ulong64)h2 * s3) + ((ulong64)h3 * s2) + ((ulong64)h4 * s1);
+-      d1 = ((ulong64)h0 * r1) + ((ulong64)h1 * r0) + ((ulong64)h2 * s4) + ((ulong64)h3 * s3) + ((ulong64)h4 * s2);
+-      d2 = ((ulong64)h0 * r2) + ((ulong64)h1 * r1) + ((ulong64)h2 * r0) + ((ulong64)h3 * s4) + ((ulong64)h4 * s3);
+-      d3 = ((ulong64)h0 * r3) + ((ulong64)h1 * r2) + ((ulong64)h2 * r1) + ((ulong64)h3 * r0) + ((ulong64)h4 * s4);
+-      d4 = ((ulong64)h0 * r4) + ((ulong64)h1 * r3) + ((ulong64)h2 * r2) + ((ulong64)h3 * r1) + ((ulong64)h4 * r0);
++      D(d0, h0,r0, h1,s4, h2,s3, h3,s2, h4,s1);
++      D(d1, h0,r1, h1,r0, h2,s4, h3,s3, h4,s2);
++      D(d2, h0,r2, h1,r1, h2,r0, h3,s4, h4,s3);
++      D(d3, h0,r3, h1,r2, h2,r1, h3,r0, h4,s4);
++      D(d4, h0,r4, h1,r3, h2,r2, h3,r1, h4,r0);
+ 
+       /* (partial) h %= p */
+                     c = (ulong32)(d0 >> 26); h0 = (ulong32)d0 & 0x3ffffff;

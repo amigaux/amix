@@ -152,6 +152,29 @@ Then add the user's authentication: a password costs one DES crypt, and a key
 costs what the user-key bullet above says. The end-to-end handshake times
 measured from the host are under Acceptance.
 
+These tables were measured before patches 06 and 07. Those patches make
+X25519 and every Ed25519 operation about three times faster and Poly1305
+about 1.8 times; the rest is unchanged. Before and after, the same build
+options, on the two 1.1 rows of the acceptance below (emulated ms, the mean
+of the two rows; one run each, Poly1305 alone from a separate one, and the
+unchanged primitives in the same run moved by up to a fifth either way,
+which is the noise):
+
+| Operation | before | after |
+|---|---:|---:|
+| X25519 (one scalar multiplication) | 1379 | 477 |
+| Ed25519 key generation | 2500 | 870 |
+| Ed25519 sign | 2668 | 920 |
+| Ed25519 verify | 5634 | 1797 |
+| Poly1305 alone, 16 KB (KB/s) | 619 | 1082 |
+| chacha20-poly1305@openssh.com, 16 KB packets (KB/s) | 271 | 387 |
+
+Every output on fixed inputs (the `DIGEST` lines: X25519, Ed25519, the
+packet ciphers and the rest) is byte for byte the same before and after, and
+the X25519, Ed25519 and Poly1305 test vectors pass on both rows (Acceptance).
+A connection's server side (two X25519 multiplications and one Ed25519
+signature) now costs about 1.9 s instead of about 5.4 s.
+
 `DROPBEAR_SMALL_CODE`: the unrolled build is 17 KB larger and measures no
 faster here. The interpreter models no instruction cache, and that cache is
 what decides the question on a 68030 (256-byte I-cache) and a 68060 (8 KB).
@@ -227,24 +250,30 @@ otherwise.
 |---|---|
 | `01-atomicio-read.patch` | Amix declares `read(int, void *, unsigned)`, and GCC 14's `size_t` is `unsigned long`: the same width but a different type, so `atomicio(read, …)` is an error. `amix_read` (`port/amix-compat.h`) is `read` cast to the type `atomicio` takes. |
 | `02-scp-bwlimit-integer.patch` | `scp -l` parsed with `strtod` and computed in `double`, the only floating point in the program. On a 68LC040/68LC060 every FP instruction traps to the kernel's emulator. The limit is now a whole number of Kbit/s, computed in integers, and the binary carries no FPU instruction at all (checked with objdump). |
-| `03-client-prefers-rsa-hostkey.patch` | The client asks for an RSA host key before an ed25519 one: verifying rsa-sha2-256 costs about a tenth of an ed25519 verify here (the measurements). |
+| `03-client-prefers-rsa-hostkey.patch` | The client asks for an RSA host key before an ed25519 one: verifying rsa-sha2-256 costs about a fifth of an ed25519 verify here, a tenth before patch 06 (the measurements). |
 | `04-connect-ndelay.patch` | On this system a TCP `connect()` under `O_NONBLOCK` fails with `EAGAIN`, and the socket is writable with `SO_ERROR` 0 at once, even when the connection is refused. Dropbear took the `EAGAIN` for a failure, so `dbclient` reached no other machine ("Connect failed: No more processes"). Under `O_NDELAY` the connect is `EINPROGRESS`, then writable once connected, so the patch connects under `O_NDELAY` and goes to `O_NONBLOCK` once connected. A refused connection fails the `SO_ERROR` query with `EPIPE`, which is now the message instead of "unexpected failure". |
 | `05-svr4-pty-child.patch` | Upstream pushes `ptem`, `ldterm` and `ttcompat` in the connection process, which is a session leader with no controlling tty. On SVR4, pushing `ldterm` there makes the pty that process's controlling tty, so the session's child, after its own `setsid()`, could never get it: `/dev/tty` failed with `ENXIO`, so there was no job control and ^C didn't reach the foreground job. The child now pushes the modules after `setsid()`, as SVR4's `telnetd` does. The master has no line discipline, so `tcgetattr` on it fails: the pty request's window size and the client's terminal modes are kept and set on the slave by the child once the modules are pushed. Before, every session had `ldterm`'s defaults, where `intr` is DEL, the key a modern terminal's Backspace sends. |
+| `06-curve25519-mulsw.patch` | Dropbear's curve25519 and ed25519 code (TweetNaCl) keeps a field element as sixteen 64-bit limbs and multiplies them as 64×64 products. `-m68020-60` never emits the 64-bit `MULU.L`/`MULS.L` the 68060 lacks, so GCC makes each product a call to libgcc's `__muldi3` (four `MULU.W` and two `MULS.L` plus the call): 256 calls per field multiply. The multiply and square now carry each operand into sixteen signed 16-bit limbs and sum `MULS.W` products in 64 bits by add/addx, and the reduction by 38 is shifts and adds. The same values mod p, the same output bytes, constant time. |
+| `07-poly1305-muluw.patch` | libtomcrypt's Poly1305 makes 25 32×32→64 products per 16-byte block, the same `__muldi3` calls. They are now 16×16→32 `MULU.W` products of the operands' halves: with the limbs under 2^27 and r and 5r under 2^29, only the low halves' sum needs 64 bits. The same tags, constant time. |
 
 ### 68LC060 and 68030: the 64-bit arithmetic
 
 curve25519 and ed25519 (TweetNaCl-derived, `curve25519.c`), Poly1305 and ML-KEM
 compute with 64-bit integers. GCC 14 with `-m68020-60` never emits the 64-bit
-`MUL.L`/`DIV.L` forms a 68060 lacks; the products go through libgcc's
-`__muldi3`/`__udivdi3`, which use 32-bit multiplies only. The 68060 gate
-proves it for the shipped binary. None of this is floating point, and the
-binary has no FPU instruction at all, so the FPU-less 68LC060 runs it without
-the kernel's emulator. The known-answer tests (RFC 7748 X25519, RFC 8032
-Ed25519, RFC 4231 HMAC-SHA-256, libtomcrypt's ChaCha20, Poly1305, AES and SHA-2
-vectors) pass on both rows, and every other primitive's output on fixed
-inputs matches the build host's byte for byte (`dbbench`, below). That
-includes ML-KEM, sntrup761, RSA, ECDH and DH, which covers the big-endian and
-32-bit word paths.
+`MUL.L`/`DIV.L` forms a 68060 lacks; a 64-bit product goes through libgcc's
+`__muldi3`, which uses 16- and 32-bit multiplies and costs a call each time.
+The field arithmetic of curve25519 and ed25519 and the Poly1305 block are the
+hot ones, so patches 06 and 07 build them from 16x16->32 multiplies
+(`MULS.W`/`MULU.W`) and add/addx instead; ML-KEM, ed25519's reduction mod the
+group order and libtommath still call `__muldi3`, off the hot paths. The 68060
+gate proves the shipped binary has no 64-bit form. None of this is floating
+point, and the binary has no FPU instruction at all, so the FPU-less 68LC060
+runs it without the kernel's emulator. The known-answer tests (RFC 7748
+X25519, RFC 8032 Ed25519, RFC 4231 HMAC-SHA-256, libtomcrypt's ChaCha20,
+Poly1305, AES and SHA-2 vectors) pass on both rows, and every other
+primitive's output on fixed inputs matches the build host's byte for byte
+(`dbbench`, below). That includes ML-KEM, sntrup761, RSA, ECDH and DH, which
+covers the big-endian and 32-bit word paths.
 
 ### Install
 
@@ -281,7 +310,7 @@ includes ML-KEM, sntrup761, RSA, ECDH and DH, which covers the big-endian and
 
 ## Acceptance
 
-**Emulator, 2026-11-02: PASS.** `tests/smoke.sh` on the box with
+**Emulator, 2026-11-03: PASS.** `tests/smoke.sh` on the box with
 `tests/host.sh` on the host (OpenSSH 10.2 client and server), on two emulated
 A4000s with a Z3660 (Amiberry; the emulator's timings are not the
 hardware's, and only compare with each other):
@@ -291,10 +320,20 @@ hardware's, and only compare with each other):
 | 1.1 A4000D disk, 68060, after first boot | kern46m 68060-261101-57, random module | 21 ok | 22 ok |
 | 1.1 A4000D disk, 68030, after first boot | kern30m 68030-261101-68, random-k30 | 21 ok | 22 ok |
 
-- **Package:** `dropbear-2026.94-1.pkg`, 401408 bytes, md5
-  `d87bc85eaae9159b5ae7c295e5e30c6a`, sha256 `321cbeda…5637`. Two rolls in
-  the build container (gcc14 43825b2) are identical, and every gate passes.
-  The binary is 285524 bytes.
+- **Package:** `dropbear-2026.94-2.pkg`, 401920 bytes, md5
+  `18774926ddd5e23b932bb4ce3c4d379f`, sha256 `1cf388a4…f690`. Two rolls in
+  the build container (gcc14 dcfd12d) are identical, and every gate passes.
+  The binary is 286324 bytes. The same checks passed on 2026-11-02 with
+  2026.94-1 (md5 `d87bc85e…5e30c6a`), before patches 06 and 07.
+- **Test vectors on the box** (both rows), each value computed by
+  pyca/cryptography and the RFC ones checked against the RFC text: X25519,
+  66 pairs and RFC 7748's iterated vector after 1 and 1000 steps; Ed25519, 35
+  keys with sign, verify and a tampered signature refused, RFC 8032's tests
+  1–3 among them; Poly1305, 53 tags, RFC 8439's among them, each whole and
+  split; ChaCha20, 25 streams in SSH's 64-bit-counter layout, RFC 8439's
+  among them. All pass. On the build host, the patched code against
+  upstream's: 3 million field multiplies and as many squares, 2 million
+  Poly1305 tags and 200 million block sums, the same results.
 - **Install:** apkg's pkgadd rc 0 and `pkgchk dropbear` rc 0 on both. On
   the 68030 disk the stock `pkgadd -n` stops with "files already installed
   … used by another package", an empty list, and changes nothing, whatever
@@ -318,17 +357,20 @@ hardware's, and only compare with each other):
   host → box, `sum -r` matching.
 - **`dropbearkey`** won't write through a symbolic link.
 - **Removal:** `pkgrm` rc 0, and the contents file has no dropbear line left.
-- **Timings from the host**, OpenSSH, key login, per handshake and per MiB
-  (emulated s, the mean of the two systems, which were within 5% of each other):
+- **Timings from the host**, OpenSSH, key login, per handshake and per MiB,
+  each MiB with its own connection (emulated s, the mean of the two systems,
+  which were within 17% of each other; the host ran up to four other
+  emulators meanwhile). Before is 2026.94-1 on 2026-11-02:
 
-| Kex + cipher | handshake | 1 MiB up | 1 MiB down |
-|---|---:|---:|---:|
-| mlkem768x25519 + chacha20-poly1305 | 7.8 | 11.1 | 11.2 |
-| mlkem768x25519 + aes128-ctr | 7.8 | 11.5 | 11.6 |
-| curve25519 + chacha20-poly1305 | 7.6 | 10.9 | 11.2 |
-| curve25519 + aes128-ctr | 7.6 | 11.0 | 11.8 |
+| Kex + cipher | handshake | before | 1 MiB up | before | 1 MiB down | before |
+|---|---:|---:|---:|---:|---:|---:|
+| mlkem768x25519 + chacha20-poly1305 | 4.1 | 7.8 | 7.6 | 11.1 | 8.2 | 11.2 |
+| mlkem768x25519 + aes128-ctr | 4.4 | 7.8 | 10.3 | 11.5 | 10.5 | 11.6 |
+| curve25519 + chacha20-poly1305 | 4.0 | 7.6 | 6.8 | 10.9 | 7.6 | 11.2 |
+| curve25519 + aes128-ctr | 3.5 | 7.6 | 8.0 | 11.0 | 8.9 | 11.8 |
 
-**Hardware, 2026-11-02.** A4000, 68060 at 80 MHz, the 1.1 system with the
+**Hardware, 2026-11-02**, 2026.94-1 (before patches 06 and 07). A4000,
+68060 at 80 MHz, the 1.1 system with the
 random module: installed with apkg's pkgadd, the boot script
 (`sh /etc/init.d/dropbear start`) made the host key and started the server,
 and password logins work. From OpenSSH on the host: the banner in 0.13 s,
