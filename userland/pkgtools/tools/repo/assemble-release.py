@@ -31,6 +31,11 @@
 #   The --apkg and --stock rows are gen-catalog's, with this directory's
 #   deps/names/cats/descs.conf, as every pkgtools row is made.
 #
+# Every live ordinary row gets its #isize line (`#ext isize 1`), the
+# installed size gen-catalog --isize computes from the datastream's pkgmap,
+# as the install CD's catalog has it: the installer's free-space check sizes
+# the network install from it.  An input's own #isize line must agree.
+#
 # Every published version stays.  The catalog's live part has ONE row per
 # name, the newest (every apkg ever shipped takes the first row of a name, so
 # several live rows would be read wrongly by the clients on the boxes).  Older
@@ -448,6 +453,51 @@ def merge(inputs, prev_live, prev_older):
     return live, older, notes
 
 
+_GENCAT = None
+
+
+def gencat():
+    """gen-catalog.py as a module: the release's #isize values come from its
+    own parse_datastream() and installed_size(), the --isize code the
+    install CD's catalog is written with."""
+    global _GENCAT
+    if _GENCAT is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "gen_catalog", os.path.join(HERE, "gen-catalog.py"))
+        _GENCAT = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(_GENCAT)
+    return _GENCAT
+
+
+def size_rows(live):
+    """An #isize line for every live ordinary row (gen-catalog sizes
+    ordinary entries only; a #kpkg entry gets none), from the datastream's
+    pkgmap.  A row an input already sized must agree."""
+    g = gencat()
+    for e in sorted(live.values(), key=lambda x: x.name):
+        if e.kind != "row":
+            continue
+        p = e.path()
+        try:
+            if p.endswith(".Z"):
+                raw = g.decompress_z(p)
+            else:
+                with open(p, "rb") as fp:
+                    raw = fp.read()
+            n = g.installed_size(g.parse_datastream(raw)[2])
+        except g.Malformed as x:
+            raise Refused("%s: %s" % (e.who(), x))
+        if n is None:
+            raise Refused("%s: no installed size: %s has no pkgmap that can be "
+                          "summed" % (e.who(), e.filename))
+        line = "#isize %s %d" % (e.name, n)
+        if "isize" in e.ann and e.ann["isize"] != line:
+            raise Refused("%s: its catalog says %r, the datastream sums to %d"
+                          % (e.who(), e.ann["isize"], n))
+        e.ann["isize"] = line
+
+
 def render(live, older):
     rows = sorted((e for e in live.values() if e.kind == "row"), key=lambda e: e.name)
     kp = sorted((e for e in live.values() if e.kind == "kpkg"), key=lambda e: e.name)
@@ -657,6 +707,7 @@ def main():
                 for e in prev_live + prev_older:
                     e.verify()
             live, older, notes = merge(inputs, prev_live, prev_older)
+            size_rows(live)
             body = render(live, older)
 
             if os.path.lexists(tmp):

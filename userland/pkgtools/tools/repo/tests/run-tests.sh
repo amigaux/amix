@@ -2804,6 +2804,14 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         bash -c "cmp -s '$S34/ap/APKG-0.3.6.pkg' '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' && cmp -s '$S34/st/core-2.1.pkg' '$S34/out/1.1/pkgs/stock/core-2.1.pkg' && cmp -s '$S34/ks/pkgs/kmod46-1.0.pkg' '$S34/out/1.1/pkgs/kmod46-1.0.pkg' && test ! -e '$S34/out/1.1/pkgs/deps.conf'"
     check "  ... the userland catalog's fstype block is carried, after the rows and before the kpkg block" \
         bash -c "grep -A1 -x '#ext fstype 1' '$C34' | grep -qx '#fstype ufst ufs' && test \$(grep -n -x '#ext fstype 1' '$C34' | cut -d: -f1) -gt \$(grep -n '^zlibt|' '$C34' | cut -d: -f1) && test \$(grep -n -x '#ext fstype 1' '$C34' | cut -d: -f1) -lt \$(grep -n -x '#ext kpkg 1' '$C34' | cut -d: -f1)"
+    # the installed sizes: gen-catalog --isize's, the install CD's way
+    mkdir -p "$S34/gi"; python3 "$GEN" --isize --packages-conf none -o "$S34/gi" "$S34/ul/pkgs" >/dev/null 2>&1
+    check "  ... an #isize line for every live ordinary row, none for the #kpkg entry" \
+        bash -c "test \$(grep -c '^[^#]' '$C34') = \$(grep -c '^#isize ' '$C34') && ! grep -q '^#isize kmod-k46 ' '$C34' && grep -q '^#isize core [0-9]' '$C34' && grep -q '^#isize apkg [0-9]' '$C34'"
+    check "  ... each one what gen-catalog --isize writes for the same datastream" \
+        bash -c "for n in zlibt ufst; do grep -qx \"\$(grep \"^#isize \$n \" '$S34/gi/catalog')\" '$C34' || exit 1; done"
+    check "  ... in gen-catalog's order: entries, isize, fstype, kpkg" \
+        bash -c "a=\$(grep -n -x '#ext isize 1' '$C34' | cut -d: -f1); b=\$(grep -n -x '#ext fstype 1' '$C34' | cut -d: -f1); test -n \"\$a\" && test \"\$a\" -lt \"\$b\""
     check "  ... catalog.md5 is the catalog's" \
         test "$(cut -c1-32 "$S34/out/1.1/catalog.md5")" = "$(md5sum < "$C34" | cut -c1-32)"
     check "  ... apkg reads it as one repository" \
@@ -2874,6 +2882,8 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     t34no 1 "a #fstype line naming a package its catalog does not carry: refused" "#fstype names zlibt, which is not in this catalog"
     { cat "$S34/ks.cat"; printf '#ext fstype 1\n#fstype ktool ufs\n#fstype ktool s5\n'; } > "$S34/ks/catalog"; kmd5
     t34no 1 "two #fstype lines for one package: refused" "a second #fstype line for ktool"
+    { cat "$S34/ks.cat"; printf '#ext isize 1\n#isize ktool 1\n'; } > "$S34/ks/catalog"; kmd5
+    t34no 1 "an input #isize the datastream does not sum to: refused" "ktool 1.0 (kspace): its catalog says '#isize ktool 1'"
     cp "$S34/ks.cat" "$S34/ks/catalog"; cp "$S34/ks.md5" "$S34/ks/catalog.md5"
     t34no 3 "no release-check: [MISSING], rc 3" "\[MISSING\] assemble-release: release-check" --release-check "$S34/nosuch"
     t34no 3 "no private patterns: [MISSING], rc 3" "\[MISSING\] assemble-release: private patterns" --private-patterns "$S34/nosuch"
@@ -2892,7 +2902,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     check "  ... the published row is kept verbatim in the older block" \
         bash -c "grep -qx \"#old \$(grep '^apkg|' '$C34')\" '$C3' && grep -qx '#ext older 1' '$C3' && grep -qx '#end older' '$C3'"
     check "  ... the published file stays, byte for byte, and every other row is as published" \
-        bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|' '$C34') <(grep -v '^apkg|\|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
+        bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|\|^#isize apkg ' '$C34') <(grep -v '^apkg|\|^#isize apkg \|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
     check "  ... apkg reads one row per name (the older block is skipped)" \
         grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.p"
     ar34 "$S34/out4/1.1" --previous "$S34/out3/1.1" >/dev/null 2>&1
@@ -2905,7 +2915,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     ar34 "$S34/out5/1.1" --previous "$S34/out3/1.1" --userland "$S34/ul3" >"$WORK/t34.5" 2>&1
     C5="$S34/out5/1.1/catalog"
     check "a newer UFS-only package: live 2.0 with its #fstype, the older row followed by its own" \
-        bash -c "test $? -eq 0 && grep -q '^ufst|2.0|' '$C5' && grep -qx '#fstype ufst ufs' '$C5' && grep -A1 '^#old ufst|1.0|' '$C5' | grep -qx '#old #fstype ufst ufs'"
+        bash -c "test $? -eq 0 && grep -q '^ufst|2.0|' '$C5' && grep -qx '#fstype ufst ufs' '$C5' && grep -A2 '^#old ufst|1.0|' '$C5' | grep -qx '#old #fstype ufst ufs' && grep -A1 '^#old ufst|1.0|' '$C5' | grep -q '^#old #isize ufst [0-9]'"
     ar34 "$S34/out6/1.1" --previous "$S34/out5/1.1" --userland "$S34/ul3" >/dev/null 2>&1
     check "  ... and an assembly over that tree reads the #old #fstype line back: same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C5' '$S34/out6/1.1/catalog'"
