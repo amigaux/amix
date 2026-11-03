@@ -301,6 +301,31 @@ mapfile -t SET_MEMBERS < <(resolve_set "$SET_NAME") || true
     echo "      available: $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}' | tr '\n' ' ')base"
   } >&2; exit 1; }
 
+# A 1.1 medium's base packages (make dist's userland: $L11_IN/base/sets, a name alone on its line is
+# one every set takes) are installed by l11_base, so a stock set member of the same name (cdfs, make
+# dist's 1.1.0-1 since amix f517676) is not a stock member as well: it leaves the set orders and the
+# disc's pkgs/, and a set needs it there no longer to be offered.
+L11_PROVIDES=" "
+_l11b="${L11_IN:-$repo/work/l11}/base/sets"
+if [ -f "$_l11b" ]; then
+  for _p in "${PROFILES[@]}"; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" = 1.1 ] || continue
+    L11_PROVIDES=" $(awk 'NF == 1 { printf "%s ", tolower($1) }' "$_l11b")"; break
+  done
+fi
+l11_filter() {   # l11_filter NAME... -> the names a 1.1 base package does not provide, one per line
+  local n
+  for n in "$@"; do
+    case "$L11_PROVIDES" in *" ${n,,} "*) ;; *) printf '%s\n' "$n" ;; esac
+  done
+}
+_drop=""
+for _m in "${SET_MEMBERS[@]}"; do case "$L11_PROVIDES" in *" ${_m,,} "*) _drop="$_drop $_m" ;; esac; done
+if [ -n "$_drop" ]; then
+  mapfile -t SET_MEMBERS < <(l11_filter "${SET_MEMBERS[@]}")
+  echo "build-install-iso: from the 1.1 base packages (make dist), not stock set members:$_drop"
+fi
+
 # A 1.1 medium's base carries m4: the 2.1c syslogd reads /etc/syslog.conf only through
 # /usr/ccs/bin/m4 (the m4 package; Cdev ships the same file) and files nothing without
 # it. install.sh refuses a 1.1 order with neither.
@@ -325,7 +350,7 @@ mapfile -t SELECTED < <(set_tokens "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_
 MEDIA_NAMES=" $(printf '%s ' "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"} | tr 'A-Z' 'a-z')"
 set_satisfiable() {   # set_satisfiable NAME
   local m
-  for m in $(resolve_set "$1"); do
+  for m in $(l11_filter $(resolve_set "$1")); do
     case "$MEDIA_NAMES" in *" ${m,,} "*) ;; *) return 1 ;; esac
   done
   return 0
@@ -1083,7 +1108,7 @@ for s in $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}'); do
   # NB: set_tokens ends in `printf '%s\n' <array>`, and printf applies its format
   # ONCE even with no arguments -- so an empty set comes back as one EMPTY line,
   # i.e. an array of length 1, not 0. Count real tokens, and pass only those on.
-  mapfile -t _raw < <(set_tokens $(resolve_set "$s")) || exit 1
+  mapfile -t _raw < <(set_tokens $(l11_filter $(resolve_set "$s"))) || exit 1
   stoks=()
   for _t in ${_raw[@]+"${_raw[@]}"}; do [ -n "$_t" ] && stoks+=("$_t"); done
   if [ "${#stoks[@]}" -eq 0 ]; then
