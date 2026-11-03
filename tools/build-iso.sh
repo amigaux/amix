@@ -101,6 +101,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 repo="$(cd "$here/.." && pwd)"
 
 PKGMGR="${PKGMGR:-$repo/../amix-packagemanager}"
@@ -568,7 +569,7 @@ PY
 echo
 echo "=== xorriso: mastering (single session, RR on, Joliet off) ==="
 rm -f "${TMPISO:?}"
-xorriso -as mkisofs \
+xorriso -as mkisofs ${SOURCE_DATE_EPOCH:+--set_all_file_dates "=$SOURCE_DATE_EPOCH"} \
         -o "$TMPISO" \
         -V "$VOLID" \
         -publisher "amix-installng" \

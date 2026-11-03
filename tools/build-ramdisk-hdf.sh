@@ -21,6 +21,7 @@
 # The image is a build artefact: never committed.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 TREE= OUT= PRI=5 HBA=z3660scsi
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -38,6 +39,9 @@ grep -q '^SYS:BOOT/amix-cdboot' "$TREE/S/Startup-Sequence" || die "$TREE/S/Start
 case "$PRI" in ''|*[!0-9]*) die "--pri '$PRI' is not a boot priority (0-127)" ;; esac
 [ "$PRI" -le 127 ] || die "--pri $PRI is not a boot priority (0-127)"
 command -v rdbtool >/dev/null && command -v xdftool >/dev/null || die "rdbtool and xdftool (amitools) required"
+# xdftool under the epoch (tools/lib/xdftool-epoch.py, amitools' own interpreter): the FFS dates of record
+XDF_PY="${XDFTOOL_PY:-$(sed -n '1s/^#!//p' "$(command -v xdftool)")}"
+xdf() { "$XDF_PY" "$here/lib/xdftool-epoch.py" "$@"; }
 if git -C "$(dirname "$OUT")" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 	git -C "$(dirname "$OUT")" check-ignore -q "$OUT" || die "$OUT is on a git-tracked path: a disk image is never committed"
 fi
@@ -48,19 +52,19 @@ DISK_MB=$(( PART_MB + 1 ))
 W="$(mktemp -d "${OUT}.work.XXXXXX")"
 trap 'rm -rf "${W:?}"' EXIT
 # the volume: FFS, the tree's directories first, then every file under its own path
-xdftool "$W/part.hdf" create "size=${PART_MB}Mi" + format AmixBoot ffs > "$W/xdf.log" 2>&1 || { cat "$W/xdf.log" >&2; die "xdftool could not make the volume"; }
+xdf "$W/part.hdf" create "size=${PART_MB}Mi" + format AmixBoot ffs > "$W/xdf.log" 2>&1 || { cat "$W/xdf.log" >&2; die "xdftool could not make the volume"; }
 ( cd "$TREE" && find . -mindepth 1 -type d | sed 's|^\./||' | sort ) | while read -r d; do
-	xdftool "$W/part.hdf" makedir "$d" >> "$W/xdf.log" 2>&1 || die "xdftool makedir $d"
+	xdf "$W/part.hdf" makedir "$d" >> "$W/xdf.log" 2>&1 || die "xdftool makedir $d"
 done
 ( cd "$TREE" && find . -type f | sed 's|^\./||' | sort ) > "$W/files"
 while read -r f; do
-	xdftool "$W/part.hdf" write "$TREE/$f" "$f" >> "$W/xdf.log" 2>&1 || die "xdftool write $f"
+	xdf "$W/part.hdf" write "$TREE/$f" "$f" >> "$W/xdf.log" 2>&1 || die "xdftool write $f"
 done < "$W/files"
 # read every file back off the volume and compare
 mkdir -p "$W/back"
 while read -r f; do
 	mkdir -p "$W/back/$(dirname "$f")"
-	xdftool "$W/part.hdf" read "$f" "$W/back/$f" >> "$W/xdf.log" 2>&1 && cmp -s "$TREE/$f" "$W/back/$f" || die "the volume's $f does not read back"
+	xdf "$W/part.hdf" read "$f" "$W/back/$f" >> "$W/xdf.log" 2>&1 && cmp -s "$TREE/$f" "$W/back/$f" || die "the volume's $f does not read back"
 done < "$W/files"
 # the disk: an RDB and the volume as its one partition, bootable at PRI
 rdbtool -f "$W/disk.hdf" create "size=${DISK_MB}Mi" + init + addimg "$W/part.hdf" name=AMIXBOOT \

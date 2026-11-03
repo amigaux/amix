@@ -25,6 +25,7 @@
 # these files is a separate, per-artefact decision. Exit 0 all built and clean, 1 not, 2 usage.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 # the workspace: the directory holding this repository's git directory (a worktree's too); amix's
 # tools/release-check is the one content check every release file passes
 ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"

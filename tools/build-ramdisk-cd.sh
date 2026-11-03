@@ -24,6 +24,7 @@
 # object in the image byte for byte, a ufs image's block size at least 4096).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-ramdisk-cd: STOP: $*" >&2; exit 1; }
 . "$here/lib/ramdisk-media.sh"
 

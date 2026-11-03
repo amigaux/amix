@@ -50,6 +50,7 @@
 # Publication: unpublished; publishing it is a per-artefact owner decision.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-netinstall: STOP: $*" >&2; exit 1; }
 
 I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA=
@@ -110,7 +111,7 @@ no packages itself.
 Publication: unpublished (publishing this medium is a per-artefact owner decision).
 EOF
 mkdir -p "$(dirname "$ISO")"; rm -f "${ISO:?}"
-xorriso -as mkisofs -o "$ISO" -V "$VOLID" -publisher "amix-installng" -A "AMIX 2.1 NETINSTALL" \
+xorriso -as mkisofs ${SOURCE_DATE_EPOCH:+--set_all_file_dates "=$SOURCE_DATE_EPOCH"} -o "$ISO" -V "$VOLID" -publisher "amix-installng" -A "AMIX 2.1 NETINSTALL" \
   -iso-level 3 -rational-rock -sysid "AMIGA BOOT" "$root" > "$W/xorriso.log" 2>&1 \
   || { tail -5 "$W/xorriso.log" >&2; die "xorriso refused"; }
 back="$W/readback"; [ ! -d "$back" ] || chmod -R u+w "$back"; rm -rf "${back:?}"; mkdir -p "$back"

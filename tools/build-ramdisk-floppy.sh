@@ -23,6 +23,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
 die() { echo "build-ramdisk-floppy: STOP: $*" >&2; exit 1; }
 . "$here/lib/ramdisk-media.sh"
+. "$here/lib/media-epoch.sh"; media_epoch || exit 1
 
 LINE= IMG= OUT= WD="$repo/work/ramdisk-floppy"
 while [ $# -gt 0 ]; do case "$1" in
