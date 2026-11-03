@@ -1,5 +1,27 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-03 — assemble-release: an #isize line for every package row
+
+The 1.1 repository catalog carried no `#isize` block, while the install CD's catalog has one
+(`gen-catalog.py --isize` over the disc's pkgs/, 18 lines). So the netinstall's free-space
+check sized nothing, and a full network install ran out of space on the default 416 MiB root.
+
+- assemble-release now writes `#ext isize 1` with one line per live ordinary row, ours and
+  stock. The values come from gen-catalog's own `parse_datastream()` and `installed_size()` (the
+  sum of the pkgmap's f/v/e/i sizes), imported rather than copied.
+- A `#kpkg` entry gets none, as in gen-catalog; the install media's check_catalog_isize refuses a name
+  that isn't an ordinary row. An input's own `#isize` line must agree, and a row whose pkgmap
+  can't be summed is refused.
+- Checked against the cut's disc catalog (amix-1.1-install.iso, 18 rows):
+  - 17 rows are shared, everything but the July cdfs, which the tree doesn't carry;
+  - all 17 have the same datastream md5 and the same `#isize` value.
+- On a make dist out/userland + candidate-15f96d8d + APKG 0.3.6/APKGENG 1.12.6 + the 28 stock:
+  - 36 rows, 36 `#isize` lines; the install media's check_catalog_isize: 0 violations, 36 of 36 sized;
+  - catalog md5 3181503;
+  - byte-identical under umask 077 and another TZ.
+- T34 has 4 new checks: every row sized and none for `#kpkg`, values equal to gen-catalog
+  `--isize`, the block order, and a disagreeing input refused.
+
 ## 2026-11-02 — assemble-release: GCC 14 ELFs by the D4 rule, fstype/isize blocks carried
 
 **The 68060 scan.** On make dist's userland at 69a05e6, scan060.py reported 1,637 hits in

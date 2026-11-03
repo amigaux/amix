@@ -363,8 +363,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   #end older
   ```
 
-  gen-catalog's per-name blocks (`#ext fstype 1`, `#ext isize 1`) are carried with the row they
-  describe. The live ones follow the entries in gen-catalog's order. An older row keeps its own
+  Every live ordinary row gets an `#isize` line: the installed size gen-catalog's `--isize`
+  computes from the datastream's pkgmap, as on the install CD's catalog, so the installer's
+  free-space check sizes a network install as it sizes the CD. A `#kpkg` entry gets none, as
+  in gen-catalog. An input's own `#isize` line must agree. gen-catalog's per-name blocks
+  (`#ext fstype 1`, `#ext isize 1`) are carried with the row they describe. The live ones follow the entries in gen-catalog's order. An older row keeps its own
   as `#old #fstype …` after it.
 
   The tool refuses, and writes nothing, when:
