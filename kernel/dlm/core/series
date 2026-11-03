@@ -53,3 +53,4 @@
 0050-first-records-message.patch
 0051-manifest-major-table.patch
 0052-interrupt-chain-early-out.patch
+0053-modadmin-namelist.patch

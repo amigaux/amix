@@ -1,0 +1,146 @@
+The curve25519 and ed25519 field arithmetic without 64-bit multiplies.
+TweetNaCl keeps a field element as sixteen 64-bit limbs and multiplies
+them as 64x64 products: GCC makes each a call to libgcc's __muldi3 on
+the 68020-68060 (the 68060 has no 64-bit MULU.L, so -m68020-60 never
+emits one), 256 calls per field multiply.  The multiply and square now
+carry each operand into sixteen signed 16-bit limbs and sum MULS.W
+products in 64 bits by add/addx; the reduction by 38 is shifts and adds.
+The values are the same mod p, the outputs byte for byte the same, and
+it stays constant time.  An x25519 scalar multiply and an ed25519
+signature take about a third of the time they did.
+
+--- a/src/curve25519.c
++++ b/src/curve25519.c
+@@ -82,6 +82,19 @@
+ }
+ #endif /* DROPBEAR_ED25519 */
+ 
++/* x*38 by shifts and adds: GCC makes a 64-bit multiply a call to
++ * libgcc's __muldi3 on the 68020-68060, and folds plain shifts and adds
++ * back into one; the empty asm hides a term from that fold. */
++static i64 mul38(i64 x)
++{
++  u64 a=(u64)x<<1,b=a<<4,c=a<<1;
++#ifdef __GNUC__
++  __asm__("" : "+g"(b), "+g"(c));
++#endif
++  return (i64)(b+c+a);
++}
++#define MUL38(x) mul38(x)
++
+ sv car25519(gf o)
+ {
+   int i;
+@@ -89,7 +102,7 @@
+   FOR(i,16) {
+     o[i]+=(1LL<<16);
+     c=o[i]>>16;
+-    o[(i+1)*(i<15)]+=c-1+37*(c-1)*(i==15);
++    if (i<15) o[i+1]+=c-1; else o[0]+=MUL38(c-1);
+     o[i]-=((u64)c)<<16;
+   }
+ }
+@@ -167,20 +180,88 @@
+   FOR(i,16) o[i]=a[i]-b[i];
+ }
+ 
+-sv M(gf o,const gf a,const gf b)
++/* The field multiply in 16x16->32 products, which every 68020-68060
++ * does in one instruction (MULS.W), summed in 64 bits by add/addx: no
++ * 64-bit multiply, which GCC calls libgcc's __muldi3 for.  Each operand
++ * is first carried into 16 signed limbs in [-2^15,2^15), the same value
++ * mod p; three passes always get there (the third can only carry out of
++ * limb 0 when the second carried out of limb 15, which leaves limbs
++ * 1-15 at the far end, so the carry stops at limb 1).  Constant time:
++ * no branch or index depends on the data. */
++typedef short i16;
++typedef int i32;
++typedef unsigned int w32;
++
++sv norm16(i16 *r,const gf a)
++{
++  int i,k;
++  i64 x,c=0;
++  i32 s[16],d,e;
++  FOR(i,16) {
++    x=a[i]+c;
++    c=(x+0x8000)>>16;
++    s[i]=(i32)(x-(i64)((u64)c<<16));
++  }
++  e=(i32)c;
++  FOR(k,2) {
++    s[0]+=(i32)(((unsigned)e<<5)+((unsigned)e<<2)+((unsigned)e<<1));
++    e=0;
++    FOR(i,16) {
++      d=s[i]+e;
++      e=(d+0x8000)>>16;
++      s[i]=d-(i32)((unsigned)e<<16);
++    }
++  }
++  s[0]+=(i32)(((unsigned)e<<5)+((unsigned)e<<2)+((unsigned)e<<1));
++  FOR(i,16) r[i]=(i16)s[i];
++}
++
++sv fold(gf o,i64 *t)
+ {
+-  i64 i,j,t[31];
+-  FOR(i,31) t[i]=0;
+-  FOR(i,16) FOR(j,16) t[i+j]+=a[i]*b[j];
+-  FOR(i,15) t[i]+=38*t[i+16];
++  int i;
++  FOR(i,15) t[i]+=MUL38(t[i+16]);
+   FOR(i,16) o[i]=t[i];
+   car25519(o);
+   car25519(o);
+ }
+ 
++/* Column k of the product is the sum of x[i]*y[k-i].  Each 32-bit
++ * product gets 2^31 added (its top bit flipped), so the terms are
++ * unsigned and the 64-bit sum needs only add/addx; the 2^31s come off at
++ * the end.  The square sums each cross product once and doubles it. */
++sv M(gf o,const gf a,const gf b)
++{
++  i16 x[16],y[16];
++  i64 t[31];
++  int i,k,lo;
++  u64 acc;
++  norm16(x,a);
++  norm16(y,b);
++  FOR(k,31) {
++    lo=k>15?k-15:0;
++    acc=0;
++    for(i=lo;i<=k-lo;i++) acc+=(w32)((i32)x[i]*y[k-i])^0x80000000U;
++    t[k]=(i64)(acc-((u64)(i-lo)<<31));
++  }
++  fold(o,t);
++}
++
+ sv S(gf o,const gf a)
+ {
+-  M(o,a,a);
++  i16 x[16];
++  i64 t[31];
++  int i,k,lo;
++  u64 acc;
++  norm16(x,a);
++  FOR(k,31) {
++    lo=k>15?k-15:0;
++    acc=0;
++    for(i=lo;2*i<k;i++) acc+=(w32)((i32)x[i]*x[k-i])^0x80000000U;
++    acc=(acc<<1)-((u64)(i-lo)<<32);
++    if (!(k&1)) acc+=(w32)((i32)x[k>>1]*x[k>>1]);
++    t[k]=(i64)acc;
++  }
++  fold(o,t);
+ }
+ 
+ sv inv25519(gf o,const gf i)
+@@ -423,7 +504,7 @@
+ 
+   FOR(i,64) x[i] = 0;
+   FOR(i,32) x[i] = (u64) r[i];
+-  FOR(i,32) FOR(j,32) x[i+j] += h[i] * (u64) d[j];
++  FOR(i,32) FOR(j,32) x[i+j] += (u32)h[i] * d[j];
+   modL(s + 32,x);
+ }
+ 

@@ -18,6 +18,13 @@ char *plat_buildid(void);
 unsigned long dma_addr(char *, unsigned long);
 char *dma_alloc(unsigned long, unsigned long *);
 void dma_free(char *, unsigned long);
+/* line.c's empty inode table, not exercised here (t_zwin46.c) */
+char kvseg[16];
+char *sptalloc(int n, int m, int b, int f) { (void)n, (void)m, (void)b, (void)f; return 0; }
+void sptfree(char *v, int n, int f) { (void)v, (void)n, (void)f; }
+unsigned long *vatosde(char *v) { (void)v; return 0; }
+unsigned long *vatopte(char *v, unsigned long *s) { (void)v, (void)s; return 0; }
+void segkmem_setprot(char *g, char *v, unsigned long l, unsigned long p) { (void)g, (void)v, (void)l, (void)p; }
 
 static char heap[0x30000], phys[0x30000];	/* A, the heap's VAs; B, its pages */
 static char *last_p, *freed_p;

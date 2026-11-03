@@ -1,4 +1,4 @@
-# C4-6 — the filesystem module form, version 6
+# C4-6 — the filesystem module form, version 7
 
 - **Status:** agreed 2026-10-26, with this draft's three
   choices: the renamed-table pattern (§2), the stock rows plus 4 (§2),
@@ -12,7 +12,9 @@
   at the first mount of its type (§1, §5); cdfs is (core patch 0048,
   kabi minor 4). Version 6 (2026-10-31): that load never waits for
   memory; short memory fails the mount with `ENOMEM` (§5, core patch
-  0049).
+  0049). Version 7 (2026-11-03): the COMMONs stock kmem readers name
+  stay in the kernel, and `inode` has an empty table while no s5 is
+  loaded (§4).
   Other repositories
   build against this text; a change from here is a contract change with
   a version bump.
@@ -124,7 +126,14 @@ more than the DDI: about 112 names for ufs and 108 for s5 (20 §4.1),
 among them `bdevsw`, `vfssw` and `nfstype`. These are the core tier,
 `abi/<line>/core.list`, written by the carve:
 - every name a carved object imports that the DDI lacks;
-- `vfssw` and `nfstype` resolve to the core's grown table (§2).
+- `vfssw` and `nfstype` resolve to the core's grown table (§2);
+- the COMMONs stock kmem readers name, `inode`, `ifreelist`, `ufs_inode`,
+  `inodeNINODE` and `ifreeh` (version 7, C3-2 §4). The kernel keeps
+  them. While no s5 is loaded, the module core points `inode` at an empty
+  table: ninode inodes of read-only pages that all map one zeroed page,
+  so `sar -v` reads zeros rather than low memory. s5's `inoinit` replaces
+  the pointer, and the s5 wrapper keeps the empty table's address for an
+  unload to put back.
 
 A core-tier module carries `tier=core` and the kernel's `build=`, and
 loads only on that kernel build (C3-1). So the ufs and s5 modules are

@@ -1,0 +1,82 @@
+Subject: modadmin: rewrite /stand/unix after a load or an unload
+
+The namelist /stand/unix that kbootset writes carries the loaded
+modules' globals at their addresses (amix-dlm C2-4 section 12), which
+crash needs to find a module's tables.  After -l, -u or -U has loaded or
+unloaded a module, modadmin runs /sbin/kbootset namelist, when present,
+with its output discarded; the exit status stays modadmin's own.  User
+side only.
+
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -39,6 +39,10 @@
+  * which kbootset writes for the booted kernel (amix-dlm C2-4 section 12),
+  * and reads them through /dev/kmem.
+  *
++ * That namelist also carries the loaded modules' globals (crash finds a
++ * module's tables there), so after -l, -u or -U has loaded or unloaded a
++ * module, /sbin/kbootset namelist is run to rewrite it, when present.
++ *
+  * Exit status 1 if any operand failed.  Built for AMIX with libmod.a.
+  *
+  * K&R C.
+@@ -257,6 +261,14 @@
+ 	    w[0] << 8 | w[1]);
+ }
+ 
++/* /stand/unix after a load or an unload: kbootset rewrites it, quietly */
++void
++renamelist()
++{
++	if (access("/sbin/kbootset", 1) == 0)
++		system("/sbin/kbootset namelist >/dev/null 2>&1");
++}
++
+ void
+ fail(what, arg)
+ 	char *what, *arg;
+@@ -430,7 +442,7 @@
+ 	char **argv;
+ {
+ 	struct mod_mreg reg;
+-	int i, id, mj;
++	int i, id, mj, moved = 0;
+ 	char *op;
+ 
+ 	if (argc < 2 || argv[1][0] != '-' || strlen(argv[1]) != 2)
+@@ -441,13 +453,17 @@
+ 		for (i = 2; i < argc; i++)
+ 			if ((id = modload(argv[i])) < 0)
+ 				fail("cannot load", argv[i]);
+-			else
++			else {
+ 				printf("%s: loaded, id %d\n", argv[i], id);
++				moved = 1;
++			}
+ 		break;
+ 	case 'u':
+ 		for (i = 2; i < argc; i++)
+ 			if (moduload(atoi(argv[i])) < 0)
+ 				fail("cannot unload", argv[i]);
++			else
++				moved = 1;
+ 		break;
+ 	case 'U':
+ 		for (i = 2; i < argc; i++) {
+@@ -456,6 +472,8 @@
+ 				fail("cannot unload", argv[i]);
+ 			} else if (moduload(id) < 0)
+ 				fail("cannot unload", argv[i]);
++			else
++				moved = 1;
+ 		}
+ 		break;
+ 	case 'q':
+@@ -544,5 +562,7 @@
+ 	default:
+ 		usage();
+ 	}
++	if (moved)
++		renamelist();
+ 	return status;
+ }

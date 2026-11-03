@@ -11,7 +11,13 @@
  *
  * The namelist: the ELF header, the four sections as NOBITS (addresses
  * and sizes, no contents), .symtab with the local symbols first, .strtab
- * and .shstrtab.  An address names the section it lies in, a constant
+ * and .shstrtab.  With x, the loaded modules' globals are added, and
+ * crash_sync gets an eighth section of its own, PROGBITS, holding the
+ * running kernel's word: stock crash reads 4 bytes at the symbol's own
+ * section's sh_offset + (st_value - sh_addr) to compare with memory, and
+ * on a NOBITS section reads past the file's end and stops.  When the word
+ * cannot be read, crash_sync is left out (crash then warns that it checks
+ * no timestamps, and goes on).  An address names the section it lies in, a constant
  * stays SHN_ABS, so a namelist made at bind 0 is itself a unix.sym.  The same inputs give the same bytes, so a caller can
  * tell a current namelist from a stale one by comparing them.
  *
@@ -44,9 +50,18 @@
 
 struct nsym {
 	ax_u32 name, value, size;	/* name: offset in the input's strings */
+	const char *xname;		/* or the name itself (an added symbol) */
 	ax_u8 info;
 	ax_u8 cnst;			/* a constant (SHN_ABS), not an address */
 };
+
+static const char *cmpstr;		/* the input's strings, for by_local */
+
+static const char *
+nsname(const struct nsym *s)
+{
+	return s->xname ? s->xname : cmpstr + s->name;
+}
 
 /* etext, edata and end are addresses, whatever section names them */
 static int
@@ -76,15 +91,15 @@ by_local(const void *a, const void *b)
 
 	if (lx != ly)
 		return ly - lx;
-	return x->value < y->value ? -1 : x->value > y->value ? 1 :
-	       x->name < y->name ? -1 : x->name > y->name;
+	return x->value < y->value ? -1 : x->value > y->value ? 1 : strcmp(nsname(x), nsname(y));
 }
 
 int
 kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u32 bind,
-	    struct kb_layout *lay, ax_u8 **out, ax_u32 *olen, char why[120])
+	    const struct kb_nlx *x, struct kb_layout *lay, ax_u8 **out, ax_u32 *olen, char why[120])
 {
-	static const char shstr[] = "\0.text\0.rodata\0.data\0.bss\0.symtab\0.strtab\0.shstrtab";
+	static const char shstr[] = "\0.text\0.rodata\0.data\0.bss\0.symtab\0.strtab\0.shstrtab"
+				    "\0.crash_sync";
 	static const ax_u32 shname[] = { 0, 1, 7, 15, 21, 26, 34, 42 };
 	static const ax_u32 shflags[] = { SHF_ALLOC | SHF_EXECINSTR, SHF_ALLOC, SHF_ALLOC | SHF_WRITE,
 					  SHF_ALLOC | SHF_WRITE };
@@ -93,6 +108,8 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 	struct nsym *ns = 0;
 	ax_u32 shoff, shent, shnum, i, k, sy = 0, nsy, syoff, syent, stroff, strsize;
 	ax_u32 secaddr[64], n = 0, nlocal, strtot, off, symoff, stroff2, shstroff, shoff2, len, shstr0;
+	ax_u32 shlen = sizeof(shstr) - 12, nsh = 8, csoff = 0, cs = 0;	/* cs: crash_sync's index + 1 */
+	ax_u8 csw[4];
 	int rc = -1;
 
 	memset(lay, 0, sizeof(*lay));
@@ -183,7 +200,7 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 		strcpy(why, "bad string table");
 		goto out;
 	}
-	if ((ns = malloc((nsy ? nsy : 1) * sizeof(*ns))) == 0) {
+	if ((ns = malloc((nsy + (x ? (ax_u32)x->nsym : 0) + 1) * sizeof(*ns))) == 0) {
 		strcpy(why, "out of memory");
 		goto out;
 	}
@@ -210,22 +227,57 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 			continue;
 		ns[n].cnst = (ax_u8)!a;
 		ns[n].name = nm;
+		ns[n].xname = 0;
 		ns[n].value = v;
 		ns[n].size = AX_GET32(p + 8);
 		ns[n].info = info;
 		strtot += (ax_u32)strlen((const char *)e + stroff + nm) + 1;
 		n++;
 	}
+	/* the added symbols: the loaded modules' globals, addresses of this boot */
+	for (i = 0; x && i < (ax_u32)x->nsym; i++) {
+		if (!x->sym[i].name || !x->sym[i].name[0])
+			continue;
+		ns[n].cnst = 0;
+		ns[n].name = 0;
+		ns[n].xname = x->sym[i].name;
+		ns[n].value = x->sym[i].value;
+		ns[n].size = x->sym[i].size;
+		ns[n].info = x->sym[i].info;
+		strtot += (ax_u32)strlen(x->sym[i].name) + 1;
+		n++;
+	}
+	cmpstr = (const char *)e + stroff;
+	/* crash_sync: its own section with the running kernel's word, or out */
+	for (i = 0; x && i < n; i++)
+		if (!ns[i].cnst && !strcmp(nsname(&ns[i]), "crash_sync")) {
+			if (x->mem && x->mem(x->ctx, ns[i].value, csw, 4) == 0) {
+				nsh = 9;
+				shlen = sizeof(shstr);
+			} else {
+				strtot -= (ax_u32)strlen("crash_sync") + 1;
+				ns[i] = ns[--n];
+			}
+			break;
+		}
 	qsort(ns, n, sizeof(*ns), by_local);
 	for (nlocal = 0; nlocal < n && (ns[nlocal].info >> 4) == STB_LOCAL; nlocal++)
 		;
+	for (i = 0; nsh == 9 && i < n; i++)
+		if (!ns[i].cnst && !strcmp(nsname(&ns[i]), "crash_sync"))
+			cs = i + 1;
 
-	/* the namelist: header, .symtab, .strtab, .shstrtab, section headers */
+	/* the namelist: header, .symtab, .strtab, .shstrtab, crash_sync's
+	 * word, section headers */
 	symoff = 52;
 	stroff2 = symoff + 16 * (n + 1);
 	shstroff = stroff2 + strtot;
-	shoff2 = (shstroff + sizeof(shstr) + 3) & ~3UL;
-	*olen = shoff2 + 8 * 40;
+	shoff2 = (shstroff + shlen + 3) & ~3UL;
+	if (cs) {
+		csoff = shoff2;
+		shoff2 += 4;
+	}
+	*olen = shoff2 + nsh * 40;
 	if ((o = calloc(1, *olen)) == 0) {
 		strcpy(why, "out of memory");
 		goto out;
@@ -238,28 +290,28 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 	AX_PUT32(o + 32, shoff2);
 	AX_PUT16(o + 40, 52);
 	AX_PUT16(o + 46, 40);
-	AX_PUT16(o + 48, 8);
+	AX_PUT16(o + 48, nsh);
 	AX_PUT16(o + 50, 7);
 	for (off = 1, i = 0; i < n; i++) {
 		ax_u8 *p = o + symoff + 16 * (i + 1);
-		const char *nm = (const char *)e + stroff + ns[i].name;
-		ax_u16 x = SHN_ABS;
+		const char *nm = nsname(&ns[i]);
+		ax_u16 xs = SHN_ABS;
 
 		/* an address: the section it lies in, or the one it ends */
 		for (k = 0; k < 4 && !ns[i].cnst; k++)
 			if (lay->size[k] && ns[i].value >= lay->vaddr[k] &&
 			    ns[i].value - lay->vaddr[k] <= lay->size[k] &&
-			    (x == SHN_ABS || ns[i].value - lay->vaddr[k] < lay->size[k]))
-				x = (ax_u16)(k + 1);
+			    (xs == SHN_ABS || ns[i].value - lay->vaddr[k] < lay->size[k]))
+				xs = (ax_u16)(k + 1);
 		AX_PUT32(p, off);
 		AX_PUT32(p + 4, ns[i].value);
 		AX_PUT32(p + 8, ns[i].size);
 		p[12] = ns[i].info;
-		AX_PUT16(p + 14, x);
+		AX_PUT16(p + 14, cs == i + 1 ? 8 : xs);
 		strcpy((char *)o + stroff2 + off, nm);
 		off += (ax_u32)strlen(nm) + 1;
 	}
-	memcpy(o + shstroff, shstr, sizeof(shstr));
+	memcpy(o + shstroff, shstr, shlen);
 	for (k = 0; k < 4; k++) {
 		sh = o + shoff2 + 40 * (k + 1);
 		AX_PUT32(sh, shname[k + 1]);
@@ -289,8 +341,19 @@ kb_namelist(const ax_u8 *kern, ax_u32 klen, const ax_u8 *sym, ax_u32 slen, ax_u3
 	AX_PUT32(sh, shname[7]);
 	AX_PUT32(sh + 4, SHT_STRTAB);
 	AX_PUT32(sh + 16, shstroff);
-	AX_PUT32(sh + 20, sizeof(shstr));
+	AX_PUT32(sh + 20, shlen);
 	AX_PUT32(sh + 32, 1);
+	if (cs) {				/* crash_sync's word */
+		memcpy(o + csoff, csw, 4);
+		sh = o + shoff2 + 40 * 8;
+		AX_PUT32(sh, (ax_u32)sizeof(shstr) - 12);
+		AX_PUT32(sh + 4, SHT_PROGBITS);
+		AX_PUT32(sh + 8, SHF_ALLOC | SHF_WRITE);
+		AX_PUT32(sh + 12, ns[cs - 1].value);
+		AX_PUT32(sh + 16, csoff);
+		AX_PUT32(sh + 20, 4);
+		AX_PUT32(sh + 32, 4);
+	}
 	*out = o;
 	o = 0;
 	rc = 0;

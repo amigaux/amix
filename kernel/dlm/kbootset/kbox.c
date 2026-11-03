@@ -9,7 +9,8 @@
  * whole-disk node hangs on a stock kernel (grimoire quirks §62).
  *
  * KBOOTSET_DEVROOT (default /dev/rdsk) and KBOOTSET_KINFO (default
- * /dev/kinfo) move both, for the host tests.
+ * /dev/kinfo) move both, for the host tests; KBOOTSET_KMEM (default
+ * /dev/kmem) and KBOOTSET_KSYMS (a file for getksym) likewise.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -130,8 +131,11 @@ kb_kinfo_read(const char *path, struct kb_kinfo *ki)
 	ki->nmods = (int)get32(r + ml);
 	if (ki->nmods > KB_MAXMODS || ml + 4 + 32 * (ax_u32)ki->nmods > len)
 		ki->nmods = 0;
-	for (i = 0; i < (ax_u32)ki->nmods; i++)
+	for (i = 0; i < (ax_u32)ki->nmods; i++) {
 		str(ki->mods[i], r + ml + 4 + 32 * i, 24);
+		ki->modbase[i] = get32(r + ml + 4 + 32 * i + 24);
+		ki->modsize[i] = get32(r + ml + 4 + 32 * i + 28);
+	}
 	return 0;
 }
 
@@ -487,4 +491,72 @@ found:
 		return KS_EIO;
 	}
 	return KS_OK;
+}
+
+#if defined(__svr4__) && defined(__m68k__)
+#include <errno.h>
+extern int syscall(int, ...);		/* the stock libc's, as modadmin's box build */
+#define	SYS_GETKSYM	69		/* the module core's getksym(2) */
+#endif
+
+int
+kb_getksym(const char *name, ax_u32 *val, ax_u32 *type)
+{
+	const char *p = getenv("KBOOTSET_KSYMS");
+	char ln[160], *e;
+	unsigned long v, t;
+	size_t k;
+	FILE *f;
+
+	if (p && *p) {			/* no sscanf: it brings libc's floating point */
+		if ((f = fopen(p, "r")) == 0)
+			return -1;
+		while (fgets(ln, sizeof(ln), f)) {
+			k = strcspn(ln, " \t\n");
+			if (k != strlen(name) || strncmp(ln, name, k))
+				continue;
+			v = strtoul(ln + k, &e, 16);
+			t = strtoul(e, 0, 10);
+			fclose(f);
+			*val = (ax_u32)v;
+			*type = (ax_u32)t;
+			return 0;
+		}
+		fclose(f);
+		return -1;
+	}
+#if defined(__svr4__) && defined(__m68k__)
+	{
+		char buf[96];
+		int r;
+
+		if (strlen(name) >= sizeof(buf))
+			return -1;
+		strcpy(buf, name);
+		v = 0;			/* 0: look the name up */
+		while ((r = syscall(SYS_GETKSYM, buf, &v, &t)) < 0 && errno == ERESTART)
+			;
+		if (r < 0)
+			return -1;
+		*val = (ax_u32)v;
+		*type = (ax_u32)t;
+		return 0;
+	}
+#else
+	return -1;
+#endif
+}
+
+int
+kb_kmem(ax_u32 addr, ax_u8 *buf, ax_u32 n)
+{
+	const char *p = getenv("KBOOTSET_KMEM");
+	FILE *f;
+	int ok;
+
+	if ((f = fopen(p && *p ? p : "/dev/kmem", "rb")) == 0)
+		return -1;
+	ok = fseek(f, (long)addr, SEEK_SET) == 0 && fread(buf, 1, n, f) == n;
+	fclose(f);
+	return ok ? 0 : -1;
 }

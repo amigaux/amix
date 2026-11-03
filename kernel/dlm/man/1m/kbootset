@@ -288,8 +288,15 @@ the file
 and
 .B crash
 read symbols from: an ELF file of the booted kernel's symbols at their
-addresses in this boot.
-It writes only when the content differs, as a new file renamed into place.
+addresses in this boot, with each loaded module's globals and, in a
+section of its own,
+.BR crash_sync 's
+word as the running kernel holds it, which
+.B crash
+checks the file against.
+It writes only when the content differs, as a new file renamed into place;
+.B modadmin
+runs it after loading or unloading a module.
 Exit status 3 when it cannot make one; the line says why.
 .TP
 .B nodes

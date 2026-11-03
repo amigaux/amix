@@ -52,6 +52,11 @@ int km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why);
 int km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *ctx,
 	    char *why);
 
+/* each global the module object in b defines (COMMONs included):
+ * fn(ctx, name, st_size, its STT_ type); otherwise as km_syms */
+int km_defs(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, ax_u32, int), void *ctx,
+	    char *why);
+
 /* in, a parameter value as modreg.d gives it, in C3-1's form for p's type
  * into out (64 bytes): bool from 0/1, yes/no, true/false, on/off; int and
  * hex from either number form, written in the declared one and within

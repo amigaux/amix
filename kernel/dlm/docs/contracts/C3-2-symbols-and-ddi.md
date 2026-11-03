@@ -1,6 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 2
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 4
 
-- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -199,6 +199,15 @@ stock filesystem objects import (`bdevsw`, `vfssw`, `nfstype` and the
 others, 20 §4.1). Only a module with `tier=core` and the kernel's `build`
 (C3-1) may resolve against it. The list is written when the filesystems are
 carved (M-FS1).
+
+It also holds the COMMONs of the carved objects that stock programs read
+through the namelist and `/dev/kmem` (version 4): `inode` and `ifreelist`
+(s5), `ufs_inode`, `inodeNINODE` and `ifreeh` (ufs); `sadc` (`sar`,
+`timex -s`) reads `inode`, `crash` all five. The kernel keeps them, so
+`nlist` finds them in `/stand/unix`, and the module core binds a module's
+COMMON of that name to the kernel's copy. Like the rest of the tier they
+are `since` 2: `abi=` covers only the DDI's data names, so it does not
+move, nor does a filesystem module's tag.
 
 ## 5. Settled at agreement
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — the kmem readers work after the fs carve; kbootset -37, modtools -12 (59ff254..a2abb80)
+
+The core tier keeps inode, ifreelist, ufs_inode, inodeNINODE and ifreeh (abi= and kabi unchanged), so stock sar/sadc, timex -s and crash find them in /stand/unix. While no s5 is loaded, inode points at a read-only window of one zeroed page. kbootset 1.1.0.261103-37 (83ae6565) writes a namelist that carries crash_sync's running word in its own section and the loaded modules' globals; modtools 1.0.261103-12 (753e364d): modadmin rewrites the namelist after a load or an unload (core 0053). core/kbootset-min 1.1.0.261103-37. core.list lists the six text-section labels as func, not data; abi= unchanged. C2-4 v26, C3-2 v4, C4-6 v7.
+
 ## 2026-11-03 — dlmkit -19: the kit pinned at 83ef3b4 (21ba67e)
 
 The ABI kit package is pinned at amix 83ef3b4 with the port at 4c363c3. Kit manifests k30 e280eafb, k46 c9597c29; abi 18c0a1c9 and kabi k30.1.4/k46.1.4 unchanged; the kit changes only in its contract copies and mkkit's rm guards. dlmkit30 11d9437e, dlmkit46 5ca01949.
