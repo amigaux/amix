@@ -123,11 +123,12 @@ def self_test():
           "SD_BOARDS": "z3660scsi a4091"}, "src") == "z3660scsi", "src: another card -> SD_BOARDS")
     t(ph({"TARGET_HBA": "a4091", "SRC_SCSI_ID": "6", "TARGET_SCSI_ID": "9"}, "src") == "",
       "src: another card and no SD_BOARDS -> unknown")
-    # every tracked profile resolves a target controller in the table
+    # every tracked profile resolves a target controller in the table; a universal profile's "auto" is
+    # the chosen disk's controller at install time (setup.sh), which the medium table above covers
     bad = []
     for p in sorted(glob.glob(os.path.join(REPO, "profiles", "*.profile"))):
         kv = dm.read_profile(p)
-        if kv.get("TARGET_HBA") and not dm.mask_for(kv["TARGET_HBA"])[1]:
+        if kv.get("TARGET_HBA") not in (None, "", "auto") and not dm.mask_for(kv["TARGET_HBA"])[1]:
             bad.append(os.path.basename(p))
     t(not bad, "every profile's TARGET_HBA is in the table%s" % (" (not: %s)" % bad if bad else ""))
     # check_image on synthetic RDBs
