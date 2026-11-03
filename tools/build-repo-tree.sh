@@ -58,10 +58,12 @@ for p in APKG APKGENG; do
 done
 D="$OUT/$REL"
 rm -rf "${D:?}"
-# its 68060 scan unpacks each datastream with the inputs' host pkgtrans
+# its 68060 scan unpacks each datastream with the inputs' host pkgtrans; GCC 14 ELFs go through build/pkg's
+# scan060-g14.py at the same revision, where the inputs have it (an older assemble-release has no such scan)
+G14=(); [ ! -f "$L11_IN/amix-gcc14/scan060-g14.py" ] || G14=(--scan060-g14 "$L11_IN/amix-gcc14/scan060-g14.py")
 AMIX_PKGTRANS="$L11_IN/pkgtools/heirloom/build-host/bin/pkgtrans" python3 "$AR" --userland "$W/userland" --kspace "$ws/$KS" --apkg "$W/apkg" --stock "$ST/stock" --release "$REL" \
 	--out "$D" --release-check "$RC" --rom-register "$ws/roms/MANIFEST.sha256" \
-	--private-patterns "$PRIVACY_PATTERNS" --apkg-bin "$L11_IN/apkg/apkg-host" > "$OUT/assemble.log" 2>&1
+	--private-patterns "$PRIVACY_PATTERNS" --apkg-bin "$L11_IN/apkg/apkg-host" "${G14[@]+"${G14[@]}"}" > "$OUT/assemble.log" 2>&1
 rc=$?
 [ "$rc" = 0 ] || { tail -15 "$OUT/assemble.log" >&2; die "assemble-release.py refused or failed (rc $rc; $OUT/assemble.log)"; }
 # the CD's bytes: every userland row's datastream is the one the CD carries in base/ (under its pkginst name)
