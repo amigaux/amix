@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — spec 10: k46 cputype from AXL1 (9096a45)
+
+The boot-loader spec documents that a k46 kernel sets cputype from the AXL1 record's cpu field (+20, 40 or 60) before its first cputype test; with no valid record, or cpu 30, the built-in value (60) stays, so a 68040 boot needs the record.
+
 ## 2026-11-02 — C2-4 version 25 §18: the A3000 WD limit lifted for k30 -70 (c7e13e5)
 
 The A3000 WD passthrough limit is lifted for k30 -70 and later, whose sdqueue raises to level 2; k46 keeps it until -60 is shown.
