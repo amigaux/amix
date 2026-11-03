@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — cut 68030-261103-71: the kmem readers' tables; kern30m -71 (71e9627, 31db77d)
+
+The kernel keeps the inode tables the stock kmem readers name (inode, ifreelist, ifreeh, ufs_inode, inodeNINODE): build step 8i links them as the kernel's COMMONs and the carved ufs and s5 modules bind to them, so sar, sadc and timex -s work again on a carved kernel, and crash starts without a timestamp error with kbootset 1.1.0.261103-37's namelist (the sidecar asks for it). Sums: unix a21b0b56, brel 6a010bc5, kabi b7d28836, ufs 74f178ca, s5 0eb95df7; abi 18c0a1c9 unchanged; host builds and the container agree. kern30m k30.1.4.261103-71 packages it.
+
 ## 2026-11-02 — cut 68030-261102-70 (fee9393)
 
 sdqueue runs a controller's queue function at sdspl or above (raise only), so a raw /dev/scsi command that is the first to the A3000 WD no longer kills the stock a3091 driver; kinfo and the port's rth1 (31edbc6) give the A1200's `A1200 IDE` motherboard id 2, as the A4000's Gayle port. kern30m k30.1.4.261102-70 packages it (1dea6b19).
