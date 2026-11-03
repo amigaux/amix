@@ -114,3 +114,63 @@ dma_free(char *va, unsigned long len)
 	purge(vtop(p, 0), n);
 	kmem_free(p, n);
 }
+
+/*
+ * The empty inode table (core/plat/amiga.c): n bytes of kernel virtual
+ * space, read-only, every page mapped to one zeroed page.  The zeroed page
+ * is one fresh frame from sptalloc (base 0), cleared here.  The run is
+ * sptalloc's too, mapped at first to the frames from the zeroed page's on;
+ * each leaf is then pointed at the zeroed page, its old frame checked
+ * first, as devkvmap040.s's cache-mode change does, so no page-table
+ * writer the port has not seen is added.  segkmem_setprot then clears the
+ * write bit in every leaf and flushes (cpusha dc, pflusha).  Nothing reads
+ * the run before that, and the 68040/68060 do not load speculatively, so
+ * the frames it pointed at for a moment leave no cache lines.  sptalloc's
+ * leaves are cacheable write-through, which a page of zeros keeps.  On a
+ * failure both are given back: the run by sptfree flag 0 (the leaves
+ * cleared, no page released: its frames are not its own), the page by
+ * flag 1.
+ */
+#define ZW_PG		4096
+#define ZW_SHIFT	12
+#define ZW_NOSLEEP	1		/* sptalloc's flag bit 0 */
+#define ZW_READ		1		/* PROT_READ */
+
+extern char kvseg[];			/* struct seg kvseg */
+extern char *sptalloc(int, int, int, int);
+extern void sptfree(char *, int, int);
+extern unsigned long *vatosde(char *);
+extern unsigned long *vatopte(char *, unsigned long *);
+extern void segkmem_setprot(char *, char *, unsigned long, unsigned long);
+extern int printf(const char *, ...);
+
+char *
+plat_line_zwin(unsigned long nbytes)
+{
+	unsigned long n = (nbytes + ZW_PG - 1) / ZW_PG, zpte, zpfn, i, *p;
+	char *zp, *va;
+
+	if (n == 0 || (zp = sptalloc(1, 0, 0, ZW_NOSLEEP)) == 0)
+		return 0;
+	for (i = 0; i < ZW_PG; i++)
+		zp[i] = 0;
+	zpte = *vatopte(zp, vatosde(zp));
+	zpfn = zpte >> ZW_SHIFT;
+	if ((va = sptalloc((int)n, 0, (int)zpfn, ZW_NOSLEEP)) == 0) {
+		sptfree(zp, 1, 1);
+		return 0;
+	}
+	for (i = 0; i < n; i++) {
+		p = vatopte(va + i * ZW_PG, vatosde(va + i * ZW_PG));
+		if ((*p >> ZW_SHIFT) != zpfn + i) {
+			printf("dlm: empty inode table: leaf %d maps frame 0x%x, not 0x%x\n",
+			    (int)i, (unsigned)(*p >> ZW_SHIFT), (unsigned)(zpfn + i));
+			sptfree(va, (int)n, 0);
+			sptfree(zp, 1, 1);
+			return 0;
+		}
+		*p = (*p & (ZW_PG - 1)) | (zpte & ~(ZW_PG - 1));
+	}
+	segkmem_setprot(kvseg, va, n * ZW_PG, ZW_READ);
+	return va;
+}

@@ -31,6 +31,11 @@ void dma_complete(char *, unsigned long, unsigned long, int);
 unsigned long dma_addr(char *, unsigned long);
 char *dma_alloc(unsigned long, unsigned long *);
 void dma_free(char *, unsigned long);
+/* line.c's empty inode table, not exercised here (t_zwin30.c) */
+char sptmap[16], kvseg[16];
+unsigned long rmalloc(char *m, unsigned long n) { (void)m, (void)n; return 0; }
+void segkmem_mapin(char *g, char *a, unsigned long l, unsigned long p, unsigned long c, int f)
+{ (void)g, (void)a, (void)l, (void)p, (void)c, (void)f; }
 
 void bcopy(const void *s, void *d, unsigned long n) { memmove(d, s, n); }
 static unsigned long heap_at = RAM + 0x20003;	/* an odd start */

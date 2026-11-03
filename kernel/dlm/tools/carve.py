@@ -17,8 +17,9 @@
       The core tier for the carved objects (C3-2 section 4), sorted, in
       the list format: every name they import outside DDI, and every
       COMMON they share with another stock object under SYS (those stay
-      the kernel's; the others go with the modules).  The kind (func or
-      data) is the namelist's.  --skip names a tree object that is one of
+      the kernel's; the others go with the modules), and the COMMONs the
+      stock kmem readers name (KMEM below), which stay the kernel's too.
+      The kind (func or data) is the namelist's.  --skip names a tree object that is one of
       the carved ones in another form (the stock original of a k46
       object patched by the port's fsobj-patch.py).
 
@@ -33,6 +34,13 @@ import struct
 import sys
 
 SHN_UNDEF, SHN_COMMON = 0, 0xfff2
+
+# COMMONs of the carved objects that stock programs read through the
+# namelist and /dev/kmem: sadc (sar, timex -s) reads s5's inode table
+# through `inode`; crash also reads s5's free list and ufs's table and free
+# list.  They stay in the kernel, so nlist finds them in /stand/unix, and
+# the module core binds the modules' COMMONs to the kernel's copies.
+KMEM = {'inode', 'ifreelist', 'ufs_inode', 'inodeNINODE', 'ifreeh'}
 
 
 class Elf:
@@ -170,7 +178,7 @@ static int
 static int
 %(fs)s_unload()
 {
-	return EBUSY;		/* unload=never: a mounted type stays */
+	return EBUSY;		/* unload=never: a mounted type stays%(unload_doc)s */
 }
 
 MOD_MISC_WRAPPER(%(fs)s, %(fs)s_load, %(fs)s_unload, "%(fs)s filesystem (carved)");
@@ -178,12 +186,23 @@ MOD_MISC_WRAPPER(%(fs)s, %(fs)s_load, %(fs)s_unload, "%(fs)s filesystem (carved)
 
 FIRST = '''	{
 		long lb = lbolt;
-
+%(keep)s
 		said("%(first)s entered", lb);
 		%(first)s();
 		said("%(first)s returned", lb);
 	}
 '''
+
+# s5: inoinit replaces the kernel's `inode` (the core's empty table while
+# no s5 is loaded, core/plat/amiga.c); the wrapper keeps what it replaced,
+# and an unload would put it back before the table goes
+S5KEEP = '''		inode0 = inode;
+'''
+S5DECL = '''
+extern char	*inode;		/* the kernel's (core.list), bound to s5's COMMON */
+static char	*inode0;	/* inode before inoinit: the core's empty table, or 0 */'''
+S5UNLOAD = (';\n\t\t\t\t * an unload would first put inode back to inode0, so the\n'
+            '\t\t\t\t * kmem readers never see a freed table')
 
 
 def wrap(args):
@@ -204,8 +223,9 @@ def wrap(args):
     os.makedirs(out, exist_ok=True)
     v = {'fs': fs, 'init': init, 'ops': ops, 'flag': flag,
          'first_doc': ', after %s' % first if first else '',
-         'first_decl': '\nextern int\t%s();' % first if first else '',
-         'first_call': FIRST % {'first': first} if first else ''}
+         'first_decl': ('\nextern int\t%s();' % first if first else '') + (S5DECL if fs == 's5' else ''),
+         'first_call': FIRST % {'first': first, 'keep': S5KEEP if fs == 's5' else ''} if first else '',
+         'unload_doc': S5UNLOAD if fs == 's5' else ''}
     open(os.path.join(out, fs + '_wrap.c'), 'w').write(WRAPPER % v)
     open(os.path.join(out, 'Master'), 'w').write(
         '# %s: carved by tools/carve.py, core tier, built per kernel cut\n'
@@ -266,20 +286,22 @@ def corelist(args):
                 continue
             others |= e.undefined() | e.commons() | set(e.defined())
     shared = commons & others
+    kmem = commons & KMEM
     kern = Elf(opt['--namelist'])
     kinds = {}
     for s in kern.globals():
         if s[4] != SHN_UNDEF:
             kinds[s[0]] = 'func' if s[3] & 15 == 2 else 'data'
-    names = sorted((imports | shared) - ddi)
+    names = sorted((imports | shared | kmem) - ddi)
     missing = [n for n in names if n not in kinds]
     if missing:
         raise SystemExit('carve: not in the kernel namelist: %s' % ' '.join(missing))
     for n in names:
         print('%s %s 2' % (n, kinds[n]))
-    print('carve: %d core-tier names: %d imports outside DDI, %d shared COMMONs; '
-          '%d COMMONs go with the modules' % (len(names), len(imports - ddi), len(shared - ddi),
-                                             len(commons - shared)), file=sys.stderr)
+    print('carve: %d core-tier names: %d imports outside DDI, %d shared COMMONs, '
+          '%d kmem COMMONs; %d COMMONs go with the modules'
+          % (len(names), len(imports - ddi), len(shared - ddi), len(kmem - shared - ddi),
+             len(commons - shared - kmem)), file=sys.stderr)
 
 
 def main():

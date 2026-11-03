@@ -1,6 +1,8 @@
 # the core tier for the k30 line (C3-2 section 4): what the carved ufs and
 # s5 objects import outside DDI, and the COMMONs they share with the rest
-# of the stock tree (tools/carve.py corelist).  Only a module with
+# of the stock tree, and the COMMONs stock kmem readers name (sadc: inode;
+# crash: ifreelist, ufs_inode, inodeNINODE, ifreeh), which the kernel keeps
+# so nlist finds them (tools/carve.py corelist).  Only a module with
 # tier=core and the kernel's build may resolve these.  Sorted by name.
 as_iolock func 2
 as_map_reliably func 2
@@ -41,8 +43,12 @@ getblk func 2
 geteblk func 2
 groupmember func 2
 hrestime data 2
+ifreeh data 2
+ifreelist data 2
 iftovt_tab data 2
 incore func 2
+inode data 2
+inodeNINODE data 2
 kmem_fast_alloc func 2
 kmem_fast_free func 2
 kprunrun data 2
@@ -92,6 +98,7 @@ strncpy data 2
 syserr data 2
 sysinfo data 2
 u data 2
+ufs_inode data 2
 ufs_ninode data 2
 vf_to_stf func 2
 vfs_add func 2

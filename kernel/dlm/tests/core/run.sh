@@ -170,7 +170,7 @@ fi
 if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -I"$R/loader/common" -o "$B/test-bin/t_plat" \
 	"$R/tests/core/t_plat.c" "$R/core/plat/amiga.c" "$R/loader/common/bootinfo.c" &&
    "$B/test-bin/t_plat" > "$B/t_plat.log" 2>&1; then
-	pass "core/plat: $(grep -c '^PASS' "$B/t_plat.log") checks (loader record, build id, board matcher)"
+	pass "core/plat: $(grep -c '^PASS' "$B/t_plat.log") checks (loader record, build id, board matcher, the empty inode table)"
 else
 	grep '^FAIL' "$B/t_plat.log"; fail "core/plat"
 fi
@@ -188,6 +188,18 @@ if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -no-pie -DDMA_HOST -DDMA_REACH=0x2
 	pass "core/plat k30 DMA: $(grep -c '^PASS' "$B/t_dma30.log") checks (the pool, bounces, both test hooks and their dma_alloc exemption, heap mode)"
 else
 	grep '^FAIL' "$B/t_dma30.log"; fail "core/plat k30 DMA"
+fi
+
+# the empty inode table each line maps for the kmem readers
+if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -DDMA_HOST -o "$B/test-bin/t_zwin30" \
+	"$R/tests/core/t_zwin30.c" "$R/core/plat/k30/line.c" &&
+   "$B/test-bin/t_zwin30" > "$B/t_zwin30.log" 2>&1 &&
+   ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -o "$B/test-bin/t_zwin46" \
+	"$R/tests/core/t_zwin46.c" "$R/core/plat/k46/line.c" &&
+   "$B/test-bin/t_zwin46" > "$B/t_zwin46.log" 2>&1; then
+	pass "core/plat empty inode table: $(cat "$B/t_zwin30.log" "$B/t_zwin46.log" | grep -c '^PASS') checks (k30 and k46: one zeroed page, read-only, the page count, the failure paths)"
+else
+	grep -h '^FAIL' "$B/t_zwin30.log" "$B/t_zwin46.log" 2>/dev/null; fail "core/plat empty inode table"
 fi
 
 # ---- 3. the user side ----
