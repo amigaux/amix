@@ -494,7 +494,8 @@ EOF
 
 {
   echo "amix-installng install CD"
-  echo "built:        $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  # the media epoch when set (tools/lib/media-epoch.sh), so a rebuild of the same inputs is the same disc
+  echo "built:        $(date -u ${SOURCE_DATE_EPOCH:+-d "@$SOURCE_DATE_EPOCH"} +%Y-%m-%dT%H:%M:%SZ)"
   echo "content-set:  $SET (sets.conf '$SET_NAME', ${#SET_MEMBERS[@]} member(s))"
   echo "members:      ${SET_MEMBERS[*]}"
   if [ "${#EXTRA_PKGS[@]}" -gt 0 ]; then echo "extra --pkg:  ${EXTRA_PKGS[*]}"; fi
