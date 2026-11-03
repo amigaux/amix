@@ -1,11 +1,11 @@
 PKG=modtools
-NAME=modtools 1.0.261103-12 - load, unload and inspect kernel modules
+NAME=modtools 1.0.261103-13 - load, unload and inspect kernel modules
 ARCH=Amiga
-VERSION=1.0.261103-12
+VERSION=1.0.261103-13
 CATEGORY=system
 CLASSES=none
 VENDOR=amix-packages
-PSTAMP=amix-packages-modtools-1.0.261103-12
+PSTAMP=amix-packages-modtools-1.0.261103-13
 # USERLAND (C2-4 v8 sec 11): an ordinary catalog entry, no
 # kpkg entry, no apkg kernel-space record, no catalog dependency -- modadmin
 # reaches the module core through system calls; on a static kernel it fails

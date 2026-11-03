@@ -12,6 +12,12 @@
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
+# -13 (2026-11-03): amix e6240fc -- core patch 0054: modadmin rewrites
+# /stand/unix by fork, execv and waitpid instead of system(), which brought
+# libc's shell signal and process-group calls: text and data 33344 bytes,
+# 844 fewer than -12.  Built in amix-toolchain:dist: modadmin fd8e8a20 (45260
+# bytes).  No scripts, ESSENTIAL, as -12.
+#
 # -12 (2026-11-03): amix 65e166c -- core patch 0053: modadmin runs
 # /sbin/kbootset namelist after -l, -u or -U has loaded or unloaded a
 # module, so /stand/unix keeps the loaded modules' globals.  Built in
@@ -75,8 +81,8 @@
 # -1 (2026-10-26): amix-dlm 42df482 (modadmin as 55722ef, core
 # patch 0015: -k, -a, -p/-w).  Equal to amix-dlm's own build/box/modadmin
 # (text 28756, data 1648, bss 2508).
-MT_DLM_COMMIT=65e166c
-MT_SHA=753e364d00268ed3f22e5eeeb97471207569387ca571e18dbd55bd4c416ad004
+MT_DLM_COMMIT=e6240fc
+MT_SHA=fd8e8a20aa007ba0bcab1d5631ee06b637a8aceb882f47ecd91e677208e2467f
 
-MT_VERSION=1.0.261103-12
+MT_VERSION=1.0.261103-13
 MT_SOURCE_EPOCH=1793664000
