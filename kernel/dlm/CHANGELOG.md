@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — dlmkit -19: the kit pinned at 83ef3b4 (21ba67e)
+
+The ABI kit package is pinned at amix 83ef3b4 with the port at 4c363c3. Kit manifests k30 e280eafb, k46 c9597c29; abi 18c0a1c9 and kabi k30.1.4/k46.1.4 unchanged; the kit changes only in its contract copies and mkkit's rm guards. dlmkit30 11d9437e, dlmkit46 5ca01949.
+
 ## 2026-11-03 — spec 10: k46 cputype from AXL1 (9096a45)
 
 The boot-loader spec documents that a k46 kernel sets cputype from the AXL1 record's cpu field (+20, 40 or 60) before its first cputype test; with no valid record, or cpu 30, the built-in value (60) stays, so a 68040 boot needs the record.
