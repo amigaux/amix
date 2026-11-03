@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — 1.1 final round: two-stage netinstall, cdfs from make dist, k46-round groundwork (28e352d..8dace4c)
+
+The netinstall works in two stages end to end: the s5 RAM disk has 1024 inodes behind a 20 % room gate, m4 arrives in the first stage (minimal set included), and an order package missing from the repository catalog is refused by name; the bootstore check verifies every package of the order the install ran. cdfs 1.1.0-1 from make dist is on the CD, the network and the k30 image, and the July staging copy is gone; the CD and the repository match both ways. card-audit checks a 1.1 disk's store kernel, card-bootpri the 1.1 boot priorities, and the 1.1 cards are pinned to Z3660 28072E28 (100 Mbit by default). Already in for the k46 round: media built under SOURCE_DATE_EPOCH from the inputs (reproducible ADFs, HDF and ISOs), the installer scripts staged without comments, every on-box mkdir -p guarded (the stage-2 resume could never resume), and a network free-space check from the catalog plus twice the largest datastream. Matrix: A1200 rows, the minimal netinstall from the raw image, cells on the 1 GiB blank's shape, and judges that read whole transcripts.
+
 ## 2026-11-02 — the universal 1.1 install CD (2879b23..d7d0602)
 
 - One install CD for every 1.1 machine and both kernel lines (amix-1.1-install.iso), booted from the CD, from the floppy pairs (amix-1.1-boot-k46/-k30-1/-2.adf) or from a Z3660 boot disk (amix-1.1-boot-z3660.hdf). The installer finds the controllers, the CD and the disks at run time; each disk is shown with its controller and what it holds, and the disk is chosen by its id.
