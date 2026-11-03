@@ -205,6 +205,13 @@ done
 SET_NAME="$SET"
 case "$SET" in base) SET_NAME="$SET_ALIAS_base" ;; esac
 mapfile -t SET_MEMBERS < <(python3 "$SETS_PY" -f "$SETS_CONF" "$SET_NAME" 2>&1) || true
+# BI_L11_PROVIDES (build-install-iso.sh): the names a 1.1 medium's base packages provide (make dist's
+# cdfs); they are no stock members of the set here either, and a staged file of that name stays off
+# the disc's pkgs/ (l11_base installs make dist's from /install/l11/base)
+L11P=" $(printf '%s' "${BI_L11_PROVIDES:-}" | tr 'A-Z' 'a-z') "
+if [ -n "$(printf '%s' "${BI_L11_PROVIDES:-}" | tr -d ' ')" ]; then
+  mapfile -t SET_MEMBERS < <(for n in "${SET_MEMBERS[@]}"; do case "$L11P" in *" ${n,,} "*) ;; *) printf '%s\n' "$n" ;; esac; done)
+fi
 if [ "${#SET_MEMBERS[@]}" -eq 0 ] || printf '%s\n' "${SET_MEMBERS[@]}" | grep -q '^sets: '; then
   {
     echo "STOP: --set '$SET' does not resolve against $SETS_CONF"
@@ -302,6 +309,7 @@ for f in "$STAGING"/stock/*.pkg "$STAGING"/stock/*.pkg.Z \
          "$STAGING"/base/*.pkg "$STAGING"/base/*.pkg.Z; do
   b="${f##*/}"; tok="${b%%-[0-9]*}"
   key="${tok,,}"
+  case "$L11P" in *" $key "*) echo "build-iso: $b left off the disc (the 1.1 base packages provide $key)"; continue ;; esac
   [ -z "${PKG_FILE[$key]:-}" ] || {
     echo "STOP: two staged packages both resolve to catalog name '$key': ${PKG_FILE[$key]} and $f" >&2
     exit 1; }
@@ -336,6 +344,7 @@ fi
 shopt -s nullglob
 for f in "$STAGING"/base/*.pkg "$STAGING"/base/*.pkg.Z; do
   b="${f##*/}"; key="${b%%-[0-9]*}"; key="${key,,}"
+  case "$L11P" in *" $key "*) continue ;; esac
   found=0
   for name in "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}; do
     [ "${name,,}" = "$key" ] && { found=1; break; }

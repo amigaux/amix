@@ -1334,7 +1334,7 @@ BIARGS=(--set "$SET" --install-src "$STAGE")
 [ -n "$OUT" ] && BIARGS+=(--out "$OUT")
 [ -n "$CDBOOT" ] && BIARGS+=(--cd-boot "$CDBOOT")
 for x in ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}; do BIARGS+=(--pkg "$x"); done
-"$here/build-iso.sh" "${BIARGS[@]}"
+BI_L11_PROVIDES="$L11_PROVIDES" "$here/build-iso.sh" "${BIARGS[@]}"
 
 echo
 echo "build-install-iso: done. $APKG_NOTE"
