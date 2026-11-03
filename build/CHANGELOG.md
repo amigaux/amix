@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — release-check refuses a known-bad module (6b800be)
+
+tools/release-check refuses an artefact carrying a module listed in tools/known-bad-modules.txt: a file or package member whose sha256 is listed, or nine in ten of the module's 512-byte pieces found at any offset in an image, ISO, floppy image or package (each piece found by a 16-byte anchor and confirmed by its sha256, so the list holds no module bytes). The first entry is the z3660scsi build from before its fixed-window gate. A floppy image or a single package is now read as a file instead of refused.
+
 ## 2026-11-03 — pkgmeta: a one-level mount point in SYSTEM_PATHS (772f99f)
 
 A one-level SYSTEM_PATHS entry passes only as a mount point: one d line of that path with nothing under it (for the userland cdfs package's /cdrom). A file at the path, anything under it, or a whole top-level tree is still refused.
