@@ -48,6 +48,9 @@ ramdisk) echo "b 20" ;;
 *) echo "kbootset: no module $2" >&2; exit 1 ;;
 esac
 EOF
+# mkdir as the stock one: -p on a directory already there exits 2
+printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$T/bin/mkdir"
+chmod +x "$T/bin/mkdir"
 # kbootset of today: no "major" subcommand yet
 printf '#!/bin/sh\necho "usage: kbootset ..." >&2\nexit 2\n' > "$T/bin/oldkbootset"
 # mknod: record the call, make a plain file (a real node needs root)
@@ -128,6 +131,13 @@ same "no timer sleep left" "0" "$(ps -eo args | grep -c '^sleep 247$')"
 expect "brief finished" "brief: finished, status 0" "$(cat "$T/rc.log")"
 expect "instant finished" "instant: finished, status 0" "$(cat "$T/rc.log")"
 same "no pid file left after them" "" "$(ls "$T/run")"
+# a log directory rc_bg makes, then finds there (the stock mkdir -p fails on it)
+D="RC_BGLOG=$T/rclog2 RC_GRACE=1 RC_RUN=$T/run"
+R "$D; rc_bg 5 first echo one" > /dev/null
+R "$D; rc_bg 5 second echo two" > /dev/null
+sleep 2
+same "log directory made: output" "one" "$(cat "$T/rclog2/first" 2>/dev/null)"
+same "log directory there: output" "two" "$(cat "$T/rclog2/second" 2>/dev/null)"
 
 # rc_mknod (the fake mknod makes a plain file, so every call makes one)
 : > "$T/rc.log"; : > "$T/mknod.log"

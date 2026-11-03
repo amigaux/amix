@@ -70,6 +70,7 @@ sh userland/base/etc/test-profile.sh           # /etc/profile = stock + profile.
 sh userland/base/etc/test-inittab.sh           # /etc/inittab = stock + the dlm line
 sh userland/base/etc/test-login.sh             # /etc/default/login = stock, ULIMIT set
 sh userland/base/etc/test-group.sh             # /etc/group = stock + audio
+sh userland/base/test-lint.sh                  # rules over the shipped scripts (mkdir -p)
 ```
 
 ## Licence

@@ -26,6 +26,9 @@ set -- $AWK
 a=$(command -v "$1"); shift
 printf '#!/bin/sh\nexec %s %s "$@"\n' "$a" "$*" > "$B/awk"
 set --
+# mkdir as the stock one: -p on a directory already there exits 2
+printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$B/mkdir"
+chmod +x "$B/mkdir"
 # ifconfig: <if> shows the state (exit 1 when not linked); <if> <a> netmask
 # <m> up -trailers sets it; <if> down
 cat > "$B/ifconfig" <<EOF
@@ -317,6 +320,22 @@ o=$(run ifup aen0)
 expect "bad row reported" "ifup: interfaces:1: aen0: the mode must be dhcp, static or off" "$o"
 expect "bad row: off" "ifup: aen0 (00:80:10:ff:ff:01): off" "$o"
 refuse "not the * address" "192.0.2.50" "$o"
+
+# --- the stock mkdir: the apply step makes IF_STATE only when it is missing,
+# so ifup runs again over the directory it made
+same "the mkdir shim refuses a directory there" 2 "$(env PATH="$B:$PATH" mkdir -p "$T" 2>/dev/null; echo $?)"
+printf 'aen0 static 192.0.2.38/24 gw 192.0.2.1\n' > "$T/interfaces"
+rm -rf "${T:?}/var"
+reset
+o=$(run ifup aen0); r=$?
+same "state directory missing: ifup status" 0 "$r"
+same "state directory missing: made, primary" aen0 "$(cat "$T/var/ifup.primary" 2>/dev/null)"
+reset
+o=$(run ifup aen0); r=$?
+same "state directory there: ifup again, status" 0 "$r"
+refuse "state directory there: no mkdir error" "File exists" "$o"
+same "state directory there: primary" aen0 "$(cat "$T/var/ifup.primary" 2>/dev/null)"
+mkdir -p "$T/var/dhcpc"
 
 # --- link.d without the major column: the registry's, or no node made
 mkdir -p "$T/link2.d"
