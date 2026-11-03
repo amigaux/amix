@@ -317,16 +317,23 @@ def layout_problems(m, objs):
     """Every object is under PREFIX, the man tree, /etc or /var, or under a
     path that SYSTEM_PATHS names (a base package's /usr/sbin/ifup); a
     directory that is a parent of one of those (/opt, /usr) may be listed
-    too."""
+    too.  A one-level SYSTEM_PATHS entry is a mount point only (cdfs's
+    /cdrom): the prototype's single line there is that directory, and
+    nothing is under it."""
     out = []
     roots = [r for r in (m["PREFIX"].rstrip("/"), MAN_TREE, "/etc", "/var") if r]
-    system = []
+    system, mounts = [], []
     for p in words(m["SYSTEM_PATHS"]):
         if not p.startswith("/") or os.path.normpath(p) != p:
             out.append("SYSTEM_PATHS: %s is not a normalised absolute path" % p)
         elif p.count("/") < 2:
-            out.append("SYSTEM_PATHS: %s is a whole top-level tree; name the "
-                       "directories or files (/usr/sbin, /usr/bin/patch)" % p)
+            there = [(ftype, path) for ftype, _, path, _ in objs if under(path, p)]
+            if there == [("d", p)]:
+                mounts.append(p)
+            else:
+                out.append("SYSTEM_PATHS: %s is a whole top-level tree; name the "
+                           "directories or files (/usr/sbin, /usr/bin/patch), or "
+                           "list a mount point as one d line with nothing under it" % p)
         elif any(under(p, r) for r in roots):
             out.append("SYSTEM_PATHS: %s is under PREFIX, the man tree, /etc "
                        "or /var, which need no entry" % p)
@@ -336,7 +343,7 @@ def layout_problems(m, objs):
             system.append(p)
     roots += system
     for ftype, _, path, _ in objs:
-        if any(under(path, r) for r in roots):
+        if any(under(path, r) for r in roots) or path in mounts:
             continue
         if ftype in "dx" and any(r.startswith(path.rstrip("/") + "/") for r in roots):
             continue
