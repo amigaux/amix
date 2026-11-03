@@ -2,6 +2,10 @@
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
 
+## 2026-11-03 — assemble-release: #isize for every package row (6ad784a)
+
+The release catalog gives every ordinary package row its #isize line (gen-catalog --isize's installed size summed from the pkgmap, as on the install CD), so the network installer's free-space check sizes the install; #kpkg entries carry none, as in gen-catalog. An input's own #isize must agree; a row whose pkgmap cannot be summed is refused.
+
 ## 2026-11-02 — guarded deletes (a0c38f7)
 
 Every rm and mv of a variable path in the scripts and tests takes "${NAME:?}"; no behaviour change.
