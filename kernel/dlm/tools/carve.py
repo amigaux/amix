@@ -288,10 +288,13 @@ def corelist(args):
     shared = commons & others
     kmem = commons & KMEM
     kern = Elf(opt['--namelist'])
+    # func: STT_FUNC, or an assembler label (STT_NOTYPE) in an executable
+    # section (fubyte, kzero, min, strcpy...); everything else is data
     kinds = {}
     for s in kern.globals():
         if s[4] != SHN_UNDEF:
-            kinds[s[0]] = 'func' if s[3] & 15 == 2 else 'data'
+            code = s[3] & 15 == 0 and s[4] < len(kern.sh) and kern.sh[s[4]][2] & 4
+            kinds[s[0]] = 'func' if s[3] & 15 == 2 or code else 'data'
     names = sorted((imports | shared | kmem) - ddi)
     missing = [n for n in names if n not in kinds]
     if missing:

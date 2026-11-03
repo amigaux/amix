@@ -38,7 +38,7 @@ fbrelsei func 2
 fbwrite func 2
 fbwritei func 2
 fs_vcode func 2
-fubyte data 2
+fubyte func 2
 getblk func 2
 geteblk func 2
 groupmember func 2
@@ -52,11 +52,11 @@ inodeNINODE data 2
 kmem_fast_alloc func 2
 kmem_fast_free func 2
 kprunrun data 2
-kzero data 2
+kzero func 2
 lookupname func 2
 makespecvp func 2
 map_addr func 2
-min data 2
+min func 2
 ndquot data 2
 ngeteblk func 2
 ninode data 2
@@ -92,9 +92,9 @@ segmap_pagecreate func 2
 segmap_release func 2
 segvn_create func 2
 specvp func 2
-strcpy data 2
-strncat data 2
-strncpy data 2
+strcpy func 2
+strncat func 2
+strncpy func 2
 syserr data 2
 sysinfo data 2
 u data 2
