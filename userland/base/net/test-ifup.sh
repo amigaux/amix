@@ -26,6 +26,9 @@ set -- $AWK
 a=$(command -v "$1"); shift
 printf '#!/bin/sh\nexec %s %s "$@"\n' "$a" "$*" > "$B/awk"
 set --
+# mkdir as the stock one: -p on a directory already there exits 2
+printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$B/mkdir"
+chmod +x "$B/mkdir"
 # ifconfig: <if> shows the state (exit 1 when not linked); <if> <a> netmask
 # <m> up -trailers sets it; <if> down
 cat > "$B/ifconfig" <<EOF
@@ -133,7 +136,7 @@ run() { # run <cmd> <args...>: one of the three, with the test tree
 	shift
 	env PATH="$B:$PATH" RC_SUBR="$here/../rc/rc.subr" IF_SUBR="$here/ifup.subr" \
 	    RC_CONF="$T/rc.conf" RC_LOG="$T/rc.log" RC_KBOOTSET="$T/none" \
-	    IF_CONF="$T/interfaces" IF_LINKD="$T/link.d" IF_HOSTS="$T/hosts" IF_NODENAME="$T/nodename" \
+	    IF_CONF="$T/interfaces" IF_LINKD="${LINKD_:-$T/link.d}" IF_HOSTS="$T/hosts" IF_NODENAME="$T/nodename" \
 	    IF_RESOLV="$T/resolv.conf" IF_NETCONFIG="$T/netconfig" IF_DOMAINF="$T/domain" IF_LIB="$T/lib" \
 	    IF_STATE="$T/var" IF_LEASES="$T/var/dhcpc" IFCONFIG="$B/ifconfig" ROUTE="$B/route" \
 	    SLINK="$B/slink" DLPIMAC="$B/dlpi-mac" DHCPC="${DHCPC_PATH:-$B/dhcpc}" \
@@ -197,6 +200,19 @@ o=$(run ifup -n)
 expect "-n aen0" "ifup: aen0 (00:80:10:ff:ff:01): static 192.0.2.38 255.255.255.0 gw 192.0.2.1 name - (row aen0)" "$o"
 expect "-n aen1" "ifup: aen1 (00:80:10:ff:ff:02): static 198.51.100.9" "$o"
 same "-n: nothing run" "" "$(grep -v '^mknod' "$T/st/calls" 2>/dev/null)"
+
+# --- "* dhcp" alone: the row key is not a file name pattern; with no
+# interface at all, -n says so and passes (the installer's check)
+cp "$T/interfaces" "$T/interfaces.keep"
+echo '* dhcp' > "$T/interfaces"
+mkdir -p "$T/cwd" "$T/nolink"; : > "$T/cwd/afile"
+o=$(cd "$T/cwd" && run ifup -n)
+expect "* row: the key as written" "dhcp - - gw - name - (row *)" "$o"
+refuse "* row: not globbed" "(row afile)" "$o"
+o=$(LINKD_=$T/nolink run ifup -n); r=$?
+expect "no interface: said" "no network interface found (link.d: $T/nolink)" "$o"
+same "no interface: -n passes" 0 "$r"
+mv "$T/interfaces.keep" "$T/interfaces"
 
 # --- one interface by name; an unknown one
 reset
@@ -304,6 +320,22 @@ o=$(run ifup aen0)
 expect "bad row reported" "ifup: interfaces:1: aen0: the mode must be dhcp, static or off" "$o"
 expect "bad row: off" "ifup: aen0 (00:80:10:ff:ff:01): off" "$o"
 refuse "not the * address" "192.0.2.50" "$o"
+
+# --- the stock mkdir: the apply step makes IF_STATE only when it is missing,
+# so ifup runs again over the directory it made
+same "the mkdir shim refuses a directory there" 2 "$(env PATH="$B:$PATH" mkdir -p "$T" 2>/dev/null; echo $?)"
+printf 'aen0 static 192.0.2.38/24 gw 192.0.2.1\n' > "$T/interfaces"
+rm -rf "${T:?}/var"
+reset
+o=$(run ifup aen0); r=$?
+same "state directory missing: ifup status" 0 "$r"
+same "state directory missing: made, primary" aen0 "$(cat "$T/var/ifup.primary" 2>/dev/null)"
+reset
+o=$(run ifup aen0); r=$?
+same "state directory there: ifup again, status" 0 "$r"
+refuse "state directory there: no mkdir error" "File exists" "$o"
+same "state directory there: primary" aen0 "$(cat "$T/var/ifup.primary" 2>/dev/null)"
+mkdir -p "$T/var/dhcpc"
 
 # --- link.d without the major column: the registry's, or no node made
 mkdir -p "$T/link2.d"

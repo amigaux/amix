@@ -45,7 +45,10 @@ if_errors | sed 's/^/ifup: /'
 
 # up <if> <node> <mac>: one interface as its row says
 up() {
+	# no file name generation: the row's key may be "*"
+	set -f
 	set -- $1 $2 $3 `if_select "$1" "$3"`
+	set +f
 	# $1 if, $2 node, $3 mac, $4 mode, $5 addr, $6 mask, $7 gw, $8 name, $9 key
 	if [ -n "$dry" ]
 	then

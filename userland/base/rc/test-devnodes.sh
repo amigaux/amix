@@ -35,6 +35,9 @@ ramdisk) echo "b 20" ;;
 *) echo "kbootset: no major is registered to $2" >&2; exit 1 ;;
 esac
 EOF
+# mkdir as the stock one: -p on a directory already there exits 2
+printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$T/bin/mkdir"
+chmod +x "$T/bin/mkdir"
 # mknod: record the call, make a plain file (a real node needs root)
 printf '#!/bin/sh\necho "$*" >> "%s/mknod.log"\n: > "$1"\n' "$T" > "$T/bin/mknod"
 # ls -ld <path> ...: the nodes "there" are the lines of $T/nodes
@@ -100,6 +103,12 @@ same "stock missing: made from the record" "$R/dev/dsk/c6d0s0 b 0 48" "$(cat "$T
 expect "stock missing: logged" "mknod: made $R/dev/dsk/c6d0s0 b 0 48" "$(cat "$T/rc.log")"
 expect "stock missing: counted" "devnodes: 1 node(s) made, 0 failed" "$(cat "$T/rc.log")"
 same "stock missing: the record's mode" "600" "$(stat -c %a "$R/dev/dsk/c6d0s0")"
+# again, the directory there now (the stock mkdir -p fails on it)
+rm -f "${R:?}/dev/dsk/c6d0s0"
+o=$(run "$K")
+same "directory there: made again" "$R/dev/dsk/c6d0s0 b 0 48" "$(cat "$T/mknod.log")"
+expect "directory there: none failed" "devnodes: 1 node(s) made, 0 failed" "$(cat "$T/rc.log")"
+case "$o" in *"File exists"*) bad "directory there: mkdir error [$o]" ;; *) ok ;; esac
 
 # a module's node missing: the registry's major, here equal to the record's
 there <<EOF

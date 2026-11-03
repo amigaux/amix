@@ -25,6 +25,9 @@ mkdir -p "$T/bin"
 # the daemon: says it ran, writes its pid as the real one does
 printf '#!/bin/sh\necho started >> %s/calls\necho $$ > %s/syslog.pid\n' "$T" "$T" > "$T/bin/syslogd"
 printf '#!/bin/sh\n' > "$T/bin/m4"
+# mkdir as the stock one: -p on a directory already there exits 2
+printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$T/bin/mkdir"
+chmod +x "$T/bin/mkdir"
 chmod +x "$T/bin/"*
 {
 	echo "# a comment naming $T/log/commented"
@@ -43,7 +46,7 @@ run() { # run start|stop [rc.conf line]
 	: > "$T/calls"
 	: > "$T/rc.log"
 	echo "${2:-}" > "$T/rc.conf"
-	env RC_SUBR="$here/../rc/rc.subr" RC_CONF="$T/rc.conf" RC_LOG="$T/rc.log" \
+	env PATH="$T/bin:$PATH" RC_SUBR="$here/../rc/rc.subr" RC_CONF="$T/rc.conf" RC_LOG="$T/rc.log" \
 	    SYSLOGD="${SYSLOGD:-$T/bin/syslogd}" SYSLOG_CONF="$T/syslog.conf" SYSLOG_PID="$T/syslog.pid" \
 	    SYSLOG_DIR="$T/log" M4="${M4:-$T/bin/m4}" $SH "$here/syslogd" "$1" 2>&1
 }
@@ -58,6 +61,12 @@ security" "$(ls "$T/log")"
 [ -e "$T/log/commented" ] && bad "a commented name was made" || ok
 [ -e "$T/nodir" ] && bad "a file in a missing directory was made" || ok
 expect "start: said" "syslogd: made $T/log/kernel" "$(cat "$T/rc.log")"
+
+# started again, the log directory there now (the stock mkdir -p fails on it)
+rm -f "${T:?}/syslog.pid"
+o=$(run start)
+same "log directory there: started" "started" "$(cat "$T/calls")"
+case "$o" in *"File exists"*) bad "log directory there: mkdir error [$o]" ;; *) ok ;; esac
 
 # running already (its pid answers): not started again; files kept
 echo "message" > "$T/log/kernel"
