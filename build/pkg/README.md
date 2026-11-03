@@ -47,7 +47,7 @@ so each fact about a package is written in one place.
 | `STYLE=configure` | `styles/<STYLE>.sh` |
 | `TOOLCHAIN=gcc14` | `gcc14`, or `period` (gcc-cross-amix) for a tool that must link only the stock libraries, or `none` for a script-only package that compiles nothing: no compiler gates, every compiler is `common/nocc`, which refuses to run, and the build is refused if its make.log shows a compile or link line or its payload holds an object |
 | `PREFIX=/opt/amix` | the install prefix |
-| `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`). For a base package's boot-path tools; a package without it stays in those four trees |
+| `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`); one level deep only for a mount point, a single `d` line with nothing under it (cdfs's `/cdrom`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
 | `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
 | `MAN_REPLACES=""` | the stock binaries the package replaces and the page shown for each, `<binary path> <sect> <page name>` triples (`/usr/sbin/tar 1 heirloom-tar`). Each binary is an object of the prototype, each page `/opt/amix/man/<sect>/<page>` is in it, and so is `/opt/amix/man/replaces.d/<PKG>`, which the stage hook writes with `amix_man_replaces` (`userland/packages/tools/manpages.sh`) for amix-base's `man` (`userland/base/docs/man.md`). `check` counts such a binary as documented by its page |
@@ -83,8 +83,9 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
 - `check` also reads the prototype. It refuses an object outside `PREFIX`,
   the man tree `/opt/amix/man`, `/etc`, `/var` and `SYSTEM_PATHS` (a
   directory above one of them, `/opt` or `/usr`, may be listed), and a
-  `SYSTEM_PATHS` entry that is relative, one level deep, already inside those
-  trees, or holds nothing. It refuses a `STOCK_ETC` path that is not under
+  `SYSTEM_PATHS` entry that is relative, one level deep (but a mount point:
+  the prototype's one line there a `d` of it, nothing under it), already
+  inside those trees, or holds nothing. It refuses a `STOCK_ETC` path that is not under
   `/etc`, not a regular file in `system/MANIFEST.sha256`, or not exactly one
   `f` or `e` line of the prototype. It refuses a `CONFFILES` path that the
   prototype does not have, has on more than one line, or has as anything but

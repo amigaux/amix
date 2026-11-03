@@ -236,6 +236,10 @@ try:
                                      + "s none /usr/bin/foo=/opt/amix/bin/foo\n",
                                      SYSTEM_PATHS="/usr/bin/foo"))
     check("layout: a SYSTEM_PATHS file passes (patch's /usr/bin/patch)", rc == 0, err)
+    rc, out, err = run("check", conf("lay", "lmount", PROTO + "d none /cdrom 0755 bin bin\n",
+                                     SYSTEM_PATHS="/cdrom"))
+    check("layout: a one-level SYSTEM_PATHS mount point, one empty d line, passes (cdfs's /cdrom)",
+          rc == 0, err)
     rc, out, err = run("check", conf("lay", "lbase", SYS, SET="base",
                                      TOOLCHAIN="period", PREFIX="/opt/amix",
                                      SYSTEM_PATHS='"/usr/sbin /usr/lib/amix"',
@@ -264,6 +268,14 @@ try:
             ("lrel", SYS, {"SYSTEM_PATHS": "usr/sbin"}, "is not a normalised absolute"),
             ("lslash", SYS, {"SYSTEM_PATHS": "/usr/sbin/"}, "is not a normalised absolute"),
             ("ltop", SYS, {"SYSTEM_PATHS": "/usr"}, "/usr is a whole top-level tree"),
+            ("lmntf", PROTO + "d none /cdrom 0755 bin bin\nf none /cdrom/README 0644 bin bin\n",
+             {"SYSTEM_PATHS": "/cdrom"}, "/cdrom is a whole top-level tree"),
+            ("lmntd", PROTO + "d none /cdrom 0755 bin bin\nd none /cdrom/sub 0755 bin bin\n",
+             {"SYSTEM_PATHS": "/cdrom"}, "/cdrom is a whole top-level tree"),
+            ("lmntfile", PROTO + "f none /cdrom 0644 bin bin\n",
+             {"SYSTEM_PATHS": "/cdrom"}, "/cdrom is a whole top-level tree"),
+            ("lmntnone", PROTO + "d none /cdrom 0755 bin bin\n", {},
+             "/cdrom is outside PREFIX"),
             ("letc", SYS, {"SYSTEM_PATHS": '"/usr/sbin /usr/lib/amix /etc/inet"'},
              "/etc/inet is under PREFIX, the man tree, /etc or /var"),
             ("lman", SYS, {"SYSTEM_PATHS": '"/usr/sbin /usr/lib/amix /opt/amix/man/1"'},
