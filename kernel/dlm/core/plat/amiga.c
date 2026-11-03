@@ -15,7 +15,14 @@
  *   - match= keys are matched against the boards in bootinfo: a
  *     zorro:MMMM:PP key against each board's manufacturer and product; a
  *     mobo: key always, because the module's gated probe decides, as for
- *     the loader (10 section 5.3).
+ *     the loader (10 section 5.3);
+ *   - s5's inode table pointer `inode`, which the kernel keeps for the
+ *     programs that read it through the namelist and /dev/kmem (sadc, and
+ *     so sar and timex -s; crash), points at an empty table while no s5
+ *     is loaded: a read-only window of ninode inodes whose pages all map
+ *     one zeroed page (plat_line_zwin(), the line's file).  s5's inoinit
+ *     replaces it when s5 loads.  Without it `inode` is 0 and sadc would
+ *     read low memory as inodes.
  *
  * Built with the loader's flags (C89), like loader/common, whose
  * bootinfo.h it uses.
@@ -33,6 +40,12 @@ extern int printf(const char *, ...);
 
 extern char *plat_buildid(void);	/* core/plat/<line>/line.c */
 extern void plat_line_init(void);	/* the line's own, at dmainit (k30: the DMA pool) */
+extern char *plat_line_zwin(unsigned long);	/* the line's own: n bytes reading as zeros */
+
+extern char *inode;			/* s5's inode table, the kernel's COMMON (core.list) */
+extern int ninode;			/* its size, the stock tunable */
+#define	S5_INOSZ	200		/* sizeof (struct inode), s5: what sadc steps by */
+char *plat_inowin;			/* the empty table, or 0 */
 
 static ax_u32
 get32(const char *p)
@@ -109,4 +122,11 @@ plat_dmainit(void)
 		dlm_build = bid;
 	dlm_plat_match = plat_match;
 	plat_line_init();
+	if (inode == 0 && ninode > 0) {
+		plat_inowin = plat_line_zwin((unsigned long)ninode * S5_INOSZ);
+		if (plat_inowin != 0)
+			inode = plat_inowin;
+		else
+			printf("dlm: no empty inode table: sar -v reads low memory until s5 loads\n");
+	}
 }

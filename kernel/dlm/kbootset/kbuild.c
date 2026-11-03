@@ -520,7 +520,7 @@ kernel_build(const char *root, const struct kb_kernel *kk, const ax_u8 *kern, ax
 		if ((sym = slurp(under(root, path), &slen)) == 0)
 			return 0;
 	}
-	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, bind, &lay, &nl, &nlen, why) == 0 &&
+	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, bind, 0, &lay, &nl, &nlen, why) == 0 &&
 	    ((v = nl_value(nl, nlen, kk->brel ? "kinfo_buildid" : "buildid")) != 0) &&
 	    (img = malloc(klen)) != 0) {
 		memcpy(img, kern, klen);
@@ -2032,14 +2032,63 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	return rc;
 }
 
+/*
+ * The namelist's added symbols (C2-4 section 12): each loaded module's
+ * globals, at the addresses the module core gives (getksym), kept only
+ * when they lie in that module's run (kinfo's list); a name another module
+ * or the kernel answers first is left out.
+ */
+struct modsyms {
+	struct kb_nlsym *s;
+	int n, cap;
+	ax_u32 lo, size;
+};
+
+static int
+modsym_one(void *c, const char *name, ax_u32 size, int type)
+{
+	struct modsyms *ms = (struct modsyms *)c;
+	struct kb_nlsym *t;
+	ax_u32 v, ty;
+	char *nm;
+
+	if (kb_getksym(name, &v, &ty) != 0 || v < ms->lo || v - ms->lo >= ms->size)
+		return 0;
+	if (ms->n == ms->cap) {
+		if ((t = realloc(ms->s, (ms->cap + 64) * sizeof(*t))) == 0)
+			return 1;
+		ms->s = t;
+		ms->cap += 64;
+	}
+	if ((nm = malloc(strlen(name) + 1)) == 0)
+		return 1;
+	strcpy(nm, name);
+	ms->s[ms->n].name = nm;
+	ms->s[ms->n].value = v;
+	ms->s[ms->n].size = size;
+	ms->s[ms->n].info = (ax_u8)(0x10 | (type ? type : (int)(ty & 15)));	/* STB_GLOBAL */
+	ms->n++;
+	return 0;
+}
+
+static int
+kmem_read(void *c, ax_u32 a, ax_u8 *b, ax_u32 n)
+{
+	(void)c;
+	return kb_kmem(a, b, n);
+}
+
 int
 kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int write,
 		char line[300])
 {
 	struct ax_manifest m;
 	struct kb_layout lay;
+	struct kb_nlx x;
+	struct modsyms ms;
 	ax_u8 *kern = 0, *sym = 0, *nl = 0, *old = 0;
 	ax_u32 klen, slen = 0, nlen, olen = 0;
+	int i, j;
 	char *buf, why[120], path[96], text[4096], v[200], sha[65], ksha[65], lname[16], np[1100];
 	int rc = KB_NL_NONE;
 	FILE *f;
@@ -2127,7 +2176,29 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 			goto out;
 		}
 	}
-	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, ki->bd_tvaddr, &lay, &nl, &nlen, why)) {
+	/* the modules loaded from this generation: their globals */
+	memset(&ms, 0, sizeof(ms));
+	for (i = 0; buf && i < ki->nmods; i++)
+		for (j = 0; j < m.nmod; j++) {
+			ax_u8 *mb;
+			ax_u32 mlen;
+
+			if (!m.mod[j].name || strcmp(m.mod[j].name, ki->mods[i]))
+				continue;
+			mb = m.mod[j].path ? slurp(under(root, m.mod[j].path), &mlen) :
+			     ks_member(k, &m.mod[j], &mlen);
+			ms.lo = ki->modbase[i];
+			ms.size = ki->modsize[i];
+			if (mb)
+				km_defs(mb, mlen, modsym_one, &ms, why);
+			free(mb);
+			break;
+		}
+	memset(&x, 0, sizeof(x));
+	x.nsym = ms.n;
+	x.sym = ms.s;
+	x.mem = kmem_read;
+	if (kb_namelist(sym ? 0 : kern, sym ? 0 : klen, sym, slen, ki->bd_tvaddr, &x, &lay, &nl, &nlen, why)) {
 		sprintf(line, "no namelist: %s", why);
 		goto out;
 	}
@@ -2184,6 +2255,9 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 			(unsigned long)ki->gen_id, (unsigned long)ki->bd_tvaddr);
 	rc = KB_NL_WRITTEN;
 out:
+	for (i = 0; i < ms.n; i++)
+		free((char *)ms.s[i].name);
+	free(ms.s);
 	free(buf);
 	free(kern);
 	free(sym);

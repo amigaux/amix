@@ -217,6 +217,47 @@ plat_line_init(void)
 		printf("dma: no memory a bus master reaches: bus-master DMA is off\n");
 }
 
+/*
+ * The empty inode table (core/plat/amiga.c): n bytes of kernel virtual
+ * space, read-only, every page mapped to one zeroed page.  The run comes
+ * from sptmap as sptalloc takes it (its index shifted by PNUMSHFT is the
+ * address); each page is mapped by its own segkmem_mapin call, since a
+ * call of several pages maps consecutive frames.  PROT_READ makes the
+ * page-table entry write-protected (PG_W, the 68030's WP bit), and
+ * segkmem_mapin flushes the ATC entry of each page it stores.  The zeroed
+ * page is in the kernel's bss: the kernel is bound 256-aligned, so the
+ * page is rounded up inside two pages' room, outside the page pool (no
+ * page structure counts the mappings).  Kept for good: the pointer is put
+ * back to it if s5 is ever unloaded (tools/carve.py's wrapper).
+ */
+#define ZW_PG		2048		/* NBPP */
+#define ZW_SHIFT	11		/* PNUMSHFT */
+#define ZW_READ		1		/* PROT_READ */
+#define ZW_LOCK		1		/* the flags sptalloc passes: PTELD_LOCK */
+
+extern char sptmap[], kvseg[];		/* struct map sptmap[], struct seg kvseg */
+extern unsigned long rmalloc(char *, unsigned long);
+extern void segkmem_mapin(char *, char *, unsigned long, unsigned long, unsigned long, int);
+
+static char zw_room[2 * ZW_PG];		/* bss; the page cleared again before use */
+
+char *
+plat_line_zwin(unsigned long nbytes)
+{
+	unsigned long n = (nbytes + ZW_PG - 1) / ZW_PG, idx, zpa, i;
+	char *zp, *va;
+
+	zp = (char *)(((unsigned long)zw_room + ZW_PG - 1) & ~(ZW_PG - 1));
+	if (n == 0 || (zpa = vtop(zp, 0)) == 0 || (idx = rmalloc(sptmap, n)) == 0)
+		return 0;
+	for (i = 0; i < ZW_PG; i++)
+		zp[i] = 0;
+	va = (char *)(idx << ZW_SHIFT);
+	for (i = 0; i < n; i++)
+		segkmem_mapin(kvseg, va + i * ZW_PG, ZW_PG, ZW_READ, zpa, ZW_LOCK);
+	return va;
+}
+
 /* the force-fail hook: a count of bounces to refuse, each one taken off;
  * it clears itself, so it can never be left on (C4-5 section 5.3) */
 static int

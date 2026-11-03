@@ -20,6 +20,13 @@ unsigned long dlm_rd_addr, dlm_rd_size;
 static ax_u32 rd_a, rd_s;	/* the image boot() puts in the loader record */
 char *dlm_build;
 int (*dlm_plat_match)(char *);
+char *inode;				/* s5's table pointer, the kernel's */
+int ninode = 600;
+static char zwin[8];			/* what the line's mapper gives */
+static unsigned long zwin_asked;	/* the bytes it was asked for */
+static int zwin_fail;
+char *plat_line_zwin(unsigned long n) { zwin_asked = n; return zwin_fail ? 0 : zwin; }
+extern char *plat_inowin;
 
 void plat_dmainit(void);
 int plat_match(char *);
@@ -99,6 +106,25 @@ main(void)
 	    "plat: the RAM-disk image's address and size reach the core (C4-3)");
 	boot(0, 0);
 	check(dlm_rd_addr == 0 && dlm_rd_size == 0, "plat: no loader record, no image");
+	/* the empty inode table: set only while inode is 0 */
+	inode = 0;
+	zwin_asked = 0;
+	boot(0, 1);
+	check(inode == zwin && plat_inowin == zwin && zwin_asked == 600UL * 200,
+	    "plat: no s5 table: inode points at the line's window of ninode x 200 bytes");
+	{
+		char table[4];
+
+		inode = table;
+		zwin_asked = 0;
+		boot(0, 1);
+		check(inode == table && zwin_asked == 0, "plat: an s5 table already there is left alone, no window made");
+	}
+	inode = 0;
+	zwin_fail = 1;
+	boot(0, 1);
+	check(inode == 0 && plat_inowin == 0, "plat: no window to be had: inode stays 0, said on the console");
+	zwin_fail = 0;
 	printf("t_plat: %d failed\n", fails);
 	return fails != 0;
 }

@@ -1,7 +1,9 @@
 # the core tier for the k46 line (C3-2 section 4): what the carved ufs and
 # s5 objects (the stock ones as the port's fsobj-patch.py patches them for
 # 4 KiB pages) import outside DDI, and the COMMONs they share with the rest
-# of the stock tree (tools/carve.py corelist).  Only a module with
+# of the stock tree, and the COMMONs stock kmem readers name (sadc: inode;
+# crash: ifreelist, ufs_inode, inodeNINODE, ifreeh), which the kernel keeps
+# so nlist finds them (tools/carve.py corelist).  Only a module with
 # tier=core and the kernel's build may resolve these.  Sorted by name.
 as_iolock func 2
 as_map_reliably func 2
@@ -37,21 +39,25 @@ fbrelsei func 2
 fbwrite func 2
 fbwritei func 2
 fs_vcode func 2
-fubyte data 2
+fubyte func 2
 getblk func 2
 geteblk func 2
 groupmember func 2
 hrestime data 2
+ifreeh data 2
+ifreelist data 2
 iftovt_tab data 2
 incore func 2
+inode data 2
+inodeNINODE data 2
 kmem_fast_alloc func 2
 kmem_fast_free func 2
 kprunrun data 2
-kzero data 2
+kzero func 2
 lookupname func 2
 makespecvp func 2
 map_addr func 2
-min data 2
+min func 2
 ndquot data 2
 ngeteblk func 2
 ninode data 2
@@ -87,12 +93,13 @@ segmap_pagecreate func 2
 segmap_release func 2
 segvn_create func 2
 specvp func 2
-strcpy data 2
-strncat data 2
-strncpy data 2
+strcpy func 2
+strncat func 2
+strncpy func 2
 syserr data 2
 sysinfo data 2
 u data 2
+ufs_inode data 2
 ufs_ninode data 2
 vf_to_stf func 2
 vfs_add func 2

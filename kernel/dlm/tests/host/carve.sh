@@ -15,7 +15,10 @@ python3 -I tools/carve.py corelist --ddi abi/k30/ddi.list --namelist "$AX_NAMELI
 sed 's/#.*//' abi/k30/core.list | awk 'NF' | cmp -s - $T/core.list ||
 	{ echo "carve: abi/k30/core.list differs from the carve's core tier" >&2; diff $T/core.list abi/k30/core.list >&2; exit 1; }
 grep -q "^rootvp data 2$" $T/core.list	# the one COMMON the rest of the tree shares
-! grep -q "^\(ihead\|hinode\|inode\|updlock\) " $T/core.list	# private: they go with the modules
+! grep -q "^\(ihead\|hinode\|updlock\) " $T/core.list	# private: they go with the modules
+for n in inode ifreelist ufs_inode inodeNINODE ifreeh; do	# kmem readers' COMMONs stay the kernel's
+	grep -q "^$n data 2$" $T/core.list || { echo "carve: $n not in the core tier" >&2; exit 1; }
+done
 echo "carve: $(cat $T/corelist.out | sed 's/^carve: //')"
 command -v m68k-cbm-sysv4-gcc >/dev/null || { echo "carve: no cross tools on PATH, module build skipped"; exit 0; }
 [ -d $B/kit/k30 ] || { echo "carve: no $B/kit/k30 (make kit), module build skipped"; exit 0; }
