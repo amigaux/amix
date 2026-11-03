@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — pkgmeta: a one-level mount point in SYSTEM_PATHS (772f99f)
+
+A one-level SYSTEM_PATHS entry passes only as a mount point: one d line of that path with nothing under it (for the userland cdfs package's /cdrom). A file at the path, anything under it, or a whole top-level tree is still refused.
+
 ## 2026-11-02 — release-check's image mode tested on a real ufs (1aba914)
 
 tools/test-release-check reads two ufs disk image fixtures, a clean one and one with a planted shadow hash and private address, fetched as distfiles (amix-distfiles release-check-fixtures-1).
