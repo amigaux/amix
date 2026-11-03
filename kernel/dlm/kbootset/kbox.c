@@ -503,20 +503,25 @@ int
 kb_getksym(const char *name, ax_u32 *val, ax_u32 *type)
 {
 	const char *p = getenv("KBOOTSET_KSYMS");
-	char ln[160], nm[96];
+	char ln[160], *e;
 	unsigned long v, t;
+	size_t k;
 	FILE *f;
 
-	if (p && *p) {
+	if (p && *p) {			/* no sscanf: it brings libc's floating point */
 		if ((f = fopen(p, "r")) == 0)
 			return -1;
-		while (fgets(ln, sizeof(ln), f))
-			if (sscanf(ln, "%95s %lx %lu", nm, &v, &t) == 3 && !strcmp(nm, name)) {
-				fclose(f);
-				*val = (ax_u32)v;
-				*type = (ax_u32)t;
-				return 0;
-			}
+		while (fgets(ln, sizeof(ln), f)) {
+			k = strcspn(ln, " \t\n");
+			if (k != strlen(name) || strncmp(ln, name, k))
+				continue;
+			v = strtoul(ln + k, &e, 16);
+			t = strtoul(e, 0, 10);
+			fclose(f);
+			*val = (ax_u32)v;
+			*type = (ax_u32)t;
+			return 0;
+		}
 		fclose(f);
 		return -1;
 	}
