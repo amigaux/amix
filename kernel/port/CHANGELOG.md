@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — cut 68060-261103-62 is the k46 cut of record; kern46m -62 (ef09519, 189a68b)
+
+port.pin moves to d8c7548 (core at amix 46ef7d1). The kernel keeps the kernel-memory readers' names (inode, ifreelist, ufs_inode, inodeNINODE, ifreeh; inode a read-only empty table while no s5 is loaded), so sar, sadc and timex -s work; kbootset 1.1.0.261103-37 or later is required. kern46m k46.1.4.261103-62: unix bc8e779f, kabi a2c4ec02, ufs.mod 18032738; abi 18c0a1c9 as -61. crash and adb -k still read the 68030 page-table format and are not yet supported on this kernel.
+
 ## 2026-11-03 — cut 68060-261103-61 is the k46 cut of record; kern46m -61 (3c69659, 7d7f32c)
 
 port.pin moves to 105f682. On a 68040 the pending write-backs of a user fault that ends in a signal are kept and replayed when its handler returns, so a store such as sh's heap growth is no longer lost; the kernel-side break growth that desynchronised libc's break is gone. kern46m k46.1.4.261103-61: unix 4d23c99b, kabi 9ec2577b, ufs.mod e4787089; abi 18c0a1c9 as -60. make dist reproduces the cut from GitHub.
