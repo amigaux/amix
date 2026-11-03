@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — dropbear 2026.94-3: in the base set (4f332a8)
+
+dropbear moves into the base set, so every install has an SSH server, on unless /etc/rc.conf says dropbear=no. A first start with no host key makes it and starts the server in the background (rc_bg, bounded by dropbear_keytime=, default 900 s), so the boot is never held; keys are written under a new name and renamed when complete, and no host key is ever shipped. dropbear(8) documents the boot keys, the rc.conf switches and that root may log in by password (empty passwords refused). Proven on fresh installs on the 060 and 030 rows and by the full acceptance against OpenSSH 10.2.
+
 ## 2026-11-03 — dropbear 2026.94-2: curve25519 and Poly1305 without 64-bit multiplies (30811c1)
 
 The curve25519/ed25519 field arithmetic (patch 06) and Poly1305 (patch 07) are built from 16×16 MULS.W/MULU.W products instead of libgcc __muldi3 calls: same outputs, constant time. In emulation X25519 and Ed25519 are about 3× faster, Poly1305 1.8×, the server's crypto per connection drops from 5.4 s to 1.9 s and an SSH handshake takes about 4 s instead of 7.8 s. Proven by differential tests, the RFC 7748/8032/8439 vectors on the 060 and 030 rows, and the full acceptance against OpenSSH 10.2 (43/43 on each row).
