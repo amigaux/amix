@@ -1,0 +1,51 @@
+Subject: modadmin: rewrite /stand/unix by fork and exec, not system()
+
+0053 ran kbootset namelist through system(), which brings libc's shell
+signal handling and process-group calls into the static modadmin: about
+7 KiB for one call.  A fork, an execv of /sbin/kbootset with its output
+on /dev/null, and a waitpid do the same.  User side only.
+
+--- a/modadmin.c
++++ b/modadmin.c
+@@ -56,6 +56,7 @@
+ #include <sys/param.h>
+ #include <fcntl.h>
+ #include <unistd.h>
++#include <sys/wait.h>
+ #include "sys/mod.h"
+ #include "sys/ksym.h"
+ 
+@@ -261,12 +262,30 @@
+ 	    w[0] << 8 | w[1]);
+ }
+ 
+-/* /stand/unix after a load or an unload: kbootset rewrites it, quietly */
++/*
++ * /stand/unix after a load or an unload: kbootset rewrites it, quietly.
++ * A fork and an exec of its own, not system(): system() brings the shell's
++ * signal handling and process-group calls from libc, about 7 KiB.
++ */
+ void
+ renamelist()
+ {
+-	if (access("/sbin/kbootset", 1) == 0)
+-		system("/sbin/kbootset namelist >/dev/null 2>&1");
++	static char *av[] = { "kbootset", "namelist", (char *)0 };
++	int pid, st, fd;
++
++	if (access("/sbin/kbootset", 1) != 0)
++		return;
++	if ((pid = fork()) == 0) {
++		if ((fd = open("/dev/null", O_WRONLY)) >= 0) {
++			dup2(fd, 1);
++			dup2(fd, 2);
++		}
++		execv("/sbin/kbootset", av);
++		_exit(127);
++	}
++	if (pid > 0)
++		while (waitpid(pid, &st, 0) < 0 && errno == EINTR)
++			;
+ }
+ 
+ void
