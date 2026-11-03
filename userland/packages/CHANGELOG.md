@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — dropbear 2026.94-2: curve25519 and Poly1305 without 64-bit multiplies (30811c1)
+
+The curve25519/ed25519 field arithmetic (patch 06) and Poly1305 (patch 07) are built from 16×16 MULS.W/MULU.W products instead of libgcc __muldi3 calls: same outputs, constant time. In emulation X25519 and Ed25519 are about 3× faster, Poly1305 1.8×, the server's crypto per connection drops from 5.4 s to 1.9 s and an SSH handshake takes about 4 s instead of 7.8 s. Proven by differential tests, the RFC 7748/8032/8439 vectors on the 060 and 030 rows, and the full acceptance against OpenSSH 10.2 (43/43 on each row).
+
 ## 2026-11-03 — cdfs 1.1.0-1, new in set base (e274300, 7338443)
 
 /usr/lib/fs/cdfs/mount, the mount helper for the cdfs CD filesystem, built with GCC 14 from amix-cdfs 215936f, and the mount point /cdrom, with the paths, modes and owners of the earlier hand-staged cdfs 0.1 package; mount_cdfs(1M). The filesystem itself is the cdfs-k30/cdfs-k46 kernel module. Mount, list, refused second mount and umount proven on k30 and k46 with a CD on the Z3660 SCSI.
