@@ -60,3 +60,6 @@ FB_REPO_URL=http://pkg.amigaux.org/1.1
 FB_ROOT_SHADOW=none
 # a published medium: it carries only the profiles it was mastered with
 MEDIUM_PROFILES=requested
+# install.sh, setup.sh and l11.sh staged without their comments (tools/strip-sh-comments.py):
+# the netinstall RAM disk's room; the sources stay commented, firstboot.sh is staged as written
+STRIP_INSTALLER_COMMENTS=y
