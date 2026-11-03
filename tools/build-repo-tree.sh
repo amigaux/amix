@@ -35,7 +35,9 @@ die() { echo "build-repo-tree: STOP: $*" >&2; exit 1; }
 L11_IN="${L11_IN:-$repo/work/l11}"
 [ -f "$L11_IN/INPUTS" ] || die "no $L11_IN/INPUTS (tools/build-l11-inputs.sh)"
 [ ! -s "$L11_IN/UNPINNED" ] || die "$L11_IN rolled userland unpinned: not inputs of record"
-AR="$ws/amix/userland/pkgtools/tools/repo/assemble-release.py"
+# the pinned tools ($L11_IN: pkgtools and amix tools/ at the set's revision), never the amix checkout's tip
+AR="$L11_IN/pkgtools/tools/repo/assemble-release.py" RC="$L11_IN/amix-tools/release-check"
+[ -f "$AR" ] && [ -x "$RC" ] || die "no pinned assemble-release or release-check under $L11_IN (tools/build-l11-inputs.sh)"
 [ -f "$AR" ] || die "no $AR (amix master)"
 KS="$(sed -n 's/^#   kspace //p' "$L11_IN/INPUTS")"
 [ -n "$KS" ] && [ -f "$ws/$KS/catalog" ] || die "INPUTS names no kernel-space tree ($KS)"
@@ -58,7 +60,7 @@ D="$OUT/$REL"
 rm -rf "${D:?}"
 # its 68060 scan unpacks each datastream with the inputs' host pkgtrans
 AMIX_PKGTRANS="$L11_IN/pkgtools/heirloom/build-host/bin/pkgtrans" python3 "$AR" --userland "$W/userland" --kspace "$ws/$KS" --apkg "$W/apkg" --stock "$ST/stock" --release "$REL" \
-	--out "$D" --release-check "$ws/amix/tools/release-check" --rom-register "$ws/roms/MANIFEST.sha256" \
+	--out "$D" --release-check "$RC" --rom-register "$ws/roms/MANIFEST.sha256" \
 	--private-patterns "$PRIVACY_PATTERNS" --apkg-bin "$L11_IN/apkg/apkg-host" > "$OUT/assemble.log" 2>&1
 rc=$?
 [ "$rc" = 0 ] || { tail -15 "$OUT/assemble.log" >&2; die "assemble-release.py refused or failed (rc $rc; $OUT/assemble.log)"; }

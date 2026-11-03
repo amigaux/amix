@@ -29,7 +29,8 @@ here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
 # the workspace: the directory holding this repository's git directory (a worktree's too); amix's
 # tools/release-check is the one content check every release file passes
 ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
-RC="$ws/amix/tools/release-check"
+# the pinned content check (amix tools/ at the set's revision, tools/build-l11-inputs.sh), not the checkout's tip
+RC="${L11_IN:-$repo/work/l11}/amix-tools/release-check"
 TREE= R46= R30= OUT= N46= N30= SET=x11
 while [ $# -gt 0 ]; do
 	case "$1" in
