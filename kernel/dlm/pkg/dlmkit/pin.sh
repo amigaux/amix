@@ -100,6 +100,14 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -19 (2026-11-03): amix 83ef3b4 (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -18 (abi texts, headers, tools unchanged; abi= 18c0a1c9 both): the
+# contract copies in docs/ at their current versions (C2-1, C2-2, C2-3,
+# C2-4, C3-5, C4-1, C4-2) and mkkit's rm guards; core patch 0052 changes
+# nothing in the kit.  k46 headers from the port at 4c363c3
+# (kernel/port/port.pin; immu.h and param.h as at 392a44e).  Built in the
+# build container (amix-toolchain:dist).  -18 at 7db391c: k30 9f95c45a...,
+# k46 5279c36f...
 # -18 (2026-11-01): amix 7db391c (KIT_REV), kabi k30.1.4 / k46.1.4 as
 # -17: the kit carries kernel/modules' sys/zz9kbus.h beside sys/monsw.h
 # (1ec3e2f), with the registry's c 55, and its PIN is gcc-cross-amix
@@ -141,21 +149,21 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=7db391c
+DK_DLM_COMMIT=83ef3b4
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=7db391c
+DK_MONSW_COMMIT=83ef3b4
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
-DK_K46_PORT_COMMIT=392a44e
+DK_K46_PORT_COMMIT=4c363c3
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
-DK_K46_PORT_HASH=392a44e1dda2bb2e8cd2ab294b00830bf04e07e0
-DK_K30_MANIFEST=9f95c45aac532675f0ad70a963777c24c84972c6a48e6e1834d26e039fb31ab9
-DK_K46_MANIFEST=5279c36f12dbeaccfa08f0cb0baf27a034f36d29b2a5289a6774e5312562a980
+DK_K46_PORT_HASH=4c363c3a0861e60bc800476b5b4db631340eb182
+DK_K30_MANIFEST=e280eafbcea979febc16c884347a5e9b1342b24fd8c52b04aa21bf721a1b0598
+DK_K46_MANIFEST=c9597c298fd0e3a8fef2088220a7b723048225d590117e4278da66dd2b4ef177
 
-DK_DATE=261101
-DK_REV=18
-DK_SOURCE_EPOCH=1793491200
+DK_DATE=261103
+DK_REV=19
+DK_SOURCE_EPOCH=1793664000
