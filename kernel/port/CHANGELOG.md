@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — cut 68060-261103-61 is the k46 cut of record; kern46m -61 (3c69659, 7d7f32c)
+
+port.pin moves to 105f682. On a 68040 the pending write-backs of a user fault that ends in a signal are kept and replayed when its handler returns, so a store such as sh's heap growth is no longer lost; the kernel-side break growth that desynchronised libc's break is gone. kern46m k46.1.4.261103-61: unix 4d23c99b, kabi 9ec2577b, ufs.mod e4787089; abi 18c0a1c9 as -60. make dist reproduces the cut from GitHub.
+
 ## 2026-11-03 — cut 68060-261102-60 is the k46 cut of record; kern46m -60 (2f624a6, 564cafd, 7774038)
 
 port.pin moves to 4c363c3. Cut 68060-261102-60 carries the port's -58 and -59 (trap diagnostics off the trap path, core 0052, the investigation instruments out, kbootset-min -35) plus sdqueue at IPL 2 (the a3091 first-use hang), the A1200 as motherboard id 2, the CACR/Ramsey boot dump only with btrace_on, and cputype from the loader's AXL1 record so a 68040 boots the k46 kernel. unix 7f217425, kabi 679b705c, ufs.mod 88034650; abi 18c0a1c9 unchanged. kernel-k46-m k46.1.4.261102-60. The cut hook now checks the pinned fork commit out before running the fork's own tools.
