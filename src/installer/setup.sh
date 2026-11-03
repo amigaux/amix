@@ -1638,6 +1638,73 @@ order_dl_bytes()
 	echo "$tot"
 }
 
+# order_dl_max ORDERFILE -- the largest datastream (the catalog's size column) of that order's
+# packages, or nothing when one is missing from the catalog
+order_dl_max()
+{
+	[ -f "$CATF" ] && [ -f "$1" ] || return 0
+	cp /dev/null "$TOK_F"
+	while read pkg
+	do
+		case "$pkg" in ""|\#*) continue ;; esac
+		echo "$pkg" >> "$TOK_F"
+	done < "$1"
+	[ -s "$TOK_F" ] || return 0
+	set -- `cat "$TOK_F"`
+	WANT=" $* "
+	nwant="$#"
+	cp /dev/null "$ISZ_F"
+	while read cline
+	do
+		case "$cline" in ""|\#*) continue ;; esac
+		cn=`expr "$cline" : '\([^|]*\)|'`
+		ci=`expr "$cline" : '[^|]*|[^|]*|\([^|]*\)|'`
+		cz=`expr "$cline" : '[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|\([0-9]*\)|'`
+		case "$WANT" in
+			*" $ci "*|*" $cn "*)	echo "$cz" >> "$ISZ_F" ;;
+		esac
+	done < "$CATF"
+	[ -s "$ISZ_F" ] || return 0
+	set -- `cat "$ISZ_F"`
+	[ "$#" = "$nwant" ] || return 0
+	mx=0
+	for b in "$@"
+	do
+		[ "$b" -gt "$mx" ] && mx="$b"
+	done
+	echo "$mx"
+}
+
+# net_need_mb ORDERFILE -- on the netinstall medium, "NEED SPOOL": the root a set needs in MB and the
+# share of it that is the largest datastream twice, or nothing when
+# the catalog cannot say: the set's packages and the base packages it takes (base/order, base/o.<set>)
+# at their budgeted footprint (the catalog's #isize lines, else the datastream sizes), the kernel set
+# (its #kpkg sizes), and the largest datastream twice -- apkg's download in its cache and pkgadd's
+# spool of it are on the root together while it installs. netset.sh and the first stage empty the
+# cache after every package, so the largest one is the peak, not the sum.
+net_need_mb()
+{
+	nall=/tmp/setup.netneed
+	cat "$1" > "$nall" 2>/dev/null || return 0
+	[ -f "$INST/l11/base/order" ] && cat "$INST/l11/base/order" >> "$nall"
+	[ -n "$SET_NAME" ] && [ -f "$INST/l11/base/o.$SET_NAME" ] && cat "$INST/l11/base/o.$SET_NAME" >> "$nall"
+	nisz=`order_size_bytes "$nall"`
+	ndl=`order_dl_bytes "$nall"`
+	nkc="$KCATF"; KCATF=
+	nrows=`order_dl_bytes "$nall"`
+	KCATF="$nkc"
+	nmax=`order_dl_max "$nall"`
+	rm -f "${nall:?}"
+	is_num "$ndl" && is_num "$nrows" && is_num "$nmax" || return 0
+	nk=`expr "$ndl" - "$nrows"`
+	is_num "$nisz" || nisz="$nrows"
+	nfoot=`expr "$nisz" + "$nk"`
+	nbud=`budget "$nfoot"`
+	nneed=`expr "$nbud" / 1048576`
+	nsp=`expr "$nmax" \* 2 / 1048576`
+	echo "`expr "$nneed" + "$nsp"` $nsp"
+}
+
 # set_net_eta ORDERFILE -- on the netinstall medium, " (~N min)" for that set at the
 # link rate net_source measured (NET_RATE bytes/s); nothing otherwise
 set_net_eta()
@@ -1820,6 +1887,25 @@ check_space()
 	if [ "$ANS_FSYS" = ufs ]; then
 		margin=`expr "$ANS_ROOT" / 50`
 		avail=`expr "$ANS_ROOT" - "$margin"`
+	fi
+	if [ "$SRC_KIND" = net ]; then
+		# both figures from one call: a variable set inside the backquotes' subshell would be lost
+		nres=`net_need_mb "$1"`
+		nmb=`expr "$nres" : '\([0-9]*\) '`
+		NET_SPOOL_MB=`expr "$nres" : '[0-9]* \([0-9]*\)'`
+		is_num "$nmb" || return 0
+		[ "$nmb" -gt "$avail" ] || return 0
+		while :
+		do
+			echo "\nWARNING:  A network installation of this set needs about $nmb MB on the root file"
+			echo "system: its packages, and room for the largest of them twice ($NET_SPOOL_MB MB) while it"
+			echo "downloads and installs.  Your root file system has $avail MB."
+			readask "\nGo ahead with the installation anyway? [n] "
+			case $ask in
+				[yY]|[yY][eE][sS] )	return 0 ;;
+				[nN]|[nN][oO]|"" )	return 1 ;;
+			esac
+		done
 	fi
 	kbytes=`order_size_bytes "$1"`
 	is_num "$kbytes" || return 0

@@ -2066,7 +2066,9 @@ msg "seeding target root..."
 # the log-open step right after the mount, because the log and runq's scratch
 # file need them before anything else runs. The 1991 mkdir -p would FAIL here on
 # the already-existing leaf.
-run mkdir -p "$TARGET/etc" "$TARGET/var/sadm/install/admin" "$TARGET/var/sadm/pkg" "$TARGET/stand"
+for _d in "$TARGET/etc" "$TARGET/var/sadm/install/admin" "$TARGET/var/sadm/pkg" "$TARGET/stand"; do
+	[ -d "$_d" ] || run mkdir -p "$_d"
+done
 # passwd + group byte-identical to core's -- the miniroot's own copies ARE core's
 # (miniroot.proto sources them from core-2.1.pkg), so this seeds them exactly.
 run cp /etc/passwd "$TARGET/etc/passwd"
@@ -2367,7 +2369,7 @@ elif [ "$SOURCE_KIND" = net ]; then
 	APKG="$INST/bin/apkg"
 	APKGCACHE="$TARGET/var/apkg/cache"
 	NETCONF="$TARGET/tmp/net.conf"
-	run mkdir -p "$APKGCACHE"
+	[ -d "$APKGCACHE" ] || run mkdir -p "$APKGCACHE"
 	{
 		echo "# apkg network source -- written by install.sh (netinstall)"
 		echo "repo=$NET_REPO"
@@ -2948,7 +2950,7 @@ fi
 # Copy the first-boot payload into the target and drop a marker the target's
 # first multiuser boot runs once. Identity comes from the profile (FB_*).
 msg "arming first-boot..."
-run mkdir -p "$TARGET/var/adm/firstboot"
+[ -d "$TARGET/var/adm/firstboot" ] || run mkdir -p "$TARGET/var/adm/firstboot"
 # root's alone: S16firstboot runs firstboot.sh AS ROOT whenever PENDING exists and it
 # sources firstboot.conf, so a writable dir or conf is a local root (P-15, 2026-10-03).
 run chmod 700 "$TARGET/var/adm/firstboot"

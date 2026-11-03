@@ -297,7 +297,7 @@ classful_mask()
 write_conf()
 {
 	if [ ! -d "$FBDIR" ]; then
-		mkdir -p "$FBDIR" || return 1
+		[ -d "$FBDIR" ] || mkdir -p "$FBDIR" || return 1
 	fi
 	if [ -f "$CONF" ]; then
 		sed	-e '/^FB_NODENAME=/d' \

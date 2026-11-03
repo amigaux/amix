@@ -103,7 +103,8 @@ N=$#
 echo "# netset: `date`" >> "$LOG"
 say ""
 say "Installing the rest of the $SET set from $REPO: $N packages."
-mkdir -p "$W/cache" || stop "cannot make $W."
+# a resumed run finds the work dir of the run that stopped: the stock mkdir -p fails on it (rc 2)
+[ -d "$W/cache" ] || mkdir -p "$W/cache" || stop "cannot make $W."
 {
 	echo "repo=$REPO"
 	echo "cachedir=$W/cache"

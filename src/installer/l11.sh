@@ -257,7 +257,7 @@ l11_bootstore()
 {
 	stage ""
 	stage "Installing the kernel and writing the boot store."
-	run mkdir -p "$TARGET/var/kbootset"
+	[ -d "$TARGET/var/kbootset" ] || run mkdir -p "$TARGET/var/kbootset"
 	# bootset=manual while the packages go in: apkg's trigger then only prints the
 	# commands, so neither the loader nor the kernel package commits anything, and the
 	# store gets exactly one generation, the pristine one, composed below. Its store-id=
@@ -332,7 +332,7 @@ l11_bootstore()
 		case "$_ck:$MODREG_LOCAL" in
 			mobo:gayle:*gayle:param\ slave=*)	;;
 			mobo:gayle:*)
-				run mkdir -p "$TARGET/etc/conf/modreg.local.d"
+				[ -d "$TARGET/etc/conf/modreg.local.d" ] || run mkdir -p "$TARGET/etc/conf/modreg.local.d"
 				echo "param slave=2" >> "$TARGET/etc/conf/modreg.local.d/gayle" || die "cannot write modreg.local.d/gayle"
 				msg "modreg.local: gayle: param slave=2 (the install CD is the IDE slave, cdfs $CD_SPEC)" ;;
 		esac
@@ -342,7 +342,7 @@ l11_bootstore()
 	# generation carries them (e.g. "z3660rtg:param fixed=1" where an emulator's RTG board has no
 	# AutoConfig entry; never on a real Z3660, whose board has one)
 	if [ -n "$MODREG_LOCAL" ]; then
-		run mkdir -p "$TARGET/etc/conf/modreg.local.d"
+		[ -d "$TARGET/etc/conf/modreg.local.d" ] || run mkdir -p "$TARGET/etc/conf/modreg.local.d"
 		_ml="$MODREG_LOCAL"
 		while [ -n "$_ml" ]
 		do
@@ -416,7 +416,7 @@ l11_base()
 	[ -x "$TARGET/usr/apkg/bin/pkgadd" ] && [ -x "$TARGET/usr/apkg/bin/removef" ] \
 		|| die "base packages: the target has no APKGENG engine (/usr/apkg/bin/pkgadd, removef) -- APKGENG must be in the set"
 	[ -f "$L11/base/order" ] || die "INSTALL_LAYOUT=1.1 but the medium has no $L11/base/order -- re-master with tools/build-install-iso.sh"
-	run mkdir -p "$_bd"
+	[ -d "$_bd" ] || run mkdir -p "$_bd"
 	# the installer's TMPDIR is /mnt/tmp, which does not exist inside the chroot: the engine
 	# could not make its unpack directory ("Bad file number" on a test install)
 	_tmpd="$TMPDIR"; TMPDIR=/tmp; export TMPDIR

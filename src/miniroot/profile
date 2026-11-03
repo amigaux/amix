@@ -846,7 +846,7 @@ net_source()
 	# THE GATE: both catalogs over HTTP, before any disk is touched (apkg keeps each
 	# catalog beside its cache: /tmp/net/catalog, /tmp/netk/catalog)
 	echo "Reading the package catalogs from $NET_REPO..."
-	mkdir -p /tmp/net/cache /tmp/netk/cache
+	for _d in /tmp/net/cache /tmp/netk/cache; do [ -d "$_d" ] || mkdir -p "$_d"; done
 	{
 		echo "repo=$NET_REPO"
 		echo "cachedir=/tmp/net/cache"

@@ -4945,7 +4945,7 @@ def _audit_w1_log(code, driver_src):
              % (i_mount, i_open, i_seed, i_order))
     # the seed must NOT re-create $TARGET/tmp (the 1991 mkdir -p fails on an
     # existing leaf, and the log step already made it)
-    m = re.search(r'run mkdir -p "\$TARGET/etc"[^\n]*', code)
+    m = re.search(r'(run mkdir -p|for _d in) "\$TARGET/etc"[^\n]*', code)
     if m and '"$TARGET/tmp"' not in m.group(0):
         ok("install log: the seed no longer mkdir's <target>/tmp (the log step made it; "
            "the 1991 mkdir -p would fail on the existing leaf)")
@@ -10835,6 +10835,104 @@ def audit_swap_stepdown():
                           % ((": " + "; ".join(bad)) if bad else ""))
 
 
+def audit_net_space():
+    head("NS. on the netinstall medium the free-space check sizes the set from the catalog (#isize, else the "
+         "datastream sizes), with the base packages, the kernel set and twice the largest datastream (apkg's cache "
+         "and pkgadd's spool on the root at once), and refuses a root that cannot take it")
+    src = open(os.path.join(REPO, "src/installer/setup.sh"), encoding="latin-1").read()
+    def fn(n):
+        m = re.search(r"^%s\(\) ?\n?\{.*?^\}\n" % n, src, re.M | re.S)
+        return m.group(0) if m else None
+    parts = [fn(n) for n in ("is_num", "budget", "order_size_bytes", "order_dl_bytes", "order_dl_max", "net_need_mb", "check_space")]
+    if None in parts:
+        fail("setup.sh lacks one of check_space's network helpers (order_dl_max, net_need_mb)")
+        return
+    d = tempfile.mkdtemp(prefix="netspace.")
+    try:
+        MB = 1048576
+        inst = os.path.join(d, "install")
+        os.makedirs(os.path.join(inst, "l11", "base"))
+        # four stock rows (40, 20, 30 and 62 MB) and a base package; kernel space as #kpkg rows
+        rows = [("core", "core", 40 * MB), ("man", "man", 20 * MB), ("xcore", "Xcore", 30 * MB),
+                ("x11r5src", "X11r5src", 62 * MB), ("amix-base", "amxbase", 1 * MB)]
+        def catalog(isize):
+            t = "#apkg-catalog 1\n" + "".join("%s|2.1|%s|stock/%s.pkg|0|%d|none|system|d\n" % (n, i, i, z) for n, i, z in rows)
+            t += "#kpkg kernel-k46-m k46-1 role=kernel size=%d sha256=0\n" % (2 * MB)
+            if isize:
+                t += "#ext isize 1\n" + "".join("#isize %s %d\n" % (n, z) for n, i, z in rows)
+            return t
+        open(os.path.join(inst, "order.small"), "w").write("core\nman\n")
+        open(os.path.join(inst, "order.big"), "w").write("core\nman\nXcore\nX11r5src\n")
+        open(os.path.join(inst, "l11", "base", "order"), "w").write("amxbase\n")
+        body = "".join(parts)
+        def run(order, root, isize, answer="n"):
+            cat = os.path.join(d, "catalog")
+            open(cat, "w").write(catalog(isize))
+            h = ('readask() { echo "$1"; ask=%s; }\nTOK_F=%s/t.tok; CATN_F=%s/t.catn; ISZ_F=%s/t.isz\n'
+                 'SRC_KIND=net; CATF=%s; KCATF=%s; INST=%s; SET_NAME=x; ANS_ROOT=%d; ANS_FSYS=ufs\n'
+                 'KERNEL_KPKG=kernel-k46-m; KERNEL_MODPKGS=\n' % (answer, d, d, d, cat, cat, inst, root))
+            h += body + 'check_space %s/%s && echo ACCEPTED || echo REFUSED\n' % (inst, order)
+            return subprocess.run(["/usr/bin/dash", "-c", h], capture_output=True, text=True, timeout=60).stdout
+        # small: (40+20+1) x 1.1 + 2 + 2 x 40 = about 149 MB; big: (40+20+30+62+1) x 1.1 + 2 + 2 x 62 = about 294 MB
+        out = run("order.small", 200, True)
+        (ok if out.strip().endswith("ACCEPTED") else fail)("a set that fits a 200 MB root is accepted on the network")
+        out = run("order.big", 200, True)
+        (ok if out.strip().endswith("REFUSED") and "124 MB" in out else fail)(
+            "a set needing about 294 MB is refused on a 200 MB root, naming twice the largest datastream (124 MB)")
+        out = run("order.big", 400, True)
+        (ok if out.strip().endswith("ACCEPTED") else fail)("the same set fits a 400 MB root")
+        out = run("order.big", 200, False)
+        (ok if out.strip().endswith("REFUSED") else fail)("with no #isize lines the datastream sizes stand in (still refused)")
+        out = run("order.big", 200, True, answer="y")
+        (ok if out.strip().endswith("ACCEPTED") else fail)("the stock override (go ahead anyway: y) still lets it through")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_guarded_mkdir():
+    head("MG. every mkdir -p in the shell that runs on the box is behind [ -d DIR ] || (the stock mkdir -p "
+         "exits 2 \"File exists\" on an existing directory: grimoire); a line that means it carries mkdir-ok")
+    files = [f for f in subprocess.run(["git", "-C", REPO, "ls-files"], capture_output=True, text=True).stdout.split()
+             if f.startswith(("src/installer/", "payload/")) or f == "src/miniroot/profile"]
+    bad = []
+    for f in files:
+        pth = os.path.join(REPO, f)
+        if not os.path.isfile(pth):
+            continue
+        with open(pth, "rb") as fh:
+            if b"\0" in fh.read(4096):
+                continue
+        for n, l in enumerate(open(pth, encoding="latin-1"), 1):
+            st = l.lstrip()
+            if st.startswith("#") or "mkdir -p" not in l or "mkdir-ok" in l:
+                continue
+            pre = l[:l.index("mkdir -p")]
+            if not re.search(r'\[ -d [^]]+\] \|\|', pre):
+                bad.append("%s:%d" % (f, n))
+    (fail if bad else ok)("mkdir -p guarded on the box (%d files)%s" % (len(files), (": " + " ".join(bad[:10])) if bad else ""))
+    # netset.sh's work-dir step twice, under a mkdir that refuses an existing directory as the box's does
+    src = open(os.path.join(REPO, "payload/firstboot/netset.sh"), encoding="latin-1").read()
+    m = re.search(r'^\[ -d "\$W/cache" \] \|\| mkdir -p "\$W/cache" \|\| stop [^\n]*\n', src, re.M)
+    if not m:
+        fail("netset.sh has no guarded work-dir step")
+        return
+    d = tempfile.mkdtemp(prefix="mkdir.")
+    try:
+        os.makedirs(os.path.join(d, "bin"))
+        fake = os.path.join(d, "bin", "mkdir")
+        open(fake, "w").write('#!/bin/sh\n[ "$1" = -p ] && shift\nfor x in "$@"; do\n'
+                              '  [ -d "$x" ] && { echo "mkdir: $x: File exists" >&2; exit 2; }\n'
+                              '  /bin/mkdir -p "$x" || exit 2\ndone\n')
+        os.chmod(fake, 0o755)
+        body = ('PATH=%s/bin:$PATH; W=%s/netset; stop() { echo "STOP $*"; exit 0; }\n' % (d, d)) + m.group(0) + "echo MADE\n"
+        outs = [subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout.strip()
+                for _ in (1, 2)]
+        (ok if outs == ["MADE", "MADE"] and os.path.isdir(os.path.join(d, "netset", "cache")) else fail)(
+            "netset.sh's work dir made twice in a row (a resumed run), the box's mkdir semantics: %s" % " / ".join(outs))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_guarded_rm_mv():
     head("RG. every rm and mv on a variable path names it \"${var:?}\" -- the root and every part after it, "
          "quoted or not, escaped in a generated script or not -- so an empty variable stops the script "
@@ -11730,6 +11828,8 @@ def main():
     audit_cd_candidates()
     audit_boot_pri()
     audit_guarded_rm_mv()
+    audit_guarded_mkdir()
+    audit_net_space()
     audit_ufs_rootcap()
     audit_l11()
 
