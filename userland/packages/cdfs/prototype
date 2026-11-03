@@ -1,0 +1,27 @@
+#
+# prototype -- cdfs 1.1.0: the mount helper SVR4's mount(1M) execs for
+# -F cdfs, the mount point /cdrom, and under /opt/amix the helper's manual
+# page and the fork's licence.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# NO INSTALL SCRIPTS: CLASSES=none, class `none` on every object.
+# /cdrom, /usr/lib/fs/cdfs and its mount keep the paths, modes and owners of
+# the July cdfs 0.1 package they replace.  /usr/lib/fs/cdfs must hold exactly
+# one file (README.md).  /usr, /usr/lib and /usr/lib/fs are core's, not listed,
+# as that package did not list them.
+#
+i pkginfo
+d none /cdrom 0755 bin bin
+d none /usr/lib/fs/cdfs 0755 bin bin
+f none /usr/lib/fs/cdfs/mount 0755 bin bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/mount_cdfs 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/cdfs 0644 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/cdfs 0755 root sys
+f none /opt/amix/doc/cdfs/LICENSE 0644 root bin
+f none /opt/amix/doc/cdfs/NOTICE 0644 root bin

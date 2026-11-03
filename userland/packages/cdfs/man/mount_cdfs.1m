@@ -1,0 +1,143 @@
+.TH MOUNT_CDFS 1M "3 November 2026" "cdfs"
+.SH NAME
+mount_cdfs \- mount a CD with the cdfs filesystem
+.SH SYNOPSIS
+.B mount \-F cdfs
+[
+.B \-o
+.I options
+]
+.IB card , unit
+.I directory
+.SH DESCRIPTION
+.B cdfs
+is a read-only filesystem for CD and DVD media: ISO 9660 (with Rock Ridge
+and Joliet), UDF and HFS.
+The filesystem is a kernel module, from the package
+.B cdfs-k30
+or
+.BR cdfs-k46 ,
+whichever matches the running kernel; it loads at the first cdfs mount.
+This package installs the mount helper,
+.BR /usr/lib/fs/cdfs/mount ,
+which
+.BR mount (1M)
+runs for
+.BR "\-F cdfs" ,
+and the mount point
+.BR /cdrom .
+.PP
+The drive is named by its SCSI controller and target, not by a
+.B /dev
+path:
+.I card
+is the controller's index and
+.I unit
+the drive's target id, joined by any character that is not a digit
+.RB ( 0,2 ,
+.B 0.2
+and
+.B 0:2
+are the same drive).
+Give
+.I directory
+as an absolute path.
+.PP
+The helper always mounts read-only and ignores any
+.B \-o
+options.
+It then adds the mount to
+.BR /etc/mnttab ,
+with the mount point in the special field as well as in the mount point
+field, as for
+.B /proc
+and
+.BR /dev/fd .
+So
+.B mount
+and
+.B df
+show the CD as
+.IR "directory " on " directory" ,
+not by its drive, and
+.BI "umount " directory
+unmounts it and removes the entry.
+.SH EXAMPLES
+Mount the CD in the drive at target 2 of the first controller, list it and
+unmount it:
+.PP
+.RS
+.nf
+mount \-F cdfs 0,2 /cdrom
+ls /cdrom
+umount /cdrom
+.fi
+.RE
+.SH FILES
+.TP 24
+.B /usr/lib/fs/cdfs/mount
+the helper; this directory must hold no other file
+.TP
+.B /etc/mnttab
+the table of mounted filesystems
+.TP
+.B /cdrom
+the usual mount point
+.SH DIAGNOSTICS
+Exit status 0: mounted.
+If the mount worked but
+.B /etc/mnttab
+could not be written, the helper prints a warning and still exits 0;
+the CD stays mounted.
+Exit status 1: the mount failed, with the errno printed:
+.TP 10
+.B ENXIO
+no controller at that
+.IR card .
+.TP
+.B ENOTTY
+the target answers but is not a CD drive; check
+.IR unit .
+.TP
+.B EINVAL
+no filesystem cdfs reads on the disc, a disc of a shape it does not
+serve, or a spec that is not
+.IR card , unit .
+.TP
+.B EIO
+the drive delivered no readable data: cable, termination or media.
+.TP
+.B EBUSY
+that drive or that directory is already mounted.
+.TP
+.B ENOMEM
+a kernel allocation failed.
+.TP
+.B EPERM
+not the superuser.
+.TP
+.B ENOTDIR
+.I directory
+is not a directory.
+.PP
+Exit status 2: fewer than two operands.
+.PP
+.B mount
+reports
+.B "unknown fstype"
+or fails at once when the cdfs module is not installed or the kernel
+cannot load it.
+.SH NOTES
+A file named
+.B umount
+in
+.B /usr/lib/fs/cdfs
+breaks
+.BR umount (1M)
+for cdfs mounts
+.RB ( "cannot execute" ,
+the CD stays mounted): remove it.
+.SH SEE ALSO
+.BR mount (1M),
+.BR umount (1M),
+.BR mnttab (4)
