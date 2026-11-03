@@ -13,7 +13,7 @@ licensed, "Copyright (c) 2026 kdedon", and its licence is
 | `upstream/` | upstream's `kernel/dlm` at that commit, unmodified, with upstream's `LICENSE` |
 | `patches/NNNN-*.patch` | our changes, one self-contained change per patch, applied with `patch -p1` from `upstream/`'s root |
 | `series` | the order the patches apply in |
-| `kbootset-min` | one line: the oldest kbootset package version that can compose a generation with a kernel carrying this queue. The kernel builds copy it into the sidecar as `kbootset-min=` (C2-3 §2). Raised when a kernel needs a newer kbootset: 1.1.0.261101-34 for 0051, the first kbootset that writes the major records; 1.1.0.261102-35, whose `kbootset cards` reads hex controller numbers, so a disk on card 2 (c10-c17) gets its own card's key. Recorded cuts keep their sidecars |
+| `kbootset-min` | one line: the oldest kbootset package version that can compose a generation with a kernel carrying this queue. The kernel builds copy it into the sidecar as `kbootset-min=` (C2-3 §2). Raised when a kernel needs a newer kbootset: 1.1.0.261101-34 for 0051, the first kbootset that writes the major records; 1.1.0.261102-35, whose `kbootset cards` reads hex controller numbers, so a disk on card 2 (c10-c17) gets its own card's key. 1.1.0.261103-37, whose namelist carries `crash_sync`'s running word and the loaded modules' globals (C2-4 §12), for a kernel whose core keeps the kmem readers' COMMONs. Recorded cuts keep their sidecars |
 
 The tree is never edited in place. A change is a patch. When the pin
 moves to a later upstream commit, patches upstream has taken are dropped
