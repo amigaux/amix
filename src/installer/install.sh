@@ -2146,8 +2146,9 @@ rm -f "${ORDERFIRST:?}"
 # through /usr/ccs/bin/m4, the m4 package's (Cdev ships the same file); without it the
 # conf parses empty and syslogd files nothing, kernel lines included. build-install-iso.sh
 # puts m4 in every 1.1 medium's order, so an order with neither is a custom selection
-# that dropped it.
-if [ "$INSTALL_LAYOUT" = 1.1 ]; then
+# that dropped it. A network install is not refused here: its first stage adds m4 below
+# (the repository's), the minimal set included.
+if [ "$INSTALL_LAYOUT" = 1.1 ] && [ "$SOURCE_KIND" != net ]; then
 	ORDCDEV="$TARGET/tmp/.ordcdev.$$"
 	rm -f "${ORDCDEV:?}"
 	while read pkg; do
