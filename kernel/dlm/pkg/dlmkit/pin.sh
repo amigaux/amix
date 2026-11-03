@@ -100,6 +100,14 @@
 # modcheck tags such a module 1.4 and refuses it below.  The kit built in
 # the container as -13's, its digests equal to `make -C build kit` at
 # 6bb7dd6.
+# -20 (2026-11-03): amix 18102d7 (KIT_REV), kabi k30.1.4 / k46.1.4 as
+# -19 (abi= 18c0a1c9 both): the core tier lists the COMMONs stock kmem
+# readers name (inode, ifreelist, ufs_inode, inodeNINODE, ifreeh) and the
+# text-section labels as func (fubyte, kzero, min, strcpy, strncat,
+# strncpy); C2-4 v26, C3-2 v4, C4-6 v7 in docs/.  k46 headers from the port
+# at d8c7548 (kernel/port/port.pin; immu.h and param.h as at 392a44e).
+# Built in the build container (amix-toolchain:dist).  -19 at 83ef3b4:
+# k30 e280eafb..., k46 c9597c29...
 # -19 (2026-11-03): amix 83ef3b4 (KIT_REV), kabi k30.1.4 / k46.1.4 as
 # -18 (abi texts, headers, tools unchanged; abi= 18c0a1c9 both): the
 # contract copies in docs/ at their current versions (C2-1, C2-2, C2-3,
@@ -149,21 +157,21 @@
 # by the manifest digest, which covers kit.conf and NOTICE (the provenance
 # the package carries), not by norev.  The digests equal the kit `make -C
 # build kit` makes at 4ccb3f0.
-DK_DLM_COMMIT=83ef3b4
+DK_DLM_COMMIT=18102d7
 # where the kit's sys/monsw.h comes from: kit.conf's MONSW_REV=<repo>@<commit>
 # (amix-modules before the move-in, amix's kernel/modules since)
 DK_MONSW_REPO=amix
-DK_MONSW_COMMIT=83ef3b4
+DK_MONSW_COMMIT=18102d7
 # amix-040-060-port: the k46 kit's include-modelb/sys/{immu,param}.h come
 # from the git archive of this commit (dlm-src.sh amix_dlm_kit), so PORT_REV
 # is this commit whatever the port's live HEAD is
-DK_K46_PORT_COMMIT=4c363c3
+DK_K46_PORT_COMMIT=d8c7548
 # its full hash: git fetches a commit by its full hash only (build.sh fetches
 # it into AMIX_PORT_REPO when that lacks it); the label stays the short one
-DK_K46_PORT_HASH=4c363c3a0861e60bc800476b5b4db631340eb182
-DK_K30_MANIFEST=e280eafbcea979febc16c884347a5e9b1342b24fd8c52b04aa21bf721a1b0598
-DK_K46_MANIFEST=c9597c298fd0e3a8fef2088220a7b723048225d590117e4278da66dd2b4ef177
+DK_K46_PORT_HASH=d8c754882a21c251fe6072e25aa0b5eb32dfb06e
+DK_K30_MANIFEST=e3878069fdc4415c1fdcaf6381d7ff903a9d60bf99635536fa04b5f0e56be36d
+DK_K46_MANIFEST=3eaa6c5ca98b2a1ed06fb8054b8ae1867a52a043880ee210ae7451a428adfde3
 
 DK_DATE=261103
-DK_REV=19
+DK_REV=20
 DK_SOURCE_EPOCH=1793664000
