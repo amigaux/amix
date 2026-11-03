@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — amix-base 1.0-28; mkdir -p lint (4dcf3f6, fd63efb)
+
+ifup no longer expands a "*" row key as a file name pattern (ifup -n printed a file name as the row); amix-base 1.0-28. test-lint.sh checks that every mkdir -p in the scripts base installs stands behind [ -d <dir> ] || for the same directory (the stock mkdir -p exits 2 on a directory already there); "# lint: mkdir-p" marks an intended exception. The ifup, devnodes, syslogd and rc_bg tests run under a mkdir that refuses an existing directory and make each directory twice. The four shipped sites were already guarded.
+
 ## 2026-11-02 — amixrt 1.0-2 (721fd88)
 
 libamixrt.so.1 stripped (38456 → 22728 bytes); allocated sections and .dynsym unchanged. Package md5 408850aa.
