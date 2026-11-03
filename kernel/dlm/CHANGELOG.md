@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-03 — dlmkit -20: the kit at 18102d7 (d4a80aa)
+
+The ABI kit package is pinned at amix 18102d7, port d8c7548: its core tier carries the kmem readers' five COMMONs and lists the text-section labels as func. Kit manifests k30 e3878069, k46 3eaa6c5c; abi 18c0a1c9 and kabi k30.1.4/k46.1.4 unchanged; the kits fit kern30m -71 and kern46m -62. dlmkit30 ee6aa4bd, dlmkit46 e11dc01e.
+
 ## 2026-11-03 — modadmin rewrites the namelist by fork and execv; modtools -13 (e6240fc, ed29d69)
 
 core 0054: modadmin rewrites /stand/unix by fork and execv of /sbin/kbootset namelist, not system(), which pulled in libc's signal and identity calls: 844 bytes less loaded than -12. modtools 1.0.261103-13 (modadmin fd8e8a20).
