@@ -295,8 +295,10 @@ try:
 
     # the control: without the commit-id test, the summary reads as a hit
     os.makedirs(os.path.join(tmp, "tools"))
-    for f in ("privacy-check", "privacy-allow.txt", "release-allow.txt"):
+    for f in ("privacy-check", "privacy-allow.txt", "release-allow.txt", "known-bad-modules.txt"):
         shutil.copy2(os.path.join(HERE, f), os.path.join(tmp, "tools", f))
+    shutil.copytree(os.path.join(HERE, "lib"), os.path.join(tmp, "tools", "lib"),
+                    ignore=shutil.ignore_patterns("__pycache__"))
     noid = os.path.join(tmp, "tools", "release-check")
     src = open(CHECK).read()
     want = 're.fullmatch(r"[0-9a-f]{7,40}", w[0]) and '
@@ -324,6 +326,103 @@ try:
           rc == 2 and "is not a cpio archive" in out, out)
     rc, out = run(flags + [os.path.join(tmp, "nosuch")], env)
     check("a path that does not exist: a failure, exit 2", rc == 2 and "no such file" in out, out)
+
+    # known-bad modules: a made-up module listed by --known-bad-entry, found
+    # by its sha256 as a file or a member, and by its 512-byte pieces in the
+    # bytes of an image, a floppy image or a file of a tree
+    def pseudo(seed, size):
+        out = b""
+        while len(out) < size:
+            out += hashlib.sha256(b"%s %d" % (seed, len(out))).digest()
+        return out[:size]
+    mod = pseudo(b"bad", 14006)
+    write(tmp, "kb/zbad.bin", mod)
+    rc, out = run(["--known-bad-entry", "zbad", os.path.join(tmp, "kb", "zbad.bin"), "a  test\nentry"], env)
+    lines = out.splitlines()
+    check("--known-bad-entry: a module line and its 27 pieces",
+          rc == 0 and len(lines) == 28 and lines[0].startswith("module zbad ") and lines[0].endswith(" a test entry")
+          and all(x.startswith("piece ") for x in lines[1:]), out)
+    kb = os.path.join(tmp, "kb", "list")
+    write(tmp, "kb/list", "# made up\n" + out)
+    write(tmp, "kb/short.bin", mod[:511])
+    rc, out = run(["--known-bad-entry", "zbad", os.path.join(tmp, "kb", "short.bin"), "short"], env)
+    check("--known-bad-entry: a file under one piece is refused", rc == 2, out)
+    kbflags = flags + ["--known-bad", kb]
+    pieces = [(int(x.split()[1]), int(x.split()[2])) for x in lines[1:]]
+    # the next build: other bytes but one shared piece; a near relative: one
+    # byte changed in every piece, away from its anchor, so only the sha256
+    # tells it apart
+    later = pseudo(b"later", 13658)
+    later = later[:4096] + mod[7168:7680] + later[4608:]
+    kin = bytearray(mod)
+    for o, k in pieces:
+        kin[o + (k + 200) % 512] ^= 0xff
+    kin = bytes(kin)
+    frags = b"".join(pseudo(b"gap%d" % i, 1024 * (i % 3 + 1)) + mod[o:o + 1024]
+                     for i, o in enumerate(reversed(range(0, len(mod), 1024))))
+    adf = bytearray(901120)
+    adf[0:4] = b"DOS\x01"
+    for name, files, want in (
+            ("kb-file", {"BOOT/K46/G1M06.BIN": mod}, "known-bad s0 /BOOT/K46/G1M06.BIN: is zbad by its sha256"),
+            ("kb-member", {"pkgs/z3660scsi-1.0-1.pkg": datastream("z3660scsi", [("root/etc/conf/mod.d/zbad", mod)])},
+             "known-bad s0 /pkgs/z3660scsi-1.0-1.pkg!root/etc/conf/mod.d/zbad: is zbad by its sha256"),
+            ("kb-embedded", {"media/floppy.adf": bytes(adf[:3000]) + mod + bytes(adf[:3000])},
+             "known-bad s0 /media/floppy.adf: carries zbad, 27 of its 27 512-byte pieces"),
+            ("kb-later", {"BOOT/K46/G1M06.BIN": later}, None),
+            ("kb-kin", {"BOOT/K46/G1M06.BIN": kin}, None)):
+        t = os.path.join(tmp, "t", name)
+        for rel, data in files.items():
+            write(t, rel, data)
+        rc, out = run(kbflags + [t], env)
+        if want is None:
+            check("%s as a directory: clean" % name, rc == 0 and "CLEAN" in out, out)
+        else:
+            check("%s as a directory: refused, %s" % (name, want), rc == 1 and ("HIT  " + want) in out
+                  and out.count("HIT  known-bad") == 1, out)
+    img = os.path.join(tmp, "kb-file.iso")
+    check("kb-file: xorriso masters the tree", master(os.path.join(tmp, "t", "kb-file"), img))
+    rc, out = run(kbflags + [img], env)
+    check("kb-file as an ISO: refused by its sha256, once",
+          rc == 1 and "HIT  known-bad s0 /BOOT/K46/G1M06.BIN: is zbad" in out and out.count("HIT  ") == 1, out)
+    check("the fragments fit a 64 KiB store", len(frags) < 65536)
+    for name, store, want in (
+            ("kb-img-odd", b"\1" * 300 + mod, "carries zbad, 27 of its 27"),
+            ("kb-img-frag", frags, "carries zbad, 27 of its 27"),
+            ("kb-img-later", b"\1" * 300 + later, None),
+            ("kb-img-kin", b"\1" * 300 + kin, None)):
+        write(tmp, name + ".img", rdb_image(b"", store))
+        rc, out = run(kbflags + [os.path.join(tmp, name + ".img")], env)
+        if want is None:
+            check("%s: clean" % name, rc == 0 and "CLEAN" in out, out)
+        else:
+            check("%s: refused, %s" % (name, want), rc == 1 and ("HIT  known-bad %s.img: %s" % (name, want)) in out, out)
+    write(tmp, "kb-floppy.adf", bytes(adf[:8192]) + mod + bytes(adf[8192 + len(mod):]))
+    write(tmp, "kb-clean.adf", bytes(adf))
+    rc, out = run(kbflags + [os.path.join(tmp, "kb-floppy.adf")], env)
+    check("a floppy image holding the module: refused, read as a file",
+          rc == 1 and "HIT  known-bad kb-floppy.adf: carries zbad" in out, out)
+    rc, out = run(kbflags + [os.path.join(tmp, "kb-clean.adf")], env)
+    check("a floppy image without it: clean, the file read raw", rc == 0 and "1 files, CLEAN" in out
+          and "in the file" in out, out)
+    write(tmp, "kb/bad-list", "module zbad " + "0" * 64 + " 14006 why\npiece 100 0 00 " + "0" * 64 + "\n")
+    rc, out = run(flags + ["--known-bad", os.path.join(tmp, "kb", "bad-list"), clean], env)
+    check("a malformed known-bad list: a failure, exit 2", rc == 2 and "bad-list:2: not a module or piece" in out, out)
+    # the list of record loads, and its entry is the one module it names
+    shipped = open(os.path.join(HERE, "known-bad-modules.txt")).read().splitlines()
+    names = [x.split()[1] for x in shipped if x.startswith("module ")]
+    check("tools/known-bad-modules.txt: z3660scsi with its 27 pieces", names == ["z3660scsi"]
+          and sum(x.startswith("piece ") for x in shipped) == 27, repr(names))
+    # the control: without the sha256 behind each anchor, the near relative
+    # reads as the module
+    src = open(CHECK).read()
+    want = "i >= k and hashlib.sha256(buf[i - k:i - k + PIECE]).hexdigest() == h"
+    check("control: release-check confirms an anchor by its piece's sha256 once", src.count(want) == 1)
+    with open(noid, "w") as f:
+        f.write(src.replace(want, "i >= k"))
+    r = subprocess.run([sys.executable, noid] + kbflags + [os.path.join(tmp, "kb-img-kin.img")],
+                       capture_output=True, text=True, env=env)
+    check("control: without it, the near relative is refused", r.returncode == 1 and "carries zbad" in r.stdout,
+          r.stdout + r.stderr)
 
     # the ufs reader image mode uses: its own hermetic selftest
     r = subprocess.run([sys.executable, os.path.join(HERE, "lib", "ufs.py")], capture_output=True, text=True)

@@ -6,10 +6,13 @@
 """release-check -- what a release file holds that must not be published.
 
     tools/release-check --rom-register FILE --private-patterns FILE PATH...
+    tools/release-check --known-bad-entry NAME MODULE WHY
 
 PATH is an Amix disk image (its RDB's slices), an ISO 9660 medium (*.iso,
-read with xorriso), or a directory (a repository tree; symbolic links are not
-followed).  A package datastream (a file that starts "# PaCkAgE DaTaStReAm")
+read with xorriso), a directory (a repository tree; symbolic links are not
+followed), or any other file, such as a floppy image (ADF) or a package
+datastream: a datastream is read member by member, a text file as text, any
+other file raw, as a slice that is no ufs.  A package datastream (a file that starts "# PaCkAgE DaTaStReAm")
 is read member by member, wherever it lies: a member is named
 "<datastream>!<member>".
 
@@ -23,6 +26,17 @@ For each PATH:
     256 KiB or 512 KiB file whose first longword is a Kickstart's
     (0x11114EF9 or 0x11144EF9), or whose sha256 is in the ROM register
     ("sha256  name" lines);
+  * no known-bad module (tools/known-bad-modules.txt, --known-bad FILE): a
+    file or member whose sha256 is listed, and, searched in the bytes of
+    PATH itself (of each file of a directory), at least nine in ten of a
+    listed module's 512-byte pieces, each found at any offset.  A piece is
+    the module's bytes at a multiple of 512 (one repeated byte is no piece),
+    so it lies whole inside one block of a ufs or FFS disk wherever the
+    blocks lie, and a module is found in a disk, an ISO or an uncompressed
+    package without reading its filesystem; a later build of the same
+    driver shares few pieces and passes.  The list holds no module bytes:
+    each piece is an anchor, its most varied 16 bytes, and its sha256.
+    Deflated content is not searched;
   * no private address, local name or secret: tools/privacy-check --tree,
     classes 1 and 3, with the private patterns, over a scratch git tree of
     the text files: an image's /etc and its first-boot payload
@@ -44,10 +58,14 @@ Without one, release-check refuses to run; --no-rom-register and
 --no-private-patterns run without it, for tests.  PRIVACY_CHECK names another
 privacy-check.
 
+--known-bad-entry prints the list lines of a module file: its "module" line
+with WHY, then its "piece" lines.
+
 Prints one line per hit and a verdict per PATH.  Exit 0 clean, 1 hits, 2 usage
 or a tool failure (never 0 on a failure).
 """
 import argparse
+import collections
 import hashlib
 import mmap
 import os
@@ -65,6 +83,7 @@ sys.dont_write_bytecode = True      # no __pycache__ left in the checkout
 PRIVACY = os.environ.get("PRIVACY_CHECK", os.path.join(HERE, "privacy-check"))
 # the repository's exemptions, then those for what packages ship
 ALLOW = (os.path.join(HERE, "privacy-allow.txt"), os.path.join(HERE, "release-allow.txt"))
+KNOWN_BAD = os.path.join(HERE, "known-bad-modules.txt")
 KS_MAGIC = (0x11114EF9, 0x11144EF9)
 ROM_SIZES = (262144, 524288)
 TEXT_PROBE = 8192
@@ -142,6 +161,91 @@ def rom_hit(data, register):
     return None
 
 
+Module = collections.namedtuple("Module", "name sha size why pieces")
+PIECE, ANCHOR, SHARE = 512, 16, 0.9
+
+
+def module_pieces(body):
+    """[(offset, anchor offset, anchor, sha256)]: the module's 512-byte
+    pieces at offsets that are multiples of 512 (full pieces; one repeated
+    byte is no piece), each with its most varied 16 bytes (the first such)
+    as the anchor a search finds it by"""
+    out = []
+    for o in range(0, len(body) - PIECE + 1, PIECE):
+        x = body[o:o + PIECE]
+        if x.count(x[:1]) == PIECE:
+            continue
+        k = max(range(PIECE - ANCHOR + 1), key=lambda k: (len(set(x[k:k + ANCHOR])), -k))
+        out.append((o, k, x[k:k + ANCHOR], hashlib.sha256(x).hexdigest()))
+    return out
+
+
+def entry_lines(name, body, why):
+    lines = ["module %s %s %d %s" % (name, hashlib.sha256(body).hexdigest(), len(body), why)]
+    lines += ["piece %d %d %s %s" % (o, k, a.hex(), h) for o, k, a, h in module_pieces(body)]
+    return lines
+
+
+def load_known_bad(path):
+    """[Module] from "module NAME SHA256 SIZE WHY" lines, each followed by
+    its "piece OFFSET ANCHOR-OFFSET ANCHOR-HEX SHA256" lines"""
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError as e:
+        raise Failure("cannot read the known-bad list %s: %s" % (path, e.strerror))
+    out = []
+    for n, line in enumerate(lines, 1):
+        w = line.split(None, 4)
+        try:
+            if not w or w[0].startswith("#"):
+                continue
+            if w[0] == "module" and len(w) == 5 and re.fullmatch(r"[0-9a-f]{64}", w[2]):
+                out.append(Module(w[1], w[2], int(w[3]), w[4], []))
+                continue
+            o, k, a = int(w[1]), int(w[2]), bytes.fromhex(w[3])
+            if (w[0] == "piece" and len(w) == 5 and out and o % PIECE == 0 and o + PIECE <= out[-1].size
+                    and 0 <= k <= PIECE - ANCHOR and len(a) == ANCHOR and re.fullmatch(r"[0-9a-f]{64}", w[4])):
+                out[-1].pieces.append((o, k, a, w[4]))
+                continue
+        except ValueError:
+            pass
+        raise Failure("%s:%d: not a module or piece line" % (path, n))
+    return out
+
+
+def bad_file_hit(data, bad):
+    """the listed module a file is, by its sha256"""
+    for m in bad:
+        if len(data) == m.size and hashlib.sha256(data).hexdigest() == m.sha:
+            return m
+    return None
+
+
+def bad_bytes_hits(label, buf, bad, skip=()):
+    """each listed module (not in skip) of which at least SHARE of the
+    pieces are in buf, at any offset; the search of a module stops once
+    that share is out of reach"""
+    out = []
+    for m in bad:
+        if m.name in skip or not m.pieces:
+            continue
+        found = missed = 0
+        for o, k, a, h in m.pieces:
+            i = buf.find(a)
+            while i >= 0 and not (i >= k and hashlib.sha256(buf[i - k:i - k + PIECE]).hexdigest() == h):
+                i = buf.find(a, i + 1)
+            if i >= 0:
+                found += 1
+            else:
+                missed += 1
+                if missed > len(m.pieces) * (1 - SHARE):
+                    break
+        if found >= len(m.pieces) * SHARE:
+            out.append("known-bad %s: carries %s, %d of its %d 512-byte pieces (%s)"
+                       % (label, m.name, found, len(m.pieces), m.why))
+    return out
+
+
 def datastream_members(data):
     """(name, bytes) of every regular file of every newc cpio archive in a
     package datastream: the header, then each archive, padded to 512.  Only
@@ -179,7 +283,7 @@ def datastream_members(data):
 def expand(label, data):
     """(label, bytes) of a file, and of each member when it is a datastream"""
     yield label, data
-    if data.startswith(DATASTREAM):
+    if data[:len(DATASTREAM)] == DATASTREAM:
         for name, body in datastream_members(data):
             yield "%s!%s" % (label, name), body
 
@@ -302,11 +406,27 @@ def privacy(tree, scratch, patterns):
     return hits
 
 
-def check(path, register, patterns):
+def is_rdb_image(path):
+    import rdb
+    with open(path, "rb") as f:
+        return rdb.find_rdsk(f.read(64 * 512)) is not None
+
+
+def mapped(path):
+    """the bytes of a file, mapped (an empty file is no mapping)"""
+    if os.path.getsize(path) == 0:
+        return b""
+    with open(path, "rb") as f:
+        return mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+
+def check(path, register, patterns, bad):
     scratch = tempfile.mkdtemp(prefix="release-check.")
     hits, n, raws = [], 0, []
     isdir = os.path.isdir(path)
-    whole = isdir or path.lower().endswith(".iso")
+    mode = "dir" if isdir else "iso" if path.lower().endswith(".iso") else \
+        "image" if is_rdb_image(path) else "file"
+    whole = mode in ("dir", "iso")
     try:
         tree = os.path.join(scratch, "tree")
         os.makedirs(tree)
@@ -315,33 +435,54 @@ def check(path, register, patterns):
             raws.append(slot)
             hits.extend(raw_hits(slot, swap, part, tree))
 
-        files = dir_files(path) if isdir else iso_files(path, scratch) if whole else image_files(path, raw)
+        if mode == "file":
+            # a floppy image or any other file: a datastream member by
+            # member, a text file as text, anything else raw as well
+            buf = mapped(path)
+            if buf[:len(DATASTREAM)] != DATASTREAM and not is_text(buf):
+                raw(0, False, buf)
+            files = [(0, "/" + os.path.basename(path), buf)]
+            whole = True
+        else:
+            files = dir_files(path) if isdir else iso_files(path, scratch) if whole else image_files(path, raw)
+        named = set()               # the modules found by sha256 in this PATH
         for slot, p0, data0 in files:
             # the privacy scan: an image's /etc (of its root slice) and its
             # first-boot payload; every text file of an ISO or a directory
             scan = whole or (slot == 1 and p0.startswith(("/etc/", "/var/adm/firstboot/")))
+            here = set()
             for p, data in expand(p0, data0):
                 n += 1
                 why = rom_hit(data, register)
                 if why:
                     hits.append("rom s%d %s: %s" % (slot, p, why))
+                m = bad_file_hit(data, bad)
+                if m:
+                    here.add(m.name)
+                    hits.append("known-bad s%d %s: is %s by its sha256 (%s)" % (slot, p, m.name, m.why))
                 hits += credential_hits(p, data)
-                if not whole:
+                if mode == "image":
                     hits += trace_hits(slot, p, data)
                 if scan and is_text(data):
                     dst = os.path.join(tree, p.lstrip("/").replace("!", "/"))
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     with open(dst, "wb") as o:
                         o.write(data)
+            named |= here
+            if isdir:               # a directory: each file's own bytes
+                hits += bad_bytes_hits("s%d %s" % (slot, p0), data0, bad, here)
+        if not isdir:               # anything else: the bytes of PATH itself
+            hits += bad_bytes_hits(os.path.basename(path), mapped(path), bad, named)
         hits += ["privacy " + h for h in privacy(tree, scratch, patterns)]
     finally:
         subprocess.run(["chmod", "-R", "u+w", scratch], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         shutil.rmtree(scratch, ignore_errors=True)
     for h in hits:
         print("  HIT  %s" % h)
-    where = "the tree" if whole else "/etc, the first-boot payload and %d raw slice(s)" % len(raws)
+    where = "the file" if mode == "file" else "the tree" if whole else \
+        "/etc, the first-boot payload and %d raw slice(s)" % len(raws)
     print("release-check: %s: %d files, %s" % (os.path.basename(os.path.normpath(path)), n,
-          "CLEAN (no Kickstart ROM, no private address, name or secret in %s)" % where
+          "CLEAN (no Kickstart ROM, no known-bad module, no private address, name or secret in %s)" % where
           if not hits else "%d HIT(s)" % len(hits)))
     return not hits
 
@@ -353,11 +494,29 @@ def main(argv):
     ap.add_argument("--private-patterns", metavar="FILE", default=os.environ.get("PRIVACY_PATTERNS"))
     ap.add_argument("--no-rom-register", action="store_true")
     ap.add_argument("--no-private-patterns", action="store_true")
-    ap.add_argument("paths", nargs="+", metavar="PATH")
+    ap.add_argument("--known-bad", metavar="FILE", default=KNOWN_BAD)
+    ap.add_argument("--known-bad-entry", nargs=3, metavar=("NAME", "MODULE", "WHY"))
+    ap.add_argument("paths", nargs="*", metavar="PATH")
     try:
         a = ap.parse_args(argv)
     except SystemExit as e:
         return 2 if e.code else 0
+    if a.known_bad_entry:
+        name, mod, why = a.known_bad_entry
+        try:
+            with open(mod, "rb") as f:
+                body = f.read()
+        except OSError as e:
+            sys.stderr.write("release-check: cannot read %s: %s\n" % (mod, e.strerror))
+            return 2
+        if not re.fullmatch(r"[A-Za-z0-9_.+-]+", name) or not why.strip() or not module_pieces(body):
+            sys.stderr.write("release-check: --known-bad-entry needs a NAME, a MODULE of full pieces, a WHY\n")
+            return 2
+        print("\n".join(entry_lines(name, body, " ".join(why.split()))))
+        return 0
+    if not a.paths:
+        ap.print_usage(sys.stderr)
+        return 2
     if not a.no_rom_register and not a.rom_register:
         sys.stderr.write("release-check: no ROM register: --rom-register FILE or ROM_MANIFEST "
                          "(--no-rom-register checks Kickstart headers only)\n")
@@ -376,11 +535,12 @@ def main(argv):
     ok = True
     try:
         register = {} if a.no_rom_register else load_register(a.rom_register)
+        bad = load_known_bad(a.known_bad)
         for p in a.paths:
             if not os.path.exists(p):
                 raise Failure("%s: no such file or directory" % p)
             try:
-                ok = check(p, register, patterns) and ok
+                ok = check(p, register, patterns, bad) and ok
             except Exception as e:      # a tool failure is never a clean verdict
                 raise Failure("%s: %s" % (os.path.basename(os.path.normpath(p)), e))
     except Failure as e:

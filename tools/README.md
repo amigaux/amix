@@ -33,10 +33,11 @@ is caught and every control passes. Both need only Python 3 and git.
 
 `release-check` is the content check every published file passes: an Amix
 disk image (each ufs slice of its RDB file by file; any other slice raw, where
-a swap slice must be all zero), an ISO 9660 medium, or a directory such as a
+a swap slice must be all zero), an ISO 9660 medium, a directory such as a
 package repository tree, where each package datastream is read member by
-member. It refuses a Kickstart or board ROM (by its header, or by
-sha256 against a ROM register), a private address or local name (the privacy
+member, or any other file, such as a floppy image (read raw) or a single
+package. It refuses a Kickstart or board ROM (by its header, or by
+sha256 against a ROM register), a known-bad module (below), a private address or local name (the privacy
 check's classes 1 and 3 over the text files), a crypt-style password hash, a
 PEM private key, a host or user key or a random seed file by its name, and,
 in an image, what the build box left: files in `/tmp` or `/var/tmp`, login
@@ -53,3 +54,31 @@ ufs disk image fixtures, a clean one and one with a planted password hash and
 private address, are distfiles (`release-check-fixture-*.distfile`) that it
 fetches into `out/cache`, since disk images never enter this repository.
 `lib/rdb.py` and `lib/ufs.py` are the RDB and ufs readers it uses.
+
+### Known-bad modules
+
+`known-bad-modules.txt` lists the module builds no release may carry, each
+with its name, sha256, size and the reason, for example a z3660scsi build
+from before its fixed-window gate, which wrote into kernel RAM on an A1200
+with a DKB card. release-check finds a listed module two ways:
+
+- **as a file**: any file, or package datastream member, whose sha256 is
+  listed is a hit, named by its path;
+- **in the bytes**: the bytes of each PATH (of each file, for a directory)
+  are searched for the module's 512-byte pieces, cut at its offsets 0, 512,
+  1024 and on. A piece of one repeated byte is left out. Each piece is
+  searched for at any offset. A ufs fragment or an FFS block starts at
+  a multiple of 512 in the file it holds, so every piece lies whole inside
+  one block, wherever the disk put the blocks. Nine in ten of a module's
+  pieces found is a hit. A later build of the same driver shares few
+  pieces (the current z3660scsi shares 1 of the old build's 27) and
+  passes. So a module is found inside a disk image, an ISO, a floppy image
+  or an uncompressed package without reading any filesystem.
+
+The list keeps no module bytes. Each piece is a line with an anchor (the
+piece's most varied 16 bytes and where they lie in it) and the piece's
+sha256: the search finds the anchor and confirms the piece by its hash.
+`release-check --known-bad-entry NAME MODULE WHY` prints the lines for a
+module file; add them to the list with the reason. Deflated content, such as
+a compressed boot store, is not searched: what it was made from is checked
+file by file where it is built. On a 3.7 GB image the search adds about 8 s.
