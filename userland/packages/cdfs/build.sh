@@ -1,6 +1,7 @@
 # build.sh -- cdfs hooks for build/pkg/pkgbuild.sh (STYLE=hooks).
 # Hooks only; the reasons are in README.md.  The tree is the git archive of
 # amix-cdfs at kernel/drivers/cdfs/cdfs.pin (FORKPIN).
+ASM_REVIEWED="platform/amiga/startup.S, the AmigaOS handler's start-up; only platform/amix/mount.c is compiled"
 
 build() {
 	# the fork's amix-mount rule: mount.c alone, system headers only (no
