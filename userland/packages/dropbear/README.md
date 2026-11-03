@@ -16,7 +16,7 @@ has no SSH.
     sh build/pkg/pkgbuild.sh userland/packages/dropbear      # build + roll (host)
     sh build/dist.sh recipes/dropbear                        # the same, in the build container
 
-Package: `dropbear`, category `network`, set `extra`, MIT. The other licences of
+Package: `dropbear`, category `network`, set `base` (on every install), MIT. The other licences of
 its parts (libtomcrypt and libtommath, public domain; the OpenSSH- and PuTTY-derived
 files, BSD/MIT) are in `/opt/amix/doc/dropbear/LICENSE`. It depends on
 `amix-base` for `rc.subr`. At run time it needs `/dev/urandom`, the 1.1 random
@@ -281,18 +281,27 @@ covers the big-endian and 32-bit word paths.
   runs `dropbearkey -t ed25519` from `/dev/urandom` when
   `/etc/dropbear/host_ed25519` is missing. With `dropbear_rsa=yes` in
   `/etc/rc.conf` it also makes a 3072-bit RSA key, which takes minutes on a
-  68030, and passes it with `-r`. The keys are no object of the package, so no
-  two machines share one, an update never replaces one, and `pkgrm` leaves
-  them (and so `/etc/dropbear`). There are no install scripts.
+  68030, and passes it with `-r`. While a key is missing, the keys are made
+  and the server started in the background (`rc_bg`, bound by
+  `dropbear_keytime=`, default 900 s), so the first boot goes on; each key is
+  written as `new_<type>` and renamed when complete, so a stopped run leaves
+  no half key and the next start tries again. The keys are no object of the
+  package, so no two machines share one, an update never replaces one, and
+  `pkgrm` leaves them (and so `/etc/dropbear`). There are no install scripts.
 - **No conffile.** Dropbear has no configuration file. Its settings are
-  `dropbear=`, `dropbear_port=`, `dropbear_rsa=` and `dropbear_flags=` in
-  `/etc/rc.conf`, which no package owns, so an upgrade never touches them.
-  Each is documented in `dropbear(8)`, BOOT SCRIPT.
+  `dropbear=`, `dropbear_port=`, `dropbear_rsa=`, `dropbear_flags=` and
+  `dropbear_keytime=` in `/etc/rc.conf`, which the installer writes and no
+  package owns, so an upgrade never touches them; `dropbear=no` switches the
+  server off. Each is documented in `dropbear(8)`, BOOT SCRIPT.
+- **Root logins** are allowed by password and by key, as on the console; an
+  empty password is refused. `dropbear_flags=-w` refuses root, `-g` allows root
+  by key only. The server does not read `/etc/default/login` (`CONSOLE=`).
 - **The boot script** follows amix-base's `rc.subr(1M)` convention:
   - `/etc/init.d/dropbear` is the file, linked as `rc2.d/S76dropbear` (after
     the network, S69) and as `K40dropbear` in `rc0.d` and `rc1.d` (before
     syslogd's K50);
-  - it is on by default, since installing the package asks for an SSH server;
+  - it is on by default: the package is in the base set, so every install has
+    an SSH server unless `/etc/rc.conf` says `dropbear=no`;
   - it logs its decisions with `rc_log`;
   - it does not start the server without `/dev/urandom`;
   - the server logs through `syslog(3)` (facility `auth`).
@@ -317,14 +326,20 @@ hardware's, and only compare with each other):
 
 | System | Kernel | Box checks | Host checks |
 |---|---|---|---|
-| 1.1 A4000D disk, 68060, after first boot | kern46m 68060-261101-57, random module | 21 ok | 22 ok |
-| 1.1 A4000D disk, 68030, after first boot | kern30m 68030-261101-68, random-k30 | 21 ok | 22 ok |
+| 1.1 A4000D disk, 68060, after first boot | kern46m 68060-261101-57, random module | 23 ok | 22 ok |
+| 1.1 A4000D disk, 68030, after first boot | kern30m 68030-261101-68, random-k30 | 23 ok | 22 ok |
 
-- **Package:** `dropbear-2026.94-2.pkg`, 401920 bytes, md5
-  `18774926ddd5e23b932bb4ce3c4d379f`, sha256 `1cf388a4…f690`. Two rolls in
+- **Package:** `dropbear-2026.94-3.pkg`, 404480 bytes, md5
+  `32a238aa98b6fd4a98cb6c495044f3be`, sha256 `6f36cd1f…bc29`. Two rolls in
   the build container (gcc14 dcfd12d) are identical, and every gate passes.
-  The binary is 286324 bytes. The same checks passed on 2026-11-02 with
-  2026.94-1 (md5 `d87bc85e…5e30c6a`), before patches 06 and 07.
+  The binary is 286324 bytes. 2026.94-3 is 2026.94-2 (md5 `18774926…c4d379f`, the same checks and the
+  timings below) with the base set and the first start in the background.
+- **A fresh install** (both rows, two boots on one disk copy): installed with
+  apkg's pkgadd as the installer does and not started, then rebooted. At that
+  boot the script made the ed25519 key in the background and the server
+  listened on `*.22` 4–5 s after S76; `/etc/dropbear` held only the key (0600)
+  and the pid file. OpenSSH 10.2 logged in as root with the password. Each
+  machine made its own key.
 - **Test vectors on the box** (both rows), each value computed by
   pyca/cryptography and the RFC ones checked against the RFC text: X25519,
   66 pairs and RFC 7748's iterated vector after 1 and 1000 steps; Ed25519, 35
@@ -341,8 +356,9 @@ hardware's, and only compare with each other):
   difference there: `/opt/amix/man/1` is registered `root bin` (amix-base),
   where this package, like the others, says `root sys`.
 - **Boot script:** with no host key, it made the ed25519 key (mode 0600,
-  83 bytes) and started the server in 2 s on both, logging both to
-  `rc.log`; `stop` ended it and removed the pid file.
+  83 bytes) and started the server in the background within 3 s on both,
+  logging each step to `rc.log` and leaving no `new_*` file; `stop` ended it
+  and removed the pid file.
 - **Algorithms:** the server offers only the kex, ciphers, MAC and host
   keys in the table above. OpenSSH can't get DH group14, ECDH P-256,
   aes256-ctr, AES-GCM, CBC, hmac-sha1 or an ECDSA host key from it.

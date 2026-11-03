@@ -1,7 +1,7 @@
 .\" dropbear(8) for Amix: Dropbear 2026.94 as this package builds it.
 .\" From upstream's page by Gerrit Pape and Matt Johnston (MIT, see
 .\" /opt/amix/doc/dropbear/LICENSE), rewritten in -man for the system's nroff.
-.TH DROPBEAR 8 "1 November 2026" "dropbear 2026.94"
+.TH DROPBEAR 8 "3 November 2026" "dropbear 2026.94"
 .SH NAME
 dropbear \- small SSH server
 .SH SYNOPSIS
@@ -53,6 +53,20 @@ A user logs in with a password (checked against
 .BR /etc/shadow )
 or with a key listed in
 .BR ~/.ssh/authorized_keys .
+.PP
+Root may log in, by password or key, as on the console: the defaults
+refuse no user, and refuse only an empty password.
+.B \-w
+refuses root,
+.B \-g
+allows root by key only; put either in
+.B dropbear_flags
+(below).
+The server does not read
+.BR /etc/default/login ,
+so its
+.B CONSOLE
+line does not apply to it.
 .PP
 .B dropbear
 and the client programs
@@ -241,7 +255,12 @@ Whether the server starts (default
 .BR yes ).
 .TP
 .BI dropbear_port= port
-The port (default 22).
+The port (default 22), on every address of the machine.
+At boot a DHCP interface may not have its address yet, so a
+.BI \-p " address" : port
+in
+.B dropbear_flags
+fails until the lease comes.
 .TP
 .BR dropbear_rsa= yes | no
 Also an RSA host key, for clients that know no ed25519 (default
@@ -250,12 +269,23 @@ Also an RSA host key, for clients that know no ed25519 (default
 .BI dropbear_flags= options
 More options for the server, such as
 .BR "\-s \-g" .
+.TP
+.BI dropbear_keytime= seconds
+How long the first start may take to make the host keys (default 900).
 .PP
 At its first start the script makes the ed25519 host key, and with
 .B dropbear_rsa=yes
 a 3072-bit RSA key, from
 .BR /dev/urandom ;
 making the RSA key takes minutes on a 68030.
+While a key is missing, the keys are made and the server started in the
+background, with
+.BR rc_bg ,
+so the boot goes on; the server listens once the keys are made.
+A key is written under a new name and renamed when it is complete, so a
+start stopped after
+.B dropbear_keytime
+leaves no half key, and the next start tries again.
 A host key never comes from the package, so no two machines share one,
 and neither an update nor
 .BR pkgrm (1M)
@@ -346,6 +376,15 @@ The host keys, readable by root only.
 .B /etc/dropbear/dropbear.pid
 The server's process number.
 .TP
+.B /etc/rc.conf
+The switch and settings of the boot script (above).
+.TP
+.B /var/adm/rc.log
+What the boot script did.
+.TP
+.B /var/adm/rclog/dropbear
+The output of a first start that made the host keys.
+.TP
 .B /etc/motd
 Shown at login, unless
 .B \-m
@@ -376,6 +415,7 @@ The command the client asked for, under a forced command.
 .BR dropbearkey (1),
 .BR scp (1),
 .BR rc.conf (4),
+.BR rc.subr (1M),
 .BR inetd (1M)
 .SH NOTES
 SFTP is not served: a modern OpenSSH

@@ -60,13 +60,19 @@ if [ -c /dev/urandom ]; then ok "/dev/urandom present"; else bad "no /dev/urando
 rm -f "${K:?}/host_ed25519" "${K:?}/host_rsa"
 t0=`date +%H%M%S`
 sh /etc/init.d/dropbear start
+# with no host key the key is made and the server started in the background
+# (rc_bg): wait for the pid file, up to dropbear_keytime's default
+n=0
+while [ ! -s $K/dropbear.pid ] && [ $n -lt 900 ]; do sleep 1; n=`expr $n + 1`; done
 t1=`date +%H%M%S`
-echo "== probe start (key made, server started) $t0 -> $t1"
+echo "== probe start (key made, server started) $t0 -> $t1, waited $n s"
+has /var/adm/rc.log 'dropbear.*in the background' && ok "rc.log: key made in the background" || bad "rc.log has no background line"
 if [ -f $K/host_ed25519 ]; then
 	ok "host key made: `ls -l $K/host_ed25519 | awk '{print $1, $3, $5}'`"
 else
 	bad "no host key $K/host_ed25519"
 fi
+if ls $K | grep '^new_' > /dev/null; then bad "key leftovers in $K: `ls $K | tr '\012' ' '`"; else ok "no key leftovers in $K"; fi
 pid=`cat $K/dropbear.pid 2>/dev/null`
 if [ -n "$pid" ] && kill -0 $pid 2> /dev/null; then ok "server running, pid $pid"; else bad "server not running"; fi
 tail -3 /var/adm/rc.log | sed 's/^/== rc.log /'

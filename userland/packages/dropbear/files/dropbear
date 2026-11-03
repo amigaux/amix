@@ -5,12 +5,18 @@
 #
 # On unless /etc/rc.conf says dropbear=no.  Settings, each a line in
 # /etc/rc.conf (rc.conf(4)), all optional:
-#   dropbear_port=22          the TCP port
+#   dropbear_port=22          the TCP port, on every address
 #   dropbear_rsa=no           yes: also an RSA host key, made at the first
 #                             start that finds none (slow on a 68030)
 #   dropbear_flags=           more options for dropbear(8), e.g. -s -g
+#   dropbear_keytime=900      seconds the first start may take to make the
+#                             host keys before it is stopped
 # The host keys are made here at the first start, from /dev/urandom, and
-# never come from the package.  See dropbear(8).
+# never come from the package.  With every key present the server starts at
+# once; with one missing, the keys are made and the server started in the
+# background (rc_bg), so the boot goes on.  A key is written under a new
+# name and renamed when complete, so a stopped run leaves no half key and
+# the next start tries again.  See dropbear(8).
 #
 # The system's /bin/sh of 1992: backticks, no $(...), no `local', no `!'.
 
@@ -20,6 +26,8 @@ DROPBEARKEY=${DROPBEARKEY:-/opt/amix/bin/dropbearkey}
 KEYDIR=${KEYDIR:-/etc/dropbear}
 URANDOM=${URANDOM:-/dev/urandom}
 PIDFILE=$KEYDIR/dropbear.pid
+SELF=${SELF:-/etc/init.d/dropbear}
+umask 022
 
 pid=`cat "$PIDFILE" 2>/dev/null`
 
@@ -28,17 +36,45 @@ hostkey() {
 	if [ -f "$KEYDIR/host_$1" ]; then
 		return 0
 	fi
-	if "$DROPBEARKEY" -t $1 -f "$KEYDIR/host_$1" > /dev/null 2>&1; then
+	# dropbearkey also writes the public half as new_<type>.pub (cut
+	# to 14 bytes on s5); "dropbearkey -y" prints it, so it is not kept
+	rm -f "${KEYDIR:?}/new_$1" "${KEYDIR:?}"/new_$1.p*
+	if "$DROPBEARKEY" -t $1 -f "$KEYDIR/new_$1" > /dev/null 2>&1 &&
+	    mv "$KEYDIR/new_$1" "$KEYDIR/host_$1"; then
+		rm -f "${KEYDIR:?}"/new_$1.p*
 		rc_log dropbear "made the $1 host key $KEYDIR/host_$1"
 		return 0
 	fi
 	rc_log dropbear "could not make the $1 host key $KEYDIR/host_$1"
-	rm -f "${KEYDIR:?}/host_$1"
+	rm -f "${KEYDIR:?}/new_$1" "${KEYDIR:?}"/new_$1.p*
 	return 1
 }
 
+# wantrsa: succeeds when rc.conf asks for an RSA host key too
+wantrsa() {
+	[ "`rc_conf dropbear rsa no`" = yes ]
+}
+
+# serve: the host keys, then the server
+serve() {
+	hostkey ed25519 || exit 1
+	keys="-r $KEYDIR/host_ed25519"
+	if wantrsa; then
+		hostkey rsa && keys="$keys -r $KEYDIR/host_rsa"
+	fi
+	port=`rc_conf dropbear port 22`
+	flags=`rc_conf dropbear flags`
+	if "$DROPBEAR" -p $port -P "$PIDFILE" $keys $flags; then
+		rc_log dropbear "started on port $port"
+	else
+		st=$?
+		rc_log dropbear "did not start (exit $st)"
+		exit $st
+	fi
+}
+
 case "$1" in
-start)
+start|serve)
 	if [ ! -f "$RC_SUBR" ]; then
 		echo "dropbear: no $RC_SUBR (amix-base); not started" >&2
 		exit 0
@@ -58,17 +94,21 @@ start)
 	fi
 	[ -d "$KEYDIR" ] || mkdir "$KEYDIR"
 	chmod 700 "$KEYDIR"
-	hostkey ed25519 || exit 0
-	keys="-r $KEYDIR/host_ed25519"
-	if [ "`rc_conf dropbear rsa no`" = yes ]; then
-		hostkey rsa && keys="$keys -r $KEYDIR/host_rsa"
+	if [ "$1" = serve ]; then
+		serve
+		exit 0
 	fi
-	port=`rc_conf dropbear port 22`
-	flags=`rc_conf dropbear flags`
-	if "$DROPBEAR" -p $port -P "$PIDFILE" $keys $flags; then
-		rc_log dropbear "started on port $port"
+	missing=no
+	[ -f "$KEYDIR/host_ed25519" ] || missing=yes
+	if wantrsa && [ ! -f "$KEYDIR/host_rsa" ]; then
+		missing=yes
+	fi
+	if [ $missing = no ]; then
+		serve
 	else
-		rc_log dropbear "did not start (exit $?)"
+		bound=`rc_conf dropbear keytime 900`
+		rc_log dropbear "making the host keys, then starting, in the background (bound $bound s)"
+		rc_bg $bound dropbear /sbin/sh "$SELF" serve
 	fi
 	;;
 stop)
