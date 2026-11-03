@@ -9,7 +9,8 @@
 # `unzip -t` must pass. Then DIR/SHA256SUMS over the zips and the images, and the content check
 # (amix's tools/release-check: no Kickstart or board ROM, no private address, local name or secret,
 # no build trace; the ROM register roms/MANIFEST.sha256 and $PRIVACY_PATTERNS, the bench's names)
-# over every image and every --media file (an ISO, whose .sha256 beside it is checked too).
+# over every image and every --media file (an ISO, whose .sha256 beside it is checked too), and
+# tools/known-bad-scan.py over the same files (no module of tools/known-bad-modules.txt).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -68,6 +69,8 @@ for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do
 done
 python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
 	"${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
+[ "${PIPESTATUS[0]}" = 0 ] || bad=1
+python3 "$here/known-bad-scan.py" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 say "release-files: $( [ $bad = 0 ] && echo 'ALL CLEAN' || echo 'FAILED')"
 exit $bad

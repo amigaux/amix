@@ -20,7 +20,8 @@
 #   amix-1.1-netinstall.iso          (with --ni-*) the network installer (tools/build-netinstall.sh)
 #   <each>.sha256, SHA256SUMS, MEDIA.txt (names, sizes, sha256, the inputs) and the content check
 #   (amix's tools/release-check on every ISO: no ROM, no private address, name or secret; needs
-#   $PRIVACY_PATTERNS, the bench's local names, and the ROM register roms/MANIFEST.sha256).
+#   $PRIVACY_PATTERNS, the bench's local names, and the ROM register roms/MANIFEST.sha256), and
+#   tools/known-bad-scan.py on every medium (no module of tools/known-bad-modules.txt).
 # The master stage is kept at --out/stage (netinstall's --install takes it). Publication of any of
 # these files is a separate, per-artefact decision. Exit 0 all built and clean, 1 not, 2 usage.
 set -uo pipefail
@@ -103,5 +104,8 @@ cat "$OUT/MEDIA.txt"
 python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
 	"$ISO" ${NI:+"$NI"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
 rc=${PIPESTATUS[0]}
+python3 "$here/known-bad-scan.py" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf 2>&1 \
+	| tee -a "$OUT/RELEASE-CHECK.txt"
+[ "${PIPESTATUS[0]}" = 0 ] || rc=1
 [ "$rc" = 0 ] && echo "build-release-media: built and clean ($OUT)" || echo "build-release-media: the content check FAILED ($OUT/RELEASE-CHECK.txt)"
 exit $([ "$rc" = 0 ] && echo 0 || echo 1)
