@@ -258,8 +258,9 @@ km_tail(const ax_u8 *b, ax_u32 len, ax_u32 *tail, char *why)
 	return 0;
 }
 
-int
-km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *ctx, char *why)
+/* each named global: fn(ctx, name, its symbol entry) */
+static int
+globals(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, const ax_u8 *), void *ctx, char *why)
 {
 	ax_u32 shoff, shnum, i, k, n, so, sz, st, stsz, nm;
 
@@ -297,9 +298,58 @@ km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *
 			nm = G32(y);
 			if ((y[12] >> 4) != 1 || nm == 0 || nm >= stsz)	/* STB_GLOBAL, named */
 				continue;
-			if (fn(ctx, (const char *)b + st + nm, G16(y + 14) == 0))
+			if (fn(ctx, (const char *)b + st + nm, y))
 				return 0;
 		}
 	}
 	return 0;
+}
+
+struct symsctx {
+	int (*fn)(void *, const char *, int);
+	void *ctx;
+};
+
+static int
+syms_one(void *c, const char *name, const ax_u8 *y)
+{
+	struct symsctx *s = (struct symsctx *)c;
+
+	return s->fn(s->ctx, name, G16(y + 14) == 0);
+}
+
+int
+km_syms(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, int), void *ctx, char *why)
+{
+	struct symsctx s;
+
+	s.fn = fn;
+	s.ctx = ctx;
+	return globals(b, len, syms_one, &s, why);
+}
+
+struct defsctx {
+	int (*fn)(void *, const char *, ax_u32, int);
+	void *ctx;
+};
+
+static int
+defs_one(void *c, const char *name, const ax_u8 *y)
+{
+	struct defsctx *d = (struct defsctx *)c;
+
+	if (G16(y + 14) == 0)			/* an import */
+		return 0;
+	return d->fn(d->ctx, name, G32(y + 8), y[12] & 15);
+}
+
+int
+km_defs(const ax_u8 *b, ax_u32 len, int (*fn)(void *, const char *, ax_u32, int), void *ctx,
+	char *why)
+{
+	struct defsctx d;
+
+	d.fn = fn;
+	d.ctx = ctx;
+	return globals(b, len, defs_one, &d, why);
 }

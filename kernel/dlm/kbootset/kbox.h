@@ -37,11 +37,22 @@ struct kb_kinfo {
 	ax_u32 bd_entry, bd_tvaddr, bd_tsize, bd_rvaddr, bd_rsize, bd_dvaddr, bd_dsize;
 	int nmods;			/* the modules loaded, from the core's list */
 	char mods[KB_MAXMODS][25];
+	ax_u32 modbase[KB_MAXMODS], modsize[KB_MAXMODS];	/* where each runs */
 };
 
 /* read and check the record at path (/dev/kinfo on the box); 0, or -1
  * when there is none or it is not a valid version-2 or version-3 record */
 int kb_kinfo_read(const char *path, struct kb_kinfo *ki);
+
+/* name's address in the running kernel, by the module core's getksym
+ * (system call 69): a kernel export, else a loaded module's global; 0 with
+ * *val and *type (its STT_ type), else -1.  KBOOTSET_KSYMS names a file of
+ * "name value type" lines that stands in for it (host tests) */
+int kb_getksym(const char *name, ax_u32 *val, ax_u32 *type);
+
+/* n bytes of the running kernel's memory at addr, through /dev/kmem
+ * (KBOOTSET_KMEM moves it): 0, or -1 */
+int kb_kmem(ax_u32 addr, ax_u8 *buf, ax_u32 n);
 
 /* a controller id (C2-1 §2.1) as a gate match key: "zorro:0202:54",
  * "mobo:gayle"; "" for an unknown motherboard code */
