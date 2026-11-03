@@ -11544,6 +11544,29 @@ def audit_l11():
             for f in os.listdir(os.path.join(ct, "tmp")):
                 os.unlink(os.path.join(ct, "tmp", f))
 
+    # (15b) the network loop: every package the order names has a catalog row, or the install stops
+    # naming the missing ones (the repository is incomplete); found ones are listed by catalog name
+    m = re.search(r'\n\tnetnames="\$TARGET/tmp/\.netnames\.\$\$" netmiss=.*?\n\t\[ -s "\$netnames" \] \|\| die [^\n]*\n', src, re.S)
+    if not m:
+        fail("install.sh's network loop has no catalog-row check of the order")
+    else:
+        nt = os.path.join(d, "netloop")
+        os.makedirs(os.path.join(nt, "tmp"), exist_ok=True)
+        open(os.path.join(nt, "catalog"), "w").write(
+            "#apkg-catalog 1\ncore|2.1|core|stock/core-2.1.pkg|x|1|none|system|d\n"
+            "m4|2.1|m4|stock/m4-2.1.pkg|x|1|none|system|d\namix-base|1.0-27|amxbase|amxbase-1.0-27.pkg|x|1|none|system|d\n")
+        for what, pkgs, want in (("an order all in the catalog", "core amxbase m4", "LIST core amix-base m4"),
+                                 ("an order naming cdfs, which the catalog lacks", "core cdfs m4", "DIE network source: the repository catalog has no row for cdfs")):
+            open(os.path.join(nt, "order"), "w").write("# set: minimal\n" + "\n".join(pkgs.split()) + "\n")
+            body = ('die() { echo "DIE $*"; exit 3; }\nTARGET=%s\nORDER=%s/order\nNETCAT=%s/catalog\n'
+                    % (nt, nt, nt) + m.group(0) + 'echo LIST `cat "$netnames"`\n')
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            left = os.listdir(os.path.join(nt, "tmp"))
+            (ok if want in out and (not left or left == [os.path.basename(f) for f in left if f.startswith(".netnames")]) else fail)(
+                "install.sh's network loop, %s: %s" % (what, out.strip()[:90]))
+            for f in os.listdir(os.path.join(nt, "tmp")):
+                os.unlink(os.path.join(nt, "tmp", f))
+
     # (16) C4-1: l11.sh reads the kernel's sd cards from its sidecar (sdcards=4, absent = 2)
     # and install.sh hands FB_SDCARDS=4 to the first boot
     m = re.search(r'\n\t_sc=`.*?\n\tcase "\$L11_SDCARDS" in .*?esac\n', l11, re.S)

@@ -2381,18 +2381,28 @@ elif [ "$SOURCE_KIND" = net ]; then
 	# the second stage's record first: every package of the chosen set must be in the
 	# repository before the first one installs
 	[ -z "$NET_SET" ] || net_record
-	netnames="$TARGET/tmp/.netnames.$$"
-	: > "$netnames"
+	# every package the order names must be in the repository catalog: a missing one means the
+	# repository is incomplete, and a system installed without it would lack what the CD gives
+	netnames="$TARGET/tmp/.netnames.$$" netmiss="$TARGET/tmp/.netmiss.$$" netone="$TARGET/tmp/.netone.$$"
+	: > "$netnames"; : > "$netmiss"
 	while read pkg; do
 		case "$pkg" in ""|\#*) continue;; esac
-		nn=
+		rm -f "${netone:?}"
 		while read cline; do
 			case "$cline" in ""|\#*) continue;; esac
 			cn=`expr "$cline" : '\([^|]*\)|'`
 			ci=`expr "$cline" : '[^|]*|[^|]*|\([^|]*\)|'`
-			if [ "$ci" = "$pkg" ] || [ "$cn" = "$pkg" ]; then echo "$cn" >> "$netnames"; break; fi
+			if [ "$ci" = "$pkg" ] || [ "$cn" = "$pkg" ]; then echo "$cn" >> "$netnames"; echo y > "$netone"; break; fi
 		done < "$NETCAT"
+		[ -f "$netone" ] || echo "$pkg" >> "$netmiss"
 	done < "$ORDER"
+	rm -f "${netone:?}"
+	if [ -s "$netmiss" ]; then
+		set -- `cat "$netmiss"`
+		rm -f "${netmiss:?}" "${netnames:?}"
+		die "network source: the repository catalog has no row for $* (named by $ORDER) -- the repository is incomplete; refusing"
+	fi
+	rm -f "${netmiss:?}"
 	[ -s "$netnames" ] || die "network source: none of $ORDER's packages is in the repository catalog"
 	set -- `cat "$netnames"`
 	npkgs=$#
