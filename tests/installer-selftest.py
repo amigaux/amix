@@ -11513,21 +11513,36 @@ def audit_l11():
 
     # (15) the 1.1 base carries m4: syslogd reads /etc/syslog.conf through
     # /usr/ccs/bin/m4 (the m4 package, or Cdev), so a 1.1 order with neither stops the install
-    m = re.search(r'\nif \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n\tORDCDEV=.*?\nfi\n', src, re.S)
-    if not m:
-        fail("install.sh has no m4 check of a 1.1 order")
+    # (a network install is not refused there: its first stage adds m4, the minimal set included)
+    m = re.search(r'\nif \[ "\$INSTALL_LAYOUT" = 1\.1 \] && \[ "\$SOURCE_KIND" != net \]; then\n\tORDCDEV=.*?\nfi\n', src, re.S)
+    m1 = re.search(r'\nif \[ "\$SOURCE_KIND" = net \] && \[ "\$INSTALL_LAYOUT" = 1\.1 \]; then\n\tORDM4=.*?\nfi\n', src, re.S)
+    if not m or not m1:
+        fail("install.sh has no m4 check of a 1.1 order, or no first-stage m4 rule for a network install")
     else:
         ct = os.path.join(d, "cdev")
         os.makedirs(os.path.join(ct, "tmp"), exist_ok=True)
-        for what, pkgs, want in (("an order with m4", "core bsd APKG m4", "PASSED"),
-                                 ("an order with Cdev", "core bsd Cdev APKG", "PASSED"),
-                                 ("an order with neither", "core bsd APKG", "DIE install order")):
+        for what, kind, pkgs, want in (("an order with m4", "cdfs", "core bsd APKG m4", "PASSED"),
+                                       ("an order with Cdev", "cdfs", "core bsd Cdev APKG", "PASSED"),
+                                       ("an order with neither", "cdfs", "core bsd APKG", "DIE install order"),
+                                       ("a network install's order with neither", "net", "core bsd APKG", "PASSED")):
             open(os.path.join(ct, "order"), "w").write("# set: minimal\n" + "\n".join(pkgs.split()) + "\n")
-            body = ('die() { echo "DIE $*"; exit 3; }\nINSTALL_LAYOUT=1.1\nTARGET=%s\nORDER=%s/order\n'
-                    % (ct, ct) + m.group(0) + "echo PASSED\n")
+            body = ('die() { echo "DIE $*"; exit 3; }\nINSTALL_LAYOUT=1.1\nSOURCE_KIND=%s\nTARGET=%s\nORDER=%s/order\n'
+                    % (kind, ct, ct) + m.group(0) + "echo PASSED\n")
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
             (ok if want in out and not os.listdir(os.path.join(ct, "tmp")) else fail)(
                 "install.sh's 1.1 m4 check, %s: %s" % (what, "accepted" if "PASSED" in out else "refused"))
+        # the first-stage rule, executed: an order with neither gains m4 (a copy, the medium's untouched)
+        for what, pkgs, want in (("the minimal order (neither)", "core bsd APKG", "core bsd APKG m4"),
+                                 ("an order with Cdev", "core bsd Cdev APKG", "core bsd Cdev APKG")):
+            open(os.path.join(ct, "order"), "w").write("# set: minimal\n" + "\n".join(pkgs.split()) + "\n")
+            body = ('die() { echo "DIE $*"; exit 3; }\nmsg() { :; }\nINSTALL_LAYOUT=1.1\nSOURCE_KIND=net\nTARGET=%s\n'
+                    'ORDER=%s/order\n' % (ct, ct) + m1.group(0) + 'grep -v "^#" "$ORDER" | tr "\\n" " "\n')
+            out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
+            left = [f for f in os.listdir(os.path.join(ct, "tmp")) if f != "order.net1"]
+            (ok if out.split() == want.split() and not left else fail)(
+                "install.sh's first-stage m4 rule, %s: %s" % (what, out.strip()))
+            for f in os.listdir(os.path.join(ct, "tmp")):
+                os.unlink(os.path.join(ct, "tmp", f))
 
     # (16) C4-1: l11.sh reads the kernel's sd cards from its sidecar (sdcards=4, absent = 2)
     # and install.sh hands FB_SDCARDS=4 to the first boot
