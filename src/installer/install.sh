@@ -2191,6 +2191,22 @@ if [ "$SOURCE_KIND" = net ] && [ "$INSTALL_SET" != minimal ]; then
 	ORDER="$INST/order.minimal" INSTALL_SET=minimal
 	msg "network install in two stages: the minimal set now, the rest of the $NET_SET set at the first boot"
 fi
+# The first stage carries m4 as well: the minimal order has neither m4 nor Cdev, and syslog (a
+# base package) reads /etc/syslog.conf through /usr/ccs/bin/m4 from the first boot on, before
+# the second stage brings the set's own Cdev or m4. The repository holds m4.
+if [ "$SOURCE_KIND" = net ] && [ "$INSTALL_LAYOUT" = 1.1 ]; then
+	ORDM4="$TARGET/tmp/.ordm4.$$" ORDNET1="$TARGET/tmp/order.net1"
+	rm -f "${ORDM4:?}" "${ORDNET1:?}"
+	while read pkg; do
+		case "$pkg" in m4|Cdev) [ -f "$ORDM4" ] || echo y > "$ORDM4" ;; esac
+	done < "$ORDER"
+	if [ ! -f "$ORDM4" ]; then
+		{ cat "$ORDER" && echo m4; } > "$ORDNET1" || die "cannot write the first stage's order $ORDNET1"
+		ORDER="$ORDNET1"
+		msg "network install: m4 joins the first stage (/usr/ccs/bin/m4, which syslogd reads its conf through)"
+	fi
+	rm -f "${ORDM4:?}"
+fi
 
 # ★ THE MEDIUM IS THE AUTHORITY ON ATTESTATION, NOT THE PROFILE. INSTALL_ATTESTED
 # arrives from the answers profile, and on an INTERACTIVE install that is already
