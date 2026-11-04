@@ -12,6 +12,8 @@ Added to the repository as they are ready and installed with `apkg`; no new rele
 
 ## Planned for 1.2
 
+From 1.1 on, later releases upgrade an installed 1.1 system in place, with its packages through `apkg`: 1.1 is the last release that only installs clean.
+
 Plans, with no dates; they may change.
 
 - Offloading work such as crypto and video to the Z3660/ZZ9000's second core when one is present.
@@ -20,7 +22,6 @@ Plans, with no dates; they may change.
 - Gigabit Ethernet on the Z3660 with a real 68060, without lost frames.
 - Shared libraries for packages, to save memory and disk.
 - `crash` and `adb` on the 68040/68060 kernel, as a boot option.
-- Upgrading an installed 1.1 in place.
 
 ## 1.1 (unreleased)
 
