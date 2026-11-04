@@ -65,6 +65,17 @@ STAGING="$L11_IN/staging" bash "$here/build-install-iso.sh" --profile universal-
 	--cd-boot "$TREE" --stage "$OUT/stage" --keep-stage --out "$ISO" > "$W/master.log" 2>&1 \
 	|| { tail -15 "$W/master.log" >&2; die "build-install-iso.sh failed (work/master.log)"; }
 rel "$ISO"
+# what the disc runs, read back: every pkgtools binary on it is the one this round's inputs built
+_rb="$W/iso-readback"; [ ! -d "$_rb" ] || chmod -R u+w "$_rb"; rm -rf "${_rb:?}"; mkdir -p "$_rb"
+xorriso -osirrox on -indev "$ISO" -extract /install/bin "$_rb/bin" -extract /install/l11/bin "$_rb/l11" > /dev/null 2>&1 \
+	|| die "cannot read /install/bin back from $ISO"
+chmod -R u+w "$_rb"
+_st="$L11_IN/pkgtools/heirloom/build-amix-static"
+for _b in bin/pkgadd:bin/pkgadd bin/pkgtrans:bin/pkgtrans bin/pkginfo:bin/pkginfo bin/pkgchk:bin/pkgchk \
+	bin/contents-fsck:bin/contents-fsck sadm-helpers/pkginstall:bin/pkginstall bin/apkg:bin/apkg; do
+	cmp -s "$_st/${_b%%:*}" "$_rb/${_b#*:}" || die "the disc's /install/${_b#*:} is not the inputs' ${_b%%:*}"
+done
+cmp -s "$L11_IN/apkg/apkg" "$_rb/l11/apkg" || die "the disc's /install/l11/bin/apkg is not the inputs' apkg"
 # 2. the floppy pairs
 for L in k46 k30; do
 	img="$R46"; [ $L = k30 ] && img="$R30"

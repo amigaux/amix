@@ -54,10 +54,10 @@ LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench'
 
 # amix userland/pkgtools at the set's revision, built by tools/build-l11-inputs.sh
 # (nothing in 1.1 reads the frozen amix-packagemanager)
-PKGMGR="${PKGMGR:-$repo/work/l11/pkgtools}"
+PKGMGR="${PKGMGR:-${L11_IN:-$repo/work/l11}/pkgtools}"
 STATIC="${STATIC:-$PKGMGR/heirloom/build-amix-static}"
 CORE_T="${CORE_T:-$repo/build/core/root}"   # tools/build-core-tree.sh
-STAGING="${STAGING:-$repo/work/l11/staging}"
+STAGING="${STAGING:-${L11_IN:-$repo/work/l11}/staging}"
 # Authored metadata comes from the sibling's REPO TREE, never its build staging:
 # the staging copy of deps.conf has been observed lagging (it predates the kernel-
 # package edges), and sets.conf/cats.conf are not staged there at all. Same rule as
@@ -378,6 +378,14 @@ cp -p "$STATIC"/bin/{pkgadd,pkgtrans,pkginfo,pkgchk,contents-fsck} "$STAGE/bin/"
 cp -p "$STATIC/sadm-helpers/pkginstall" "$STAGE/bin/pkginstall"
 cp -p "$CORE_T/usr/bin/sum" "$STAGE/bin/sum"
 chmod 0755 "$STAGE"/bin/*
+# every pkgtools binary staged here is the one the round's inputs built: a default must never beat the pin
+_in="${L11_IN:-$repo/work/l11}/pkgtools/heirloom/build-amix-static"
+for _b in bin/pkgadd:bin/pkgadd bin/pkgtrans:bin/pkgtrans bin/pkginfo:bin/pkginfo bin/pkgchk:bin/pkgchk \
+          bin/contents-fsck:bin/contents-fsck sadm-helpers/pkginstall:bin/pkginstall bin/apkg:bin/apkg; do
+  [ -f "$STAGE/${_b#*:}" ] || continue
+  cmp -s "$_in/${_b%%:*}" "$STAGE/${_b#*:}" || {
+    echo "STOP: staged ${_b#*:} is not the inputs' ${_b%%:*} ($_in)" >&2; exit 1; }
+done
 
 # the DosEnvec Mask per disk controller (tools/lib/dmamask.py, the one table): install.sh
 # stamps the authored target's partitions with its controller's row (TARGET_HBA)
@@ -1362,7 +1370,7 @@ BIARGS=(--set "$SET" --install-src "$STAGE")
 [ -n "$OUT" ] && BIARGS+=(--out "$OUT")
 [ -n "$CDBOOT" ] && BIARGS+=(--cd-boot "$CDBOOT")
 for x in ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}; do BIARGS+=(--pkg "$x"); done
-BI_L11_PROVIDES="$L11_PROVIDES" "$here/build-iso.sh" "${BIARGS[@]}"
+PKGMGR="$PKGMGR" STAGING="$STAGING" BI_L11_PROVIDES="$L11_PROVIDES" "$here/build-iso.sh" "${BIARGS[@]}"
 
 echo
 echo "build-install-iso: done. $APKG_NOTE"

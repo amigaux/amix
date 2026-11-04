@@ -104,8 +104,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 repo="$(cd "$here/.." && pwd)"
 
-PKGMGR="${PKGMGR:-$repo/../amix-packagemanager}"
-STAGING="${STAGING:-$PKGMGR/build/repo-staging}"
+PKGMGR="${PKGMGR:-${L11_IN:-$repo/work/l11}/pkgtools}"
+STAGING="${STAGING:-${L11_IN:-$repo/work/l11}/staging}"
 GEN_CATALOG="${GEN_CATALOG:-$PKGMGR/tools/repo/gen-catalog.py}"
 # Authored metadata, read from the sibling's REPO TREE (never its build staging).
 SETS_PY="${SETS_PY:-$PKGMGR/tools/repo/sets.py}"

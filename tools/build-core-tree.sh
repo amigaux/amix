@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
 done
 die() { echo "build-core-tree: $*" >&2; exit 1; }
 
-PKGTRANS="$repo/work/l11/pkgtools/heirloom/build-host/bin/pkgtrans"
+PKGTRANS="${L11_IN:-$repo/work/l11}/pkgtools/heirloom/build-host/bin/pkgtrans"
 [ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 [ -f "$PKG" ] || die "no $PKG"
 got="$(sha256sum < "$PKG" | cut -d' ' -f1)"
