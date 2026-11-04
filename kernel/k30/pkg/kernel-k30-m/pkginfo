@@ -1,11 +1,11 @@
 PKG=kern30m
-NAME=kernel-k30-m k30.1.4.261103-71.1 - the 68030 module kernel
+NAME=kernel-k30-m k30.1.4.261103-71.2 - the 68030 module kernel
 ARCH=Amiga
-VERSION=k30.1.4.261103-71.1
+VERSION=k30.1.4.261103-71.2
 CATEGORY=system
 CLASSES=none
 VENDOR=amix-packages
-PSTAMP=amix-packages-kern30m-k30.1.4.261103-71.1
+PSTAMP=amix-packages-kern30m-k30.1.4.261103-71.2
 # Kernel space (amix-dlm C2-2/C2-3): catalogued in the #ext kpkg block, never
 # as an ordinary entry; installs /stand/k30/{unix,kabi,unix.sym} and the
 # cut's ufs and s5 modules at /etc/conf/mod.d (C2-3 v8 sec 1).  The module
