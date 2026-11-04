@@ -1,3 +1,7 @@
+## 2026-11-04 — repo tests without the host engine (9a3f46a)
+
+Repo tests skip the publish checks when the host engine is not built, instead of failing.
+
 ## 2026-11-04 — apkg 0.3.8; publish.sh; requirements (2996a5b, a5344fb, 02b8b1f, 63324c8)
 
 apkg 0.3.8: the shipped apkg.conf names no address; the repository goes by name and the box needs DNS. APKG 0.3.8 minted, md5 d0bdd279, staged, not published.
