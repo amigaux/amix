@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — release-check reads binaries; CI's merge-base fallback (ddb403c, 62e9598)
+
+tools: release-check searches binary files and package members, images included, for the local patterns, by privacy-check's search and exemptions. ci: a push with no usable previous tip is checked from its merge base with origin/master; the logic moves to tools/ci-privacy-check.
+
 ## 2026-11-04 — privacy-check reads binaries (a31b586)
 
 tools: privacy-check searches binary files for the local patterns (also as UTF-16) and refuses compiled Python (*.pyc, __pycache__/) in class 4. The repository's .gitignore now keeps compiled Python out everywhere.
