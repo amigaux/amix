@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — a4kt710 package 1.0.0-8 (eb2efd0)
+
+The copyright note drops process wording and says what is known: the 68030 form has run only under emulation; with module 1.0.0-1 the A4000T + Z3660 booted from the onboard bus and 16 MiB raw reads matched the host's checksum. Module 1.0.0-4, objects unchanged.
+
 ## 2026-11-02 — a4kt710 refuses an A1200 or A600 Kickstart (5caf1c4)
 
 a4kt710 refuses a Kickstart with a card.resource ROM tag (every A1200 and A600 one) before any $DD access, even with declared=1 (a4kt_gate 5, a4kt_cardoff); checked over every Kickstart image in our ROM store; the A4000T path is unchanged. a4kt710 module 1.0.0-4, package 1.0.0-7; a4091 unchanged.
