@@ -328,6 +328,8 @@ W=${XSTART_TMP:-/tmp}/xstart.$$
 cleanup() {
 	rm -f ${W:?}.server ${W:?}.client ${W:?}.pid ${W:?}.clean
 }
+# finish <status>: hand the display back, then exit. Not an EXIT trap: this
+# sh exits with the trap's last status, not the one exit was given.
 finish() {
 	if [ -n "$restore" ] && [ ! -f $W.clean ]
 	then
@@ -336,9 +338,9 @@ finish() {
 	fi
 	[ -n "$tool" ] && "$tool" $monsw off > /dev/null
 	cleanup
+	exit $1
 }
-trap 'finish' 0
-trap 'exit 1' 1 2 3 15
+trap 'finish 1' 1 2 3 15
 srv=$sline
 if [ -n "$env" ] || [ -n "$restore" ]
 then
@@ -350,7 +352,7 @@ then
 		done
 		echo "echo \$\$ > $W.pid"
 		echo "exec $server \"\$@\""
-	} > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; exit 1; }
+	} > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; finish 1; }
 	srv=`echo $W.server $disp $args $once`
 fi
 cli=$s
@@ -360,8 +362,9 @@ then
 		echo '#!/bin/sh'
 		echo "/bin/sh $s"
 		echo "kill -0 \`cat $W.pid 2>/dev/null\` 2>/dev/null && : > $W.clean"
-	} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; exit 1; }
+	} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; finish 1; }
 	cli=$W.client
 fi
 [ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
 $xinit $cli -- $srv
+finish 0
