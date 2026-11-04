@@ -928,8 +928,9 @@ if [ -n "$_want_l11" ]; then
   chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock" \
     "$STAGE/l11/inittab" "$STAGE/l11/2.1_unix.sum" "$STAGE/l11"/base/*
   chmod 0755 "$STAGE/l11/base/seed.sh"
-  { [ -n "$STRIP_COMMENTS" ] || cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"; } \
-    && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart" && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
+  { [ -n "$STRIP_COMMENTS" ] || { cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
+      && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"; }; } \
+    && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
     && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \
     || { echo "STOP: staged /install/l11 is not byte-identical to $L11_IN" >&2; exit 1; }
   echo "build-install-iso: staged /install/l11 for${_want_l11}: apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel-space and $(grep -c '^[a-z][^#]*|' "$STAGE/l11/kpkg/catalog") userland package(s)"
