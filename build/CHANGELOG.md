@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — NOTICES: rdate's acknowledgement (3135981)
+
+release/NOTICES.md adds the acknowledgement rdate's rdate.c and rfc868time.c require ("This product includes software developed by Christos Zoulas.").
+
 ## 2026-11-04 — CI's host job checks out the whole history (f502489)
 
 The host job's checkout fetches the whole history, so pkgtools' apkg suite runs its checks of the older client from history too (573 checks, 8 skip lines).
