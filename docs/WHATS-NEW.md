@@ -18,6 +18,7 @@ internals are in each directory's `CHANGELOG.md`.
 - Paula audio: the `paula` driver and `/dev/paula`.
 - `ztop` and `xztop`: the Z3660 board's sensors in a terminal and in an X window.
 - SSH: `dropbear`, the server and client with scp, in the base set and on by default (`dropbear=no` in `/etc/rc.conf` turns it off), with a faster key exchange.
+- Time sync: the clock set from time servers at boot and hourly (`ntp=yes`, the default; DHCP-announced servers first, then the pool), and the battery clock written with a corrected `setclk`.
 - CDs: the `cdfs` filesystem module and its mount helper, in the base set.
 - A `tar` that reads modern archives (GNU, ustar, pax) without crashing, from the Heirloom Toolchest.
 - `/dev/random`: the `random` module.
