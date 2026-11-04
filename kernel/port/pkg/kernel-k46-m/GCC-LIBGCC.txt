@@ -28,8 +28,12 @@ this exception (longlong.h, a file of macros it includes, carries none):
 
 Where the source is.  GCC 2.7.2.3, with libgcc2.c and longlong.h in it:
 
-    https://ftp.gnu.org/gnu/gcc/gcc-2.7.2.3.tar.gz
+    https://github.com/amigaux/amix-distfiles/releases/download/gcc-2.7.2.3/gcc-2.7.2.3.tar.gz
     sha256 16166e0f0f2064bb3114716650569065ef3855ae2331d7a29b85d4b9aa73773c
+
+the same file as the original at the GNU project's site:
+
+    https://ftp.gnu.org/gnu/gcc/gcc-2.7.2.3.tar.gz
 
 The compiler's patches, which change neither file, and the rule that builds
 libgcc.a from them:
