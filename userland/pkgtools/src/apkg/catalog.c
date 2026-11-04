@@ -361,19 +361,19 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         krefuse(e, "unknown line", e->kline);
     if (loader) {
         if (seen_kabi)
-            krefuse(e, "a loader entry may not carry", "kabi= (C2-2 v3 §1.1)");
+            krefuse(e, "a loader entry may not carry", "kabi=");
         if (seen_pin)
-            krefuse(e, "a loader entry may not carry", "pin= (C2-2 v3 §1.1)");
+            krefuse(e, "a loader entry may not carry", "pin=");
         if (!seen_loader)
-            krefuse(e, "missing key", "loader= (C2-2 v3 §1.1)");
+            krefuse(e, "missing key", "loader=");
     } else {
         if (!seen_kabi)
-            krefuse(e, "missing key", "kabi= (C2-2 v3 §1.1)");
+            krefuse(e, "missing key", "kabi=");
         if (!seen_pin)
-            krefuse(e, "missing key", "pin= (C2-2 v3 §1.1)");
+            krefuse(e, "missing key", "pin=");
     }
     if (seen_kbootset && (e->role == NULL || strcmp(e->role, "kernel") != 0))
-        krefuse(e, "only a kernel entry may carry", "kbootset= (C2-2 v6 §1.1)");
+        krefuse(e, "only a kernel entry may carry", "kbootset=");
     if (!seen_size)
         krefuse(e, "missing key", "size=");
     if (!seen_sha)

@@ -1338,9 +1338,8 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
                nleft == 1 ? "" : "s", left);
         warnx2("upgrade %s in the same call when the catalog has a "
                "version that fits ('apkg upgrade' with no names takes "
-               "every newer package), or 'apkg remove' %s; nothing was "
-               "changed", nleft == 1 ? "it" : "them",
-               nleft == 1 ? "it" : "them");
+               "every newer package), or 'apkg remove' %s",
+               nleft == 1 ? "it" : "them", nleft == 1 ? "it" : "them");
     }
     return bad ? EX_DEPS : EX_OK;
 }
@@ -1836,8 +1835,7 @@ static int kb_call(const struct conf *cf, const char *cmd, char *last,
         return EX_BOOTSET;
     case 2:
         warnx2("kbootset rejected the call '%s' (status 2, usage): is "
-               "%s the kbootset of contract C2-4 version 2?", cmd,
-               cf->kbootset);
+               "%s a kbootset this apkg can drive?", cmd, cf->kbootset);
         return EX_BOOTSET;
     case 3:
         warnx2("kbootset %s refused by a rule (status 3)%s%s", cmd,

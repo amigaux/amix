@@ -2967,6 +2967,12 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
         bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|\|^#isize apkg ' '$C34') <(grep -v '^apkg|\|^#isize apkg \|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
     check "  ... apkg reads one row per name (the older block is skipped)" \
         grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.p"
+    # a point after a build number sorts after it, as apkg_vercmp has it
+    check "assemble-release orders -62.1 after -62 and before -63" \
+        env PYTHONDONTWRITEBYTECODE=1 python3 -c "import importlib.util as u
+s = u.spec_from_file_location('ar', '$AR'); m = u.module_from_spec(s); s.loader.exec_module(m)
+v = m.vercmp; b = 'k46.1.4.261103-'
+raise SystemExit(0 if v(b + '62.1', b + '62') == 1 and v(b + '62', b + '62.1') == -1 and v(b + '62.1', b + '63') == -1 else 1)"
     # publish.sh takes an assembled tree as it is, and the follow-on release
     # over it keeps the older versions served
     D34="$WORK/t34-docroot"; mkdir -p "$D34"

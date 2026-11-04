@@ -152,6 +152,7 @@ mkconf() {
     cat > "$1" <<EOF
 repo=$2
 cachedir=$ROOT/var/apkg/cache
+keepcache=1
 pkgadd=$WORK/bin/pkgadd-shim
 pkgrm=$WORK/bin/pkgrm-shim
 admin=$ROOT/var/apkg/admin

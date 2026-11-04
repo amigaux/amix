@@ -89,6 +89,9 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # 0.3.10 (2026-11-04; minted 2026-11-04, md5 53426b21...): apkg passes -S to
 # pkgadd, so no licence is printed at
 # install or upgrade.  0.3.9 (3f796aed...) stays what it is.
+  # Version 0.3.11 (2026-11-04, not minted).  The apkg binary, apkg.1,
+  # apkg.conf.5 and the apkg.conf template change; every other payload byte is
+  # 0.3.10's.
 VER_APKG="0.3.10"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
@@ -340,6 +343,9 @@ EOF
 # apkg configuration
 repo=http://pkg.amigaux.org/1.1
 cachedir=/var/apkg/cache
+# A good install or upgrade removes the packages it fetched from cachedir;
+# 1 keeps them.  'apkg clean' empties it.  (This IS the built-in default.)
+keepcache=0
 # The admin(4) file handed to pkgadd/pkgrm with -a.  This package ships it,
 # which also means pkgrm APKG deletes it -- so apkg re-creates it whenever it
 # is missing rather than trusting it to be there.  An admin file you have
@@ -596,6 +602,9 @@ EOF
   # text and the version strings; every other payload byte is 0.3.8's.
   # Version 0.3.10 (2026-11-04; minted 2026-11-04).  The apkg binary (-S to pkgadd) and apkg.1;
   # every other payload byte is 0.3.9's.
+  # Version 0.3.11 (2026-11-04, not minted).  The apkg binary, apkg.1,
+  # apkg.conf.5 and the apkg.conf template change; every other payload byte is
+  # 0.3.10's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

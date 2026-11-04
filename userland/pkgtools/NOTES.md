@@ -1,5 +1,26 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — apkg 0.3.11: the cache, the output, a refused upgrade (built, NOT minted)
+
+**The cache.** A kernel upgrade fetched 2.3 to 2.9 MB and kept it, on a root with about 20 MB free, and
+file names carry the version, so nothing was ever replaced. Nothing reads a package after a good
+transaction: `apkg recover` reads a staged file only for what is not done, and kbootset works from its
+generations. So a good transaction now removes what it staged from the cache once its journal has
+cleared. A failed one keeps them for `recover` or another try; a plain .pkg on a medium is staged in
+place and stays. `keepcache=1` keeps them. `apkg clean` (-n says what it would) takes only package
+files and their cut downloads, and refuses while a journal stands. The catalog beside the cache stays.
+
+**The output.** stdout was
+not flushed before a fork, so in a log the plan landed after all of pkgadd's output; it is now in order.
+Several packages end in a summary (from which version to which, what was not done), before the
+generation lines. `apkg licence <name>` prints the notice pkgadd saved in
+/var/sadm/pkg/<pkginst>/install/copyright and names the licence files among the package's files. The
+plan no longer promises a power cycle: kbootset's last line says whether one is needed (a set that changes
+nothing has "nothing to commit").
+
+**A refused upgrade.** It stays all or nothing. A refusal now says "nothing was changed" in every form;
+a no-name upgrade refused for kernel space names the userland that can go by name; a refused catalog
+entry left out of a no-name upgrade is named. Messages cite no internal document.
 ## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this

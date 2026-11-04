@@ -62,6 +62,8 @@ apkg list [installed|all]    catalog entries, with installed-version column
 apkg search <substr>         case-insensitive match on name|description
 apkg info <name>             full catalog entry + installed state
 apkg download <name>         fetch <repo>/pkgs/<filename> into cache, md5-verify
+apkg clean                    remove the package files from the cache (-n: say what it would)
+apkg licence <name>          print an installed package's saved notice, name its licence files
 apkg install <name>...       resolve deps (recursive, topological) -> download -> pkgadd each
 apkg upgrade <name>          if catalog version > installed: download, pkgrm old, pkgadd new
 apkg remove <name>           pkgrm wrapper

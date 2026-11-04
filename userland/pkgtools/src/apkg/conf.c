@@ -7,7 +7,7 @@
  * Format: plain "key=value" lines, '#' starts a comment, blank lines
  * ignored, whitespace around key and value trimmed.  Unknown keys warn.
  *
- * Keys: repo, cachedir, pkgadd, pkgrm, admin, the fetch-path tunables --
+ * Keys: repo, cachedir, keepcache, pkgadd, pkgrm, admin, the fetch-path tunables --
  * timeout, connect_timeout, retries, retry_delay, progress, bufsize,
  * redirects, rcvbuf, sndbuf -- and the resolver's three: nameserver,
  * dns_timeout, dns_retries.  Nothing the fetch path does is a
@@ -183,6 +183,7 @@ int conf_load(const char *conffile_opt, const char *target_opt,
 
     cf->repo = xstrdup(DEF_REPO);
     cf->cachedir = cat2(cf->root, DEF_CACHEDIR);
+    cf->keepcache = 0;
     cf->pkgadd = cat2(cf->root, DEF_PKGADD);
     cf->pkgrm = cat2(cf->root, DEF_PKGRM);
     cf->admin = cat2(cf->root, DEF_ADMIN);
@@ -246,6 +247,12 @@ int conf_load(const char *conffile_opt, const char *target_opt,
             } else if (strcmp(key, "cachedir") == 0) {
                 free(cf->cachedir);
                 cf->cachedir = xstrdup(val);
+            } else if (strcmp(key, "keepcache") == 0) {
+                if (getnum(val, &num) != 0 || num < 0 || num > 1)
+                    warnx2("%s:%d: bad keepcache '%s', keeping %d",
+                           cf->conffile, lineno, val, cf->keepcache);
+                else
+                    cf->keepcache = (int)num;
             } else if (strcmp(key, "pkgadd") == 0) {
                 free(cf->pkgadd);
                 cf->pkgadd = xstrdup(val);

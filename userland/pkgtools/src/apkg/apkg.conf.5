@@ -34,7 +34,13 @@ section CONFIGURATION.
 repository base URL: the release's tree on the host (http://pkg.amigaux.org/1.1)
 .TP
 .B cachedir
-package download cache (/var/apkg/cache)
+package download cache (/var/apkg/cache).  A good install or upgrade removes
+the packages it fetched from here; the directory is apkg's own
+.TP
+.B keepcache
+1 keeps the fetched packages after a good transaction (default 0);
+.B "apkg clean"
+empties the cache
 .TP
 .B pkgadd\fR, \fBpkgrm
 the engine binaries (/usr/apkg/bin/pkgadd, /usr/apkg/bin/pkgrm, falling

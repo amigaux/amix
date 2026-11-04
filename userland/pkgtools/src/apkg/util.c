@@ -261,6 +261,7 @@ void note(const char *fmt, ...)
 
     if (!opt_verbose)
         return;
+    fflush(stdout);         /* the two streams in order, also in a log */
     va_start(ap, fmt);
     fprintf(stderr, "apkg: ");
     vfprintf(stderr, fmt, ap);
@@ -273,6 +274,7 @@ void warnx2(const char *fmt, ...)
 {
     va_list ap;
 
+    fflush(stdout);
     va_start(ap, fmt);
     fprintf(stderr, "apkg: ");
     vfprintf(stderr, fmt, ap);
