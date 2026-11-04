@@ -38,12 +38,11 @@
  *                    optionally with ":port".  REPEATABLE: each line
  *                    appends, and they are tried in the order written.
  *                    The default list is EMPTY -- with no nameserver
- *                    line apkg resolves exactly as it always did, out
- *                    of the hosts file only.  A line with an empty
- *                    value CLEARS the list, so a later config can undo
- *                    an earlier one.  The hosts file is consulted
- *                    FIRST in any case: DNS is the fallback, never the
- *                    override.
+ *                    line apkg asks the servers /etc/resolv.conf names,
+ *                    if it names any.  A line with an empty value CLEARS
+ *                    the list, so a later config can undo an earlier one.
+ *                    The hosts file is consulted FIRST in any case: DNS
+ *                    is the fallback, never the override.
  *   dns_timeout      seconds per DNS query ATTEMPT (not per name, not
  *                    per server).
  *   dns_retries      extra attempts per nameserver; every configured
@@ -200,6 +199,9 @@ int conf_load(const char *conffile_opt, const char *target_opt,
     cf->sndbuf = APKG_DEF_SNDBUF;
     cf->nameservers = NULL;
     cf->nnameservers = 0;
+    /* the CLIENT's, not the target's: under -R apkg's own lookups run on
+     * the system apkg runs on */
+    cf->resolvconf = cat2(cf->root, "/etc/resolv.conf");
     cf->dns_timeout = APKG_DEF_DNSTIMEO;
     cf->dns_retries = APKG_DEF_DNSRETRIES;
     cf->pkgadd_is_default = 1;
@@ -320,8 +322,7 @@ int conf_load(const char *conffile_opt, const char *target_opt,
             } else if (strcmp(key, "nameserver") == 0) {
                 /* REPEATABLE: each line appends.  An empty value clears
                  * the list -- the only way a later line can undo an
-                 * earlier one, and the natural spelling of "this box
-                 * uses the hosts file only". */
+                 * earlier one. */
                 if (*val == '\0') {
                     while (cf->nnameservers > 0)
                         free(cf->nameservers[--cf->nnameservers]);
@@ -416,8 +417,9 @@ void conf_note_dns(const struct conf *cf)
     if (!opt_verbose)
         return;
     if (cf->nnameservers <= 0) {
-        note("dns: nameserver=(none, hosts file only) dns_timeout=%lds "
-             "dns_retries=%d", cf->dns_timeout, cf->dns_retries);
+        note("dns: nameserver=(none, those of %s) dns_timeout=%lds "
+             "dns_retries=%d", cf->resolvconf, cf->dns_timeout,
+             cf->dns_retries);
         return;
     }
     len = 1;
@@ -453,6 +455,7 @@ void http_opts_default(struct httpopts *o)
     o->sndbuf = APKG_DEF_SNDBUF;
     o->dns.servers = NULL;
     o->dns.nservers = 0;
+    o->dns.resolvconf = NULL;
     o->dns.timeout = APKG_DEF_DNSTIMEO;
     o->dns.retries = APKG_DEF_DNSRETRIES;
 }
@@ -472,6 +475,7 @@ void http_opts_from_conf(struct httpopts *o, const struct conf *cf)
      * copied by value all over the fetch path and must not own memory */
     o->dns.servers = cf->nameservers;
     o->dns.nservers = cf->nnameservers;
+    o->dns.resolvconf = cf->resolvconf;
     o->dns.timeout = cf->dns_timeout;
     o->dns.retries = cf->dns_retries;
 }

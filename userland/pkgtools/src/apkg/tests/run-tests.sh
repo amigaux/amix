@@ -1698,6 +1698,88 @@ echo "$OUT" | grep -q 'resolve: localhost -> 127.0.0.1 (hosts file)' \
 echo "$OUT" | grep -q 'dns: asked ' \
     && bad "DNS was consulted although the hosts file answered" "$OUT" \
     || ok "DNS is not consulted when the hosts file answers"
+# (2b) the same with a broken nameserver only in resolv.conf
+mkconf "$WORK/conf-hrc" "http://localhost:$PORT/repo" "$WORK/bin/pkgadd-shim"
+printf 'nameserver 127.0.0.1:%s\n' "$D_GARBAGE" > "$ROOT/etc/resolv.conf"
+OUT=$("$APKG" -v -c "$WORK/conf-hrc" update 2>&1)
+rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q 'resolve: localhost -> 127.0.0.1 (hosts file)' \
+    && ! echo "$OUT" | grep -q 'etc/resolv.conf$\|dns: asked ' \
+    && ok "a hosts line wins over resolv.conf, which is not consulted" \
+    || bad "resolv.conf was consulted although the hosts file answered (rc=$rc)" "$OUT"
+rm -f "${ROOT:?}/etc/resolv.conf"
+# resolv.conf, by the driver: -F is step (b) with no host database in the way
+RC=$WORK/resolv.conf
+rcfile() { printf "$@" > "$RC"; }
+drv() { "$DNSDRV" -v -F -t 1 -r 0 "$@" dnsok.apkg.invalid 2>&1; }
+rcfile 'nameserver 127.0.0.1:%s\n' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q '^resolved dnsok.apkg.invalid 127.0.0.1$' \
+    && echo "$OUT" | grep -q "asking 1 nameserver(s) from $RC" \
+    && ok "resolv.conf only: its nameserver answers" \
+    || bad "resolv.conf only (rc=$rc)" "$OUT"
+# nameserver= is the override: the file names a broken server...
+rcfile 'nameserver 127.0.0.1:%s\n' "$D_GARBAGE"
+OUT=$(drv -f "$RC" -s "127.0.0.1:$D_OK"); rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "(dns 127.0.0.1:$D_OK)" \
+    && ! echo "$OUT" | grep -q "from $RC" \
+    && ok "nameserver= wins over resolv.conf, which is not read" \
+    || bad "nameserver= did not win over resolv.conf (rc=$rc)" "$OUT"
+# ...and a dead nameserver= does not fall through to a good file
+rcfile 'nameserver 127.0.0.1:%s\n' "$D_OK"
+OUT=$(drv -f "$RC" -s "127.0.0.1:$D_NX"); rc=$?
+[ $rc -ne 0 ] \
+    && ok "a nameserver= that says no does not fall through to resolv.conf" \
+    || bad "nameserver= fell through to resolv.conf" "$OUT"
+# none: no file, then a file that names nobody
+OUT=$(drv -f "$WORK/no-such-resolv.conf"); rc=$?
+[ $rc -ne 0 ] && echo "$OUT" | grep -q "no nameserver= is configured and $WORK/no-such-resolv.conf names no nameserver" \
+    && ok "no nameserver=, no resolv.conf: not resolved, and the message says what is missing" \
+    || bad "the no-file message (rc=$rc)" "$OUT"
+rcfile '# nothing\n\ndomain example.invalid\nsearch example.invalid\nnameserver\nnameserverX 127.0.0.1:%s\n' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -ne 0 ] && echo "$OUT" | grep -q "names no nameserver" \
+    && ok "a resolv.conf with no usable nameserver line is the same as none" \
+    || bad "a nameserver-less resolv.conf (rc=$rc)" "$OUT"
+# what real files hold, ifup's among them
+rcfile '; comment\n# comment\ndomain example.invalid\n  \tnameserver\t  127.0.0.1:%s  # why\nsearch x\n' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] \
+    && ok "resolv.conf: comments, other keywords, leading blanks, tabs, a trailing word" \
+    || bad "resolv.conf parsing (rc=$rc)" "$OUT"
+rcfile 'nameserver 127.0.0.1:%s' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && ok "resolv.conf: a last line with no newline" || bad "no final newline (rc=$rc)" "$OUT"
+rcfile 'nameserver 127.0.0.1:%s\r\n' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && ok "resolv.conf: a CRLF line" || bad "CRLF (rc=$rc)" "$OUT"
+rcfile 'nameserver 2001:db8::1\nnameserver 127.0.0.1:%s\n' "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q 'skipping nameserver 2001:db8::1' \
+    && ! echo "$OUT" | grep -q "is not an IPv4 address (optionally" \
+    && ok "resolv.conf: an IPv6 line is skipped quietly, the next one is asked" \
+    || bad "the IPv6 line (rc=$rc)" "$OUT"
+rcfile 'nameserver 127.0.0.1:%s\nnameserver 127.0.0.1:%s\n' "$D_GARBAGE" "$D_OK"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && echo "$OUT" | grep -q "(dns 127.0.0.1:$D_OK)" \
+    && ok "resolv.conf: a broken first server falls through to the second, in file order" \
+    || bad "resolv.conf order (rc=$rc)" "$OUT"
+# longer than the reader's line buffer: the tail is not a line of its own
+{ printf '# '; python3 -c "print('x' * 300, end='')"; printf ' nameserver 127.0.0.1:%s\n' "$D_OK"; } > "$RC"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -ne 0 ] \
+    && ok "resolv.conf: the tail of an overlong comment is not read as a line" \
+    || bad "the tail of an overlong line was read" "$OUT"
+{ python3 -c "print('# ' + 'x' * 300)"; printf 'nameserver 127.0.0.1:%s\n' "$D_OK"; } > "$RC"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -eq 0 ] && ok "resolv.conf: the line after an overlong one is read" || bad "after an overlong line (rc=$rc)" "$OUT"
+{ i=0; while [ $i -lt 12 ]; do printf 'nameserver 127.0.0.1:%s\n' "$D_NX"; i=$((i + 1)); done; } > "$RC"
+OUT=$(drv -f "$RC"); rc=$?
+[ $rc -ne 0 ] && echo "$OUT" | grep -q "more than 8 nameservers, using the first 8" \
+    && echo "$OUT" | grep -q "(8 configured)" \
+    && ok "resolv.conf: at most 8 servers are asked" \
+    || bad "the cap on resolv.conf servers (rc=$rc)" "$OUT"
+rm -f "${RC:?}"
 # (3)+(4) the full path: a repo host the HOST DATABASE does not know and
 #     only the nameserver does.  Staging that needs a name this machine's
 #     gethostbyname() genuinely fails on -- and that cannot be assumed.
@@ -1720,7 +1802,7 @@ if [ -n "$E2EHOST" ]; then
     # (3) no nameserver configured: the old behaviour, and a message that
     #     says which of the two things is missing
     OUT=$("$DNSDRV" -v "$E2EHOST" 2>&1)
-    echo "$OUT" | grep -q 'not in the hosts file and no nameserver= is configured' \
+    echo "$OUT" | grep -q 'not in the hosts file, no nameserver= is configured and /etc/resolv.conf names no nameserver' \
         && ok "with no nameserver configured the message says what is missing" \
         || bad "the no-nameserver message does not say what is missing" "$OUT"
     # (4) with one configured, the same name resolves and the fetch runs
@@ -1740,6 +1822,23 @@ if [ -n "$E2EHOST" ]; then
     [ -s "$CATFILE" ] \
         && ok "the catalog fetched over the DNS-resolved host is on disk" \
         || bad "no catalog after the DNS-resolved fetch" "$OUT"
+    # (5) the same name, no nameserver=, the server only in resolv.conf
+    #     (the client's, under APKG_ROOT): what a box with DNS on has
+    mkconf "$WORK/conf-rc" "http://$E2EHOST:$PORT/repo" "$WORK/bin/pkgadd-shim"
+    printf 'nameserver 127.0.0.1:%s\n' "$D_OK" > "$ROOT/etc/resolv.conf"
+    OUT=$("$APKG" -v -c "$WORK/conf-rc" update 2>&1)
+    rc=$?
+    [ $rc -eq 0 ] && echo "$OUT" | grep -q "asking 1 nameserver(s) from $ROOT/etc/resolv.conf" \
+        && echo "$OUT" | grep -q "resolve: $E2EHOST -> 127.0.0.1 (dns 127.0.0.1:$D_OK)" \
+        && ok "resolv.conf only: a repo host only DNS knows is fetched end to end" \
+        || bad "the resolv.conf-only fetch failed (rc=$rc)" "$OUT"
+    # (6) no hosts line, no nameserver=, no resolv.conf: the clear message
+    rm -f "${ROOT:?}/etc/resolv.conf"
+    OUT=$("$APKG" -c "$WORK/conf-rc" update 2>&1)
+    rc=$?
+    [ $rc -ne 0 ] && echo "$OUT" | grep -q "not in the hosts file, no nameserver= is configured and $ROOT/etc/resolv.conf names no nameserver" \
+        && ok "none of the three: apkg fails with a message naming all of them" \
+        || bad "the none-of-the-three message (rc=$rc)" "$OUT"
 else
     echo "SKIP: end-to-end DNS fetch - this host's resolver answers EVERY"
     echo "SKIP: candidate name, so a DNS-only host name cannot be staged."
@@ -1749,7 +1848,7 @@ fi
 "$APKG" update >/dev/null 2>&1   # restore the plain catalog (default conf)
 
 # --- the config keys ---
-DNSDEF="dns: nameserver=(none, hosts file only) dns_timeout=5s dns_retries=2"
+DNSDEF="dns: nameserver=(none, those of $ROOT/etc/resolv.conf) dns_timeout=5s dns_retries=2"
 OUT=$("$APKG" -v -c "$WORK/conf-nofetch" list 2>&1)
 echo "$OUT" | grep -q "$DNSDEF" \
     && ok "a config naming no resolver key gets the documented defaults" \
@@ -1775,7 +1874,7 @@ echo "$OUT" | grep -q "dns: nameserver=192.0.2.1,192.0.2.2:5353 dns_timeout=9s d
     || bad "the resolver keys did not parse as documented" "$OUT"
 OUT=$(dnsconf "nameserver=192.0.2.1
 nameserver=")
-echo "$OUT" | grep -q "dns: nameserver=(none, hosts file only)" \
+echo "$OUT" | grep -q "dns: nameserver=(none, those of " \
     && ok "an empty nameserver= clears the list" \
     || bad "an empty nameserver= did not clear the list" "$OUT"
 OUT=$(dnsconf "dns_timeout=banana")

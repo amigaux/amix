@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.6"
+#define APKG_VERSION "0.3.7"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -79,7 +79,7 @@
  *
  * The nameservers are config (`nameserver=`, repeatable, tried in
  * order) and the DEFAULT LIST IS EMPTY: with nothing configured apkg
- * behaves exactly as it always did, hosts file only.  The hosts file
+ * asks those /etc/resolv.conf names, if it names any.  The hosts file
  * is consulted FIRST in any case, so a box that resolves today cannot
  * regress and an operator's hand-written line cannot be shadowed.
  *
@@ -233,7 +233,8 @@ struct conf {
     long rcvbuf;       /* SO_RCVBUF before connect; 0 = stack default  */
     long sndbuf;       /* SO_SNDBUF before connect; 0 = stack default  */
     char **nameservers;   /* nameserver= values, in config order       */
-    int  nnameservers;    /* 0 = hosts file only (the default)         */
+    int  nnameservers;    /* 0 (the default) = those of resolvconf     */
+    char *resolvconf;     /* <root>/etc/resolv.conf                    */
     long dns_timeout;  /* seconds per DNS query attempt                */
     int  dns_retries;  /* extra DNS attempts per nameserver            */
     char *catalog;     /* local catalog path: dirname(cachedir)/catalog */
@@ -342,6 +343,7 @@ struct dnsopts {
     int  nservers;
     long timeout;       /* seconds per query attempt                  */
     int  retries;       /* extra attempts per nameserver              */
+    const char *resolvconf; /* servers when nservers is 0; NULL = none */
 };
 
 struct httpopts {
@@ -379,6 +381,8 @@ extern int apkg_resolve(const char *host, const struct dnsopts *d,
                         long hosts_timeout, unsigned long *addr);
 extern int apkg_dns_query(const char *host, const struct dnsopts *d,
                           unsigned long *addr);
+extern int apkg_dns_fallback(const char *host, const struct dnsopts *d,
+                             unsigned long *addr);
 extern int apkg_ipv4_parse(const char *s, unsigned long *addr);
 extern void apkg_ipv4_str(unsigned long addr, char *buf);  /* buf >= 16 */
 

@@ -104,16 +104,17 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
   (post-migration it exists; absent → "unversioned").
 - **HTTP**: hand-rolled HTTP/1.0 GET, `Host:` header (virtual host!), `Connection: close`,
   follows one 301/302, times out (alarm()), streams to file, supports `http://host[:port]/path`.
-- **Name resolution** (`src/apkg/dns.c`): stock Amix has **no resolver** — `gethostbyname` reads
-  `/etc/inet/hosts` and nothing else, `resolv.conf` is inert — and the repository is a name-based
-  virtual host, so on a stock box "no resolver" means "no repository" until a hosts line is
-  hand-written. apkg resolves in three steps: IPv4 literal, then the host database
-  (`gethostbyname`, unchanged), then its own **stub resolver** — one UDP A query per attempt,
-  recursion requested, no EDNS, no cache, no search list, no TCP fallback, no `resolv.conf`,
-  CNAME chain followed, TTLs ignored. Nameservers come from `nameserver=` in apkg.conf
-  (repeatable, tried in order, **empty by default** = hosts file only), with `dns_timeout=` (5 s
-  per attempt) and `dns_retries=` (2 per server). Hosts-first is deliberate: a box that resolves
-  today cannot regress, and a hand-written line is never shadowed. Replies are validated hard
+- **Name resolution** (`src/apkg/dns.c`): the `gethostbyname` apkg links reads `/etc/inet/hosts`
+  and nothing else, also on a box with DNS on, and the repository is a name-based virtual host.
+  apkg resolves in three steps: IPv4 literal, then the host database (`gethostbyname`, unchanged),
+  then its own **stub resolver** — one UDP A query per attempt, recursion requested, no EDNS, no
+  cache, no search list, no TCP fallback, CNAME chain followed, TTLs ignored. Nameservers come
+  from `nameserver=` in apkg.conf (repeatable, tried in order, **empty by default**); with none
+  there, from the `nameserver` lines of `/etc/resolv.conf` (0.3.7; the client's under `-R`), read
+  only when a name reaches this step. `nameserver=` is the override: the file is then not read.
+  With `dns_timeout=` (5 s per attempt) and `dns_retries=` (2 per server). Hosts-first is
+  deliberate: a box that resolves today cannot regress, and a hand-written line is never
+  shadowed, a stale one included. Replies are validated hard
   (transaction id, QR/opcode, the echoed question, backwards-only compression pointers, every
   offset bounds-checked, class IN + rdlength 4 for an A) and anything else is discarded in favour
   of the next attempt/nameserver. It answers **apkg's own lookups only** — telnet/ftp still read
@@ -339,8 +340,7 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 - **A local repository has the same layout.** gen-catalog moves no file. apkg reads
   `<repo>/catalog` and `<repo>/pkgs/<filename>`, so a directory R works as a repository when
   the datastreams are in `R/pkgs/` and `gen-catalog.py -o R R/pkgs` has written R's catalog
-  (`repo=file:///R`, or `repo=/R`). gen-catalog's `--help` says so. apkg.1 says it from the
-  next APKG version on: the page ships in APKG, and 0.3.6's bytes are minted.
+  (`repo=file:///R`, or `repo=/R`). gen-catalog's `--help` and, from 0.3.7, apkg.1 say so.
 
 - **A release tree is assembled, and keeps every published version.**
   `assemble-release.py --userland DIR --kspace DIR [--apkg DIR] [--stock DIR] [--previous DIR]
