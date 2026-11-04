@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — CI's host job checks out the whole history (f502489)
+
+The host job's checkout fetches the whole history, so pkgtools' apkg suite runs its checks of the older client from history too (573 checks, 8 skip lines).
+
 ## 2026-11-04 — CI runs the pkgtools tests; NOTICES gains two acknowledgements (2a273e0, 0a0f248)
 
 CI's host job runs `make -C userland/pkgtools test` with the m68k binutils, fakeroot and ncompress installed; PKGTOOLS_REQUIRE makes those tools and the host engine required, so their absence fails the step instead of skipping. docs/ci.md lists the step and the skips that stay. release/NOTICES.md adds the acknowledgements kern46m's floating-point emulation (University of California, Lawrence Berkeley Laboratory) and prngd (University of California, Berkeley and its contributors) require.
