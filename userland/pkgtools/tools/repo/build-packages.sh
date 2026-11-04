@@ -125,7 +125,8 @@ VER_APKG="0.3.10"
 # 1.12.7 (2026-11-04; minted 2026-11-04, md5 c200b28b...) -- pkginstall prints no notice by default; -S stays
 # accepted.  The notice is still saved.  copyright(5) says so.  1.12.6
 # (c1d4831a...) stays what it is.
-# 1.12.8 (2026-11-04) -- /usr/apkg/doc/SOURCE and i copyright say where the
+# 1.12.8 (2026-11-04; minted 2026-11-04, md5 678a7808...) -- /usr/apkg/doc/SOURCE
+# and i copyright say where the
 # source is and which licence covers it, as CDDL 3.1 asks.  Text only: every
 # program is 1.12.7's.  1.12.7 (c200b28b...) stays what it is.
 VER_ENG="1.12.8"
