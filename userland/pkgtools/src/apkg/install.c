@@ -221,7 +221,7 @@ static int run_cmd(char **argv)
 static int run_pkgadd(const struct conf *cf, const char *pkgadd,
                       const char *file, const char *pkginst, int overwrite)
 {
-    char *argv[11];
+    char *argv[12];
     char *admin;
     int a;
     int rc;
@@ -236,6 +236,9 @@ static int run_pkgadd(const struct conf *cf, const char *pkgadd,
         argv[a++] = cf->target;
     }
     argv[a++] = (char *)"-n";
+    /* no licence printed at install; pkgadd still saves the notice */
+    if (!conf_stock_engine(cf, pkgadd))
+        argv[a++] = (char *)"-S";
     argv[a++] = (char *)"-a";
     argv[a++] = admin;
     argv[a++] = (char *)"-d";

@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.9"
+#define APKG_VERSION "0.3.10"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -256,6 +256,7 @@ struct conf {
 extern int conf_load(const char *conffile_opt, const char *target_opt,
                      struct conf *cf);
 extern char *conf_pkgcmd(const struct conf *cf, int is_rm);
+extern int conf_stock_engine(const struct conf *cf, const char *pkgadd);
 
 /* the resolver's -v line (nameserver list, dns_timeout, dns_retries),
  * printed beside the fetch one; a no-op unless -v */

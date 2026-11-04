@@ -209,7 +209,7 @@ cmp -s "$CATFILE" "$WORK/repo/catalog" \
 : > "$SHIMLOG"
 run 0 "nohttp: file:// install foo" "$APKGNH" -c "$WORK/conf-file" install foo
 cp "$SHIMLOG" "$SLOG_NH"
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $WORK/repo/pkgs/foo-1.0.pkg FOO" "$SLOG_NH" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $WORK/repo/pkgs/foo-1.0.pkg FOO" "$SLOG_NH" \
     && ok "nohttp: file:// plain .pkg handed to pkgadd IN PLACE (no cache copy)" \
     || bad "nohttp: file:// in-place staging wrong" "$(cat "$SLOG_NH")"
 # same scenario through the shared build

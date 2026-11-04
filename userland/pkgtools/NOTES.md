@@ -1,5 +1,12 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — apkg 0.3.10: no licence printed at install
+
+apkg passes -S to pkgadd, with -v too, so no notice reaches the screen or a log of its output. The
+engine still saves it under /var/sadm/pkg/<pkginst>/install/ and in its pspool copy. The stock
+/usr/sbin/pkgadd has no -S, so it is not passed there, and that engine prints the notice: a box reaches
+it only when APKGENG is gone, or when a conf names it.
+
 ## 2026-11-04 — APKG 0.3.9 minted (STAGED, NOT PUBLISHED)
 
 **Why.** apkg.conf is a conffile, so what ships stays on a box for good. Two of its comments told test

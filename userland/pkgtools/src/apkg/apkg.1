@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.9" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.10" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -91,7 +91,7 @@ checksum against the catalog.
 .BI install " name ..."
 Resolve dependencies recursively from the catalog, download and
 verify every needed package first, then run
-.B pkgadd \-n \-a
+.B pkgadd \-n \-S \-a
 .I admin
 .B \-d
 .I file pkginst
@@ -1224,6 +1224,17 @@ the transaction journal
 .BR conffile (5),
 .BR kbootset (1M)
 .SH NOTES
+.B apkg
+prints no licence at install or upgrade: it hands
+.B pkgadd \-S
+to the engine, which still saves a package's notice as
+.BI /var/sadm/pkg/ pkginst /install/copyright ,
+the place to read it.  The stock
+.B /usr/sbin/pkgadd
+has no
+.BR \-S ,
+so it is not passed there, and that engine prints the notice.
+.PP
 Only plain
 .B http://
 URLs are supported; the transport uses HTTP/1.0 with a

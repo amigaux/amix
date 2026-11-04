@@ -402,8 +402,8 @@ BAZ" ]; then
 else
     bad "pkgadd order wrong" "$(cat $SHIMLOG)"
 fi
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
-    && ok "pkgadd argv is -n -a <admin> -d <cachefile> <pkginst>" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
+    && ok "pkgadd argv is -n -S -a <admin> -d <cachefile> <pkginst>" \
     || bad "pkgadd argv unexpected" "$(cat $SHIMLOG)"
 
 # ------------------------------------------------ already-installed skip + -f
@@ -425,7 +425,7 @@ fi
 # under instance=quit the engine quits on any installed instance before its
 # same-version path, so a reinstall needs the overwrite admin file (0.3.6;
 # the real engine's half is the "-f against the real engine" block)
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d .* SAMEPKG" "$SHIMLOG" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin.overwrite -d .* SAMEPKG" "$SHIMLOG" \
     && ok "-f on the same version passes admin.overwrite" \
     || bad "-f same-version admin file" "$(cat $SHIMLOG)"
 
@@ -556,8 +556,8 @@ rm -f "${ROOT:?}/var/apkg/admin.overwrite"
 : > "$SHIMLOG"
 OUT=$("$APKG" upgrade oldpkg 2>&1); rc=$?
 if [ $rc -eq 0 ] && \
-   grep -q "pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $CACHE/oldpkg-2.0.pkg OLDPKG" "$SHIMLOG"; then
-    ok "upgrade argv is exactly: pkgadd -n -a <admin.overwrite> -d <file> <pkginst>"
+   grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin.overwrite -d $CACHE/oldpkg-2.0.pkg OLDPKG" "$SHIMLOG"; then
+    ok "upgrade argv is exactly: pkgadd -n -S -a <admin.overwrite> -d <file> <pkginst>"
 else
     bad "upgrade pkgadd argv wrong (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
@@ -610,7 +610,7 @@ rm -f "${CACHE:?}/foo-1.0.pkg"
 OUT=$("$APKG" install foo 2>&1); rc=$?
 if [ $rc -eq 0 ] && [ -f "$ROOT/var/apkg/admin" ] && \
    grep -q '^instance=quit$' "$ROOT/var/apkg/admin" && \
-   grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG"; then
+   grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG"; then
     ok "install re-creates a MISSING admin file (instance=quit) and uses it"
 else
     bad "missing-admin recovery on install broken (rc=$rc)" "$OUT $(cat $SHIMLOG)"
@@ -706,7 +706,7 @@ setess ""
 # ------------------------------------------------ .Z transparency
 : > "$SHIMLOG"
 run 0 ".Z package is zcat-decompressed before pkgadd" "$APKG" install zpkg
-if grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/zpkg-1.0.pkg ZPKG" "$SHIMLOG" && \
+if grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/zpkg-1.0.pkg ZPKG" "$SHIMLOG" && \
    cmp -s "$CACHE/zpkg-1.0.pkg" "$WORK/zpkg-plain"; then
     ok "pkgadd got the decompressed datastream"
 else
@@ -718,7 +718,7 @@ fi
 # is the basename
 : > "$SHIMLOG"
 run 0 "install of subdir-filename package works" "$APKG" install net
-if grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/net-2.1.pkg NETPKG" "$SHIMLOG"; then
+if grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/net-2.1.pkg NETPKG" "$SHIMLOG"; then
     ok "subdir package cached and passed to pkgadd by basename"
 else
     bad "subdir cache/pkgadd path wrong" "$(cat $SHIMLOG)"
@@ -767,13 +767,13 @@ run 0 "update from a bare absolute /path source (installer /cdrom)" \
     "$APKG" -c "$WORK/conf-fileabs" update
 : > "$SHIMLOG"
 run 0 "install foo from file:// source" "$APKG" -c "$WORK/conf-file" install foo
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $WORK/repo/pkgs/foo-1.0.pkg FOO" "$SHIMLOG" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $WORK/repo/pkgs/foo-1.0.pkg FOO" "$SHIMLOG" \
     && ok "file:// plain .pkg handed to pkgadd IN PLACE (no cache copy)" \
     || bad "file:// in-place staging wrong" "$(cat $SHIMLOG)"
 : > "$SHIMLOG"
 run 0 "install .Z from file:// source decompresses to cache" \
     "$APKG" -c "$WORK/conf-file" install zpkg
-if grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/zpkg-1.0.pkg ZPKG" "$SHIMLOG" && \
+if grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/zpkg-1.0.pkg ZPKG" "$SHIMLOG" && \
    cmp -s "$CACHE/zpkg-1.0.pkg" "$WORK/zpkg-plain"; then
     ok "file:// .Z verified in place, decompressed to cache"
 else
@@ -823,7 +823,7 @@ fi
 : > "$SHIMLOG"
 run 0 "install from raw: dd's the package by its catalog offset" \
     "$APKG" -c "$WORK/conf-raw" install foo
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
     && ok "raw package extracted to cache and pkgadd'd by basename" \
     || bad "raw staging wrong" "$(cat $SHIMLOG)"
 cmp -s "$CACHE/foo-1.0.pkg" "$P/foo-1.0.pkg" \
@@ -897,13 +897,13 @@ mkdir -p "$TGT/var/sadm/pkg"
 : > "$SHIMLOG"
 run 0 "install -R passes -R <root> to pkgadd" \
     "$APKG" -c "$CONF" -R "$TGT" install foo
-grep -q "pkgadd -R $TGT -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
+grep -q "pkgadd -R $TGT -n -S -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
     && ok "pkgadd argv grows -R <target>; engine + admin unmoved" \
     || bad "-R argv wrong" "$(cat $SHIMLOG)"
 : > "$SHIMLOG"
 run 0 "install without -R stays byte-identical (no -R in argv)" \
     "$APKG" -c "$CONF" -f install foo
-grep -q "pkgadd -n -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
+grep -q "pkgadd -n -S -a $ROOT/var/apkg/admin -d $CACHE/foo-1.0.pkg FOO" "$SHIMLOG" \
     && ok "no -R: argv is exactly the form before -R existed" \
     || bad "non-R argv drifted" "$(cat $SHIMLOG)"
 
@@ -2310,7 +2310,7 @@ OUT=$(cat "$WORK/kinst.out")
 echo "$OUT" | grep -q "kernel space: 1 package in this transaction; a generation build (kbootset) and a power cycle follow" \
     && ok "the transaction announces kernel space before it starts" \
     || bad "no kernel-space announcement" "$OUT"
-grep -q "^pkgadd -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/kernel-k46-1.1.0.pkg KERNK46$" "$SHIMLOG" \
+grep -q "^pkgadd -n -S -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/kernel-k46-1.1.0.pkg KERNK46$" "$SHIMLOG" \
     && ok "pkgadd got the verified medium file and the pkginst from the datastream header" \
     || bad "kernel pkgadd argv wrong" "$(cat "$SHIMLOG")"
 KREC=$REC/kernel-k46
@@ -2422,7 +2422,7 @@ mkkcat "$KR2/catalog" "$(kline kernel-k46 1.1.1 kernel k46 k46.1.0 $PIN kernel/k
 "$APKG" -c "$WORK/conf-k2" update >/dev/null 2>&1
 kreset
 run 0 "upgrade kernel-k46 1.1.0 -> 1.1.1" "$APKG" -c "$WORK/conf-k2" upgrade kernel-k46
-grep -q "^pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR2/pkgs/kernel/kernel-k46-1.1.1.pkg KERNK46$" "$SHIMLOG" \
+grep -q "^pkgadd -n -S -a $ROOT/var/apkg/admin.overwrite -d $KR2/pkgs/kernel/kernel-k46-1.1.1.pkg KERNK46$" "$SHIMLOG" \
     && ok "the kernel upgrade is one pkgadd with instance=overwrite" \
     || bad "kernel upgrade argv" "$(cat "$SHIMLOG")"
 grep -q "^version 1.1.1$" "$KREC" && grep -q "^file /stand/k46/unix $(sizeof "$U") $(sha "$U")$" "$KREC" \
@@ -2532,7 +2532,7 @@ grep -q "^pkg 1 0 1 .* kernel-k46 " "$TXN" 2>/dev/null && grep -q "^pkg 0 0 1 .*
     || bad "state after the cut" "$(ls "$REC"; cat "$KLOG")"
 kreset
 run 0 "apkg recover finishes the interrupted transaction" "$APKG" -c "$KCONF" recover
-grep -q "^pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR/pkgs/kernel/z3660scsi-k46-1.0.pkg Z3660SCS$" "$SHIMLOG" && \
+grep -q "^pkgadd -n -S -a $ROOT/var/apkg/admin.overwrite -d $KR/pkgs/kernel/z3660scsi-k46-1.0.pkg Z3660SCS$" "$SHIMLOG" && \
 ! grep -q KERNK46 "$SHIMLOG" \
     && ok "recover re-adds only the pending package, with instance=overwrite" \
     || bad "recover pkgadd" "$(cat "$SHIMLOG")"
@@ -2716,7 +2716,7 @@ KD=$WORK/ktgt-dev
 kreset
 run 0 "install -R <target> of a module package with a device entry (/dev/zen0 c 51 0)" \
     "$APKG" -c "$KCONF" -R "$KD" install z3660eth-k46
-grep -qx "pkgadd -R $KD -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/zeth46-1.0.0-1.pkg zeth46" "$SHIMLOG" \
+grep -qx "pkgadd -R $KD -n -S -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/zeth46-1.0.0-1.pkg zeth46" "$SHIMLOG" \
     && ok "pkgadd -R got the module datastream (zeth46)" \
     || bad "module pkgadd argv" "$(cat "$SHIMLOG")"
 KDC=$ROOT$KD/var/sadm/install/contents
@@ -2753,7 +2753,7 @@ kreset
 # a block driver's nodes (C3-5 v8 §1.2): the ramdisk's three b nodes
 run 0 "install -R <target> of a module package with block nodes (/dev/dsk/ram0-2 b 20 0-2)" \
     "$APKG" -c "$KCONF" -R "$KD" install ramdisk-k46
-grep -qx "pkgadd -R $KD -n -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/ram46-1.0.0-1.pkg ram46" "$SHIMLOG" \
+grep -qx "pkgadd -R $KD -n -S -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/ram46-1.0.0-1.pkg ram46" "$SHIMLOG" \
     && grep -qx "/dev/dsk/ram0 b none 20 0 0600 root root ram46" "$KDC" \
     && grep -qx "/dev/dsk/ram2 b none 20 2 0600 root root ram46" "$KDC" \
     && [ -e "$ROOT$KD/dev/dsk/ram1" ] \
@@ -2919,7 +2919,7 @@ run 0 "-n install kernel-k46-m over kernel-k46-z" "$APKG" -c "$K4" -n install ke
 echo "$OUT" | grep -qx "kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line" \
     && ok "the dry run prints the C2-2 v5 §2.1 plan line" || bad "dry-run plan line" "$OUT"
 RMN=$(echo "$OUT" | grep -n "would run: $WORK/bin/kpkgrm-shim -n -a $ROOT/var/apkg/admin KERN46Z$" | cut -d: -f1)
-ADN=$(echo "$OUT" | grep -n "would run: $WORK/bin/kpkgadd-shim -n -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M$" | cut -d: -f1)
+ADN=$(echo "$OUT" | grep -n "would run: $WORK/bin/kpkgadd-shim -n -S -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M$" | cut -d: -f1)
 [ -n "$RMN" ] && [ -n "$ADN" ] && [ "$RMN" -lt "$ADN" ] \
     && echo "$OUT" | grep -q "would remove the record $REC/KERN46Z" \
     && echo "$OUT" | grep -q "would write the record $REC/KERN46M" \
@@ -2934,7 +2934,7 @@ run 0 "install kernel-k46-m replaces the static kernel-k46-z" "$APKG" -c "$K4" i
 echo "$OUT" | grep -qx "kernel-k46-m replaces kernel-k46-z (KERN46Z): one kernel package per line" \
     && ok "step 1: the plan line" || bad "plan line" "$OUT"
 [ "$(sed -n 1p "$SHIMLOG")" = "pkgrm -n -a $ROOT/var/apkg/admin KERN46Z" ] && \
-[ "$(sed -n 2p "$SHIMLOG")" = "pkgadd -n -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] && \
+[ "$(sed -n 2p "$SHIMLOG")" = "pkgadd -n -S -a $ROOT/var/apkg/admin -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] && \
 [ "$(grep -c . "$SHIMLOG")" = 2 ] \
     && ok "steps 3-4: pkgrm KERN46Z first, then pkgadd KERN46M (plain admin: a new instance)" \
     || bad "replace order" "$(cat "$SHIMLOG")"
@@ -3024,7 +3024,7 @@ run 0 "apkg recover finishes the replace" "$APKG" -c "$K4" recover
 echo "$OUT" | grep -q "1 of 2 packages done" \
     && echo "$OUT" | grep -q "done    kernel-k46-z (removed first: one kernel package per line)" \
     && ok "recover reports the removal done and the install pending" || bad "recover report" "$OUT"
-[ "$(cat "$SHIMLOG")" = "pkgadd -n -a $ROOT/var/apkg/admin.overwrite -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] \
+[ "$(cat "$SHIMLOG")" = "pkgadd -n -S -a $ROOT/var/apkg/admin.overwrite -d $KR4/pkgs/kernel/kernel-k46-m-1.0.pkg KERN46M" ] \
     && ok "recover runs only the pending pkgadd (no second pkgrm)" || bad "recover engine calls" "$(cat "$SHIMLOG")"
 grep -qx "name kernel-k46-m" "$REC/KERN46M" 2>/dev/null && [ ! -f "$REC/KERN46Z" ] && [ "$(grep -c . "$KLOG")" -eq 2 ] \
     && [ ! -f "$TXN" ] && [ "$(owners /stand/k46/unix)" = "KERN46M " ] \
@@ -3474,8 +3474,54 @@ else
         && ok "... the file is laid again and a record written" \
         || bad "real-engine install with no record" "$OUT"
     kreset
+    # a real package with a notice: apkg prints none, the engine saves it
+    printf 'PKG=ZNOTE\nNAME=noticed\nARCH=m68k\nVERSION=1.0\nCATEGORY=system\n' > "$RE/nt.pkginfo"
+    printf 'first line of the notice\n\nlast line of the notice\n' > "$RE/nt.copyright"
+    printf 'i pkginfo=%s\ni copyright=%s\nd none /znote 0755 %s %s\nf none /znote/f=%s 0644 %s %s\n' \
+        "$RE/nt.pkginfo" "$RE/nt.copyright" "$RU" "$RG" "$RE/src/unix" "$RU" "$RG" > "$RE/nt.proto"
+    rm -rf "${RE:?}/spool"; mkdir -p "$RE/spool"
+    "$HB/pkgmk" -o -d "$RE/spool" -f "$RE/nt.proto" > "$RE/nt.out" 2>&1
+    "$HB/pkgtrans" -s "$RE/spool" "$RE/repo/pkgs/znote-1.0.pkg" ZNOTE >> "$RE/nt.out" 2>&1
+    { sed -n 1p "$RE/repo/catalog"
+      printf 'znote|1.0|ZNOTE|znote-1.0.pkg|%s|%s|none|system|noticed\n' \
+          "$(md5sum < "$RE/repo/pkgs/znote-1.0.pkg" | cut -c1-32)" "$(sizeof "$RE/repo/pkgs/znote-1.0.pkg")"
+      sed 1d "$RE/repo/catalog"; } > "$RE/cat.new"
+    cp "$RE/cat.new" "$RE/repo/catalog"
+    ra update > /dev/null 2>&1
+    run 0 "install a package with a notice (real engine, -v)" ra -v install znote
+    ! echo "$OUT" | grep -q "line of the notice" && echo "$OUT" | grep -q "successful" \
+        && ok "... its notice is not printed, the engine's own lines are" || bad "real-engine notice" "$OUT"
+    [ -n "$(find "$RT" -path '*/ZNOTE/install/copyright' 2>/dev/null)" ] \
+        && ok "... and the engine has saved it" || bad "the saved notice" "$(find "$RT" -path '*ZNOTE*' | head)"
     rm -rf "${RT:?}"
 fi
+
+# ------------------------------------------------ -S, and the engine without it
+# Any engine gets -S but the stock pkgadd, which has none: with the default
+# engine gone, apkg falls back to it and leaves -S out.
+EN=$WORK/en
+mkdir -p "$EN/usr/apkg/bin" "$EN/usr/sbin" "$EN/etc" "$EN/var/sadm/pkg" "$EN/var/sadm/install" "$EN/var/apkg"
+: > "$EN/var/sadm/install/contents"
+printf 'repo=http://127.0.0.1:%s/repo\ncachedir=%s/var/apkg/cache\nadmin=%s/var/apkg/admin\nretries=0\n' \
+    "$PORT" "$EN" "$EN" > "$EN/etc/apkg.conf"
+EA() { APKG_ROOT=$EN "$APKG" "$@"; }
+for e in usr/apkg/bin/pkgadd usr/sbin/pkgadd; do
+    cat > "$EN/$e" <<EOF
+#!/bin/sh
+echo "$e \$*" >> $SHIMLOG
+case " \$* " in *" -S "*) [ "$e" = usr/sbin/pkgadd ] && exit 1 ;; esac
+exit 0
+EOF
+    chmod +x "$EN/$e"
+done
+EA update > /dev/null 2>&1
+: > "$SHIMLOG"
+run 0 "the engine apkg ships" EA install foo
+grep -q "^usr/apkg/bin/pkgadd -n -S -a " "$SHIMLOG" && ok "... gets -S" || bad "-S" "$(cat "$SHIMLOG")"
+rm -f "${EN:?}/usr/apkg/bin/pkgadd" "${EN:?}/var/apkg/cache/foo-1.0.pkg"; : > "$SHIMLOG"
+run 0 "the fallback to the stock pkgadd, which refuses -S" EA install foo
+grep -q "^usr/sbin/pkgadd -n -a " "$SHIMLOG" && ok "... does not get it" || bad "stock -S" "$OUT $(cat "$SHIMLOG")"
+rm -rf "${EN:?}"
 
 # ------------------------------------------------ exit-code sanity extras
 run 1 "unknown verb fails with exit 1" "$APKG" frobnicate

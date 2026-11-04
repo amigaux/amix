@@ -633,6 +633,18 @@ char *conf_adminfile(const struct conf *cf, int overwrite)
  * is the built-in default and is not executable, fall back to the
  * stock /usr/sbin one.  Returns an allocated path, or NULL (message
  * printed) when nothing usable exists. */
+/* pkgadd is the stock /usr/sbin one, which has no -S: 1 / 0 */
+int conf_stock_engine(const struct conf *cf, const char *pkgadd)
+{
+    char *stock;
+    int r;
+
+    stock = cat2(cf->root, DEF_PKGADD_FB);
+    r = strcmp(stock, pkgadd) == 0;
+    free(stock);
+    return r;
+}
+
 char *conf_pkgcmd(const struct conf *cf, int is_rm)
 {
     const char *want;
