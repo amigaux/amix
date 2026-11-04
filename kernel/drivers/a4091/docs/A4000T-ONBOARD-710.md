@@ -516,7 +516,11 @@ So:
 - Metal, 2026-10-28 (k46): the A4000T with a Z3660 (060) booted the k46 module kernel -61 with root on a ZuluSCSI
   at id 6 on the onboard bus, through `a4kt710`: 3/3 cold boots via the Kickstart's NCR scsi.device, the DMA
   buffer in Z3660 DDR (`0x0801fd88`), the root filesystem check clean.
-- Open: the §10.6 byte compare on the tower; N-A4T1/N-A4T2 in amiberry; `a4kt710-k30` is untested on metal.
+- Metal, 2026-10-27 (k46, module 1.0.0-1, Z3660 root, the 710 as the second card): a 16 MiB raw read through the
+  710, twice, into Z3660 DDR: `sum -r` 56233 both times, equal to the host's; `cp` + `sync` ok. That answers §10.6
+  by checksum; no `cmp` of the bytes.
+- Emulation: root on the 710 passes on k46 and k30, and an A4000 refuses the module.
+- Open: `a4kt710-k30` has never run on metal.
 
 ### 10.9 Effort, and the interface questions
 
