@@ -121,20 +121,23 @@ VER_APKG="0.3.10"
 # Xa (ANSI mode, libm's error handling among it; the engine calls no libm
 # function), +4 bytes of .text each.  1.12.5's a49452d8 cannot be rolled
 # from master, so the number moves.  NOTES 2026-11-02.
-VER_ENG="1.12.6"
+# 1.12.7 (2026-11-04) -- pkginstall prints no notice by default; -S stays
+# accepted.  The notice is still saved.  copyright(5) says so.  1.12.6
+# (c1d4831a...) stays what it is.
+VER_ENG="1.12.7"
 # EPOCH_APKG, EPOCH_ENG: each version's own epoch: every
 # time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
-# 2026-11-02 00:00:00 UTC, the day 1.12.6 was set (1.12.5's was
-# 1793318400); EPOCH_APKG: 2026-11-04
+# 2026-11-04 00:00:00 UTC, the day 1.12.7 was set (1.12.6's was 1793577600,
+# 1.12.5's 1793318400); EPOCH_APKG: 2026-11-04
 # 00:00:00 UTC, the day 0.3.10 was set, as 0.3.7 to 0.3.9 were (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793750400
-EPOCH_ENG=1793577600
+EPOCH_ENG=1793750400
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"

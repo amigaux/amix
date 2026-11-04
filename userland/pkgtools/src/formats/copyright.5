@@ -1,8 +1,8 @@
 .\" copyright.5 - manual page for a package's copyright file.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH COPYRIGHT 5 "November 2026" "APKGENG 1.12.6" "Amix File Formats"
+.TH COPYRIGHT 5 "November 2026" "APKGENG 1.12.7" "Amix File Formats"
 .SH NAME
-copyright \- the text a package shows when it is installed
+copyright \- a package's copyright and licence notice
 .SH SYNOPSIS
 .B install/copyright
 .SH DESCRIPTION
@@ -14,14 +14,12 @@ It is plain text, any number of lines, and holds the package's
 copyright and licence notice.
 .PP
 .BR pkgadd (1M)
-prints it, unchanged, near the start of the installation, before any file
-is installed.  A package without the file prints its
-.B VENDOR
-parameter from
-.BR pkginfo (5)
-instead, when it has one.
-.BR apkg (1)
-passes pkgadd's output through, so the text appears there too.
+saves it, unchanged, as
+.BI /var/sadm/pkg/ pkginst /install/copyright
+and in the package's pspool copy, and from APKGENG 1.12.7 prints nothing of
+it, with or without
+.BR \-S .
+That file is the place to read it.
 .SH EXAMPLE
 .nf
 Copyright (c) 2026 Example Author.

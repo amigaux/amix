@@ -3493,6 +3493,17 @@ else
         && ok "... its notice is not printed, the engine's own lines are" || bad "real-engine notice" "$OUT"
     [ -n "$(find "$RT" -path '*/ZNOTE/install/copyright' 2>/dev/null)" ] \
         && ok "... and the engine has saved it" || bad "the saved notice" "$(find "$RT" -path '*ZNOTE*' | head)"
+    # by hand, with no -S: the engine's own default
+    env -u APKG_ROOT "$HB/pkgrm" -n -a "$RE/admin" -R "$RT" ZNOTE > /dev/null 2>&1
+    OUT=$(env -u APKG_ROOT "$HB/pkgadd" -n -a "$RE/admin" -R "$RT" -d "$RE/repo/pkgs/znote-1.0.pkg" ZNOTE 2>&1); rc=$?
+    [ $rc -eq 0 ] && ! echo "$OUT" | grep -q "line of the notice" \
+        && [ -n "$(find "$RT" -path '*/ZNOTE/install/copyright' 2>/dev/null)" ] \
+        && [ -n "$(find "$RT" -path '*/pspool/ZNOTE/install/copyright' 2>/dev/null)" ] \
+        && ok "a plain pkgadd by hand prints no notice, and saves it twice" || bad "plain pkgadd" "$OUT"
+    env -u APKG_ROOT "$HB/pkgrm" -n -a "$RE/admin" -R "$RT" ZNOTE > /dev/null 2>&1
+    OUT=$(env -u APKG_ROOT "$HB/pkgadd" -S -n -a "$RE/admin" -R "$RT" -d "$RE/repo/pkgs/znote-1.0.pkg" ZNOTE 2>&1); rc=$?
+    [ $rc -eq 0 ] && ! echo "$OUT" | grep -q "line of the notice" \
+        && ok "pkgadd -S is still accepted" || bad "pkgadd -S" "$OUT"
     rm -rf "${RT:?}"
 fi
 

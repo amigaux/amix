@@ -1,12 +1,19 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — APKGENG 1.12.7: pkgadd prints no notice, by hand either
+
+pkginstall's default is now no notice, the one line in pkgcmds/pkginstall/main.c, so a plain pkgadd by
+hand is quiet and `-S` stays accepted. pkginstall is what prints it, so the line covers any pkgadd that
+execs this pkginstall. The notice is still saved under /var/sadm/pkg/<pkginst>/install/ and in the pspool
+copy. copyright(5) says so.
+
 ## 2026-11-04 — apkg 0.3.10: no licence printed at install
 
 apkg passes -S to pkgadd, with -v too, so no notice reaches the screen or a log of its output. The
 engine still saves it under /var/sadm/pkg/<pkginst>/install/ and in its pspool copy. The stock
 /usr/sbin/pkgadd refuses -S ("illegal option"), so it is not passed there; run with -n, as apkg runs it,
 that engine printed no notice on an emulated box either. A box reaches it only when APKGENG is gone, or
-when a conf names it. A plain APKGENG pkgadd by hand, without -S, still prints the notice.
+when a conf names it.
 
 ## 2026-11-04 — APKG 0.3.9 minted (STAGED, NOT PUBLISHED)
 

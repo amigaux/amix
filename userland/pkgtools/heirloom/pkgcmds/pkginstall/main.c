@@ -137,7 +137,7 @@ static char	*pkgcontsrc = NULL;
 static int	non_abi_scripts = 0;
 static char	*respfile = NULL;
 static char	*srcinst = NULL;
-static int	suppressCopyright = 0;
+static int	suppressCopyright = 1;	/* no notice printed; -S stays accepted */
 static int	nointeract = 0;
 
 /* exported globals */
