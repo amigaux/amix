@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.7"
+#define APKG_VERSION "0.3.8"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are

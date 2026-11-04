@@ -1028,6 +1028,12 @@ if [ -s "$TMPL" ]; then
     # the fallback under it.  Both must name the canonical host, and they must
     # name the SAME one -- a template that drifts from the binary hands the two
     # halves of one box two different repositories.
+    # The repository goes by name: the shipped conf names no address.
+    if grep -Eq '(^|[^0-9.])[0-9]{1,3}(\.[0-9]{1,3}){3}([^0-9.]|$)' "$TMPL"; then
+        bad "the shipped apkg.conf names an address"
+    else
+        ok "the shipped apkg.conf names no address"
+    fi
     TMPLREPO=$(sed -n 's/^repo=//p' "$TMPL" | head -1)
     [ "$TMPLREPO" = "$CANON_REPO" ] \
         && ok "the shipped apkg.conf template names the canonical repository" \

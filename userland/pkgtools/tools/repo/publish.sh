@@ -8,8 +8,11 @@
 #
 #   <release>    the Amix release this tree is for, <major>.<minor> (1.0,
 #                1.1, ...).  Required: every release has its own tree.
-#   <stagingdir> must contain: catalog, catalog.md5 (from gen-catalog.py)
-#                and the *.pkg / *.pkg.Z files the catalog references.
+#   <stagingdir> must contain: catalog, catalog.md5 (from gen-catalog.py or
+#                assemble-release.py) and the *.pkg / *.pkg.Z files the catalog
+#                references: in <stagingdir>/pkgs/ when that directory exists
+#                (an assembled release tree, a local repository), else beside
+#                the catalog (a gen-catalog staging root).
 #
 # Layout pushed (docs/design.md section 5): one tree per release, nothing
 # at the docroot itself.
@@ -181,10 +184,16 @@ rsync "${RSYNC_OPTS[@]}" "${SKEL:?}/${RELEASE:?}" "${DEST:?}/"
 # Filters: '*/' lets rsync descend into the categorized subdirectories
 # (stock/, base/, test/, ...) with the directory structure preserved;
 # --prune-empty-dirs keeps package-less directories off the server.
+# With <staging>/pkgs the sync starts there: from the staging root, that tree
+# would land in <tree>/pkgs/pkgs/, where no catalog row points.
+PKGSRC="${STAGING:?}"
+if [[ -d "$STAGING/pkgs" ]]; then
+    PKGSRC="${STAGING:?}/pkgs"
+fi
 echo "publish: syncing packages -> ${TREE:?}/pkgs/"
 rsync "${RSYNC_OPTS[@]}" --delete --delete-excluded --prune-empty-dirs \
     --include='*/' --include='*.pkg' --include='*.pkg.Z' --exclude='*' \
-    "${STAGING:?}/" "${TREE:?}/pkgs/"
+    "${PKGSRC:?}/" "${TREE:?}/pkgs/"
 
 echo "publish: syncing catalog -> ${TREE:?}/"
 rsync "${RSYNC_OPTS[@]}" "$STAGING/catalog" "$STAGING/catalog.md5" "${TREE:?}/"
