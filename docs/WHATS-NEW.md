@@ -29,6 +29,7 @@ Plans, with no dates; they may change.
 - Filesystems as modules, loaded when a filesystem of their type is mounted.
 - One install CD for every 1.1 machine and both kernel lines, booted from the CD, boot floppies or a Z3660 boot disk.
 - Install over the network, or from RAM-disk boot floppies.
+- RAM-disk boot beside a software MapROM copy or a reset-proof `RAD:`: the boot loader places the image below the memory AmigaOS keeps at the top (tested in emulation: the A1200 with a 68030 and a 68040).
 - The A4000's IDE disk as an install target and root disk (`gayle-ide`).
 - The A4000T's onboard SCSI controller as the root disk (`a4kt710`).
 - The A1200 with a 68030, 68040 or 68060 accelerator whose fast RAM sits below 1 GiB, rooted on its own IDE port (tested: Blizzard 1230-III, DKB 1240).
