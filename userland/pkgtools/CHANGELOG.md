@@ -2,6 +2,10 @@
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
 
+## 2026-11-04 — apkg 0.3.7: resolv.conf when nameserver= is empty (18b3ee8, ece52e1, f50dadb)
+
+With no nameserver= the stub resolver asks the servers /etc/resolv.conf names, so a box with DNS on and no hosts line reaches the repository; a hosts line still wins and nameserver= still overrides; with none of the three the message names them all. apkg.1 gives a local repository's layout. APKG 0.3.7 minted, md5 69d439ea, staged, not published.
+
 ## 2026-11-04 — make test passes in a fresh clone (3c1c615)
 
 `make -C userland/pkgtools test` builds the host contents-fsck through that suite's own make test, and the real-engine apkg checks use a short target root: heirloom's pkginfo.c builds the lock path in a 256-byte buffer, noted for the next APKGENG.
