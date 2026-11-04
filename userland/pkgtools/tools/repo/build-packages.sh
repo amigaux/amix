@@ -83,7 +83,9 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # 0.3.8 (2026-11-04; minted 2026-11-04, md5 d0bdd279...): the apkg.conf
 # template names no address: the repository
 # goes by name, and the box needs DNS.  0.3.7 (69d439ea...) stays what it is.
-VER_APKG="0.3.8"
+# 0.3.9 (2026-11-04): the apkg.conf template's comments and apkg.1 cite no
+# internal document and no test history.  0.3.8 (d0bdd279...) stays what it is.
+VER_APKG="0.3.9"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -125,7 +127,7 @@ VER_ENG="1.12.6"
 # file's last commit (which every arm here shares).  EPOCH_ENG:
 # 2026-11-02 00:00:00 UTC, the day 1.12.6 was set (1.12.5's was
 # 1793318400); EPOCH_APKG: 2026-11-04
-# 00:00:00 UTC, the day 0.3.8 was set, as 0.3.7 was (0.3.6's was 1793577600, 0.3.5's
+# 00:00:00 UTC, the day 0.3.9 was set, as 0.3.7 and 0.3.8 were (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793750400
@@ -333,13 +335,12 @@ repo=http://pkg.amigaux.org/1.1
 cachedir=/var/apkg/cache
 # The admin(4) file handed to pkgadd/pkgrm with -a.  This package ships it,
 # which also means pkgrm APKG deletes it -- so apkg re-creates it whenever it
-# is missing rather than trusting it to be there (that assumption bricked the
-# upgrade verb on metal, 2026-09-16).  An admin file you have edited is left
-# alone.  The upgrade verb derives admin.overwrite beside it, carrying your
-# keys with instance=overwrite.
+# is missing rather than trusting it to be there.  An admin file you have
+# edited is left alone.  The upgrade verb derives admin.overwrite beside it,
+# carrying your keys with instance=overwrite.
 admin=/var/apkg/admin
-# v1.1: the heirloom engine is the default (tolerant parser, corrupt-DB
-# capable, bench-proven E2E). apkg falls back to /usr/sbin/* automatically
+# The heirloom engine is the default (tolerant parser, copes with a corrupt
+# package database). apkg falls back to /usr/sbin/* automatically
 # if APKGENG is not installed. Uncomment to force the stock engine:
 # pkgadd=/usr/sbin/pkgadd
 # pkgrm=/usr/sbin/pkgrm
@@ -584,6 +585,8 @@ EOF
   # Version 0.3.8 (2026-11-04; minted 2026-11-04).  The apkg.conf template's comment names no
   # address, and the version strings in the binary and apkg.1 move; every
   # other payload byte is 0.3.7's.
+  # Version 0.3.9 (2026-11-04).  Comments of the apkg.conf template, apkg.1's
+  # text and the version strings; every other payload byte is 0.3.8's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

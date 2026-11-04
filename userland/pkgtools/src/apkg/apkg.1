@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.8" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.9" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -324,8 +324,7 @@ honours the mark.  The engine ignores the parameter, and the stock
 removes an essential package like any other when asked to directly.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
-catalog that every older client skips as comments (kernel/dlm contract
-C2-2, version 5):
+catalog that every older client skips as comments:
 .PP
 .RS
 .nf
@@ -402,8 +401,8 @@ version of is left for the pre-flight, which refuses the transaction: remove
 it, or wait for its package.
 .PP
 A kernel row may carry
-.BI kbootset= version
-(C2-2 version 6): the lowest kbootset that composes a generation with
+.BI kbootset= version :
+the lowest kbootset that composes a generation with
 it.  When neither the transaction's kbootset nor the installed one is
 that new, the transaction is refused before anything is fetched
 ("kernel-k46-m needs kbootset 1.1.0.261101-34 or newer; 1.1.0.261031-33
@@ -416,8 +415,8 @@ line and what to do (upgrade, or remove it), or says that every module
 fits and kbootset's own line names the gate.  The generation committed
 before stays in the boot store and still boots.
 .PP
-.B One kernel package per line
-(C2-2 version 5 \(sc2.1).  Every kernel package of a line, a static
+.B "One kernel package per line."
+Every kernel package of a line, a static
 family's and the module kernel's alike, installs
 .BI /stand/ line /unix
 (and its kabi sidecar).  So when a transaction installs a kernel and a
@@ -466,7 +465,7 @@ and no install scripts (of the
 .B i
 entries only pkginfo, depend and copyright), and at least one file.
 A module package may also carry the device nodes of its driver's majors
-(C3-5 version 4) as
+as
 .B c
 entries under
 .BR /dev/ ,
@@ -475,11 +474,11 @@ in full
 and a block driver's as
 .B b
 entries under
-.B /dev/dsk/
-(version 8); pkgadd makes the node and records it in the contents
+.BR /dev/dsk/ ;
+pkgadd makes the node and records it in the contents
 database.  A node's class is
 .B none
-or, since C3-5 version 18, its module's name \- the file name of the
+or its module's name \- the file name of the
 package's one object in
 .B /etc/conf/mod.d/
 .RB ( "c z3660eth /dev/zen0 51 0 0600 root root" )
@@ -510,7 +509,7 @@ and a long name and its
 .B .new
 would collide; the full name is the record's
 .B name
-line (C2-2 version 4) \(em
+line \(em
 (name, version, role, line, then kabi and pin for a kernel or module or
 loader for the loader, the datastream's sha256, the
 source, the install time,
@@ -831,7 +830,7 @@ The
 .B \-\-journal
 path handed to kbootset; empty (the default) means
 .IB target /var/kbootset/journal ,
-the contract's own default, passed explicitly.
+kbootset's own default, passed explicitly.
 .TP
 .B timeout
 Seconds of network
