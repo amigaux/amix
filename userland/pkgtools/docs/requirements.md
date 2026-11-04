@@ -27,8 +27,7 @@ with our patch set; build a small **C89 remote catalog client** on top. Evaluati
    - Repo = static file tree served as **`http://pkg.amigaux.org/`** (a plain static docroot,
      published with `tools/repo/publish.sh`). The host is a **name-based virtual host**: the
      hostname form is the only supported repo URL, and a request carrying a bare IP as its
-     `Host:` value is answered 404. A box without DNS reaches it by adding
-     `52.59.174.203 pkg.amigaux.org` to `/etc/inet/hosts`.
+     `Host:` value is answered 404. A box needs DNS to reach it: netconfig's DNS, or DHCP.
      *(Until 2026-09-14 this was a LAN-only mirror; see NOTES.md 2026-09-15.)*
    - **Plain HTTP is mandatory** (the Amix client speaks HTTP/1.0-1.1 GET); HTTPS maybe later
      (host-side tooling may use it; the on-box client does not require TLS).
