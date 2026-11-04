@@ -1,3 +1,7 @@
+## 2026-11-04 — apkg 0.3.9 (cbc5001, 1e45f27)
+
+apkg 0.3.9: what ships cites no internal document or test history. APKG 0.3.9 minted, md5 3f796aed, staged, not published.
+
 ## 2026-11-04 — repo tests without the host engine (9a3f46a)
 
 Repo tests skip the publish checks when the host engine is not built, instead of failing.
