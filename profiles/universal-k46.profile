@@ -16,7 +16,7 @@ INSTALL_LAYOUT=1.1
 KERNEL_KPKG=kernel-k46-m
 # the installed generation carries every hardware driver of the line; each loads only when its
 # match rule finds the card, so the cards a box lacks cost nothing and change no card order
-KERNEL_MODPKGS="z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46 paula-k46 z3660rtg-k46 zz9kbus-k46 zz9ksvc-k46 monsw-k46 cdfs-k46"
+KERNEL_MODPKGS="z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46 paula-k46 z3660rtg-k46 zz9kbus-k46 zz9ksvc-k46 monsw-k46 cdfs-k46 random-k46"
 # the box's fast memory for bootset's mem= (a nominal figure: kbootset's gate reads kinfo's on the box)
 TARGET_FASTMEM_MB=32
 TARGET_DISK_MB=

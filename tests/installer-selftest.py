@@ -11228,6 +11228,8 @@ def audit_l11():
         (ok if ifs == ["* dhcp name amixbox"] else fail)("l11_admin, public with a name: * dhcp name: %r" % (ifs,))
         out, ifs, rc, disp, crl = admin()
         (ok if ifs == ["* dhcp", "hostname dhcp"] else fail)("l11_admin, public without a name: * dhcp, hostname dhcp: %r" % (ifs,))
+        (ok if "\n# set to no to disable the SSH server\ndropbear=yes\n" in rc and "syslogd=yes" in rc else fail)(
+            "l11_admin: /etc/rc.conf shows the SSH server's switch, dropbear=yes under its comment: %r" % rc)
         (ok if "/usr/sbin/ifup -n" in crl and "xstart" not in crl and "card auto" in disp else fail)(
             "l11_admin, a set without X: /etc/display written, ifup -n run, xstart -n not (it checks the X server)")
         out, *_ = admin(FB_IP="192.0.2.38", FB_NETMASK="255.255.255.7")
