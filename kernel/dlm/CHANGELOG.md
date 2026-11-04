@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — modtools 1.0.261104-14: modadmin(1M) (569ddc8, 8c2755b)
+
+The manual page modadmin(1M) and its whatis fragment; modadmin unchanged (fd8e8a20).
+
 ## 2026-11-04 — the RAM-disk boot works with memory AmigaOS keeps at the top; loader-amix -13 (bdac83f, 09bfe6c, 18d1144, 406ef1f)
 
 boot2 and amix-cdboot place the RAM-disk image as high in the kernel's region as is free when AmigaOS keeps memory at its top (a software MapROM copy, a reset-proof RAD:), stepping down 64 KiB at a time; the top-first path is unchanged. L4 now says either "too big" or "the RAM disk's place is in use". The loader build leaves out the header and tally writers it never calls (414 bytes). loader-amix 1.0.261104-13 (boot2 d57bf011). The holdtop bench tool holds the top of fast memory to test it; proven on the A1200 with a Blizzard 1230-III (68030) and a DKB 1240 (68040). C4-3 v5.
