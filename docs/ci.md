@@ -8,7 +8,7 @@ finding to fix, not a gate.
 
 | Job | Step | Command |
 |-----|------|---------|
-| privacy | the privacy check over the new commits | `tools/privacy-check --range BASE..HEAD` |
+| privacy | the privacy check over the new commits | `tools/ci-privacy-check` (`tools/privacy-check --range BASE..HEAD`) |
 | tests | the privacy check's self-test | `tools/test-privacy-check` |
 | tests | the release content check's self-test (directories, datastreams, ISOs, floppy and disk images, known-bad modules, and two ufs disk images fetched as distfiles) | `tools/test-release-check` |
 | tests | kernel/dlm host tests | `make -C kernel/dlm test` |
@@ -28,8 +28,11 @@ finding to fix, not a gate.
 | kit | the packaging harness selftests (68060 and gcc14 gates, one-version guard, the reproducible roll), in the container | `make -C build selftests` |
 
 The range of the privacy check is the pull request's base to its head, or for
-a push the previous tip of `master` to the new one. When there is no previous
-tip (the first push of a branch) it checks the whole history (`--all`).
+a push the previous tip of `master` to the new one. When a push has no previous
+tip it can use, the range starts at the merge base with `origin/master`, since
+published history is not judged again; a push of `master` itself then has no new
+commits to check, and the maintainer's pre-push check has already read them.
+With no history in common, everything is new (`--all`).
 
 ## Public rules only
 

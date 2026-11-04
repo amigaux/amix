@@ -32,6 +32,10 @@ through the `PRIVACY_PATTERNS` and `PRIVACY_BLOCKED` environment variables.
 class beside clean controls, runs every mode, and passes only when every plant
 is caught and every control passes. Both need only Python 3 and git.
 
+`ci-privacy-check` is CI's call of it: from a pull request's base, or from the
+last tip of a push, or, when a push has none it can use, from the merge base
+with `origin/master`. `test-privacy-check` tests it too.
+
 ## release-check
 
 `release-check` is the content check every published file passes: an Amix

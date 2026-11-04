@@ -1,0 +1,37 @@
+#!/bin/sh
+# ci-privacy-check: CI's privacy check, over what a push or pull request adds.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Environment, from the workflow: EVENT, PUSH_BEFORE, PUSH_AFTER, PR_BASE,
+# PR_HEAD. A push with no previous tip it can use is checked from its merge
+# base with origin/master: published history is not judged again. Exit status
+# is privacy-check's; 2 when no range can be worked out, never a pass.
+set -eu
+here=$(dirname "$0")
+
+if [ "${EVENT:-}" = pull_request ]; then
+	set -- --range "$PR_BASE..$PR_HEAD"
+elif [ -n "${PUSH_BEFORE:-}" ] && ! expr "$PUSH_BEFORE" : '0*$' >/dev/null &&
+    git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+	set -- --range "$PUSH_BEFORE..$PUSH_AFTER"
+else
+	if ! git rev-parse --verify --quiet refs/remotes/origin/master >/dev/null; then
+		echo "ci-privacy-check: no origin/master to find a merge base with" >&2
+		exit 2
+	fi
+	rc=0
+	base=$(git merge-base "$PUSH_AFTER" refs/remotes/origin/master 2>/dev/null) || rc=$?
+	case $rc in
+	0) set -- --range "$base..$PUSH_AFTER" ;;
+	1) set -- --all "$PUSH_AFTER" ;;	# no history in common: all of it is new
+	*)
+		echo "ci-privacy-check: cannot find a merge base for $PUSH_AFTER" >&2
+		exit 2
+		;;
+	esac
+fi
+
+# CI has no maintainer's local list: only the public classes run.
+echo "privacy-check: public rules only (no local list in CI)"
+echo "privacy-check $*"
+exec env -u PRIVACY_PATTERNS -u PRIVACY_BLOCKED "$here/privacy-check" "$@"

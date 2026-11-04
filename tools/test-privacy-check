@@ -369,6 +369,54 @@ def binaries_and_compiled(t, env, root):
          "--max-size reads it whole, the string at its end is found", out)
 
 
+def ci_range(t, env, root):
+    """tools/ci-privacy-check: which commits CI judges."""
+    repo = Repo(env, os.path.join(root, "repo4"))
+    script = os.path.join(HERE, "ci-privacy-check")
+    old = repo.commit(OURS, {"probe/__pycache__/m.cpython-314.pyc": b"\0old"},
+                      "A compiled file already in published history")
+    pub = repo.commit(OURS, {"notes.txt": "published\n"}, "Published")
+    repo.git("update-ref", "refs/remotes/origin/master", pub)
+    repo.git("checkout", "-q", "-b", "topic")
+    ok1 = repo.commit(OURS, {"a.txt": "clean\n"}, "A clean commit on a branch")
+    repo.git("checkout", "-q", "-b", "topic2")
+    bad = repo.commit(OURS, {"b.txt": j("gw ", dotted(10, 0, 0, 1), "\n")}, "A private address")
+
+    def ci(**kw):
+        e = dict(env.base, EVENT="push", PUSH_BEFORE="", PUSH_AFTER="", PR_BASE="", PR_HEAD="",
+                 PRIVACY_PATTERNS="/no/such/file", PRIVACY_BLOCKED="/no/such/file")
+        e.update(kw)
+        p = subprocess.run(["sh", script], cwd=repo.path, env=e, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode("utf-8", "replace")
+
+    rc, out = ci(PUSH_BEFORE=pub, PUSH_AFTER=ok1)
+    t.ok(rc == 0 and "--range %s..%s" % (pub, ok1) in out and "1 commit(s)" in out,
+         "CI: a push checks from its previous tip; no local list is read", out)
+    rc, out = ci(PUSH_BEFORE=pub, PUSH_AFTER=bad)
+    t.ok(rc == 1 and bad[:10] in out, "CI: a push's new hit fails it", out)
+    rc, out = ci(EVENT="pull_request", PR_BASE=pub, PR_HEAD=bad)
+    t.ok(rc == 1 and "--range %s..%s" % (pub, bad) in out, "CI: a pull request checks base to head", out)
+    for name, before in (("no previous tip", ZERO), ("empty", ""), ("a tip it does not have", "1" * 40)):
+        rc, out = ci(PUSH_BEFORE=before, PUSH_AFTER=ok1)
+        t.ok(rc == 0 and "--range %s..%s" % (pub, ok1) in out and old[:10] not in out,
+             "CI: %s: from the merge base, published history not judged" % name, out)
+    rc, out = ci(PUSH_BEFORE=ZERO, PUSH_AFTER=bad)
+    t.ok(rc == 1 and bad[:10] in out, "CI: from the merge base a new hit still fails", out)
+    rc, out = ci(PUSH_BEFORE=ZERO, PUSH_AFTER=pub)
+    t.ok(rc == 0 and "0 commit(s)" in out, "CI: master itself has no new commits", out)
+    rc, out = ci(PUSH_BEFORE=ZERO, PUSH_AFTER="1" * 40)
+    t.ok(rc == 2, "CI: an unknown commit exits 2", out)
+    repo.git("checkout", "-q", "--orphan", "other")
+    repo.git("rm", "-rqf", "--cached", ".")
+    other = repo.commit(OTHER, {"c.txt": j("gw ", dotted(10, 0, 0, 2), "\n")}, "Unrelated")
+    rc, out = ci(PUSH_BEFORE=ZERO, PUSH_AFTER=other)
+    t.ok(rc == 1 and "--all " + other in out, "CI: no history in common: all of it is new", out)
+    repo.git("update-ref", "-d", "refs/remotes/origin/master")
+    rc, out = ci(PUSH_BEFORE=ZERO, PUSH_AFTER=ok1)
+    t.ok(rc == 2 and "origin/master" in out, "CI: no origin/master exits 2, never a pass", out)
+
+
 def main():
     root = tempfile.mkdtemp(prefix="privacy-check-test.")
     t = Tally()
@@ -509,6 +557,7 @@ def main():
 
         added_lines(t, env, root, local_env)
         binaries_and_compiled(t, env, root)
+        ci_range(t, env, root)
 
         # Fail closed.
         rc, _, out = repo.check(["--tree", "master", "--exclude-remotes"])

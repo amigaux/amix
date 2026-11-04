@@ -33,20 +33,7 @@ jobs:
           PUSH_AFTER: ${{ github.sha }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          # CI has no maintainer's local list: PRIVACY_PATTERNS and
-          # PRIVACY_BLOCKED are unset, so only the public classes run.
-          echo "privacy-check: public rules only (no local list in CI)"
-          if [ "$EVENT" = pull_request ]; then
-            set -- --range "$PR_BASE..$PR_HEAD"
-          elif [ -n "$PUSH_BEFORE" ] && ! expr "$PUSH_BEFORE" : '0*$' >/dev/null \
-              && git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
-            set -- --range "$PUSH_BEFORE..$PUSH_AFTER"
-          else
-            set -- --all "$PUSH_AFTER"
-          fi
-          echo "privacy-check $*"
-          env -u PRIVACY_PATTERNS -u PRIVACY_BLOCKED tools/privacy-check "$@"
+        run: tools/ci-privacy-check
 
   tests:
     name: host tests
