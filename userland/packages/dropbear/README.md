@@ -173,7 +173,9 @@ Every output on fixed inputs (the `DIGEST` lines: X25519, Ed25519, the
 packet ciphers and the rest) is byte for byte the same before and after, and
 the X25519, Ed25519 and Poly1305 test vectors pass on both rows (Acceptance).
 A connection's server side (two X25519 multiplications and one Ed25519
-signature) now costs about 1.9 s instead of about 5.4 s.
+signature) now costs about 1.9 s instead of about 5.4 s. On the hardware the
+key exchange went from about 5.3 s to 1.5–1.9 s (Acceptance, the 2026-11-04
+hardware row).
 
 `DROPBEAR_SMALL_CODE`: the unrolled build is 17 KB larger and measures no
 faster here. The interpreter models no instruction cache, and that cache is
@@ -401,3 +403,19 @@ random module: installed with apkg's pkgadd, the boot script
 and password logins work. From OpenSSH on the host: the banner in 0.13 s,
 key exchange about 5 s (5.4 s mlkem768x25519, 5.2 s curve25519, with
 chacha20-poly1305 and an ed25519 host key), login plus one command 5.6 s.
+
+**Hardware, 2026-11-04**, 2026.94-3 (with patches 06 and 07), the same A4000
+with the 68060 at 80 MHz, on a 1.1 install that carries dropbear in its base
+set, over 100 Mbit Ethernet. From OpenSSH 10.2 on the host, with an ed25519
+host key and chacha20-poly1305, three logins each. The key exchange is
+timed from `ssh -v`'s "KEXINIT sent" to "NEWKEYS received":
+
+| Key exchange | key exchange, s | login plus `true`, s |
+|---|---|---|
+| mlkem768x25519-sha256 | 1.73, 1.61, 1.90 | 2.33, 2.17, 2.60 |
+| curve25519-sha256 | 1.51, 1.53, 1.51 | 2.17, 2.22, 2.18 |
+
+That is about three times faster than 2026.94-1's 5.4 s and 5.2 s.
+`scp -O` of 4 MB moved 171–175 KB/s each way (114 and 116 KB/s with -1). On
+the first boot, port 22 answered 269 s after the firmware's "Booting", with
+the host key made at that start.

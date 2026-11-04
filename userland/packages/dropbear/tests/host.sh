@@ -25,7 +25,11 @@ set -u
 H=$HOSTWORK
 HOSTIP=${RIG_GW:?host.sh: no RIG_GW (the bench bridge address)}
 PORT=$((22600 + ${RIG_SLOT:-0}))
-SSH="ssh -F /dev/null -o UserKnownHostsFile=$H/known_hosts -o StrictHostKeyChecking=accept-new -o ConnectTimeout=120"
+# -F /dev/null: no user or system ssh_config; and no connection sharing,
+# said outright, so every login and every timed handshake is a connection
+# of its own with its own key exchange
+NOMUX="-o ControlMaster=no -o ControlPath=none"
+SSH="ssh -F /dev/null $NOMUX -o UserKnownHostsFile=$H/known_hosts -o StrictHostKeyChecking=accept-new -o ConnectTimeout=120"
 box() { python3 "${KT:?}/amixrun.py" "$@"; }
 
 case "$1" in
@@ -106,8 +110,8 @@ run)
 	done
 	# OpenSSH's scp, the original protocol (-O): no SFTP on the box
 	head -c 200000 /dev/urandom > "$H/scp-up"
-	if scp -O -F /dev/null -o UserKnownHostsFile="$H/known_hosts" $K "$H/scp-up" "$B:/usr/tmp/scp-up" > /dev/null 2>&1 &&
-	   scp -O -F /dev/null -o UserKnownHostsFile="$H/known_hosts" $K "$B:/usr/tmp/scp-up" "$H/scp-back" > /dev/null 2>&1 &&
+	if scp -O -F /dev/null $NOMUX -o UserKnownHostsFile="$H/known_hosts" $K "$H/scp-up" "$B:/usr/tmp/scp-up" > /dev/null 2>&1 &&
+	   scp -O -F /dev/null $NOMUX -o UserKnownHostsFile="$H/known_hosts" $K "$B:/usr/tmp/scp-up" "$H/scp-back" > /dev/null 2>&1 &&
 	   cmp -s "$H/scp-up" "$H/scp-back"; then
 		echo "RES ok   OpenSSH scp -O both ways"
 	else
