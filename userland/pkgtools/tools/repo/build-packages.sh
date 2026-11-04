@@ -606,9 +606,13 @@ EOF
   # every other payload byte is 0.3.9's.
   # Version 0.3.11 (2026-11-04, not minted).  The apkg binary, apkg.1,
   # apkg.conf.5 and the apkg.conf template change; every other payload byte is
-  # 0.3.10's.
+  # 0.3.10's.  The package carries its notice (i copyright), as it did not.
+  { printf 'APKG: the apkg client, contents-fsck and amix-sadm-migrate, MIT.\n'
+    printf 'Source: https://github.com/amigaux/amix, in userland/pkgtools.\n\n'
+    cat "$REPO/src/apkg/LICENSE"; } > "$A/copyright"
   cat > "$A/prototype" <<EOF
 i pkginfo
+i copyright=$A/copyright
 i i.conffile=$REPO/src/conffile/i.conffile
 i r.conffile=$REPO/src/conffile/r.conffile
 d none /usr/apkg 0755 root sys

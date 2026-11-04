@@ -18,6 +18,9 @@ generation lines. `apkg licence <name>` prints the notice pkgadd saved in
 plan no longer promises a power cycle: kbootset's last line says whether one is needed (a set that changes
 nothing has "nothing to commit").
 
+**APKG's notice.** The package carried no licence notice of its own; it now has its MIT notice and the
+source's place as `i copyright`, so `apkg licence apkg` shows it.
+
 **A refused upgrade.** It stays all or nothing. A refusal now says "nothing was changed" in every form;
 a no-name upgrade refused for kernel space names the userland that can go by name; a refused catalog
 entry left out of a no-name upgrade is named. Messages cite no internal document.

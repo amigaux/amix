@@ -2642,6 +2642,8 @@ fi
 echo "T31: APKG and APKGENG carry APKG_ESSENTIAL=yes"
 APKGH="$HERE/../../../src/apkg/apkg"
 if [ -n "${P23:-}" ] && [ -f "$P23" ] && [ -x "$APKGH" ]; then
+    check "the minted APKG carries its MIT notice" \
+        bash -c "grep -aq 'i copyright' '$P23' && grep -aq 'Permission is hereby granted, free of charge' '$P23'"
     check "the minted APKG pkginfo says APKG_ESSENTIAL=yes" \
         grep -aqx 'APKG_ESSENTIAL=yes' "$P23"
     VS31="$(cd "$HB/.." && pwd)/var/sadm"
