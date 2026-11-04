@@ -5289,7 +5289,8 @@ netinstall images' gate in `build-netinstall.sh`) demands the medium table byte 
 
 ## The network installation in two stages
 
-The netinstall medium boots a 5 MiB RAM disk and reads its packages over HTTP. A set beyond minimal
+The netinstall medium boots a 5.5 MiB RAM disk (5 MiB until the SSH server joined the base set the
+image carries) and reads its packages over HTTP. A set beyond minimal
 is installed in two stages:
 
 1. **From the RAM disk.** The interview offers the repository's sets (minimal, standard, full) as
