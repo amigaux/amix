@@ -1,5 +1,27 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — assemble-release needs the gcc14 sysroot; scan060-g14 says when it has none
+
+A repository build that ran assemble-release.py directly, without AMIX_SYSROOT, refused dropbear
+2026.94-3: scan060-g14.py reported 48 movepw at 0x80037fb8-0x80038154. Those bytes are stock
+libcrypt.a(des_crypt.o)'s DES tables, which the 1992 compiler put in .text. scan060-g14.py knows
+them by sha256 (KNOWN_STOCK_DATA), but only from the sysroot's archives, and without a sysroot it
+applied nothing, silently. make dist's release step exports the sysroot; a direct caller didn't.
+
+- assemble-release.py takes `--sysroot DIR` (default $AMIX_SYSROOT). It must have usr/lib, or
+  the tool doesn't start: exit 3, [MISSING], naming
+  `AMIX_SYSROOT=$(m68k-elf-gcc -print-sysroot)`. It passes the sysroot to scan060-g14.py
+  explicitly, so the verdict doesn't depend on the caller's environment.
+- scan060-g14.py prints, once per run, `NOTE no AMIX_SYSROOT: known stock data in .text not
+  applied ...` when the sysroot is unset or has no usr/lib. Its verdict logic is unchanged.
+- In the build container: dropbear with the sysroot scans CLEAN (72752 insns) with the
+  known-stock-data NOTE for des_crypt.o. Without it: the new NOTE, then HITS 48 (73054 insns).
+  assemble-release over a dropbear tree: rc 3 without the sysroot, rc 0 with it.
+- The same run showed apkg says "1 package" in the singular; the tool's apkg check now expects
+  apkg's own wording.
+- T34 gains 3 checks: the sysroot reaches scan060-g14.py as AMIX_SYSROOT; no sysroot is refused
+  with the message; a sysroot without usr/lib is refused.
+
 ## 2026-11-03 — assemble-release: an #isize line for every package row
 
 The 1.1 repository catalog carried no `#isize` block, while the install CD's catalog has one

@@ -50,7 +50,8 @@ its archive in the sysroot ($AMIX_SYSROOT), its sha256 and those symbols.  A
 member whose sha256 differs is a problem.  Otherwise its .text is looked for
 in the program, its relocated bytes masked, and where it is found exactly,
 each listed symbol's range (to the member's next symbol) is data, like a
-sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied.
+sized table, and a NOTE says so.  Without AMIX_SYSROOT none is applied, and a
+NOTE says that too, once per run.
 A sized STT_OBJECT symbol inside an executable section is data the same way
 (values-Xa.o's _lib_version, in every program the period toolchain links),
 with a NOTE.  objdump runs with -D on each executable section, by objdump's
@@ -826,6 +827,15 @@ def main(argv):
             die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE] <elf>...")
     if not args:
         die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE] <elf>...")
+    # said once per run: without the sysroot's archives the stock data GCC 14
+    # programs carry in .text (KNOWN_STOCK_DATA) reads as code, so hits in
+    # such a run may be that data
+    sysroot = os.environ.get("AMIX_SYSROOT", "")
+    if not sysroot or not os.path.isdir(os.path.join(sysroot, "usr", "lib")):
+        print("  NOTE %s: known stock data in .text not applied (KNOWN_STOCK_DATA, "
+              "e.g. libcrypt.a's des_crypt.o tables); set AMIX_SYSROOT=$(m68k-elf-gcc "
+              "-print-sysroot)" % ("no AMIX_SYSROOT" if not sysroot
+                                   else "AMIX_SYSROOT=%s has no usr/lib" % sysroot))
     rc = 0
     for path in args:
         r = scan(tool, path)

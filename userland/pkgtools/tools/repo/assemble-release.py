@@ -8,7 +8,7 @@
 #                       [--previous DIR] --release 1.1 --out OUT
 #                       [--release-check PATH] [--rom-register FILE]
 #                       [--private-patterns FILE] [--scan060 PATH]
-#                       [--scan060-g14 PATH] [--apkg-bin PATH]
+#                       [--scan060-g14 PATH] [--sysroot DIR] [--apkg-bin PATH]
 #
 # OUT gets the layout publish.sh pushes and a box reads as ONE repository:
 #
@@ -60,7 +60,10 @@
 #   - a 68060-unimplemented instruction in an ELF of a live ordinary row,
 #     by build/pkg's D4 rule: scan060.py for period ELFs; for GCC 14 ELFs
 #     scan060-g14.py, with every scan060.py hit explained by it (stock/ is
-#     vendor code, and kernel-space files have kernel space's own gates);
+#     vendor code, and kernel-space files have kernel space's own gates).
+#     scan060-g14.py gets the gcc14 sysroot (--sysroot, default
+#     $AMIX_SYSROOT; it must have usr/lib) for the stock data in .text it
+#     knows by sha256: without one the tool does not start (exit 3);
 #   - tools/release-check refusing the tree;
 #   - apkg itself not reading the tree as one repository (`update`, `list`).
 # The tree is written to OUT.tmp and renamed into place only after every
@@ -524,8 +527,8 @@ def _vkey(v):
 
 # ---------------------------------------------------------------- checks
 
-def run_check(argv, what, refuse_rc):
-    r = subprocess.run(argv, capture_output=True, text=True)
+def run_check(argv, what, refuse_rc, env=None):
+    r = subprocess.run(argv, capture_output=True, text=True, env=env)
     sys.stdout.write(r.stdout)
     sys.stderr.write(r.stderr)
     if r.returncode in refuse_rc:
@@ -606,8 +609,12 @@ def scan_userland(files, a, work):
     if period:
         run_check([sys.executable, "-I", a.scan060] + period, "scan060", (2,))
     if g14:
+        # the sysroot names the stock archives whose data GCC 14 programs
+        # carry in .text (scan060-g14.py's KNOWN_STOCK_DATA): given, never
+        # inherited, so the verdict cannot depend on the caller's environment
+        g14env = dict(os.environ, AMIX_SYSROOT=a.sysroot)
         run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump] + g14,
-                  "scan060-g14", (1, 3))
+                  "scan060-g14", (1, 3), g14env)
         for p in g14:
             hits = p + ".scan060"
             with open(hits, "w") as fp:
@@ -618,7 +625,7 @@ def scan_userland(files, a, work):
             if r.returncode != 2:
                 raise ToolError("scan060 failed on %s (exit %d)" % (p, r.returncode))
             run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump,
-                       "--explain", hits, p], "scan060-g14 --explain", (1, 3))
+                       "--explain", hits, p], "scan060-g14 --explain", (1, 3), g14env)
     return len(period), len(g14)
 
 
@@ -632,7 +639,7 @@ def apkg_reads(apkg_bin, tree, n_rows, n_k):
         env = dict(os.environ, APKG_ROOT=d)
         r = subprocess.run([apkg_bin, "-c", conf, "update"], capture_output=True,
                            text=True, env=env)
-        want = "catalog updated: %d packages" % n_rows
+        want = "catalog updated: %d package%s" % (n_rows, "" if n_rows == 1 else "s")
         if n_k:
             want += ", %d kernel-space" % n_k
         if r.returncode != 0 or want not in r.stdout:
@@ -662,6 +669,7 @@ def main():
     ap.add_argument("--rom-register", default=os.environ.get("ROM_MANIFEST"))
     ap.add_argument("--private-patterns", default=os.environ.get("PRIVACY_PATTERNS"))
     ap.add_argument("--scan060", default=os.path.join(HERE, "scan060.py"))
+    ap.add_argument("--sysroot", default=os.environ.get("AMIX_SYSROOT"))
     ap.add_argument("--scan060-g14", default=os.path.join(
         TOP, "build", "pkg", "common", "gcc14", "scan060-g14.py"))
     ap.add_argument("--apkg-bin", default=os.path.join(PKGTOOLS, "src", "apkg", "apkg"))
@@ -677,6 +685,16 @@ def main():
                         ("scan060-g14", a.scan060_g14), ("apkg (host build)", a.apkg_bin)):
             if not os.access(p, os.X_OK) and not (what.startswith("scan060") and os.path.isfile(p)):
                 raise Missing("%s: %s" % (what, p))
+        # scan060-g14.py knows stock data in .text (libcrypt's DES tables)
+        # only from the sysroot's archives; without one it reports them as
+        # code.  So no sysroot is a missing input, never a quieter scan.
+        if not a.sysroot or not os.path.isdir(os.path.join(a.sysroot, "usr", "lib")):
+            raise Missing("no gcc14 sysroot for scan060-g14 (%s): set AMIX_SYSROOT="
+                          "$(m68k-elf-gcc -print-sysroot), or pass --sysroot DIR (a "
+                          "directory with usr/lib); without it the stock data GCC 14 "
+                          "programs link into .text would be scanned as code"
+                          % ("AMIX_SYSROOT=%s has no usr/lib" % a.sysroot if a.sysroot
+                             else "AMIX_SYSROOT is not set"))
         for what, p in (("rom register", a.rom_register),
                         ("private patterns", a.private_patterns)):
             if not p or not os.path.isfile(p):
