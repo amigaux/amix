@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — a compiled Python file out of the tree; tapdhcpd's MAC (ea6dc35, 7c92258)
+
+A compiled Python file tracked by mistake is removed from the tree, and userland/base/.gitignore keeps them out. tapdhcpd's default server MAC comes from its address, so two responders on one bridge no longer take each other's traffic.
+
 ## 2026-11-04 — amix-base 1.0-30: names resolve when ntpsync is told the network is up (5f8da50)
 
 ifup writes /var/inet/ifup.primary after the DNS step: that file ends ntpsync's boot wait, and a sync started in the gap found no name. ntpsync says what to do when names cannot be looked up (a dns line in /etc/inet/interfaces, or addresses in ntp_servers), in the log, on a run by hand and in ntpsync -n.
