@@ -204,20 +204,28 @@ check "one entry survives" test "$(grep -vc '^#' "$S7/catalog")" = 1
 check "duplicate reported" grep -q 'duplicate catalog name' "$WORK/t7.err"
 
 # ---------------------------------------------------------------- T8 ----
+# Past its first refusals publish.sh runs the licence gate, which needs the host
+# pkgtrans and refuses without it: a check that gets that far skips when the
+# engine is not built.  PKGTOOLS_REQUIRE=engine makes such a skip a failure.
+PUBPT="$HERE/../../../heirloom/build-host/bin/pkgtrans"
 echo "T8: publish.sh --dry-run against scratch PUBLISH_DEST"
 S8="$WORK/t8"; mkdir -p "$S8"
 cp "$FIX/TESTpkg.pkg" "$FIX/toy.pkg" "$S8/"
 python3 "$GEN" "$S8" >/dev/null 2>&1
-DEST8="$WORK/t8-dest"; mkdir -p "$DEST8"
-PUBLISH_DEST="$DEST8" bash "$PUB" --dry-run 1.1 "$S8" >"$WORK/t8.out" 2>&1
-check "dry-run exit 0" test $? -eq 0
-check "dry-run announces itself" grep -q 'DRY RUN' "$WORK/t8.out"
-check "dry-run lists packages" grep -q 'TESTpkg.pkg' "$WORK/t8.out"
-check "dry-run lists catalog" grep -q 'catalog' "$WORK/t8.out"
-check "dry-run skips HTTP verify" \
-    grep -q 'skipping HTTP verify' "$WORK/t8.out"
-check "destination untouched" \
-    test -z "$(find "$DEST8" -mindepth 1 -print -quit)"
+if [ -x "$PUBPT" ]; then
+    DEST8="$WORK/t8-dest"; mkdir -p "$DEST8"
+    PUBLISH_DEST="$DEST8" bash "$PUB" --dry-run 1.1 "$S8" >"$WORK/t8.out" 2>&1
+    check "dry-run exit 0" test $? -eq 0
+    check "dry-run announces itself" grep -q 'DRY RUN' "$WORK/t8.out"
+    check "dry-run lists packages" grep -q 'TESTpkg.pkg' "$WORK/t8.out"
+    check "dry-run lists catalog" grep -q 'catalog' "$WORK/t8.out"
+    check "dry-run skips HTTP verify" \
+        grep -q 'skipping HTTP verify' "$WORK/t8.out"
+    check "destination untouched" \
+        test -z "$(find "$DEST8" -mindepth 1 -print -quit)"
+else
+    echo "  skip- publish.sh --dry-run (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 
 # ---------------------------------------------------------------- T9 ----
 echo "T9: publish.sh refuses bad staging"
@@ -267,23 +275,27 @@ check "cross-subdir duplicate reported" \
 
 # --------------------------------------------------------------- T11 ----
 echo "T11: publish.sh --dry-run preserves subdirectory structure"
-DEST11="$WORK/t11-dest"; mkdir -p "$DEST11"
-PUBLISH_DEST="$DEST11" bash "$PUB" --dry-run 1.1 "$S10" >"$WORK/t11.out" 2>&1
-check "dry-run exit 0" test $? -eq 0
-check "dry-run lists subdir package with its path" \
-    grep -q 'stock/TESTpkg.pkg' "$WORK/t11.out"
-check "dry-run lists nested subdir package with its path" \
-    grep -q 'base/deep/toy.pkg' "$WORK/t11.out"
-check "dry-run lists root-level package" \
-    grep -q 'TSTpkg.pkg' "$WORK/t11.out"
-check "dry-run does not sync deps.conf" \
-    bash -c "! grep -q 'deps.conf' <(grep -v '^publish:' '$WORK/t11.out')"
-check "destination untouched" \
-    test -z "$(find "$DEST11" -mindepth 1 -print -quit)"
-check "dry-run syncs packages into the release tree" \
-    grep -qF "publish: syncing packages -> $DEST11/1.1/pkgs/" "$WORK/t11.out"
-check "dry-run syncs the catalog into the release tree" \
-    grep -qF "publish: syncing catalog -> $DEST11/1.1/" "$WORK/t11.out"
+if [ -x "$PUBPT" ]; then
+    DEST11="$WORK/t11-dest"; mkdir -p "$DEST11"
+    PUBLISH_DEST="$DEST11" bash "$PUB" --dry-run 1.1 "$S10" >"$WORK/t11.out" 2>&1
+    check "dry-run exit 0" test $? -eq 0
+    check "dry-run lists subdir package with its path" \
+        grep -q 'stock/TESTpkg.pkg' "$WORK/t11.out"
+    check "dry-run lists nested subdir package with its path" \
+        grep -q 'base/deep/toy.pkg' "$WORK/t11.out"
+    check "dry-run lists root-level package" \
+        grep -q 'TSTpkg.pkg' "$WORK/t11.out"
+    check "dry-run does not sync deps.conf" \
+        bash -c "! grep -q 'deps.conf' <(grep -v '^publish:' '$WORK/t11.out')"
+    check "destination untouched" \
+        test -z "$(find "$DEST11" -mindepth 1 -print -quit)"
+    check "dry-run syncs packages into the release tree" \
+        grep -qF "publish: syncing packages -> $DEST11/1.1/pkgs/" "$WORK/t11.out"
+    check "dry-run syncs the catalog into the release tree" \
+        grep -qF "publish: syncing catalog -> $DEST11/1.1/" "$WORK/t11.out"
+else
+    echo "  skip- publish.sh --dry-run with subdirectories (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 
 # --------------------------------------------------------------- T11b ---
 # One tree per release: publish.sh takes the release as a required argument,
@@ -304,44 +316,52 @@ done
 check "a refused release wrote nothing" \
     test "$(cd "$D11b" && find . | sort | tr '\n' ' ')" = ". ./1.0 ./1.0/catalog ./1.0/pkgs ./1.0/pkgs/base ./1.0/pkgs/base/OLD-1.0.pkg "
 # a real publish into the temp docroot, verified through file:// (curl)
-mkdir -p "$D11b/1.1/pkgs"; echo stale > "$D11b/1.1/pkgs/STALE-0.pkg"
-PUBLISH_DEST="$D11b" PUBLISH_URL="file://$D11b" bash "$PUB" 1.1 "$S10" >"$WORK/t11b.out" 2>&1
-check "publish 1.1 exit 0" test $? -eq 0
-check "1.1/catalog and catalog.md5 published" \
-    bash -c "cmp -s '$S10/catalog' '$D11b/1.1/catalog' && cmp -s '$S10/catalog.md5' '$D11b/1.1/catalog.md5'"
-check "packages under 1.1/pkgs/ with their subdirectories" \
-    bash -c "test -f '$D11b/1.1/pkgs/stock/TESTpkg.pkg' && test -f '$D11b/1.1/pkgs/base/deep/toy.pkg' && test -f '$D11b/1.1/pkgs/TSTpkg.pkg'"
-check "nothing at the docroot's own catalog or pkgs/" \
-    bash -c "test ! -e '$D11b/catalog' && test ! -e '$D11b/catalog.md5' && test ! -e '$D11b/pkgs'"
-check "a stale 1.1 package is pruned" test ! -e "$D11b/1.1/pkgs/STALE-0.pkg"
-check "the 1.0 tree is untouched" \
-    bash -c "test \"\$(cat '$D11b/1.0/catalog')\" = old && test -f '$D11b/1.0/pkgs/base/OLD-1.0.pkg'"
-check "the docroot keeps its mode" test "$(stat -c %a "$D11b")" = 755
-check "verify fetched <url>/1.1/catalog" \
-    grep -qF "publish: OK -- served catalog matches staging" "$WORK/t11b.out"
+if [ -x "$PUBPT" ]; then
+    mkdir -p "$D11b/1.1/pkgs"; echo stale > "$D11b/1.1/pkgs/STALE-0.pkg"
+    PUBLISH_DEST="$D11b" PUBLISH_URL="file://$D11b" bash "$PUB" 1.1 "$S10" >"$WORK/t11b.out" 2>&1
+    check "publish 1.1 exit 0" test $? -eq 0
+    check "1.1/catalog and catalog.md5 published" \
+        bash -c "cmp -s '$S10/catalog' '$D11b/1.1/catalog' && cmp -s '$S10/catalog.md5' '$D11b/1.1/catalog.md5'"
+    check "packages under 1.1/pkgs/ with their subdirectories" \
+        bash -c "test -f '$D11b/1.1/pkgs/stock/TESTpkg.pkg' && test -f '$D11b/1.1/pkgs/base/deep/toy.pkg' && test -f '$D11b/1.1/pkgs/TSTpkg.pkg'"
+    check "nothing at the docroot's own catalog or pkgs/" \
+        bash -c "test ! -e '$D11b/catalog' && test ! -e '$D11b/catalog.md5' && test ! -e '$D11b/pkgs'"
+    check "a stale 1.1 package is pruned" test ! -e "$D11b/1.1/pkgs/STALE-0.pkg"
+    check "the 1.0 tree is untouched" \
+        bash -c "test \"\$(cat '$D11b/1.0/catalog')\" = old && test -f '$D11b/1.0/pkgs/base/OLD-1.0.pkg'"
+    check "the docroot keeps its mode" test "$(stat -c %a "$D11b")" = 755
+    check "verify fetched <url>/1.1/catalog" \
+        grep -qF "publish: OK -- served catalog matches staging" "$WORK/t11b.out"
+else
+    echo "  skip- a real publish into a temp docroot (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 
 # --------------------------------------------------------------- T11d ---
 # A staging with pkgs/ below the catalog (assemble-release's layout, T34 runs
 # the real one): the packages land in <tree>/pkgs/, not <tree>/pkgs/pkgs/, and
 # a second publish replaces a changed package and prunes a removed one.
 echo "T11d: publish.sh with pkgs/ below the catalog"
-S11d="$WORK/t11d-tree"; D11d="$WORK/t11d-dest"; mkdir -p "$S11d/pkgs" "$D11d"
-cp -R "$S10/stock" "$S10/base" "$S10/TSTpkg.pkg" "$S11d/pkgs/"
-cp "$S10/catalog" "$S10/catalog.md5" "$S11d/"
-PUBLISH_DEST="$D11d" bash "$PUB" --dry-run 1.1 "$S11d" >"$WORK/t11d-dry.out" 2>&1
-check "dry-run: exit 0" test $? -eq 0
-check "dry-run: lists the package below pkgs/ without the pkgs/ prefix" \
-    bash -c "grep -qx 'stock/TESTpkg.pkg' '$WORK/t11d-dry.out' && ! grep -q '^pkgs/stock/' '$WORK/t11d-dry.out'"
-check "dry-run: writes nothing" test -z "$(find "$D11d" -mindepth 1 -print -quit)"
-PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d.out" 2>&1
-check "publish: exit 0" test $? -eq 0
-check "publish: the served tree is the staged tree" diff -r "$S11d" "$D11d/1.1"
-check "publish: no pkgs/pkgs" test ! -e "$D11d/1.1/pkgs/pkgs"
-cp "$FIX/toy.pkg" "$S11d/pkgs/TSTpkg.pkg"; rm -f "${S11d:?}/pkgs/stock/TESTpkg.pkg"
-PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d-2.out" 2>&1
-check "re-publish: exit 0" test $? -eq 0
-check "re-publish: a changed package is replaced" cmp -s "$FIX/toy.pkg" "$D11d/1.1/pkgs/TSTpkg.pkg"
-check "re-publish: a removed package is pruned" test ! -e "$D11d/1.1/pkgs/stock/TESTpkg.pkg"
+if [ -x "$PUBPT" ]; then
+    S11d="$WORK/t11d-tree"; D11d="$WORK/t11d-dest"; mkdir -p "$S11d/pkgs" "$D11d"
+    cp -R "$S10/stock" "$S10/base" "$S10/TSTpkg.pkg" "$S11d/pkgs/"
+    cp "$S10/catalog" "$S10/catalog.md5" "$S11d/"
+    PUBLISH_DEST="$D11d" bash "$PUB" --dry-run 1.1 "$S11d" >"$WORK/t11d-dry.out" 2>&1
+    check "dry-run: exit 0" test $? -eq 0
+    check "dry-run: lists the package below pkgs/ without the pkgs/ prefix" \
+        bash -c "grep -qx 'stock/TESTpkg.pkg' '$WORK/t11d-dry.out' && ! grep -q '^pkgs/stock/' '$WORK/t11d-dry.out'"
+    check "dry-run: writes nothing" test -z "$(find "$D11d" -mindepth 1 -print -quit)"
+    PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d.out" 2>&1
+    check "publish: exit 0" test $? -eq 0
+    check "publish: the served tree is the staged tree" diff -r "$S11d" "$D11d/1.1"
+    check "publish: no pkgs/pkgs" test ! -e "$D11d/1.1/pkgs/pkgs"
+    cp "$FIX/toy.pkg" "$S11d/pkgs/TSTpkg.pkg"; rm -f "${S11d:?}/pkgs/stock/TESTpkg.pkg"
+    PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d-2.out" 2>&1
+    check "re-publish: exit 0" test $? -eq 0
+    check "re-publish: a changed package is replaced" cmp -s "$FIX/toy.pkg" "$D11d/1.1/pkgs/TSTpkg.pkg"
+    check "re-publish: a removed package is pruned" test ! -e "$D11d/1.1/pkgs/stock/TESTpkg.pkg"
+else
+    echo "  skip- publish.sh with pkgs/ below the catalog (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 
 # --------------------------------------------------------------- T11c ---
 # move-1.0-tree.sh, the one-time move of the 1.0 tree from the docroot into
@@ -569,15 +589,19 @@ check "publish wrote nothing to the destination" \
 # T13g: publish.sh PASSES a staging whose only /stand-shipping package is the
 # stock-core-like one (no markers) -- the NAS-publish path must NOT refuse
 # stock content.  (dry-run, so it exits before the HTTP verify.)
-S13g="$WORK/t13g"; mkdir -p "$S13g"
-cp "$FIX/toy.pkg" "$S13g/"
-mk_stock_stand_pkg "$S13g"
-python3 "$GEN" "$S13g" >/dev/null 2>&1            # valid catalog incl. the stock pkg
-DEST13g="$WORK/t13g-dest"; mkdir -p "$DEST13g"
-PUBLISH_DEST="$DEST13g" bash "$PUB" --dry-run 1.1 "$S13g" >"$WORK/t13g.out" 2>&1; RC=$?
-check "publish passes stock /stand staging (dry-run rc 0)" test "$RC" -eq 0
-check "publish scan announces OK on stock /stand staging" \
-    grep -q 'scan-private: OK' "$WORK/t13g.out"
+if [ -x "$PUBPT" ]; then
+    S13g="$WORK/t13g"; mkdir -p "$S13g"
+    cp "$FIX/toy.pkg" "$S13g/"
+    mk_stock_stand_pkg "$S13g"
+    python3 "$GEN" "$S13g" >/dev/null 2>&1            # valid catalog incl. the stock pkg
+    DEST13g="$WORK/t13g-dest"; mkdir -p "$DEST13g"
+    PUBLISH_DEST="$DEST13g" bash "$PUB" --dry-run 1.1 "$S13g" >"$WORK/t13g.out" 2>&1; RC=$?
+    check "publish passes stock /stand staging (dry-run rc 0)" test "$RC" -eq 0
+    check "publish scan announces OK on stock /stand staging" \
+        grep -q 'scan-private: OK' "$WORK/t13g.out"
+else
+    echo "  skip- publish.sh on a stock /stand staging (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 
 # --------------------------------------------------------------- T14 ----
 # Installed-size extension block (--isize).  The load-bearing property is
@@ -1137,8 +1161,12 @@ mkdir -p "$T19W/empty" "$T19W/nobin"
 cp "$HERE/fixtures/toy.pkg" "$T19W/nobin/"
 python3 "$PLG" "$T19W/empty" >/dev/null 2>&1
 check "an empty path is NOT a pass" test $? -ne 0
-python3 "$PLG" "$T19W/nobin" >/dev/null 2>&1
-check "a binary-free package IS a pass" test $? -eq 0
+if [ -x "$PUBPT" ]; then
+    python3 "$PLG" "$T19W/nobin" >/dev/null 2>&1
+    check "a binary-free package IS a pass" test $? -eq 0
+else
+    echo "  skip- the licence gate on a binary-free package (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
 check "it says nothing was inspected rather than OK" \
     bash -c "python3 '$PLG' '$T19W/empty' 2>&1 | grep -q 'NOTHING INSPECTED'"
 
