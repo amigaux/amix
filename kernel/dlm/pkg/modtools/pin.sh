@@ -12,6 +12,11 @@
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
+# -14 (2026-11-04): amix 569ddc8 -- the manual page modadmin(1M) and its
+# whatis fragment, in the shared /opt/amix/man layout (amix
+# userland/packages/docs/man-pages.md).  modadmin's source is as -13's: the
+# same binary, fd8e8a20 (45260 bytes).
+#
 # -13 (2026-11-03): amix e6240fc -- core patch 0054: modadmin rewrites
 # /stand/unix by fork, execv and waitpid instead of system(), which brought
 # libc's shell signal and process-group calls: text and data 33344 bytes,
@@ -81,8 +86,10 @@
 # -1 (2026-10-26): amix-dlm 42df482 (modadmin as 55722ef, core
 # patch 0015: -k, -a, -p/-w).  Equal to amix-dlm's own build/box/modadmin
 # (text 28756, data 1648, bss 2508).
-MT_DLM_COMMIT=e6240fc
+MT_DLM_COMMIT=569ddc8
 MT_SHA=fd8e8a20aa007ba0bcab1d5631ee06b637a8aceb882f47ecd91e677208e2467f
+MT_MAN_SHA=e111f86fc7c9ca5e944c9a8da49dbb6100967007c34c85975d57347cde69bc6f
+MT_WHATIS_SHA=59d050166020f1c06224382d3db0061204152c276b6d1bb1146df7d8656664d7
 
-MT_VERSION=1.0.261103-13
-MT_SOURCE_EPOCH=1793664000
+MT_VERSION=1.0.261104-14
+MT_SOURCE_EPOCH=1793750400

@@ -37,6 +37,13 @@ echo "--- build amix-dlm $MT_DLM_COMMIT ---"
 amix_dlm_build "$MT_DLM_COMMIT" box/modadmin
 amix_verify "$AMIX_DLM_TREE/build/box/modadmin" "$MT_SHA"
 cp "$AMIX_DLM_TREE/build/box/modadmin" "$DEST/sbin/modadmin"
+# modadmin(1M) and its whatis fragment (amix userland/packages/docs/man-pages.md)
+M="$DEST/opt/amix/man"
+mkdir -p "$M/1m" "$M/whatis.d"
+amix_verify "$AMIX_DLM_TREE/man/1m/modadmin" "$MT_MAN_SHA"
+amix_verify "$AMIX_DLM_TREE/man/whatis.d/modtools" "$MT_WHATIS_SHA"
+cp "$AMIX_DLM_TREE/man/1m/modadmin" "$M/1m/modadmin"
+cp "$AMIX_DLM_TREE/man/whatis.d/modtools" "$M/whatis.d/modtools"
 
 echo "--- gates ---"
 amix_gate_elf "$DEST/sbin/modadmin"

@@ -1,8 +1,10 @@
 #
-# prototype -- modtools: /sbin/modadmin .
+# prototype -- modtools: /sbin/modadmin and its manual page.
 #
 # AUTHORED, NOT GENERATED: build.sh runs `pkgmk -r <destroot>`.  /sbin is
-# the stock core's directory, declared with core's attributes (0755 bin bin).
+# the stock core's directory, declared with core's attributes (0755 bin bin);
+# since -14 modadmin(1M) and its whatis fragment, in the shared /opt/amix/man
+# layout (amix userland/packages/docs/man-pages.md).
 # Since -9 no scripts: the `dlm::sysinit:/sbin/modadmin -B ...' line in
 # /etc/inittab is amix-base's.
 #
@@ -10,3 +12,10 @@ i pkginfo
 i copyright
 d none /sbin 0755 bin bin
 f none /sbin/modadmin 0755 root bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/modadmin 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/modtools 0644 root bin
