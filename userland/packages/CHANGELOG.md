@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — dropbear: tests share no connections; hardware timings (0111e3e)
+
+tests/host.sh passes `-o ControlMaster=no -o ControlPath=none` beside `-F /dev/null`, so every login and timed handshake is a connection of its own. README: the A4000 68060 hardware row for 2026.94-3, key exchange 1.5–1.9 s (5.2–5.4 s with -1), scp 171–175 KB/s. Package unchanged.
+
 ## 2026-11-04 — rdate 1.11-1, new in the base set; dropbear 2026.94-4 (ab9d403, b4d4ca7)
 
 rdate: openrdate's rdate as /opt/amix/sbin/rdate. It sets the clock by SNTP (-n) or RFC 868, as a step or slewed with adjtime (-a). Every try is bounded by -t (default 15 s, the name lookup included, which runs in a child killed at the bound) with -r retries (default 1); several servers are tried in order, and the exit codes name the failure. The SNTP arithmetic is fixed point, with no FPU instructions, and right across 2036. No config file; the base system's ntpsync runs it. rdate(1M).
