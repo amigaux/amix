@@ -1,11 +1,11 @@
 PKG=kern46m
-NAME=kernel-k46-m k46.1.4.261103-62 - the 68040/68060 module kernel
+NAME=kernel-k46-m k46.1.4.261103-62.1 - the 68040/68060 module kernel
 ARCH=Amiga
-VERSION=k46.1.4.261103-62
+VERSION=k46.1.4.261103-62.1
 CATEGORY=system
 CLASSES=none
 VENDOR=amix-packages
-PSTAMP=amix-packages-kern46m-k46.1.4.261103-62
+PSTAMP=amix-packages-kern46m-k46.1.4.261103-62.1
 # Kernel space (amix-dlm C2-2/C2-3): catalogued in the #ext kpkg block, never
 # as an ordinary entry; installs /stand/k46/{unix,kabi} and the cut's ufs
 # module at /etc/conf/mod.d (C2-3 v8 sec 1).  The module kernel (family

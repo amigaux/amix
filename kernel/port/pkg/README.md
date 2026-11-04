@@ -26,7 +26,9 @@ cut record `cuts/<build id>/cut.sh` (amix-040-060-port at the commit
 Every byte is checked against `pin.sh`: the ET_REL and its sidecar, the
 image's build id against the sidecar's and the module's, and the ufs module,
 rebuilt from the cut's carve sources with the kit of the pinned commit. The
-port's notices come from the cut's copy of the port tree, the other licences
+port's notices come from the cut's copy of the port tree, except that the
+recipe's corrected `NETBSD-M68K-FPE.txt` is shipped for that one (the port's
+own prose reworded, the third-party notices the same), the other licences
 from amix at a commit and from amix-paula by hash (`AMIX_PAULA_REPO`/
 `AMIX_PAULA_URL`); the kit's port headers are fetched by hash too
 (`AMIX_PORT_REPO`/`AMIX_PORT_URL`). Every time stamp of the roll is

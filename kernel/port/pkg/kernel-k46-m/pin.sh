@@ -56,6 +56,8 @@
 # The release notes in pkginfo ride this cut (a new version); -51 is never
 # re-rolled -- one version, one set of bytes (recipes/README.md).
 
+# -62.1 against -62 (2026-11-04): the same cut and objects, re-minted for the
+# copyright file's wording (a corrected copy of the port's FPE notice, below).
 # -62 against -61 (2026-11-03): the port's cut 68060-261103-62 (amix-040-060-port
 # cuts/68060-261103-62 at d8c7548; REV 84b0623; amix 46ef7d1): the core tier
 # keeps five COMMONs (inode, ifreelist, ufs_inode, inodeNINODE, ifreeh), so the
@@ -156,7 +158,7 @@ K46M_PKG=kern46m
 K46M_BUILDID=68060-261103-62
 K46M_KABI=k46.1.4
 K46M_FSKABI=k46.1.2       # the .moddata kabi of ufs (the minor it imports)
-K46M_VERSION=k46.1.4.261103-62
+K46M_VERSION=k46.1.4.261103-62.1
 
 K46M_UNIX_SHA=bc8e779f1f0f74ab6232efcd4f2314a4d25b2b01352dcd2bf482f03a6dab7242
 K46M_UNIX_SIZE=2355892
@@ -180,6 +182,10 @@ LICENSE                                    ceec1a0761d69087a733d3b04716c29baa0c0
 THIRD_PARTY_NOTICES/MOTOROLA-M68040-FPSP.txt 5992bb2233f332643bf14ab275bfd71719e316e10a4de5f6d772a9526d28ab79
 THIRD_PARTY_NOTICES/MOTOROLA-M68060-SP.txt a8fd4c6fe11aa1c3eede5f74fcb726ee09440c2decb665603408ecc6625b26f1
 THIRD_PARTY_NOTICES/NETBSD-M68K-FPE.txt    dab091a6bad4311450455e7410bcfe9c3378cdc5878b66d282d2936d88d8e41b"
+# The package ships this recipe's copy of that last file: three lines of the
+# port's own prose reworded, every third-party notice in it the same bytes.
+K46M_FPE_COPY=NETBSD-M68K-FPE.txt
+K46M_FPE_COPY_SHA=0c4e04164ef71c9307a9dbcf67d75b7f82682a3fff1567a6419305ca49c6734f
 # The code linked in from sibling repositories besides the port and the
 # module core (families-c.json in the cut: no z3660 pass, no zz9000/monsw;
 # since -71 amix-z3660scsi is not linked and its LICENSE left this list):
