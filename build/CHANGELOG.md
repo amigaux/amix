@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — scan060-g14 notes a run without a sysroot (1b58b0f)
+
+scan060-g14.py prints one NOTE when it runs without AMIX_SYSROOT: the known stock data in .text (KNOWN_STOCK_DATA) is then not applied. Its verdicts are unchanged.
+
 ## 2026-11-03 — release-check refuses a known-bad module (6b800be)
 
 tools/release-check refuses an artefact carrying a module listed in tools/known-bad-modules.txt: a file or package member whose sha256 is listed, or nine in ten of the module's 512-byte pieces found at any offset in an image, ISO, floppy image or package (each piece found by a 16-byte anchor and confirmed by its sha256, so the list holds no module bytes). The first entry is the z3660scsi build from before its fixed-window gate. A floppy image or a single package is now read as a file instead of refused.

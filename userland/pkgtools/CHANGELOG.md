@@ -2,6 +2,10 @@
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
 
+## 2026-11-04 — assemble-release refuses to scan without the gcc14 sysroot (1b58b0f, ebc8512)
+
+assemble-release.py takes --sysroot (default $AMIX_SYSROOT, must contain usr/lib) and refuses to start without one, then passes it to scan060-g14 explicitly, so stock data GCC 14 programs link into .text (libcrypt's DES tables) is never scanned as code and the verdict doesn't depend on the caller's environment. tools/repo/cats.conf leaves cdfs's category to the packages layer.
+
 ## 2026-11-03 — assemble-release: #isize for every package row (6ad784a)
 
 The release catalog gives every ordinary package row its #isize line (gen-catalog --isize's installed size summed from the pkgmap, as on the install CD), so the network installer's free-space check sizes the install; #kpkg entries carry none, as in gen-catalog. An input's own #isize must agree; a row whose pkgmap cannot be summed is refused.
