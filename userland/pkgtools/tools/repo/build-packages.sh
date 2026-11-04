@@ -75,9 +75,10 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # the engine quits on any installed instance), and a kernel-space install
 # over an engine instance with no record (files a bare pkgadd laid) does
 # the same.  0.3.5 (3d2f8737...) stays what it is.
-# 0.3.7 (2026-11-04, not minted yet): with no nameserver= the stub resolver
-# asks the servers /etc/resolv.conf names, so a box with DNS on and no hosts
-# line reaches the repository.  apkg.1 gets the local repository's layout.
+# 0.3.7 (2026-11-04; minted 2026-11-04, md5 69d439ea...): with no nameserver=
+# the stub resolver asks the servers /etc/resolv.conf names, so a box with DNS
+# on and no hosts line reaches the repository.  apkg.1 gets the local
+# repository's layout.
 # 0.3.6 (f87c02e0...) stays what it is.
 VER_APKG="0.3.7"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
@@ -574,7 +575,7 @@ EOF
   # Version 0.3.6 (2026-11-02; minted 2026-11-02).  The apkg binary and apkg.1
   # change (a reinstall passes instance=overwrite); every other payload
   # byte is 0.3.5's.
-  # Version 0.3.7 (2026-11-04, not minted).  The apkg binary, apkg.1,
+  # Version 0.3.7 (2026-11-04; minted 2026-11-04).  The apkg binary, apkg.1,
   # apkg.conf.5 and the apkg.conf template's comments change (resolv.conf);
   # every other payload byte is 0.3.6's.
   cat > "$A/prototype" <<EOF

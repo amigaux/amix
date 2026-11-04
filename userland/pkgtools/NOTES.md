@@ -1,6 +1,24 @@
 # amix-packagemanager — lab notes
 
-## 2026-11-04 — apkg 0.3.7: the servers of resolv.conf when nameserver= is empty (NOT MINTED)
+## 2026-11-04 — APKG 0.3.7 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from
+`ece52e1`, `VER_APKG="0.3.7"`, `EPOCH_APKG=1793750400`; `make repro-check` there from `18b3ee8`:
+the checkout's roll and a `git archive` copy's (another path, umask 077, `SOURCE_DATE_EPOCH=1`) are
+the same bytes, and so is the final `make dist`:
+
+- **md5 `69d439ea20cdc9c8e2406a39d79c0461`**, **sha256
+  `f770e901f024a9bd7ddadb1e71cd90cc890cbfb1135021432533f5b169dc700f`**, **256000 B**; the bytes the
+  emulated box of the entry below installed.
+- `apkg.amix`: sha256 `0624c8acaf42633d78b71490c36fc32c4bc97f897ad796cbc8d6d751124811b0`, 133720 B,
+  `sum -r` 19587. scan060 clean, link gate OK.
+- APKGENG 1.12.6 rolls in the same `make dist` at `c1d4831a…`, unchanged; not part of this mint.
+- 0.3.6 (`f87c02e0…`) stays what it is.
+
+A hosts line stays first by design: it is the user's choice, stale or not, so apkg does not retry
+through DNS when a connect to its address fails.
+
+## 2026-11-04 — apkg 0.3.7: the servers of resolv.conf when nameserver= is empty
 
 **Why.** On a box with DNS on, the shared libsocket is the DNS one, but apkg links the static
 libsocket, whose gethostbyname() reads /etc/inet/hosts only. apkg's own resolver read `nameserver=`
