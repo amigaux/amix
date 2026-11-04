@@ -1,5 +1,40 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — APKG 0.3.8 minted (STAGED, NOT PUBLISHED)
+
+**Why.** The repository goes by name, so nothing 1.1 ships names its address. The apkg.conf template
+did, in a comment; 0.3.6 and 0.3.7 carry it and stay what they are. The comment now says the box
+needs DNS (netconfig's DNS, or DHCP). A line written by hand in /etc/inet/hosts stays the first step.
+
+`make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this
+entry's commit, `VER_APKG="0.3.8"`, `EPOCH_APKG=1793750400`; `make repro-check` there from `2996a5b`:
+the checkout's roll and a `git archive` copy's are the same bytes, and so is the final `make dist`:
+
+- **md5 `d0bdd2793a65760342a69cb078a7aa19`**, **sha256
+  `5907a88fea7af914e9398c3a1d51e26f3ce02a8041691f4b102242fd1eae06b4`**, **256000 B**; the bytes the
+  emulated box below installed.
+- `apkg.amix`: sha256 `76d8883c7e2b8cb093edf91c03f6f232c2eae29dc0589f478bdd8ef469ace98c`, 133720 B,
+  `sum -r` 03071, text 109487 + data 2472 + bss 4036 (0.3.7's sizes). scan060 clean, link gate OK.
+- Against 0.3.7 only apkg (its version string), apkg.1 (its title line), the two apkg.conf copies,
+  pkginfo and pkgmap differ. APKGENG rolls `c1d4831a…`, unchanged.
+
+**On an emulated k46 box with DNS on,** first boot through the real dialog, the hosts line removed:
+`apkg upgrade apkg` from 0.3.6; `pkgchk -n APKG` clean; `sum -r` as above; both apkg.conf copies free
+of the address. Then, with the shipped conf, `apkg update` against the published 1.1 tree, the name
+resolved through /etc/resolv.conf: 43 packages, 29 kernel-space; `apkg download rdate` fetched it.
+
+## 2026-11-04 — publish.sh and an assembled tree
+
+publish.sh synced the staging root into `<tree>/pkgs/`, right for a gen-catalog root (packages beside
+the catalog) and wrong for assemble-release's tree (`pkgs/` below it): those packages would land in
+`pkgs/pkgs/`, where no catalog row points, and only a dry run's paths showed it. It now syncs from
+`<staging>/pkgs` when that exists. `PUBLISH_DEST` names the docroot: the tool adds `<release>`.
+
+A re-publish replaces what changed and prunes, inside its own release's `pkgs/`, what staging lacks.
+So a follow-on release is assembled with `--previous`, which keeps every published version and
+refuses a version whose bytes differ; publish.sh checks neither. The tests publish a real assembled
+tree and a `--previous` follow-on over it.
+
 ## 2026-11-04 — APKG 0.3.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from

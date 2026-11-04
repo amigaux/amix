@@ -80,7 +80,8 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # on and no hosts line reaches the repository.  apkg.1 gets the local
 # repository's layout.
 # 0.3.6 (f87c02e0...) stays what it is.
-# 0.3.8 (2026-11-04): the apkg.conf template names no address: the repository
+# 0.3.8 (2026-11-04; minted 2026-11-04, md5 d0bdd279...): the apkg.conf
+# template names no address: the repository
 # goes by name, and the box needs DNS.  0.3.7 (69d439ea...) stays what it is.
 VER_APKG="0.3.8"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
@@ -580,7 +581,7 @@ EOF
   # Version 0.3.7 (2026-11-04; minted 2026-11-04).  The apkg binary, apkg.1,
   # apkg.conf.5 and the apkg.conf template's comments change (resolv.conf);
   # every other payload byte is 0.3.6's.
-  # Version 0.3.8 (2026-11-04).  The apkg.conf template's comment names no
+  # Version 0.3.8 (2026-11-04; minted 2026-11-04).  The apkg.conf template's comment names no
   # address, and the version strings in the binary and apkg.1 move; every
   # other payload byte is 0.3.7's.
   cat > "$A/prototype" <<EOF
