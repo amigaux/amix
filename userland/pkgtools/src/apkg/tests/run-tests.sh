@@ -1035,6 +1035,12 @@ if [ -s "$TMPL" ]; then
     else
         ok "the shipped apkg.conf names no address"
     fi
+    # One version, in every place that states it.
+    VH=$(sed -n 's/^#define APKG_VERSION "\(.*\)"$/\1/p' "$SRC/apkg.h")
+    VB=$(sed -n 's/^VER_APKG="\(.*\)"$/\1/p' "$SRC/../../tools/repo/build-packages.sh")
+    [ -n "$VH" ] && [ "$VH" = "$VB" ] && grep -q "\"apkg $VH\" \"Amix User Commands\"" "$SRC/apkg.1" \
+        && ok "apkg.h, build-packages.sh and apkg.1 state one version ($VH)" \
+        || bad "the version differs: apkg.h $VH, build-packages.sh $VB"
     # What ships stays on the box: no internal document, no test history.
     if grep -Eq 'C[0-9]-[0-9]|bench-proven|on metal|contract' "$TMPL" "$SRC/apkg.1"; then
         bad "the shipped apkg.conf or apkg.1 cites an internal document or test" \

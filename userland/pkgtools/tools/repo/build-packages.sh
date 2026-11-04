@@ -89,10 +89,12 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # 0.3.10 (2026-11-04; minted 2026-11-04, md5 53426b21...): apkg passes -S to
 # pkgadd, so no licence is printed at
 # install or upgrade.  0.3.9 (3f796aed...) stays what it is.
-  # Version 0.3.11 (2026-11-04, not minted).  The apkg binary, apkg.1,
-  # apkg.conf.5 and the apkg.conf template change; every other payload byte is
-  # 0.3.10's.
-VER_APKG="0.3.10"
+# 0.3.11 (2026-11-04, not minted): a good transaction removes what it fetched
+# from the cache (keepcache=1 keeps it); apkg clean; apkg licence; output in
+# order and a summary; a refused upgrade says what it did and what can go by
+# name; the plan leaves the power cycle to kbootset's last line; messages cite
+# no internal document.  0.3.10 (53426b21...) stays what it is.
+VER_APKG="0.3.11"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -137,7 +139,7 @@ VER_ENG="1.12.7"
 # file's last commit (which every arm here shares).  EPOCH_ENG:
 # 2026-11-04 00:00:00 UTC, the day 1.12.7 was set (1.12.6's was 1793577600,
 # 1.12.5's 1793318400); EPOCH_APKG: 2026-11-04
-# 00:00:00 UTC, the day 0.3.10 was set, as 0.3.7 to 0.3.9 were (0.3.6's was 1793577600, 0.3.5's
+# 00:00:00 UTC, the day 0.3.11 was set, as 0.3.7 to 0.3.10 were (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793750400
