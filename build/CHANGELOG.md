@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — kmodpkg's notice headings (408e557)
+
+kmodpkg heads a fork's licence in the copyright file by its component, without the build path.
+
 ## 2026-11-04 — What's new: the RAM-disk boot (38cb1f1)
 
 docs: What's new lists the RAM-disk boot beside a software MapROM copy or a reset-proof RAD:.
