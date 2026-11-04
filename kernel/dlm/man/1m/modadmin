@@ -1,0 +1,260 @@
+.\" modadmin(1M) -- the module administrator (kernel/dlm).
+.\" Written from the core's modadmin.c (core/upstream with core/series
+.\" applied) and dlm_core.c; installed as /opt/amix/man/1m/modadmin
+.\" (userland/packages/docs/man-pages.md).
+.\" Plain -man requests only: the stock nroff of 1991 formats it.
+.\" MIT licence, see LICENSE in kernel/dlm.
+.TH MODADMIN 1M "2026-11-04" "modtools" "Amix kernel modules"
+.nh
+.SH NAME
+modadmin \- load, unload and inspect kernel modules
+.SH SYNOPSIS
+.B modadmin
+.B \-s
+|
+.B \-S
+.br
+.B modadmin
+.B \-q
+.IR id " ..."
+|
+.B \-Q
+.IR name " ..."
+.br
+.B modadmin
+.B \-l
+.IR name | path " ..."
+.br
+.B modadmin
+.B \-u
+.IR id " ..."
+|
+.B \-U
+.IR name " ..."
+.br
+.B modadmin
+.B \-d
+.IR dir [: dir ]
+|
+.B \-D
+.br
+.B modadmin
+.B \-r
+.BR cdev | sdev
+.I name major
+\&...
+.br
+.B modadmin
+.B \-k
+.IR name " ..."
+|
+.B \-a
+.IR addr " ..."
+.br
+.B modadmin
+.B \-p
+.IR name [: n ]
+\&...
+|
+.B \-w
+.I name value
+.br
+.B modadmin
+.B \-L
+|
+.B \-K
+|
+.B \-B
+.SH DESCRIPTION
+.B modadmin
+loads, unloads and reports the loadable modules of a running Amix 1.1
+kernel: disk and network drivers, filesystems and the rest.
+Most modules need no attention: the generation that booted names them, and
+the kernel and the boot scripts load them by class.
+Root-class modules load as the kernel starts, boot-class modules at the first
+.B sysinit
+entry, and demand-class modules at the first open of their device or the
+first mount of their filesystem.
+.PP
+.BR kbootset (1M)
+decides what a generation holds; use it to add or remove a module for good.
+.B modadmin
+acts on the running kernel only, and what it does is gone at the next boot.
+.PP
+Exactly one option is given, as the first argument.
+The status options, loads, unloads and search-path options, and
+.BR \-r ,
+are for root.
+.BR \-k " and " \-a
+are for anyone.
+.BR \-p ", " \-w ", " \-L " and " \-K
+need access to
+.BR /dev/kmem .
+.SH OPTIONS
+.TP 8
+.B \-s
+One line per loaded module: its id, reference count, dependent count and name.
+.TP
+.B \-S
+The full status of every loaded module, as
+.BR \-q .
+.TP
+.BI \-q " id ..."
+The full status of each module: name, id, path, size, base address, wrapper
+revision, unload delay, reference and dependent counts, flags and linkages.
+An unload delay of
+.B "never (locked)"
+is a module that cannot be unloaded.
+.TP
+.BI \-Q " name ..."
+The same, by name.
+.TP
+.BI \-l " name" \fR|\fIpath " ..."
+Load each module and print its id.
+A module loads only as a member of the booted generation: from the path its
+manifest gives,
+.BI /stand/gen/ id /mod/ name\fR,
+and only with the SHA-256 the manifest gives.
+Anything else is refused with
+.BR EPERM ,
+and the console says why.
+A boot with development loading
+.RB ( "kbootset next devload" )
+lifts that rule for that boot, and the console says so at each load.
+In safe mode only the root set and what
+.B /etc/conf/modreg.local.d
+marks safe will load.
+.TP
+.BI \-u " id ..."
+Unload each module.
+An id of 0 unloads every unused module.
+A module loads pinned unless it declares
+.BR unload=allowed :
+a pinned one, or one in use, is refused with
+.BR EBUSY .
+.TP
+.BI \-U " name ..."
+Unload by name.
+.TP
+.BI \-d " dir" \fR[:\fIdir\fR]
+Put these directories first on the kernel's module search path.
+.TP
+.B \-D
+Reset the search path.
+.TP
+.BI \-r " " cdev\fR|\fBsdev " name major ..."
+Register character
+.RB ( cdev )
+or STREAMS
+.RB ( sdev )
+driver majors for a module, so that the first open loads it.
+The major registry decides: a major that belongs to another module is refused.
+.TP
+.BI \-k " name ..."
+Print the address of each symbol: the kernel's exported names first, then each
+loaded module's globals.
+.TP
+.BI \-a " addr ..."
+Print the symbol each address falls in, and the offset into it.
+.TP
+.BI \-p " name" \fR[:\fIn\fR] " ..."
+Print
+.I n
+longs (default 1, at most 64) at a symbol, read through
+.BR /dev/kmem .
+A module's tunables and counters move with it, so they are reached by name.
+.TP
+.BI \-w " name value"
+Write one long at a symbol through
+.BR /dev/kmem .
+.TP
+.B \-L
+Print the kernel's message buffer, oldest first, text only, after a line of its
+control words: what the core and the modules printed, also after the console
+stopped showing kernel messages.
+It finds the buffer in
+.BR /stand/unix .
+.TP
+.B \-K
+Keep every kernel message in that buffer as well as on the console.
+Without a console logger the kernel stores nothing there after boot.
+.TP
+.B \-B
+Load the boot-class modules of the booted generation, once a boot.
+The first
+.B sysinit
+entry of
+.B /etc/inittab
+runs it; it is not for use by hand.
+.PP
+After
+.BR \-l ", " \-u " or " \-U
+has loaded or unloaded a module,
+.B modadmin
+runs
+.BR "kbootset namelist" ,
+so that
+.B /stand/unix
+carries the loaded modules' symbols for
+.BR crash (1M).
+A demand-class module loaded by a first open or mount appears there at the next
+rewrite.
+.SH EXIT STATUS
+.TP 4
+.B 0
+Every operand succeeded.
+.TP
+.B 1
+An operand failed; the others were still tried, and each failure is named on
+standard error.
+.TP
+.B 2
+A usage error.
+.SH FILES
+.TP 28
+.BI /stand/gen/ id /mod/
+the modules of a generation, boot and demand class.
+.TP
+.B /stand/unix
+the booted kernel's namelist, written by
+.BR kbootset (1M).
+.TP
+.B /dev/kmem
+kernel memory, for
+.BR \-p ", " \-w ", " \-L " and " \-K .
+.TP
+.B /etc/inittab
+runs
+.B modadmin \-B
+as its first
+.B sysinit
+entry.
+.SH EXAMPLES
+What is loaded:
+.PP
+.RS
+.nf
+modadmin \-s
+.fi
+.RE
+.PP
+One module in full:
+.PP
+.RS
+.nf
+modadmin \-Q ufs
+.fi
+.RE
+.PP
+What the kernel printed since boot, kept from now on:
+.PP
+.RS
+.nf
+modadmin \-K
+modadmin \-L
+.fi
+.RE
+.SH SEE ALSO
+.BR kbootset (1M),
+.BR apkg (1),
+.BR crash (1M)
