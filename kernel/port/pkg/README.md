@@ -31,7 +31,9 @@ recipe's corrected `NETBSD-M68K-FPE.txt` is shipped for that one (the port's
 own prose reworded, the third-party notices the same), the other licences
 from amix at a commit and from amix-paula by hash (`AMIX_PAULA_REPO`/
 `AMIX_PAULA_URL`); the kit's port headers are fetched by hash too
-(`AMIX_PORT_REPO`/`AMIX_PORT_URL`). Every time stamp of the roll is
+(`AMIX_PORT_REPO`/`AMIX_PORT_URL`). `GCC-LIBGCC.txt`, last in the copyright
+file, names the libgcc routines linked in, with their licence, exception and
+source. Every time stamp of the roll is
 `pin.sh`'s `SOURCE_EPOCH`.
 
 **Versions up to k46.1.3.261031-52 were minted by amix-packages' older

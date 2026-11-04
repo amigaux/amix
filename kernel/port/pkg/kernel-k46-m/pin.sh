@@ -56,6 +56,9 @@
 # The release notes in pkginfo ride this cut (a new version); -51 is never
 # re-rolled -- one version, one set of bytes (recipes/README.md).
 
+# -62.2 against -62.1 (2026-11-04): the same cut and objects, re-minted so the
+# copyright file names the libgcc routines linked in, with the GPL-2 text, the
+# exception and where the source is (GCC-LIBGCC.txt); DESC in plain words.
 # -62.1 against -62 (2026-11-04): the same cut and objects, re-minted for the
 # copyright file's wording (a corrected copy of the port's FPE notice, below).
 # -62 against -61 (2026-11-03): the port's cut 68060-261103-62 (amix-040-060-port
@@ -158,7 +161,7 @@ K46M_PKG=kern46m
 K46M_BUILDID=68060-261103-62
 K46M_KABI=k46.1.4
 K46M_FSKABI=k46.1.2       # the .moddata kabi of ufs (the minor it imports)
-K46M_VERSION=k46.1.4.261103-62.1
+K46M_VERSION=k46.1.4.261103-62.2
 
 K46M_UNIX_SHA=bc8e779f1f0f74ab6232efcd4f2314a4d25b2b01352dcd2bf482f03a6dab7242
 K46M_UNIX_SIZE=2355892
@@ -186,6 +189,10 @@ THIRD_PARTY_NOTICES/NETBSD-M68K-FPE.txt    dab091a6bad4311450455e7410bcfe9c3378c
 # port's own prose reworded, every third-party notice in it the same bytes.
 K46M_FPE_COPY=NETBSD-M68K-FPE.txt
 K46M_FPE_COPY_SHA=0c4e04164ef71c9307a9dbcf67d75b7f82682a3fff1567a6419305ca49c6734f
+# The libgcc routines linked in: which, their licence and exception, where the
+# source is (the toolchain the cut names in pin=), and GCC 2.7.2.3's COPYING.
+K46M_LIBGCC_COPY=GCC-LIBGCC.txt
+K46M_LIBGCC_COPY_SHA=ff00ad0f486bca2f223d9fa1489b0f4090cb510f2a7e6cc6763212f5b0daafbf
 # The code linked in from sibling repositories besides the port and the
 # module core (families-c.json in the cut: no z3660 pass, no zz9000/monsw;
 # since -71 amix-z3660scsi is not linked and its LICENSE left this list):
