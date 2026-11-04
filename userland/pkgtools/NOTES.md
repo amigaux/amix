@@ -1,5 +1,46 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — apkg 0.3.7: the servers of resolv.conf when nameserver= is empty (NOT MINTED)
+
+**Why.** On a box with DNS on, the shared libsocket is the DNS one, but apkg links the static
+libsocket, whose gethostbyname() reads /etc/inet/hosts only. apkg's own resolver read `nameserver=`
+alone, and that is empty by default. So with no hosts line for the repository: "cannot resolve host
+pkg.amigaux.org: it is not in the hosts file and no nameserver= is configured".
+
+**What it does now.** Hosts line, then `nameserver=`, else each `nameserver` line of the client's
+/etc/resolv.conf (under -R, the system apkg runs on), read only when a name gets that far.
+- `nameserver=` is the override: the file is then not read, also when those servers do not answer.
+- An IPv6 line is skipped quietly; at most 8 servers.
+- With none of the three, the message names all of them.
+- A hosts line still wins, so **a stale one still wins too**: this release does not change that.
+  apkg.1 and the shipped apkg.conf say to remove it to let DNS answer.
+
+**Also in this version:** apkg.1 gives a local repository's layout (held back from 0.3.6's minted
+bytes), and the apkg.conf template's comments follow the new order, so an unedited conf takes the
+new default and an edited one keeps its file with a .new beside it.
+
+**Tests.** 16 new apkg checks: the four cases, by the driver's new `-F` (step (b) with no host
+database in the way, this bench's upstream answering every name) and end to end through apkg;
+and resolv.conf's forms (comments, other keywords, tabs, no final newline, CRLF, IPv6, overlong
+lines, more than 8 servers).
+`PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make test` in a fresh clone: 8 suites.
+
+**Roll.** `make repro-check` in the build container: same bytes twice, md5
+`69d439ea20cdc9c8e2406a39d79c0461`, sha256
+`f770e901f024a9bd7ddadb1e71cd90cc890cbfb1135021432533f5b169dc700f`, 256000 B (0.3.6: 254464).
+scan060 clean. apkg.amix 133720 B, `sum -r` 19587, text 109487 + data 2472 + bss 4036 (0.3.6:
+text 108583, the same data and bss). Against 0.3.6 only apkg, apkg.1, apkg.conf.5, the two
+apkg.conf copies, pkginfo and pkgmap differ. APKGENG rolls `c1d4831a…`, unchanged.
+
+**On an emulated k46 box with DNS on,** first boot through the real dialog, the hosts line removed:
+- 0.3.6: the message above.
+- `apkg upgrade apkg` to this roll; `pkgchk -n APKG` clean; `sum -r` as above.
+- resolv.conf only: "asking 1 nameserver(s) from /etc/resolv.conf", the name resolved by DNS,
+  and pkg.amigaux.org answers 404, as expected until the 1.1 tree is published.
+- `nameserver=` an unreachable server: no reply, not resolved, the file not read.
+- No resolv.conf either: the message naming all three.
+- The hosts line back: "(hosts file)", 404.
+
 ## 2026-11-04 — make test from a fresh clone; an engine buffer for the next APKGENG
 
 `make test` was red in a fresh clone (the CI checkout). My worktree had binaries an earlier
