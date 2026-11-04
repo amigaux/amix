@@ -86,6 +86,10 @@ int kb_spec(const char *root, const struct kb_facts *f, ax_u32 loader_version, a
  * skipped when root holds no apkg records; returns the number of problems */
 int kb_check(struct ks *k, const char *root, void (*say)(const char *line));
 
+/* does /stand/loader/boot2 differ from the store's primary boot2 (its length
+ * and CRC-32)?  An upgraded package does not touch the store; 0 when no such file */
+int kb_loader_new(struct ks *k, const char *root);
+
 /* the booted kernel's namelist, root/stand/unix (40 §4.2, C2-4 §12):
  * made from the booted generation's kernel (or the line's unix.sym for a
  * brel) at kinfo's bind address, its layout checked against kinfo's

@@ -124,6 +124,8 @@ int ks_retry(struct ks *k, ax_u32 booted);
 /* the default goes to the newest good (or pristine) generation older than
  * it; a pending trial is cancelled; *to = the new default */
 int ks_rollback(struct ks *k, ax_u32 *to);
+/* make a good or pristine generation the default (kbootset default) */
+int ks_default(struct ks *k, ax_u32 id);
 
 /* a one-shot request for the next boot (AXO_*), gen for AXO_GEN */
 int ks_next(struct ks *k, int req, ax_u32 gen);

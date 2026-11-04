@@ -1,10 +1,10 @@
 .\" kbootset(1M) -- the generation composer (kernel/dlm).
-.\" Written from docs/contracts/C2-4-kbootset-cli.md version 21 and
+.\" Written from docs/contracts/C2-4-kbootset-cli.md version 27 and
 .\" docs/spec/40-generations-and-composer.md; installed as
 .\" /opt/amix/man/1m/kbootset (userland/packages/docs/man-pages.md).
 .\" Plain -man requests only: the stock nroff of 1991 formats it.
 .\" MIT licence, see LICENSE in kernel/dlm.
-.TH KBOOTSET 1M "2026-11-01" "kbootset" "Amix kernel modules"
+.TH KBOOTSET 1M "2026-11-04" "kbootset" "Amix kernel modules"
 .nh
 .SH NAME
 kbootset \- compose, commit and roll back boot generations
@@ -47,8 +47,8 @@ a trial that failed, or a generation marked bad by hand.
 .PP
 The
 .I kept set
-is the pristine generation, the two newest good generations and at most one
-trial.
+is the pristine generation, the default, the two newest good generations and
+at most one trial.
 .B commit
 and
 .B collect
@@ -131,6 +131,11 @@ booted generation, the loader that booted it and the kernel
 (and why, in a safe boot), whether
 .B /stand/unix
 is the booted kernel's namelist, and the box's facts.
+A
+.B note:
+line says when
+.B /stand/loader
+holds a loader the store does not.
 It writes nothing.
 .TP
 .B build \fR[\fP\fIoptions\fP\fR]\fP
@@ -175,6 +180,9 @@ When the built generation equals the default one,
 says that
 .B commit
 will write nothing.
+When another good generation holds it, it says that
+.BI "kbootset default " id
+makes that one the default without a new generation.
 .TP
 .B commit
 Writes the built generation into the store as the trial: the journal, the
@@ -185,7 +193,12 @@ It prints
 When the generation equals the default one (the same line, kabi, root,
 swap, members by name, size and SHA-256, and parameters), it writes
 nothing and prints
-.BR "the default generation M already has these members; nothing to commit" .
+.BR "the default generation M already has these members; nothing to commit" ,
+and removes what the build put in
+.BI /stand/gen/ id .
+Either line ends with the way to install the loader when
+.B /stand/loader/boot2
+differs from the store's; a loader is never installed unasked.
 On the running box it then makes the disk nodes, as
 .B nodes
 does.
@@ -208,6 +221,15 @@ kernel's major table with this
 .BR kbootset 's
 registry (a different table is a problem, none a note), and compares the
 installed packages with the default generation.
+An installed kernel the default does not hold is named as what it is:
+on trial in generation
+.IR N ,
+good in generation
+.IR N ,
+or in no generation yet; each line gives the next step, and none is a problem.
+So is a loader in
+.B /stand/loader
+that the store does not hold.
 It never writes.
 Exit status 1 when it finds a problem.
 .TP
@@ -241,6 +263,14 @@ otherwise it does nothing.
 Makes the newest good generation older than the default the new default,
 or the pristine one when there is none.
 A pending trial is cancelled.
+The line names the way back.
+.TP
+.BI default " id"
+Makes the good or pristine generation
+.I id
+the default, for every boot from the next on, writing no new generation.
+It is refused while a generation is on trial: boot that one first, or mark
+it bad.
 .TP
 .BI mark-bad " id"
 Marks generation
@@ -297,6 +327,12 @@ checks the file against.
 It writes only when the content differs, as a new file renamed into place;
 .B modadmin
 runs it after loading or unloading a module.
+A kernel shipped without symbols takes them from
+.BI /stand/gen/ id /unix.sym
+when the generation has one, else from the line's
+.BR unix.sym ,
+which it then saves there, so that a rollback's boot still has them after a
+package replaces the line's file.
 Exit status 3 when it cannot make one; the line says why.
 .TP
 .B nodes
@@ -531,9 +567,15 @@ and the box's facts
 .BR mem= ).
 .TP
 .BI /stand/gen/ id /
-a built generation: its manifest and
+a built generation: its manifest,
 .BR mod/ ,
-the modules the kernel loads from the root.
+the modules the kernel loads from the root, and for a kernel without symbols
+.BR unix.sym .
+.TP
+.B /stand/loader/boot2
+the loader package's boot2;
+.B loader-install
+puts it on the store.
 .TP
 .B /stand/unix
 the booted kernel's namelist.
@@ -592,6 +634,14 @@ To make the previous good generation the default again:
 .RS
 .nf
 kbootset rollback
+.fi
+.RE
+.PP
+and to go back to generation 4 after that:
+.PP
+.RS
+.nf
+kbootset default 4
 .fi
 .RE
 .PP

@@ -54,6 +54,7 @@
  *                          the trial's attempt does not count (40 §3.3);
  *                          writes the boot slice only, nothing on the root
  *   rollback               the default to the previous good generation
+ *   default ID             a good or pristine generation becomes the default
  *   next previous|safe|devload|none|ID   for the next boot only
  *   mark-bad ID
  *   collect
@@ -111,6 +112,11 @@
 #define SECTOR	512UL
 
 static void usage(void);
+
+/* /stand/loader holds what the store does not (kb_loader_new); never installed
+ * unasked: loader-install is a trial with the old loader kept as the secondary */
+#define LOADER_NEW	"; the loader in /stand/loader is not on the boot store yet: " \
+			"kbootset loader-install /stand/loader/boot2"
 static ax_u8 *slurp(const char *path, ax_u32 *len);
 
 struct file {
@@ -424,7 +430,7 @@ usage(void)
 	fprintf(stderr,
 		"usage: kbootset [-R ROOT] [--image FILE | --dev PATH] [--offset N] [--journal PATH] COMMAND\n"
 		"  create SIZE BOOT2 [--boot1 FILE] [--version N] [--force]\n"
-		"  status | check | rollback | collect | mark-bad ID\n");
+		"  status | check | rollback | default ID | collect | mark-bad ID\n");
 	fprintf(stderr,
 		"  build [--line 30|46] [--bootdev KEY] [--rootdev KEY] [--rootfs TYPE] [--mem N]\n"
 		"        [--root REC] [--swap REC]\n"
@@ -1019,6 +1025,8 @@ main(int argc, char **argv)
 		k.msg[0] = 0;
 		if (!strcmp(cmd[0], "status")) {
 			status(&k);
+			if (kb_loader_new(&k, root))
+				printf("note:%s\n", LOADER_NEW + 1);
 			if (have_kinfo && KB_MEDIUM(&ki)) {	/* C2-4 section 13 */
 				printf("booted: generation %lu of a read-only medium (%s), not of this box's store; "
 				       "kernel %s, 680%lu, %lu bytes of fast memory\n", (unsigned long)ki.gen_id,
@@ -1056,6 +1064,9 @@ main(int argc, char **argv)
 		} else if (!strcmp(cmd[0], "check") && argc == 1) {
 			int bad = ks_check(&k, say) + kb_check(&k, root, say);
 
+			if (kb_loader_new(&k, root))
+				say(LOADER_NEW + 2);
+
 			if (image == dev) {	/* the running box's nodes (C2-4 §14) */
 				char nm[300];
 				int r = kb_nodes(root, 0, nm);
@@ -1074,6 +1085,8 @@ main(int argc, char **argv)
 				return 2;
 		} else if (!strcmp(cmd[0], "commit") && (argc == 1 || (argc == 2 && !strcmp(cmd[1], "--again")))) {
 			rc = kb_commit(&k, root, &id, argc == 2);
+			if (rc == KS_OK && kb_loader_new(&k, root))	/* on the line apkg repeats (C2-4 §3) */
+				strcat(k.msg, LOADER_NEW);
 			if (rc == KS_OK && image == dev && !root_given) {
 				char nm[300];	/* before the commit's line, which apkg repeats (C2-4 §3, §14) */
 				int r = kb_nodes(root, 1, nm);
@@ -1130,6 +1143,8 @@ main(int argc, char **argv)
 			return 3;
 		} else if (!strcmp(cmd[0], "rollback") && argc == 1) {
 			rc = ks_rollback(&k, &id);
+		} else if (!strcmp(cmd[0], "default") && argc == 2) {
+			rc = ks_default(&k, (ax_u32)strtoul(cmd[1], 0, 0));
 		} else if (!strcmp(cmd[0], "next") && argc == 2) {
 			const char *r = cmd[1];
 			rc = !strcmp(r, "previous") ? ks_next(&k, AXO_PREVIOUS, 0) :
