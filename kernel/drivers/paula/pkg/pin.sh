@@ -22,12 +22,14 @@
 # programs, /usr/include/paula.h.
 # 1.1.0-2 (2026-11-01): the module 1.1.0-1 (fork a111e57), built with the
 # gcc-2.7.2.3-33ebadc kit, first rolled from amix.
+# 1.1.0-3 (2026-11-04): the same module and objects; the copyright file's licence
+# headings name the component, without the build path.
 
 KM_NAME=paula
 KM_SHORT=paula
 KM_REPO=kernel/drivers/paula
 KM_VERSION=1.1.0-1
-KM_PKG_VERSION=1.1.0-2
+KM_PKG_VERSION=1.1.0-3
 KM_VERSION_FILE=out/cache/forks/paula/module/VERSION
 
 KM_K30_SHA=5db201d7df21e9ec06b097416857afee88db9d6e9ae59a36fc1823603922d858

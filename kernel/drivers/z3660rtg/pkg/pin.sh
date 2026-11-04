@@ -20,12 +20,14 @@
 # 1.1.1-3 (2026-11-01): the module 1.1.1-1 (fork a9d39a1: startx-rtg runs
 # the server at /opt/amix/X11R6/bin/Xzz9000), built with the
 # gcc-2.7.2.3-33ebadc kit, first rolled from amix; xztop moved out.
+# 1.1.1-4 (2026-11-04): the same module and objects; the copyright file's licence
+# headings name the component, without the build path.
 
 KM_NAME=z3660rtg
 KM_SHORT=zrtg
 KM_REPO=kernel/drivers/z3660rtg
 KM_VERSION=1.1.1-1
-KM_PKG_VERSION=1.1.1-3
+KM_PKG_VERSION=1.1.1-4
 KM_VERSION_FILE=out/cache/forks/z3660rtg/module/VERSION
 
 KM_K30_SHA=ab7af11c013c2df07619f0f2991f7236aa358c76819f7fce210cdbd7ad778d71

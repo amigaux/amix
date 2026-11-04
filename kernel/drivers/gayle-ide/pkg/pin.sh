@@ -22,12 +22,14 @@
 # symbols are built only with IDE_DIAG.
 # 1.1.0-8 (2026-11-02): the module 1.1.0-5 (fork 3b72994): the A1200 port
 # too, chosen by the Kickstart ROM's card.resource resident; param board.
+# 1.1.0-9 (2026-11-04): the same module and objects; the copyright file's licence
+# headings name the component, without the build path.
 
 KM_NAME=gayle
 KM_SHORT=gayle
 KM_REPO=kernel/drivers/gayle-ide
 KM_VERSION=1.1.0-5
-KM_PKG_VERSION=1.1.0-8
+KM_PKG_VERSION=1.1.0-9
 KM_VERSION_FILE=out/cache/forks/gayle-ide/module/VERSION
 
 KM_K30_SHA=3b7c03dadca22706ee7b4d13d748aa02d3854fe98aa35306bedd0c52c572e62b

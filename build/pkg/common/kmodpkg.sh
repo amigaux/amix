@@ -178,7 +178,8 @@ PY
 		[ -z "${KM_EXTRA_NOTE:-}" ] || { echo; echo "$KM_EXTRA_NOTE"; }
 		echo "$KM_LICENCES" | while read _n _h; do
 			[ -n "$_n" ] || continue
-			echo; echo "======== $_n ========"; echo
+			# the heading names the component; a fork's cache path is the build's
+			echo; echo "======== ${_n#out/cache/forks/} ========"; echo
 			cat "$_km_root/$_n"
 		done
 		echo; echo "======== the amix-dlm ABI kit (module wrapper, headers): LICENSE ========"; echo
