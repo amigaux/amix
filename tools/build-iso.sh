@@ -370,7 +370,7 @@ fi
 if [ -n "$PUBLISHED" ]; then
   PUBLINE="published by owner decision $PUBLISHED"
 else
-  PUBLINE="unpublished (publishing this medium is a per-artefact owner decision)"
+  PUBLINE="unpublished when built"
 fi
 
 # --- .Z refusal (gen-catalog accepts .pkg.Z, so this must be checked, not assumed)
@@ -479,18 +479,35 @@ PY
   SYSID_ARGS=(-sysid "AMIGA BOOT")
 fi
 
+. "$here/lib/licensing-text.sh"
 cat >"$root/LICENSING" <<EOF
 Amix 2.1 install CD -- release-cleared 2026-09-23.
 
 /pkgs/stock/ holds Amix 2.1 factory packages repackaged from the original Commodore
 install tape. On 2026-09-23 Amiga Corporation approved distributing the Commodore
-Amiga binaries, and the project owner ruled that Amiga UNIX may be released.
-
-Publication: $PUBLINE.
-
-/pkgs/base/ (the apkg client and the heirloom-derived engine) is ours and carries
-its own licenses. See tools/build-iso.sh.
+Amiga binaries; they are distributed here on that approval.
 EOF
+# the texts beside this file, when the disc carries the installer (the stage's LICENSES)
+if [ -d "$root/install/LICENSES" ]; then
+  mv "${root:?}/install/LICENSES" "${root:?}/LICENSES"
+  cat >>"$root/LICENSING" <<'EOF'
+
+The package engine (pkgadd, pkginstall and the other package tools in /install/bin, and the
+APKGENG package in /pkgs/base/) is the Heirloom Packaging Tools by Gunnar Ritter, derived from
+the OpenSolaris SVR4 packaging tools, with changes for Amix. It is under the Common Development
+and Distribution License 1.0. Its source is at https://github.com/amigaux/amix, in
+userland/pkgtools/heirloom.
+The licence texts are on this disc in /LICENSES:
+  OPENSOLARIS.LICENSE          the CDDL 1.0
+  CALDERA.LICENSE              the engine's old Unix code. This product includes software
+                               developed or owned by Caldera International, Inc.
+  FNMATCH.LIC, SNPRINTF.LIC    the engine's fnmatch and snprintf
+
+The apkg package client (/install/bin/apkg and the APKG package in /pkgs/base/) is under the MIT
+licence, /LICENSES/APKG.LICENSE. Its source is in the same repository, in userland/pkgtools.
+EOF
+  licensing_gpl_text /LICENSES/GPL-2 /LICENSES/GPL-3 "$root/LICENSING"
+fi
 # third-party notices on the medium, each only when the disc carries the code. Acknowledgements a
 # package's licence asks for (an advertising clause), when the base set holds the package
 # (install/l11/base/<pkginst>.pkg): rdate (openrdate 1.11's rdate.c and rfc868time.c, Christos
@@ -528,7 +545,7 @@ fi
   echo "volume-id:    $VOLID"
   echo "xorriso:      $(xorriso --version 2>&1 | sed -n 's/^xorriso version *: *//p' | head -1)"
   echo "catalog:      apkg catalog v1 + the isize extension block (gen-catalog.py --isize)"
-  echo "metadata:     deps.conf + cats.conf from amix-packagemanager/tools/repo/"
+  echo "metadata:     deps.conf + cats.conf from pkgtools' tools/repo/"
   echo "sessions:     1 (single-session ONLY — Amix cdfs cannot see a second one)"
   echo "extensions:   Rock Ridge on, Joliet off, no .Z compression"
   if [ -n "$CDBOOT" ]; then

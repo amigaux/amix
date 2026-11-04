@@ -314,6 +314,7 @@ write_conf()
 			-e '/^FB_NET_MODE=/d' \
 			-e '/^FB_REPO_HOST=/d' \
 			-e '/^FB_REPO_IP=/d' \
+			-e '/^FB_REPO_IP_TYPED=/d' \
 			-e '/^FB_REPO_URL=/d' \
 			-e '/^FB_ROOT_TELNET=/d' \
 			-e '/^FB_SYSLOG=/d' \
@@ -338,6 +339,7 @@ write_conf()
 		echo "FB_NET_MODE=$FB_NET_MODE"
 		echo "FB_REPO_HOST=$FB_REPO_HOST"
 		echo "FB_REPO_IP=$FB_REPO_IP"
+		echo "FB_REPO_IP_TYPED=$FB_REPO_IP_TYPED"
 		echo "FB_REPO_URL=$FB_REPO_URL"
 		echo "FB_ROOT_TELNET=$FB_ROOT_TELNET"
 		echo "FB_SYSLOG=$FB_SYSLOG"
@@ -701,16 +703,36 @@ ask_network()
 
 ask_repo()
 {
-	# The package repository. Its name has to resolve without DNS, so the address
-	# is asked for too and S16 bakes the pair into /etc/inet/hosts.
+	# The package repository. pkg.amigaux.org is reached by name only: the host may
+	# move, so no address is asked and no hosts line is written for it. Your own
+	# mirror's address may be asked, and S16 bakes the pair into /etc/inet/hosts.
 	readask "\nWhat is the package repository host? [$FB_REPO_HOST] "
 	if [ "$ask" != "" ]; then
 		RNEW="$ask"
 		if [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_URL" ]; then
 			# keep the URL pointing at the host that was just named
-			FB_REPO_URL=`echo "$FB_REPO_URL" | sed -e "s|//$FB_REPO_HOST/|//$RNEW/|"`
+			# (http://HOST/path, http://HOST:port, http://HOST: two -e too, SVR4 sed has no alternation)
+			FB_REPO_URL=`echo "$FB_REPO_URL" | sed -e "s|//$FB_REPO_HOST\([:/]\)|//$RNEW\1|" -e "s|//$FB_REPO_HOST\$|//$RNEW|"`
 		fi
+		# an address carried in belongs to the name it came with
+		[ "$RNEW" = "$FB_REPO_HOST" ] || FB_REPO_IP= FB_REPO_IP_TYPED=
 		FB_REPO_HOST="$RNEW"
+	fi
+	if [ "$FB_REPO_HOST" = pkg.amigaux.org ]; then
+		FB_REPO_IP= FB_REPO_IP_TYPED=
+		if [ -z "$FB_DNS1" ] && [ "$FB_NET_MODE" != dhcp ]; then
+			echo "\nNo name servers: apkg cannot reach $FB_REPO_HOST until the system has"
+			echo "one. To give it one later, add a dns line to /etc/inet/interfaces."
+		fi
+		return
+	fi
+	# The hosts row wins over DNS for years, so an address not typed here (the netinstall's,
+	# a profile's) stays only where the box has no name servers to ask.
+	if [ -n "$FB_REPO_IP" ] && [ "$FB_REPO_IP_TYPED" != y ] && { [ -n "$FB_DNS1" ] || [ "$FB_NET_MODE" = dhcp ]; }; then
+		echo "\nDuring the installation $FB_REPO_HOST was at $FB_REPO_IP. The name servers"
+		echo "will resolve it from now on; type that address here only if they do not"
+		echo "know this name."
+		FB_REPO_IP=
 	fi
 	if [ -n "$FB_REPO_HOST" ]; then
 		RIOK=
@@ -725,23 +747,28 @@ ask_repo()
 			# empty answer became an empty $ask, valid_ip refused it, and
 			# nothing could ever satisfy it), so a public disc would have
 			# hung its own first boot. Two ways out, both stated out loud:
-			# with DNS the name resolves and no hosts line is wanted; with
-			# neither, S16 skips the bake and says so -- and `apkg update`
-			# will not resolve the repository until somebody adds it by
-			# hand. Half a resolver is worse than none, so we never pretend
+			# with DNS the system's name servers resolve the name (apkg reads
+			# /etc/resolv.conf too) and no hosts line is wanted; with neither,
+			# S16 skips the bake and says so -- and `apkg update` will not
+			# resolve the repository until somebody adds it by hand. Half a resolver is worse than none, so we never pretend
 			# an address we were not given.
 			if [ "$ask" = "" ] && [ -z "$FB_REPO_IP" ]; then
 				if [ -n "$FB_DNS1" ]; then
-					echo "\nNo address: $FB_REPO_HOST will be resolved by DNS."
+					echo "\nNo address: the name servers you gave will resolve"
+					echo "$FB_REPO_HOST."
 				elif [ "$FB_NET_MODE" = dhcp ]; then
-					# ifup gives the resolver the name servers of the lease (DHCP_DNS)
-					echo "\nNo address: $FB_REPO_HOST will be resolved by the name"
-					echo "servers the DHCP server gives. If it gives none, add the"
-					echo "name to /etc/inet/hosts by hand."
+					# ifup writes the lease's name servers (DHCP_DNS) to /etc/resolv.conf
+					echo "\nNo address: the name servers the DHCP server gives will"
+					echo "resolve $FB_REPO_HOST. If it gives none, apkg cannot reach"
+					echo "the repository until it has an address: add the line"
+					echo "  <address> $FB_REPO_HOST"
+					echo "to /etc/inet/hosts."
 				else
-					echo "\nNo address recorded for $FB_REPO_HOST."
-					echo "Package downloads will not resolve it until it is"
-					echo "added to /etc/inet/hosts by hand."
+					echo "\nNo address and no name servers: apkg cannot reach the"
+					echo "repository until it has an address. To give it one later,"
+					echo "add the line"
+					echo "  <address> $FB_REPO_HOST"
+					echo "to /etc/inet/hosts."
 				fi
 				RIOK=y
 				continue
@@ -750,6 +777,8 @@ ask_repo()
 				ask="$FB_REPO_IP"
 			fi
 			if valid_ip "$ask"; then
+				# typed, as opposed to RETURN on a carried default: this is the row S16 writes
+				[ "$ask" = "$FB_REPO_IP" ] || FB_REPO_IP_TYPED=y
 				FB_REPO_IP="$ask"
 				RIOK=y
 			else
@@ -1036,7 +1065,7 @@ summary()
 		echo "Network:		as installed ($FB_ETHER_IF $FB_IP)"
 	fi
 	if [ -n "$FB_REPO_HOST" ]; then
-		echo "Package repository:	$FB_REPO_HOST ($FB_REPO_IP)"
+		echo "Package repository:	$FB_REPO_HOST${FB_REPO_IP:+ ($FB_REPO_IP)}"
 	fi
 	if [ "$PW_DONE" = y ]; then
 		echo "Root password:		set"
@@ -1523,10 +1552,17 @@ fi
 # ZERO-TOUCH out of the box (W6.4c). Same /etc/inet/hosts, same rule: NEVER touch
 # network-config. Profile-driven: FB_REPO_HOST/FB_REPO_IP come from firstboot.conf.
 #   * Both empty/absent  -> a profile without a repo is legal; skip, but LOG it.
+#   * pkg.amigaux.org -> never a hosts line: it is reached by name only (the host may move).
+#   * An address not typed at the dialog's question (FB_REPO_IP_TYPED) -> only where the box has no
+#     name servers (no FB_DNS1, not DHCP): a hosts row wins over DNS and goes stale silently.
 #   * Duplicate-guarded  -> strip any prior line naming FB_REPO_HOST (as a
 #     whitespace-delimited token) before appending exactly one, so a re-run (or a
 #     repo host already present) can never accumulate duplicate lines.
-if [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_IP" ]; then
+if [ "$FB_REPO_HOST" = pkg.amigaux.org ]; then
+	echo "firstboot: no hosts line for $FB_REPO_HOST: it is reached by name only"
+elif [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_IP" ] && [ "$FB_REPO_IP_TYPED" != y ] && { [ -n "$FB_DNS1" ] || [ "$FB_NET_MODE" = dhcp ]; }; then
+	echo "firstboot: no hosts row for $FB_REPO_HOST: the name servers resolve it ($FB_REPO_IP was not typed)"
+elif [ -n "$FB_REPO_HOST" ] && [ -n "$FB_REPO_IP" ]; then
 	if [ -f /etc/inet/hosts ]; then
 		# two -e expressions, never `\|` -- SVR4 sed has no alternation (see the
 		# nodename guard above; measured 2026-08-12, this line's alternation form
@@ -1952,7 +1988,7 @@ fi
 # exits the X session ends, which is why it is exec'd rather than backgrounded.
 {
 	echo "#!/bin/sh"
-	echo "# Installer-NG default X session: the OPEN LOOK desktop (owner-approved)."
+	echo "# Installer-NG default X session: the OPEN LOOK desktop."
 	echo "olwm &"
 	echo "olwsm &"
 	echo "sleep 2"

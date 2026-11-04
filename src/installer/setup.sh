@@ -213,7 +213,7 @@ BREAKPT=120
 LGSWAP=30
 SMSWAP=18
 MINBOOT=2                # the boot-slice floor; install.sh carries the same constant
-BOOTSIZE=10               # r6e (owner 2026-10-10): 10 MiB so every kernel cut fits; stock was 2
+BOOTSIZE=10               # 10 MiB so every kernel cut fits; stock was 2
 OFFSET_BLOCKS=128
 BLOCKS_PER_MB=2048
 # E-BIG (KT-32, 2026-10-02): the STOCK kernel cannot write an on-box filesystem
@@ -2440,7 +2440,7 @@ do
 	# probe needs a raw node) and before a single size is asked for.
 	check_old_boot
 	ask_sizes
-	ANS_FSYS=ufs	# the only target filesystem (P-35); not asked
+	ANS_FSYS=ufs	# the only target filesystem; not asked
 	ask_set
 	ask_verbose
 	if confirm; then

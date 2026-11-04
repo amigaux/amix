@@ -94,8 +94,9 @@ fi
 ( cd "$OUT" && sha256sum amix-1.1-*.iso amix-1.1-*.adf amix-1.1-*.hdf > SHA256SUMS )
 {
 	echo "# amigaux 1.1 installer media, $(date -u +%Y-%m-%dT%H:%M:%SZ), installng $(git -C "$repo" rev-parse --short HEAD)"
-	echo "# inputs: $L11_IN/INPUTS"
-	grep -E '^#   (dlm|kspace|dist) ' "$L11_IN/INPUTS" | sed 's/^#   /#   /'
+	# published with the media: the inputs by their record's hash and the candidate by name, no machine path
+	echo "# inputs: INPUTS sha256 $(sha256sum < "$L11_IN/INPUTS" | cut -c1-64)"
+	grep -E '^#   (dlm|kspace|dist) ' "$L11_IN/INPUTS" | sed -e 's|^#   kspace .*/|#   kspace |'
 	for f in "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf; do
 		echo "$(basename "$f")  $(stat -c %s "$f") bytes  sha256 $(cut -c1-64 "$f.sha256")"
 	done
@@ -105,6 +106,13 @@ python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRI
 	"$ISO" ${NI:+"$NI"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
 rc=${PIPESTATUS[0]}
 python3 "$here/known-bad-scan.py" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf 2>&1 \
+	| tee -a "$OUT/RELEASE-CHECK.txt"
+[ "${PIPESTATUS[0]}" = 0 ] || rc=1
+# the repository by name only: the media, the master stage, and the RAM disks before they are deflated
+bash "$here/medium-address-check.sh" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf "$OUT/stage" "$R46" "$R30" ${N46:+"$N46"} ${N30:+"$N30"} 2>&1 \
+	| tee -a "$OUT/RELEASE-CHECK.txt"
+[ "${PIPESTATUS[0]}" = 0 ] || rc=1
+bash "$here/sidecar-path-check.sh" "$OUT"/MEDIA.txt "$OUT"/SHA256SUMS "$OUT"/*.sha256 "$OUT"/*.MANIFEST "$OUT"/RELEASE-CHECK.txt 2>&1 \
 	| tee -a "$OUT/RELEASE-CHECK.txt"
 [ "${PIPESTATUS[0]}" = 0 ] || rc=1
 [ "$rc" = 0 ] && echo "build-release-media: built and clean ($OUT)" || echo "build-release-media: the content check FAILED ($OUT/RELEASE-CHECK.txt)"

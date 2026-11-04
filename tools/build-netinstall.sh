@@ -103,15 +103,36 @@ cp -R "$W/tree/BOOT" "$W/tree/S" "$root/"
 find "$root/BOOT" "$root/S" -type d -exec chmod 0755 {} +
 find "$root/BOOT" "$root/S" -type f -exec chmod 0644 {} +
 chmod 0755 "$root/BOOT/amix-cdboot"
+. "$here/lib/licensing-text.sh"
 cat > "$root/LICENSING" <<EOF
 Amix 2.1 netinstall medium -- release-cleared 2026-09-23.
 
-This disc boots the Amix 1.1 installer into memory (68030 and 68040/68060 lines); the
-system's packages are read over the network from the package repository. It carries
-no packages itself.
+This disc boots the Amix 1.1 installer into memory (68030 and 68040/68060 lines). Its RAM disk
+carries the base packages the installer needs; the rest of the system's packages are read over
+the network from the package repository.
 
-Publication: unpublished (publishing this medium is a per-artefact owner decision).
+The package engine in the RAM disk (pkgadd, pkginstall) and the APKGENG package among its base
+packages are the Heirloom Packaging Tools by Gunnar Ritter, derived from the OpenSolaris SVR4
+packaging tools, with changes for Amix. They are under the Common Development and Distribution
+License 1.0. The source is at https://github.com/amigaux/amix, in userland/pkgtools/heirloom.
+The licence texts are on this disc in /LICENSES, and in the RAM disk in /install/LICENSES:
+  OPENSOLARIS.LICENSE (CDDL in the RAM disk)  the CDDL 1.0
+  CALDERA.LICENSE (CALDERA)      the engine's old Unix code. This product includes software
+                                 developed or owned by Caldera International, Inc.
+  FNMATCH.LIC (FNMATCH), SNPRINTF.LIC (SNPRINTF)  the engine's fnmatch and snprintf
+
+The apkg package client is under the MIT licence, /LICENSES/APKG.LICENSE (APKG in the RAM disk).
+Its source is in the same repository, in userland/pkgtools.
 EOF
+licensing_gpl_text "/LICENSES/GPL-2 (GPL-2 in the RAM disk)" "/LICENSES/GPL-3 (GPL-3 in the RAM disk)" "$root/LICENSING"
+mkdir -p "$root/LICENSES"
+for _l in heirloom/LICENSE/OPENSOLARIS.LICENSE heirloom/LICENSE/CALDERA.LICENSE heirloom/LICENSE/FNMATCH.LIC \
+          heirloom/LICENSE/SNPRINTF.LIC; do
+  cp "$L11/pkgtools/$_l" "$root/LICENSES/" || die "no $L11/pkgtools/$_l"
+done
+cp "$L11/pkgtools/LICENSE" "$root/LICENSES/APKG.LICENSE" || die "no $L11/pkgtools/LICENSE"
+cp "$repo/payload/licences/GPL-2" "$repo/payload/licences/GPL-3" "$root/LICENSES/" || die "no payload/licences"
+chmod 0644 "$root"/LICENSES/*
 # third-party notices on the medium (build-iso.sh's table), each only when the disc carries the code:
 # a base-set package's acknowledgement when the RAM disk's first stage installs it (the inputs'
 # base/sets name its pkginst), the 68040/68060 kernel's when the disc boots that kernel

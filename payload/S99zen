@@ -5,7 +5,7 @@
 # (docs/address-by-card.md). A matched row also sets the nodename and rewrites
 # this box's own row in /etc/inet/hosts. No zen.conf = the laydown address
 # below, exactly as before the table existed.
-# Laid onto the target root by src/installer/install.sh for zen0 (metal) profiles
+# Laid onto the target root by src/installer/install.sh for zen0 profiles
 # only: a driver-written ADDITIVE file, NOT a package member (like S16firstboot
 # and updbootpart). The FALLBACK/NETMASK/GATEWAY/DOMAIN values are the profile's
 # FB_IP/FB_NETMASK/FB_GATEWAY/FB_DOMAIN, parameterized at laydown (the tracked

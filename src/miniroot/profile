@@ -811,6 +811,10 @@ net_source()
 	then
 		case "$nhost" in
 			[0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+			# reached by name only: the host may move
+			pkg.amigaux.org)
+				echo "\nNo name server: $nhost can only be reached by name, so the"
+				echo "repository will not be found. Start again with a name server." ;;
 			*)	readask "What is the address of $nhost? "
 				NRIP="$ask"
 				echo "$ask	$nhost" >> /etc/inet/hosts ;;

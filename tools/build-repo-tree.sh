@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # build-repo-tree.sh -- the release's package repository tree, as it is published, from the inputs of record.
 #
-#   tools/build-repo-tree.sh --out DIR [--release 1.1]
+#   tools/build-repo-tree.sh --out DIR [--release 1.1] [--previous DIR]
 #
 # Writes DIR/<release>/ (catalog, catalog.md5, pkgs/) with amix's
 # userland/pkgtools/tools/repo/assemble-release.py, the tool that writes the published tree: one catalog
@@ -26,10 +26,14 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--out) OUT="$2"; shift 2 ;;
 	--release) REL="$2"; shift 2 ;;
+	--previous) PREV="$2"; shift 2 ;;
 	*) sed -n '2,22p' "$0"; exit 2 ;;
 	esac
 done
 die() { echo "build-repo-tree: STOP: $*" >&2; exit 1; }
+# --previous DIR: the published tree, read-only: assemble-release keeps its older versions, and refuses a
+# published name and version whose bytes differ, so a re-publish removes nothing a box may have listed
+[ -z "${PREV:-}" ] || [ -d "$PREV" ] || die "--previous: no directory $PREV"
 [ -n "$OUT" ] || { sed -n '2,6p' "$0" >&2; exit 2; }
 [ -n "${PRIVACY_PATTERNS:-}" ] && [ -f "$PRIVACY_PATTERNS" ] || die "PRIVACY_PATTERNS (the bench's local names) is required"
 L11_IN="${L11_IN:-$repo/work/l11}"
@@ -70,7 +74,7 @@ rm -rf "${D:?}"
 G14=(); [ ! -f "$L11_IN/amix-gcc14/scan060-g14.py" ] || G14=(--scan060-g14 "$L11_IN/amix-gcc14/scan060-g14.py")
 AMIX_PKGTRANS="$L11_IN/pkgtools/heirloom/build-host/bin/pkgtrans" python3 "$AR" --userland "$W/userland" --kspace "$ws/$KS" --apkg "$W/apkg" --stock "$ST/stock" --release "$REL" \
 	--out "$D" --release-check "$RC" --rom-register "$ws/roms/MANIFEST.sha256" \
-	--private-patterns "$PRIVACY_PATTERNS" --apkg-bin "$L11_IN/apkg/apkg-host" "${G14[@]+"${G14[@]}"}" > "$OUT/assemble.log" 2>&1
+	--private-patterns "$PRIVACY_PATTERNS" --apkg-bin "$L11_IN/apkg/apkg-host" "${G14[@]+"${G14[@]}"}" ${PREV:+--previous "$PREV"} > "$OUT/assemble.log" 2>&1
 rc=$?
 [ "$rc" = 0 ] || { tail -15 "$OUT/assemble.log" >&2; die "assemble-release.py refused or failed (rc $rc; $OUT/assemble.log)"; }
 # the CD's bytes: every userland row's datastream is the one the CD carries in base/ (under its pkginst name)

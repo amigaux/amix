@@ -448,9 +448,19 @@ else
   cp -p "$repo/src/installer/install.sh" "$STAGE/bin/install.sh"; chmod 0755 "$STAGE/bin/install.sh"
   cp -p "$repo/src/installer/setup.sh"   "$STAGE/bin/setup.sh";   chmod 0755 "$STAGE/bin/setup.sh"
 fi
-cp -p "$repo"/payload/firstboot/firstboot.sh "$STAGE/firstboot/firstboot.sh"
+# stage_sh SRC DST -- a script that ships: without its comments when the profile strips them
+stage_sh() {
+  if [ -n "$STRIP_COMMENTS" ]; then
+    python3 "$here/strip-sh-comments.py" "$1" "$2" \
+      || { echo "STOP: strip-sh-comments refused $1" >&2; exit 1; }
+  else
+    cp -p "$1" "$2"
+  fi
+  chmod --reference="$1" "$2"
+}
+stage_sh "$repo/payload/firstboot/firstboot.sh" "$STAGE/firstboot/firstboot.sh"
 # the netinstall's second stage (install.sh arms it on a network install of a set beyond minimal)
-cp -p "$repo"/payload/firstboot/netset.sh "$STAGE/firstboot/netset.sh"
+stage_sh "$repo/payload/firstboot/netset.sh" "$STAGE/firstboot/netset.sh"
 cp -p "$repo"/payload/firstboot/root.shadow  "$STAGE/firstboot/root.shadow"
 
 # FB_ROOT_SEED_PW (optional profile key): override the SEEDED root password hash.
@@ -577,11 +587,28 @@ fi
 # nothing, and payload/updbootpart stays the single tracked master. The staged copy
 # is proven byte-identical to that master here -- the drift lock the here-doc used
 # to give us for free (installer-selftest audit O keeps the other half).
-cp -p "$repo/payload/updbootpart" "$STAGE/updbootpart"
+stage_sh "$repo/payload/updbootpart" "$STAGE/updbootpart"
 chmod 0755 "$STAGE/updbootpart"
-cmp -s "$repo/payload/updbootpart" "$STAGE/updbootpart" || {
-  echo "STOP: staged /install/updbootpart is not byte-identical to payload/updbootpart" >&2; exit 1; }
-echo "build-install-iso: staged /install/updbootpart ($(wc -c <"$STAGE/updbootpart") B, byte-identical to payload/updbootpart)"
+if [ -z "$STRIP_COMMENTS" ]; then
+  cmp -s "$repo/payload/updbootpart" "$STAGE/updbootpart" || {
+    echo "STOP: staged /install/updbootpart is not byte-identical to payload/updbootpart" >&2; exit 1; }
+fi
+echo "build-install-iso: staged /install/updbootpart ($(wc -c <"$STAGE/updbootpart") B, from payload/updbootpart)"
+
+# --- /install/LICENSES: the licence texts of what the medium runs ------------
+# The package engine in /install/bin and apkg, from the pkgtools the inputs pin. build-iso.sh puts
+# them beside /LICENSING; the netinstall's RAM disk takes them from this stage.
+mkdir -p "$STAGE/LICENSES"
+for _l in heirloom/LICENSE/OPENSOLARIS.LICENSE heirloom/LICENSE/CALDERA.LICENSE heirloom/LICENSE/FNMATCH.LIC \
+          heirloom/LICENSE/SNPRINTF.LIC; do
+  need_file "$PKGMGR/$_l" "the licence text $_l"
+  cp "$PKGMGR/$_l" "$STAGE/LICENSES/"
+done
+need_file "$PKGMGR/LICENSE" "apkg's licence text"
+cp "$PKGMGR/LICENSE" "$STAGE/LICENSES/APKG.LICENSE"
+# the kernels' libgcc helpers and zz9ksvc (tools/lib/licensing-text.sh says which is which)
+cp "$repo/payload/licences/GPL-2" "$repo/payload/licences/GPL-3" "$STAGE/LICENSES/"
+chmod 0644 "$STAGE"/LICENSES/*
 
 # --- /install/zenmac (P-3 address-by-card) -----------------------------------
 # The zen0 MAC reader install.sh lays down at /usr/amiga/bin/zenmac on a zen0
@@ -828,7 +855,7 @@ if [ -n "$_want_l11" ]; then
   else
     echo "# cd-boot: none -- the install kernel boots from the floppy pair; amix-dlm D-3 §10 (option B) adds the CD boot tree (S3-31 part 3)" >> "$STAGE/l11/INPUTS"
   fi
-  cp "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
+  stage_sh "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
   # /sbin/bcheckrc with `kbootset retry` before each of the three reboots of its root
   # fsck block (amix-dlm C2-4 v5 §7): a repair reboot must not spend a trial's single
   # attempt. Made here from core's own file (2.1, pinned) by inserting one line before

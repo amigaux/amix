@@ -93,7 +93,7 @@ BREAKPT=120
 LGSWAP=30
 SMSWAP=18
 MINBOOT=2
-BOOTSIZE=10               # r6e (owner 2026-10-10): 10 MiB so every kernel cut fits; stock was 2
+BOOTSIZE=10               # 10 MiB so every kernel cut fits; stock was 2
 BLOCKS_PER_MB=2048
 # E-BIG (KT-32, 2026-10-02): the STOCK kernel cannot write an on-box filesystem
 # past block 1234567 -- sdpart.c sddevsize() answers 1234567 for an unknown
@@ -515,7 +515,7 @@ emit_zen_hook() {
 		echo '# (docs/address-by-card.md). A matched row also sets the nodename and rewrites'
 		echo '# this box'"'"'s own row in /etc/inet/hosts. No zen.conf = the laydown address'
 		echo '# below, exactly as before the table existed.'
-		echo '# Laid onto the target root by src/installer/install.sh for zen0 (metal) profiles'
+		echo '# Laid onto the target root by src/installer/install.sh for zen0 profiles'
 		echo '# only: a driver-written ADDITIVE file, NOT a package member (like S16firstboot'
 		echo '# and updbootpart). The FALLBACK/NETMASK/GATEWAY/DOMAIN values are the profile'"'"'s'
 		echo '# FB_IP/FB_NETMASK/FB_GATEWAY/FB_DOMAIN, parameterized at laydown (the tracked'
@@ -756,7 +756,7 @@ emit_zen_hook() {
 emit_system_setup() {
 	{
 		echo '#!/bin/sh'
-		echo '# system.setup -- ENTRY POINT for the first-boot configuration dialog (W5).'
+		echo '# system.setup -- ENTRY POINT for the first-boot configuration dialog.'
 		echo '# Written into the stock slot by src/installer/install.sh when the profile says'
 		echo '# FIRSTBOOT_DIALOG=y; /etc/sysinit runs it iff it is executable, and the dialog'
 		echo '# takes the exec bit off THIS file at the clean end of its summary loop.'
@@ -918,15 +918,17 @@ case "$FB_TZ" in
 esac
 # the netinstall: the network the miniroot brought up (net_source's answers) is the installed
 # system's, offered again by the first-boot dialog; the second stage installs from the same
-# repository. A profile's own value wins.
+# repository, and apkg keeps it: a universal profile's FB_REPO_URL is only the default the miniroot
+# already offered. For the rest a profile's own value wins.
 if [ "$SRC_KIND" = net ]; then
-	[ -n "$FB_REPO_URL" ] || FB_REPO_URL="$NET_REPO"
+	FB_REPO_URL="$NET_REPO"
 	[ -n "$FB_ETHER_IF" ] || FB_ETHER_IF="$NET_IF"
 	[ -n "$FB_IP" ] || FB_IP="$NET_IP"
 	[ -n "$FB_NETMASK" ] || FB_NETMASK="$NET_MASK"
 	[ -n "$FB_GATEWAY" ] || FB_GATEWAY="$NET_GW"
 	[ -n "$FB_DNS1" ] || FB_DNS1="$NET_NS"
-	if [ -z "$FB_REPO_IP" ] && [ -n "$NET_RIP" ]; then
+	# the name the installation read it by (with a name server, net_source asks no address)
+	if [ -z "$FB_REPO_IP" ] && [ -n "$NET_RHOST" ]; then
 		FB_REPO_HOST="$NET_RHOST" FB_REPO_IP="$NET_RIP"
 	fi
 fi
@@ -975,7 +977,7 @@ esac
 # asking for one are refused; the disk is erased and installed afresh.
 case "${INSTALL_UPGRADE:-no}" in
 	no)	: ;;
-	*)	die "profile INSTALL_UPGRADE='$INSTALL_UPGRADE': 1.1 requires a fresh install, P-36 -- there is no upgrade install; drop the key" ;;
+	*)	die "profile INSTALL_UPGRADE='$INSTALL_UPGRADE': 1.1 requires a fresh install -- there is no upgrade install; drop the key" ;;
 esac
 # Both default to the behaviour the driver has always had, so a profile that omits
 # them installs a byte-identical tree: root may telnet in (the shipped
@@ -1033,7 +1035,7 @@ esac
 [ -n "$TARGET_ROOT_FSTYPE" ] || TARGET_ROOT_FSTYPE=ufs
 case "$TARGET_ROOT_FSTYPE" in
 	ufs)	: ;;
-	s5)	die "profile TARGET_ROOT_FSTYPE=s5: s5 is no longer an install target (P-35) -- the root is ufs; drop the key or set it to ufs" ;;
+	s5)	die "profile TARGET_ROOT_FSTYPE=s5: s5 is no longer an install target -- the root is ufs; drop the key or set it to ufs" ;;
 	*)	die "profile TARGET_ROOT_FSTYPE='$TARGET_ROOT_FSTYPE' is not ufs" ;;
 esac
 
@@ -1780,7 +1782,7 @@ ufs_mkfs_opts()
 
 # INSTALL_TARGET_PREBUILT=1 mounted an s5 root tools/mkroot.sh had minted
 # host-side; with s5 no longer a target (P-35) there is nothing for it to mount.
-[ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ] && die "INSTALL_TARGET_PREBUILT=1 is retired (P-35): mkroot.sh mints s5 roots only, and s5 is no longer a target -- install in author mode (drop the key)"
+[ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ] && die "INSTALL_TARGET_PREBUILT=1 is retired: mkroot.sh mints s5 roots only, and s5 is no longer a target -- install in author mode (drop the key)"
 TARGET_BUILD_MODE="authored on-box"
 build_target_author
 
@@ -2257,7 +2259,7 @@ msg "install set: $INSTALL_SET  order: $ORDER  (attested=$INSTALL_ATTESTED)"
 APKG_CONF="$TARGET/etc/apkg.conf"
 write_apkg_conf() {
 	{
-		echo "# apkg configuration -- written by install.sh (W6.4b); points at the live repo"
+		echo "# apkg configuration -- written by install.sh; points at the live repo"
 		echo "repo=$FB_REPO_URL"
 		echo "cachedir=/var/apkg/cache"
 		echo "admin=/var/apkg/admin"
@@ -2442,7 +2444,7 @@ else
 	RAWCONF="$TARGET/tmp/raw.conf"
 	# raw.conf: echo + redirection only (allowlist-clean; the target tmp is writable).
 	{
-		echo "# apkg raw source -- written by install.sh (W6-RAW.1)"
+		echo "# apkg raw source -- written by install.sh"
 		echo "repo=raw:$SRC_RAW_DEV"
 		echo "cachedir=$APKGCACHE"
 		echo "admin=$INST/admin/pkgadd"
@@ -2501,7 +2503,7 @@ fi
 # step must never run on a bad contents DB (fail closed, like the boot-chain verify).
 CFSCK="$INST/bin/contents-fsck"
 CONTENTS="$TARGET/var/sadm/install/contents"
-[ -x "$CFSCK" ] || die "no contents-fsck at $CFSCK -- is /install/ populated? (W6.4b)"
+[ -x "$CFSCK" ] || die "no contents-fsck at $CFSCK -- is /install/ populated?"
 [ -f "$CONTENTS" ] || die "contents DB absent at $CONTENTS after the pkgadd loop -- refusing to arm"
 msg "checking contents-DB integrity (CHECK-ONLY): $CFSCK $CONTENTS"
 if runq "$CFSCK" "$CONTENTS"; then
@@ -3137,7 +3139,7 @@ if [ "$INSTALL_LAYOUT" != 1.1 ]; then
 # core ships /usr/sbin, so it exists by now; guard the mkdir all the same (the
 # miniroot 1991 mkdir -p is not idempotent on an existing leaf -- W5.4f).
 [ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
-[ -f "$INST/updbootpart" ] || die "no updbootpart on the medium at $INST/updbootpart -- re-master with tools/build-install-iso.sh (W5.5 staged it there)"
+[ -f "$INST/updbootpart" ] || die "no updbootpart on the medium at $INST/updbootpart -- re-master with tools/build-install-iso.sh"
 run cp "$INST/updbootpart" "$TARGET/usr/sbin/updbootpart"
 run chmod 0755 "$TARGET/usr/sbin/updbootpart"
 msg "installed /usr/sbin/updbootpart from $INST/updbootpart (on-box boot-slice reframe tool; additive, not a package member)"
@@ -3268,7 +3270,7 @@ elif [ "$FB_ETHER_IF" = zen0 ]; then
 		msg "zen0: no address in the profile -- the first-boot dialog asks for one (zen0 stays down until then)"
 	else
 		[ -n "$FB_IP" ] || die "profile $PROFILE_NAME sets FB_ETHER_IF=zen0 but FB_IP is empty -- the zen0 bring-up needs a LITERAL IP (never uname -n on SVR4.0)"
-		[ -n "$FB_GATEWAY" ] || die "profile $PROFILE_NAME sets FB_ETHER_IF=zen0 but FB_GATEWAY is empty -- the zen0 bring-up writes a literal default route (W1: it was a hardcoded LAN gateway)"
+		[ -n "$FB_GATEWAY" ] || die "profile $PROFILE_NAME sets FB_ETHER_IF=zen0 but FB_GATEWAY is empty -- the zen0 bring-up writes a literal default route (it was a hardcoded LAN gateway)"
 	fi
 	echo "+ emit_zen_hook $TARGET/etc/rc2.d/S99zen (zen0 @ ${FB_IP:-no address})"
 	emit_zen_hook "$TARGET/etc/rc2.d/S99zen" || die "cannot write the zen0 bring-up hook /etc/rc2.d/S99zen"

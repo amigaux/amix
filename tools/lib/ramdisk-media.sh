@@ -37,7 +37,7 @@ rd_init() {
 	cat > "$W/bin/pkgadd" <<P
 #!/bin/bash
 T=; F=; I=
-while [ \$# -gt 0 ]; do case "\$1" in -R) T=\$2; shift 2;; -d) F=\$2; shift 2;; -a) shift 2;; -n) shift;; *) I=\$1; shift;; esac; done
+while [ \$# -gt 0 ]; do case "\$1" in -R) T=\$2; shift 2;; -d) F=\$2; shift 2;; -a) shift 2;; -n|-S) shift;; *) I=\$1; shift;; esac; done
 U=\$(mktemp -d "$W/unpack.XXXXXX")
 "$PKGTRANS" "\$F" "\$U" "\$I" >/dev/null 2>&1 || exit 1
 C=\$T/var/sadm/install/contents; mkdir -p "\$(dirname "\$C")"; touch "\$C"

@@ -2929,10 +2929,10 @@ def audit_repo_host():
     bench = os.path.join(PROFILES_DIR, "bench-a3000-a4091.profile")
     if os.path.isfile(bench):
         d = _parse_profile(bench)
-        if d.get("FB_REPO_HOST") == "pkg.amigaux.org" and d.get("FB_REPO_IP") == "52.59.174.203":
-            ok("bench profile pins FB_REPO_HOST=pkg.amigaux.org FB_REPO_IP=52.59.174.203")
+        if d.get("FB_REPO_HOST") == "pkg.amigaux.org" and not d.get("FB_REPO_IP"):
+            ok("bench profile names FB_REPO_HOST=pkg.amigaux.org, by name only (no FB_REPO_IP)")
         else:
-            fail("bench profile repo host/ip not the canonical pkg.amigaux.org/52.59.174.203 "
+            fail("bench profile repo host/ip: pkg.amigaux.org by name only, no address "
                  "(the old LAN files.example.net/192.0.2.2 is retired) (got %r / %r)"
                  % (d.get("FB_REPO_HOST"), d.get("FB_REPO_IP")))
     else:
@@ -4008,7 +4008,7 @@ def audit_updbootpart():
     driver_src = open(DRIVER, encoding="utf-8").read()
     if os.path.isfile(ISO_BUILDER):
         b = open(ISO_BUILDER, encoding="utf-8").read()
-        staged = re.search(r'cp\s+-p\s+"\$repo/payload/updbootpart"\s+"\$STAGE/updbootpart"', b)
+        staged = re.search(r'stage_sh\s+"\$repo/payload/updbootpart"\s+"\$STAGE/updbootpart"', b)
         gated = re.search(r'cmp\s+-s\s+"\$repo/payload/updbootpart"\s+"\$STAGE/updbootpart"\s+\|\|', b)
         chm = re.search(r'chmod\s+0755\s+"\$STAGE/updbootpart"', b)
         if staged and gated and chm:
@@ -7918,11 +7918,57 @@ def audit_w5_dialog():
         fail("the repository-address loop has no empty-default escape: with "
              "FB_REPO_HOST set and FB_REPO_IP empty (the public flavor) it "
              "re-asks forever")
-    if re.search(r'Package downloads will not resolve it until it is', code):
+    if re.search(r'apkg cannot reach the', code) and re.search(r'to /etc/inet/hosts\.', code):
         ok("...and it says the consequence out loud rather than pretending an "
            "address it was not given")
     else:
         fail("the empty-address escape does not state its consequence")
+    # the repository's hosts row, run from firstboot.sh's own text: ask_repo with the answers typed
+    # (RETURN = an empty line), then S16's bake on a scratch hosts file
+    fb_text = open(FIRSTBOOT, encoding="latin-1").read()
+    m_ask = re.search(r'^ask_repo\(\)\n\{.*?^\}\n', fb_text, re.S | re.M)
+    m_bake = re.search(r'^if \[ "\$FB_REPO_HOST" = pkg\.amigaux\.org \]; then\n\techo "firstboot: no hosts line.*?^fi\n', fb_text, re.S | re.M)
+    if not (m_ask and m_bake):
+        fail("firstboot.sh: ask_repo or the repository's hosts step not found (%s)" % [bool(m_ask), bool(m_bake)])
+    else:
+        with tempfile.TemporaryDirectory() as td:
+            hosts = os.path.join(td, "hosts")
+            bake = m_bake.group(0).replace("/etc/inet/hosts", hosts)
+            def repo(answers, **env):
+                if os.path.exists(hosts):
+                    os.unlink(hosts)   # the bake leaves it 0444
+                open(hosts, "w").write("127.0.0.1\tlocalhost\n0.0.0.0\told.example\n")
+                ans = "".join(a + "\n" for a in answers)
+                sh = ("readask() { IFS= read -r ask <&3; }\nvalid_ip() { case \"$1\" in *.*.*.*) return 0 ;; esac; return 1; }\n"
+                      + m_ask.group(0) + "exec 3<<'EOF'\n" + ans + "EOF\nask_repo > /dev/null\n" + bake
+                      + 'echo "IP=$FB_REPO_IP TYPED=$FB_REPO_IP_TYPED URL=$FB_REPO_URL"\n')
+                e = dict(os.environ, FB_REPO_HOST="pkg.example", FB_REPO_URL="http://pkg.example/1.1", FB_REPO_IP="",
+                         FB_REPO_IP_TYPED="", FB_DNS1="", FB_NET_MODE="static")
+                e.update(env)
+                r = subprocess.run(["sh", "-c", sh], capture_output=True, text=True, env=e)
+                return r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr, open(hosts).read()
+            for what, answers, env, want_row, want_ip in (
+                ("a netinstall's address, DNS on: no hosts row", ["", ""], dict(FB_REPO_IP="192.0.2.7", FB_DNS1="192.0.2.1"), None, ""),
+                ("a netinstall's address, DHCP: no hosts row", ["", ""], dict(FB_REPO_IP="192.0.2.7", FB_NET_MODE="dhcp"), None, ""),
+                ("a netinstall's address, no DNS: the row stays (no other way to the repository)", ["", ""], dict(FB_REPO_IP="192.0.2.7"), "192.0.2.7", "192.0.2.7"),
+                ("typed, DNS on: the row is written", ["", "192.0.2.9"], dict(FB_DNS1="192.0.2.1"), "192.0.2.9", "192.0.2.9"),
+                ("typed over a carried address, DHCP: the row is written", ["", "192.0.2.9"], dict(FB_REPO_IP="192.0.2.7", FB_NET_MODE="dhcp"), "192.0.2.9", "192.0.2.9"),
+                ("RETURN, nothing carried: no hosts row", ["", ""], dict(FB_NET_MODE="dhcp"), None, ""),
+                ("another host named: the carried address does not follow it", ["mirror.example", ""], dict(FB_REPO_IP="192.0.2.7"), None, ""),
+                ("the same host typed again: the carried address stays, no DNS", ["pkg.example", ""], dict(FB_REPO_IP="192.0.2.7"), "192.0.2.7", "192.0.2.7"),
+                ("pkg.amigaux.org, RETURN: no address question, no hosts line", [""], dict(FB_REPO_HOST="pkg.amigaux.org", FB_NET_MODE="dhcp"), None, ""),
+                ("pkg.amigaux.org with no DNS: still no hosts line", [""], dict(FB_REPO_HOST="pkg.amigaux.org"), None, ""),
+                ("pkg.amigaux.org with an address carried in: dropped", [""], dict(FB_REPO_HOST="pkg.amigaux.org", FB_REPO_IP="192.0.2.7"), None, ""),
+            ):
+                st, h = repo(answers, **env)
+                row = [l for l in h.splitlines() if l.endswith(("pkg.example", "mirror.example", "pkg.amigaux.org"))]
+                good = (row == [] if want_row is None else row and row[0].startswith(want_row)) and ("IP=%s " % want_ip) in st + " "
+                (ok if good else fail)("repository hosts row: %s: %r %r" % (what, st, row))
+            st, _ = repo(["mirror.example", ""], FB_REPO_IP="192.0.2.7")
+            (ok if "URL=http://mirror.example/1.1" in st else fail)("repository: FB_REPO_URL follows the host named: %r" % st)
+            for url, want in (("http://pkg.example:8080", "http://mirror.example:8080"), ("http://pkg.example", "http://mirror.example")):
+                st, _ = repo(["mirror.example", ""], FB_REPO_URL=url)
+                (ok if st.endswith("URL=" + want) else fail)("repository: FB_REPO_URL follows the host named, %s: %r" % (url, st))
     profs = sorted(f for f in os.listdir(PROFILES_DIR) if f.endswith(".profile")) \
         if os.path.isdir(PROFILES_DIR) else []
     profiles = [(pf, _parse_profile(os.path.join(PROFILES_DIR, pf))) for pf in profs]
@@ -9914,7 +9960,7 @@ def _p36_problems(install_src, l11_src):
     """What keeps install.sh + l11.sh from being clean-install only (P-36)."""
     probs = []
     if not re.search(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n\tno\)\t: ;;\n\t\*\)\tdie "[^"\n]*'
-                     r'1\.1 requires a fresh install, P-36', install_src):
+                     r'1\.1 requires a fresh install', install_src):
         probs.append("install.sh does not refuse INSTALL_UPGRADE")
     code = strip_full_comments(install_src) + strip_full_comments(l11_src)
     left = sorted(w for w in _P36_GONE if w in code)
@@ -11143,7 +11189,7 @@ def audit_l11():
             body = 'die() { echo "DIE $*"; exit 3; }\n' + ("INSTALL_UPGRADE=%s\n" % val if val else "") \
                    + m.group(0) + "echo PASSED\n"
             out = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30).stdout
-            good = want in out and (want == "PASSED" or "fresh install, P-36" in out)
+            good = want in out and (want == "PASSED" or "fresh install" in out)
             (ok if good else fail)("install.sh, INSTALL_UPGRADE=%s: %s" % (val or "(unset)", out.strip()[:90]))
 
     # (5b) the base packages. l11_base adds base/order's packages under the
