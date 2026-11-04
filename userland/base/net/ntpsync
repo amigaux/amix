@@ -39,6 +39,7 @@ NTP_CMD=${NTP_CMD:-/usr/sbin/ntpsync}
 IF_STATE=${IF_STATE:-/var/inet}
 IF_LEASES=${IF_LEASES:-/var/inet/dhcpc}
 NTP_DHCPC=${NTP_DHCPC:-/usr/sbin/dhcpc}
+IF_LIB=${IF_LIB:-/usr/lib}
 # the stock setclk (sum, bytes): its -s writes 2012 for 2026
 NTP_STOCKCLK="60596 7120"
 NTP_POOL="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org"
@@ -97,6 +98,14 @@ pick() {
 	done
 	dhcp=`echo $servers | wc -w | tr -d ' '`
 	add $conf
+}
+
+# dns_on: is the resolver switched on? ifup makes libsocket.so libsockdns.so
+# when it knows a name server; otherwise a name is looked up in the hosts file
+dns_on() {
+	[ -f "$IF_LIB/libsockdns.so" ] &&
+	[ "`ls -i "$IF_LIB/libsocket.so" 2>/dev/null | awk '{ print $1 }'`" = \
+	    "`ls -i "$IF_LIB/libsockdns.so" | awk '{ print $1 }'`" ]
 }
 
 # say <message>: the outcome, in the log (the hourly run only when it
@@ -190,6 +199,16 @@ dry)
 	else
 		echo "servers: none"
 	fi
+	if dns_on
+	then
+		:
+	else
+		case "$servers" in
+		*[a-zA-Z]*)
+			echo "no name server: a name is looked up in /etc/inet/hosts only; add a dns line to /etc/inet/interfaces, or addresses to ntp_servers in /etc/rc.conf"
+			;;
+		esac
+	fi
 	if [ -x "$NTP_RDATE" ]
 	then
 		echo "would run: $NTP_RDATE -n -s -v -t $timeout -r $retries $servers"
@@ -268,7 +287,15 @@ r=$?
 if [ $r -ne 0 ]
 then
 	n=`echo $servers | wc -w | tr -d ' '`
-	_say fail "no time server answered ($n tried, rdate status $r)"
+	if [ $r -ne 3 ]
+	then
+		_say fail "no time server answered ($n tried, rdate status $r)"
+	elif dns_on
+	then
+		_say fail "time servers not found by name ($n tried, rdate status 3)"
+	else
+		_say fail "names cannot be looked up: no name server; add a dns line to /etc/inet/interfaces, or addresses to ntp_servers in /etc/rc.conf"
+	fi
 	finish 1
 fi
 # "rdate: adjust local clock by <x> seconds [(adjtime)] (<address>)"
