@@ -105,6 +105,25 @@ CASES = [
      "credential /pkgs/bad-1.0-1.pkg!root/etc/shadow", False),
     ("pkg-rfc1918", {"pkgs/bad-1.0-1.pkg": datastream("bad", [("root/etc/hosts", PRIV_ADDR + " h\n")])},
      "privacy", True),
+    # the private patterns in a binary file, as a file or a member; an
+    # address in a binary is left to chance, and passes
+    ("binary-pattern", {"bin/tool": b"\x7fELF\0/srv/secretbox/tool.c\0"},
+     "privacy /bin/tool: local pattern #1 in a binary file at offset", True),
+    ("pkg-binary-pattern", {"pkgs/bad-1.0-1.pkg": datastream("bad", [
+        ("root/usr/bin/x", b"\x7fELF\0/srv/secretbox/x.c\0")])},
+     "privacy /pkgs/bad-1.0-1.pkg!root/usr/bin/x: local pattern #1 in a binary file at offset", True),
+    ("pkg-binary-wide", {"pkgs/bad-1.0-1.pkg": datastream("bad", [
+        ("root/usr/bin/x", b"\0\0" + "secretbox".encode("utf-16-le"))])},
+     "privacy /pkgs/bad-1.0-1.pkg!root/usr/bin/x: local pattern #1 in a binary file with its NUL", False),
+    ("pkg-binary-path", {"pkgs/bad-1.0-1.pkg": datastream("bad", [
+        ("root/usr/secretbox/x", b"\0secretbox\0")])},
+     "privacy <withheld>: local pattern #1", False),
+    ("pkg-binary-address", {"pkgs/good-1.0-1.pkg": datastream("good", [
+        ("root/usr/bin/x", b"\0gw " + PRIV_ADDR.encode() + b"\0")])}, None, False),
+    ("stock-allowed-binary", {"pkgs/stock/Xsource-2.1.pkg": datastream("Xsource", [
+        ("root/usr/src/X/contrib/clients/xpostit/note.c", b"\0secretbox\0")])}, None, False),
+    ("stock-other-binary", {"pkgs/stock/Xsource-2.1.pkg": datastream("Xsource", [
+        ("root/usr/src/X/contrib/clients/xpostit/other", b"\0secretbox\0")])}, "privacy", False),
     # the release exemptions: what upstream ships, at its own path only
     ("allowed", {"pkgs/python3-3.11-1.pkg": datastream("python3", [
         ("root/opt/amix/lib/python3.11/ipaddress.py", ".".join(("10", "0", "0", "0")) + "/8\n")])}, None, False),
@@ -201,6 +220,8 @@ try:
             ("img-swap", b"\0" * 40000 + b"\x01", text, "swap s1: not zeroed, 64 KiB written"),
             ("img-kick", b"", b"\0" * 1024 + KICK[:4096], "rom s2 raw+0x400: a Kickstart header"),
             ("img-pattern", b"", text + b"built on secretbox-lab\0", "privacy"),
+            ("img-wide", b"", text + "secretbox".encode("utf-16-le"),
+             "privacy s2 raw: local pattern #1 in a binary file with its NUL"),
             ("img-crypt", b"", b"\0root:" + DES.encode() + b":0:0::/:/sbin/sh\0",
              "credential /raw/s2-raw-000.txt")):
         img = os.path.join(tmp, name + ".img")
@@ -234,6 +255,26 @@ try:
         got = rc_mod.trace_hits(slot, p, data)
         check("image trace s%d %s: %s" % (slot, p, want or "none"),
               (not got) if want is None else (len(got) == 1 and want in got[0]), repr(got))
+
+    # image mode reaches a binary file anywhere in a ufs slice, not only /etc
+    import contextlib
+    import io
+    fake = os.path.join(tmp, "fake.img")
+    write(tmp, "fake.img", b"\0" * 512)
+    real_rdb, real_files = rc_mod.is_rdb_image, rc_mod.image_files
+    rc_mod.is_rdb_image = lambda p: True
+    rc_mod.image_files = lambda p, raw: iter([(4, "/usr/bin/x", b"\0/srv/secretbox/x.c\0"),
+                                              (4, "/usr/bin/y", b"\0nothing here\0"),
+                                              (4, "/usr/doc/z", b"plain secretbox text\n")])
+    got = io.StringIO()
+    with contextlib.redirect_stdout(got):
+        verdict = rc_mod.check(fake, {}, pat, [], rc_mod.LocalNames(pat))
+    rc_mod.is_rdb_image, rc_mod.image_files = real_rdb, real_files
+    got = got.getvalue()
+    check("image: a binary file outside /etc is searched, a text file there is not",
+          not verdict and got.count("HIT") == 2
+          and "HIT  privacy s4 /usr/bin/x: local pattern #1 in a binary file at offset 6" in got, got)
+    check("the string found in a binary is not printed", "secretbox" not in got, got)
 
     # image mode on a real ufs: two fixtures, an RDB with s1 a ufs made by
     # the box's own mkfs (invented /etc and first-boot files), s2 swap (zero)
@@ -284,6 +325,15 @@ try:
     check("--no-private-patterns: the local name passes, as asked", rc == 0, out)
     rc, out = run(["--rom-register", os.path.join(tmp, "none"), "--private-patterns", pat, clean], env)
     check("an unreadable register: a failure, exit 2", rc == 2 and "FAILED" in out, out)
+
+    # no search, no verdict
+    bad_pc = os.path.join(tmp, "bad-privacy-check")
+    write(tmp, "bad-privacy-check", "this is not python\n")
+    rc, out = run(flags + [clean], dict(env, PRIVACY_CHECK=bad_pc))
+    check("a privacy-check that does not load: a failure, exit 2", rc == 2 and "FAILED" in out, out)
+    write(tmp, "bad-patterns.txt", "(\n")
+    rc, out = run(["--rom-register", reg, "--private-patterns", os.path.join(tmp, "bad-patterns.txt"), clean], env)
+    check("an invalid pattern: a failure, exit 2", rc == 2 and "FAILED" in out, out)
 
     # privacy-check's summary ("N file(s), M hit(s)") is no hit, whatever N is
     for n in (1, 3):

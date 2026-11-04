@@ -45,7 +45,9 @@ package repository tree, where each package datastream is read member by
 member, or any other file, such as a floppy image (read raw) or a single
 package. It refuses a Kickstart or board ROM (by its header, or by
 sha256 against a ROM register), a known-bad module (below), a private address or local name (the privacy
-check's classes 1 and 3 over the text files), a crypt-style password hash, a
+check's classes 1 and 3 over the text files), a local name in a binary file
+(every binary file and package member, by the privacy check's search for the
+private patterns; compressed content is not looked inside), a crypt-style password hash, a
 PEM private key, a host or user key or a random seed file by its name, and,
 in an image, what the build box left: files in `/tmp` or `/var/tmp`, login
 records that are not empty, shell histories. The ROM register

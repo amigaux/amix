@@ -43,6 +43,13 @@ For each PATH:
     (/var/adm/firstboot), every text file of an ISO or a directory; the
     exemptions are tools/privacy-allow.txt and tools/release-allow.txt (what
     upstream software ships, such as documentation's example networks);
+  * no local name in a binary file: the private patterns over the bytes of
+    every binary file of a directory, an ISO or an image's ufs slices, every
+    binary member of a datastream, a binary file given as PATH and each raw
+    slice, by privacy-check's own search (as they are and with the NUL bytes
+    taken out, which reads ASCII held as UTF-16) and with the same exemptions.
+    A datastream is judged by its members.  Compressed content is not looked
+    inside;
   * no credential: in every text file no "user:HASH:" line with a crypt-style
     hash (DES's 13 characters or a $id$ hash; *LK*, x or an empty field
     passes) and no PEM private key; no SSH or dropbear host key, user key or
@@ -67,6 +74,8 @@ or a tool failure (never 0 on a failure).
 import argparse
 import collections
 import hashlib
+import importlib.machinery
+import importlib.util
 import mmap
 import os
 import re
@@ -406,6 +415,29 @@ def privacy(tree, scratch, patterns):
     return hits
 
 
+class LocalNames:
+    """the private patterns over binary files, by privacy-check's search"""
+
+    def __init__(self, patterns):
+        loader = importlib.machinery.SourceFileLoader("privacy_check", PRIVACY)
+        self.pc = importlib.util.module_from_spec(importlib.util.spec_from_loader("privacy_check", loader))
+        loader.exec_module(self.pc)
+        self.names = self.pc.load_patterns(patterns)
+        self.rx = self.pc.bytes_patterns(self.names)
+        self.allow = [e for f in ALLOW for e in self.pc.load_allowlist(f)]
+
+    def hits(self, label, path, data):
+        """[line] for one binary file; `path` is its path in the privacy
+        scan's tree, which the exemptions are written against"""
+        out = []
+        if any(p.search(label) for _, p in self.names):
+            label = self.pc.WITHHELD
+        for n, where, found in self.pc.binary_hits(self.rx, data):
+            if not self.pc.allowed_by(self.allow, 1, path, found):
+                out.append("privacy %s: local pattern #%d in a binary file %s" % (label, n, where))
+        return out
+
+
 def is_rdb_image(path):
     import rdb
     with open(path, "rb") as f:
@@ -420,7 +452,7 @@ def mapped(path):
         return mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
 
 
-def check(path, register, patterns, bad):
+def check(path, register, patterns, bad, local=None):
     scratch = tempfile.mkdtemp(prefix="release-check.")
     hits, n, raws = [], 0, []
     isdir = os.path.isdir(path)
@@ -434,6 +466,8 @@ def check(path, register, patterns, bad):
         def raw(slot, swap, part):
             raws.append(slot)
             hits.extend(raw_hits(slot, swap, part, tree))
+            if local and mode == "image":
+                hits.extend(local.hits("s%d raw" % slot, "raw/s%d" % slot, part))
 
         if mode == "file":
             # a floppy image or any other file: a datastream member by
@@ -463,6 +497,9 @@ def check(path, register, patterns, bad):
                 hits += credential_hits(p, data)
                 if mode == "image":
                     hits += trace_hits(slot, p, data)
+                if local and not is_text(data) and data[:len(DATASTREAM)] != DATASTREAM:
+                    hits += local.hits("s%d %s" % (slot, p) if slot else p,
+                                       p.lstrip("/").replace("!", "/"), data)
                 if scan and is_text(data):
                     dst = os.path.join(tree, p.lstrip("/").replace("!", "/"))
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -480,7 +517,7 @@ def check(path, register, patterns, bad):
     for h in hits:
         print("  HIT  %s" % h)
     where = "the file" if mode == "file" else "the tree" if whole else \
-        "/etc, the first-boot payload and %d raw slice(s)" % len(raws)
+        "/etc, the first-boot payload, the binary files and %d raw slice(s)" % len(raws)
     print("release-check: %s: %d files, %s" % (os.path.basename(os.path.normpath(path)), n,
           "CLEAN (no Kickstart ROM, no known-bad module, no private address, name or secret in %s)" % where
           if not hits else "%d HIT(s)" % len(hits)))
@@ -536,11 +573,15 @@ def main(argv):
     try:
         register = {} if a.no_rom_register else load_register(a.rom_register)
         bad = load_known_bad(a.known_bad)
+        try:
+            local = LocalNames(patterns) if patterns else None
+        except Exception as e:          # a tool failure is never a clean verdict
+            raise Failure("privacy-check's search: %s" % e)
         for p in a.paths:
             if not os.path.exists(p):
                 raise Failure("%s: no such file or directory" % p)
             try:
-                ok = check(p, register, patterns, bad) and ok
+                ok = check(p, register, patterns, bad, local) and ok
             except Exception as e:      # a tool failure is never a clean verdict
                 raise Failure("%s: %s" % (os.path.basename(os.path.normpath(p)), e))
     except Failure as e:

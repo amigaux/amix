@@ -234,6 +234,18 @@ def read_lines(path, what):
         raise UsageError("cannot read %s: %s" % (what, e.__class__.__name__))
 
 
+def allowed_by(entries, cls, path, text):
+    base = basename(path)
+    for acls, has_slash, glob, rx in entries:
+        if acls != cls:
+            continue
+        if not glob.match(path if has_slash else base):
+            continue
+        if rx is None or rx.search(text or ""):
+            return True
+    return False
+
+
 def load_allowlist(path):
     entries = []
     for n, raw in enumerate(read_lines(path, "allowlist " + path), 1):
@@ -282,6 +294,25 @@ def first_new(rx, data, known):
         if m.group(0) not in known:
             return m
     return None
+
+
+def binary_hits(patterns, data, old=None):
+    """[(pattern's line, where, the string)], one per pattern, for the bytes
+    of a binary file, as they are and with the NUL bytes taken out, which
+    reads ASCII held as UTF-16. A string `old` holds is not new."""
+    wide = bytes(data).replace(b"\0", b"")
+    before = [] if old is None else [old, old.replace(b"\0", b"")]
+    out = []
+    for n, rx in patterns:
+        known = set(m.group(0) for d in before for m in rx.finditer(d))
+        m = first_new(rx, data, known)
+        where = "at offset %d" % m.start() if m else ""
+        if not m:
+            m = first_new(rx, wide, known)
+            where = "with its NUL bytes taken out"
+        if m:
+            out.append((n, where, m.group(0).decode("latin-1")))
+    return out
 
 
 def load_blocked(path):
@@ -395,22 +426,11 @@ class Checker(object):
 
     # -- output -----------------------------------------------------------
 
-    def allowed(self, cls, path, text):
-        base = basename(path)
-        for acls, has_slash, glob, rx in self.allow:
-            if acls != cls:
-                continue
-            if not glob.match(path if has_slash else base):
-                continue
-            if rx is None or rx.search(text or ""):
-                return True
-        return False
-
     def local_match(self, text):
         return any(p.search(text) for _, p in self.patterns)
 
     def hit(self, sha, cls, path, detail, text=None):
-        if self.allowed(cls, path, text if text is not None else path):
+        if allowed_by(self.allow, cls, path, text if text is not None else path):
             return
         shown_path = path
         if path != "message" and self.local_match(path):
@@ -522,33 +542,24 @@ class Checker(object):
         return self.merged[key]
 
     def scan_binary(self, sha, path, oid, blob, base):
-        """The local patterns over a binary file, one hit per pattern. The
-        other text classes stay out: dotted quads occur in binary data by
-        chance. With `base`, a string the file already held there is not
-        new."""
+        """The local patterns over a binary file. The other text classes stay
+        out: dotted quads occur in binary data by chance. With `base`, a
+        string the file already held there is not new."""
         if not self.binary_patterns:
             return
         if blob.size > len(blob.head):
             raise GitError("binary blob %s (%s) was not read whole; raise "
                            "--max-size" % (oid, path))
-        wide = blob.head.replace(b"\0", b"")
-        old = []
+        old = None
         if base is not None:
             older = self.objects.get(base, self.keep)
             if older is None or older.size > len(older.head):
                 raise GitError("blob %s (%s) was not read whole; raise "
                                "--max-size" % (base, path))
-            old = [older.head, older.head.replace(b"\0", b"")]
-        for n, rx in self.binary_patterns:
-            known = set(m.group(0) for data in old for m in rx.finditer(data))
-            m = first_new(rx, blob.head, known)
-            where = "at offset %d" % m.start() if m else ""
-            if not m:
-                m = first_new(rx, wide, known)
-                where = "with its NUL bytes taken out"
-            if m:
-                self.hit(sha, 1, path, "local pattern #%d in a binary file %s"
-                         % (n, where), m.group(0).decode("latin-1"))
+            old = older.head
+        for n, where, found in binary_hits(self.binary_patterns, blob.head, old):
+            self.hit(sha, 1, path, "local pattern #%d in a binary file %s"
+                     % (n, where), found)
 
     def scan_blob(self, sha, path, oid, manifest, base=None):
         """Classes 1-4 on one file. With `base` (the file's blob at the first
