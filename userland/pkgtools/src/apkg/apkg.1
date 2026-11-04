@@ -1231,9 +1231,11 @@ to the engine, which still saves a package's notice as
 .BI /var/sadm/pkg/ pkginst /install/copyright ,
 the place to read it.  The stock
 .B /usr/sbin/pkgadd
-has no
+refuses
 .BR \-S ,
-so it is not passed there, and that engine prints the notice.
+so it is not passed there; run with
+.B \-n
+as apkg runs it, that engine prints no notice either.
 .PP
 Only plain
 .B http://

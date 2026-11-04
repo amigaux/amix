@@ -4,8 +4,9 @@
 
 apkg passes -S to pkgadd, with -v too, so no notice reaches the screen or a log of its output. The
 engine still saves it under /var/sadm/pkg/<pkginst>/install/ and in its pspool copy. The stock
-/usr/sbin/pkgadd has no -S, so it is not passed there, and that engine prints the notice: a box reaches
-it only when APKGENG is gone, or when a conf names it.
+/usr/sbin/pkgadd refuses -S ("illegal option"), so it is not passed there; run with -n, as apkg runs it,
+that engine printed no notice on an emulated box either. A box reaches it only when APKGENG is gone, or
+when a conf names it. A plain APKGENG pkgadd by hand, without -S, still prints the notice.
 
 ## 2026-11-04 — APKG 0.3.9 minted (STAGED, NOT PUBLISHED)
 
