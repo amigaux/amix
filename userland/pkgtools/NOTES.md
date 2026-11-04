@@ -1,5 +1,26 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — make test from a fresh clone; an engine buffer for the next APKGENG
+
+`make test` was red in a fresh clone (the CI checkout). My worktree had binaries an earlier
+build left, which hid two dependencies:
+- **contents-fsck:** its suite needs the host binary, which test-all.sh never built. It now
+  runs `make -C src/contents-fsck test`, which builds it, as the apkg suite's `make test` builds
+  apkg. The suite's message now names the directory whose `make host` it means.
+- **The real-engine block (apkg 0.3.6's test):** in a clone under a longer path, the host pkgadd
+  died with "*** buffer overflow detected ***". heirloom's libadm/pkginfo.c rdconfig() builds
+  `<pkgdir>/<pkginst>/!I-Lock!` in a 256-byte buffer. Under -R, pkgdir is the alternate root plus
+  the engine's build-host var path. There it was 121 + 121 bytes before the suffix; my worktree
+  had 196.
+  - The block's target root is now a short mktemp directory.
+  - On a box, the paths are /var/sadm/pkg, or /mnt/var/sadm/pkg under -R, far below the limit.
+  - The buffer (and compver()'s, the same size) belongs in the next APKGENG: PATH_MAX, or a
+    bounded snprintf. Any change to that source changes 1.12.6's minted bytes, so it isn't
+    made here.
+- **Proof:** a fresh clone of master 2f3c168 with this commit, nothing prebuilt, under a
+  deliberately longer path: `PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make test`
+  passes all 8 suites in 112 s. The skips are the 8 workstation-only lines CI will list too.
+
 ## 2026-11-04 — make test: every pkgtools suite, skips visible, PKGTOOLS_REQUIRE for CI
 
 T15 failed on master unnoticed: the repo-tools suite ran nowhere automatically.

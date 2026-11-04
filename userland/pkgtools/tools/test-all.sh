@@ -8,9 +8,10 @@
 #   PKGTOOLS_REQUIRE="objdump fakeroot compress engine" sh tools/test-all.sh
 #
 # Builds the host engine (heirloom/build-host.sh), then runs the apkg suite
-# (which builds the host apkg), its kbootset-consumer, conffile-e2e and
-# nohttp-variant runs, the conffile, contents-fsck and migrate suites and the
-# repo tools.  Each suite's summary line is printed, and so is every check it
+# (make test, which builds the host apkg), its kbootset-consumer,
+# conffile-e2e and nohttp-variant runs, the conffile suite, contents-fsck
+# (make test, which builds the host binary), the migrate suite and the repo
+# tools: nothing a fresh clone lacks.  Each suite's summary line is printed, and so is every check it
 # skipped, so a skip shows in the log instead of passing in silence; a suite
 # that exits 77 skipped itself whole and is listed so.  The first red suite
 # stops the run, its log's tail printed; exit 1.
@@ -109,7 +110,7 @@ run apkg-kbootset-consumer sh src/apkg/tests/kbootset-consumer.sh
 run apkg-conffile-e2e sh src/apkg/tests/conffile-e2e.sh
 run apkg-nohttp-variant sh src/apkg/tests/nohttp-variant.sh
 run conffile sh src/conffile/tests/run-tests.sh
-run contents-fsck sh src/contents-fsck/tests/run-tests.sh
+run contents-fsck make -C src/contents-fsck test
 run migrate sh tools/migrate/tests/run-tests.sh
 run repo-tools bash tools/repo/tests/run-tests.sh
 

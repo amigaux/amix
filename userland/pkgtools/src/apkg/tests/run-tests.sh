@@ -3313,7 +3313,13 @@ HB=$SRC/../../heirloom/build-host/bin
 if [ ! -x "$HB/pkgadd" ] || [ ! -x "$HB/pkgmk" ] || [ ! -x "$HB/pkgtrans" ]; then
     bad "the real-engine block needs the host engine: cd heirloom && ./build-host.sh"
 else
-    RE=$WORK/reng; RT=$RE/tgt; RV="$(cd "$HB/.." && pwd -P)/var/sadm"
+    # The target root is a short temporary directory, not under $WORK: the
+    # engine relocates its build-host var path under -R, and heirloom's
+    # libadm/pkginfo.c builds "<pkgdir>/<pkginst>/!I-Lock!" in a 256-byte
+    # buffer (rdconfig), which a deep checkout plus a deep target overruns
+    # ("buffer overflow detected" in a fresh clone under a long path).
+    RE=$WORK/reng; RV="$(cd "$HB/.." && pwd -P)/var/sadm"
+    RT=$(mktemp -d "${TMPDIR:-/tmp}/apkg-reng.XXXXXX")
     mkdir -p "$RE/src" "$RE/spool" "$RE/repo/pkgs/kernel" "$RE/cache/c" \
         "$RT$RV/pkg" "$RT$RV/install" "$RT/var/sadm" "$RT/var/apkg"
     ln -s "$RT$RV/pkg" "$RT/var/sadm/pkg"; ln -s "$RT$RV/install" "$RT/var/sadm/install"
@@ -3356,6 +3362,7 @@ else
         && ok "... the file is laid again and a record written" \
         || bad "real-engine install with no record" "$OUT"
     kreset
+    rm -rf "${RT:?}"
 fi
 
 # ------------------------------------------------ exit-code sanity extras

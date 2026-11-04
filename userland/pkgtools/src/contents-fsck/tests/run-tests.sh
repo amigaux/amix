@@ -16,7 +16,7 @@ BIN=${1:-$DIR/../contents-fsck}
 OUT=$DIR/out
 
 if [ ! -x "$BIN" ]; then
-    echo "run-tests.sh: binary $BIN not found -- run 'make host' first" >&2
+    echo "run-tests.sh: binary $BIN not found -- run 'make host' (or 'make test') in src/contents-fsck first" >&2
     exit 2
 fi
 
