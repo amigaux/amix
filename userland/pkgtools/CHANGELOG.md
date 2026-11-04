@@ -2,6 +2,10 @@
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
 
+## 2026-11-04 — make test runs every pkgtools suite (01097f9)
+
+`make -C userland/pkgtools test` builds the host engine and runs every pkgtools suite, printing each summary and every skipped check and stopping at the first red one. PKGTOOLS_REQUIRE="objdump fakeroot compress engine" makes the skips those tools' absence would cause into failures, for CI. T31 and T34 skip instead of failing without the m68k binutils.
+
 ## 2026-11-04 — assemble-release refuses to scan without the gcc14 sysroot (1b58b0f, ebc8512)
 
 assemble-release.py takes --sysroot (default $AMIX_SYSROOT, must contain usr/lib) and refuses to start without one, then passes it to scan060-g14 explicitly, so stock data GCC 14 programs link into .text (libcrypt's DES tables) is never scanned as code and the verdict doesn't depend on the caller's environment. tools/repo/cats.conf leaves cdfs's category to the packages layer.
