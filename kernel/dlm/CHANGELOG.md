@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — the RAM-disk boot works with memory AmigaOS keeps at the top; loader-amix -13 (bdac83f, 09bfe6c, 18d1144, 406ef1f)
+
+boot2 and amix-cdboot place the RAM-disk image as high in the kernel's region as is free when AmigaOS keeps memory at its top (a software MapROM copy, a reset-proof RAD:), stepping down 64 KiB at a time; the top-first path is unchanged. L4 now says either "too big" or "the RAM disk's place is in use". The loader build leaves out the header and tally writers it never calls (414 bytes). loader-amix 1.0.261104-13 (boot2 d57bf011). The holdtop bench tool holds the top of fast memory to test it; proven on the A1200 with a Blizzard 1230-III (68030) and a DKB 1240 (68040). C4-3 v5.
+
 ## 2026-11-03 — dlmkit -20: the kit at 18102d7 (d4a80aa)
 
 The ABI kit package is pinned at amix 18102d7, port d8c7548: its core tier carries the kmem readers' five COMMONs and lists the text-section labels as func. Kit manifests k30 e3878069, k46 3eaa6c5c; abi 18c0a1c9 and kabi k30.1.4/k46.1.4 unchanged; the kits fit kern30m -71 and kern46m -62. dlmkit30 ee6aa4bd, dlmkit46 e11dc01e.
