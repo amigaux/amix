@@ -2782,8 +2782,9 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     # scan060-g14: exit $G14_RC for a verdict, $G14X_RC for --explain
     printf 'import os, sys\nopen("%s/scan.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nh = os.environ.get("SCAN_HIT")\nsys.exit(2 if h and any(h in x for x in sys.argv[1:]) else 0)\n' \
         "$S34" > "$S34/bin/scan060"
-    printf 'import os, sys\nopen("%s/g14.log", "a").write(" ".join(sys.argv[1:]) + "\\n")\nsys.exit(int(os.environ.get("G14X_RC" if "--explain" in sys.argv else "G14_RC", "0")))\n' \
+    printf 'import os, sys\nopen("%s/g14.log", "a").write("AMIX_SYSROOT=" + os.environ.get("AMIX_SYSROOT", "") + " " + " ".join(sys.argv[1:]) + "\\n")\nsys.exit(int(os.environ.get("G14X_RC" if "--explain" in sys.argv else "G14_RC", "0")))\n' \
         "$S34" > "$S34/bin/scan060-g14"
+    mkdir -p "$S34/sysroot/usr/lib" "$S34/nolib"
     printf '#!/bin/sh\necho "$@" >> %s/rc.log\nexit ${RC_RC:-0}\n' "$S34" > "$S34/bin/release-check"
     chmod +x "$S34/bin/scan060" "$S34/bin/release-check"
     : > "$S34/rom"; : > "$S34/pat"
@@ -2791,7 +2792,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         local o="$1"; shift
         python3 "$AR" --userland "$S34/ul" --kspace "$S34/ks" --apkg "$S34/ap" \
             --stock "$S34/st" --stock-lock "$S34/stock.lock" --release 1.1 --out "$o" \
-            --scan060 "$S34/bin/scan060" --scan060-g14 "$S34/bin/scan060-g14" \
+            --scan060 "$S34/bin/scan060" --scan060-g14 "$S34/bin/scan060-g14" --sysroot "$S34/sysroot" \
             --release-check "$S34/bin/release-check" \
             --rom-register "$S34/rom" --private-patterns "$S34/pat" --apkg-bin "$APKGH" "$@"
     }
@@ -2818,6 +2819,8 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
         grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.a"
     check "  ... the period ELF went to scan060.py, the GCC 14 one to scan060-g14.py (and scan060.py)" \
         bash -c "grep -q 'zlibt.elf' '$S34/scan.log' && grep -q 'ktool.elf' '$S34/g14.log' && grep -q 'ktool.elf' '$S34/scan.log' && ! grep -q 'zlibt.elf' '$S34/g14.log' && ! grep -q -- '--explain' '$S34/g14.log'"
+    check "  ... scan060-g14.py ran with the given sysroot as AMIX_SYSROOT" \
+        bash -c "grep 'ktool.elf' '$S34/g14.log' | grep -q '^AMIX_SYSROOT=$S34/sysroot '"
     check "  ... no stock/ ELF and no #kpkg file was scanned" \
         bash -c "! grep -q 'core.elf\|kmod46' '$S34/scan.log' '$S34/g14.log'"
     check "  ... a package with no ELF (APKG here) is no failure" \
@@ -2885,6 +2888,10 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     { cat "$S34/ks.cat"; printf '#ext isize 1\n#isize ktool 1\n'; } > "$S34/ks/catalog"; kmd5
     t34no 1 "an input #isize the datastream does not sum to: refused" "ktool 1.0 (kspace): its catalog says '#isize ktool 1'"
     cp "$S34/ks.cat" "$S34/ks/catalog"; cp "$S34/ks.md5" "$S34/ks/catalog.md5"
+    # no sysroot: scan060-g14.py would scan the stock data in .text as code
+    AMIX_SYSROOT= t34no 3 "no sysroot (AMIX_SYSROOT unset, no --sysroot): [MISSING], rc 3, naming how to set it" \
+        'AMIX_SYSROOT is not set): set AMIX_SYSROOT=$(m68k-elf-gcc -print-sysroot), or pass --sysroot DIR' --sysroot ""
+    t34no 3 "a sysroot without usr/lib: [MISSING], rc 3" "AMIX_SYSROOT=$S34/nolib has no usr/lib" --sysroot "$S34/nolib"
     t34no 3 "no release-check: [MISSING], rc 3" "\[MISSING\] assemble-release: release-check" --release-check "$S34/nosuch"
     t34no 3 "no private patterns: [MISSING], rc 3" "\[MISSING\] assemble-release: private patterns" --private-patterns "$S34/nosuch"
     mv "${S34:?}/st/core-2.1.pkg" "${S34:?}/core.save"
