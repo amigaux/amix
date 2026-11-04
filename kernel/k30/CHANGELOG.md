@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — kern30m k30.1.4.261103-71.1 (08092ce)
+
+Same cut and objects: the copyright file names the libgcc routines linked in (__udivdi3, __umoddi3, __lshrdi3, __clz_tab), quotes libgcc2.c's exception, carries GCC 2.7.2.3's GPL-2 text and says where the source is. DESC no longer names an internal recipe or a cut path. build.sh takes a .<r> re-mint, as kern46m's does.
+
 ## 2026-11-03 — cut 68030-261103-71: the kmem readers' tables; kern30m -71 (71e9627, 31db77d)
 
 The kernel keeps the inode tables the stock kmem readers name (inode, ifreelist, ifreeh, ufs_inode, inodeNINODE): build step 8i links them as the kernel's COMMONs and the carved ufs and s5 modules bind to them, so sar, sadc and timex -s work again on a carved kernel, and crash starts without a timestamp error with kbootset 1.1.0.261103-37's namelist (the sidecar asks for it). Sums: unix a21b0b56, brel 6a010bc5, kabi b7d28836, ufs 74f178ca, s5 0eb95df7; abi 18c0a1c9 unchanged; host builds and the container agree. kern30m k30.1.4.261103-71 packages it.
