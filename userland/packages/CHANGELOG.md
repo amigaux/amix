@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — rdate 1.11-2: a polite SNTP client (deed3a9)
+
+A silent server is asked at 0, 2 and 6 s per try instead of every 0.6 s, so 6 datagrams per silent server per run at ntpsync's defaults (49 before). A reply to any datagram of the try counts, however late, and the first good one ends the try; before, a reply 1 s late or more never set the clock. A kiss-o'-death or unsynchronised reply is not asked again. Exit status 4 under -n is documented to include no route and a closed port.
+
 ## 2026-11-04 — dropbear: tests share no connections; hardware timings (0111e3e)
 
 tests/host.sh passes `-o ControlMaster=no -o ControlPath=none` beside `-F /dev/null`, so every login and timed handshake is a connection of its own. README: the A4000 68060 hardware row for 2026.94-3, key exchange 1.5–1.9 s (5.2–5.4 s with -1), scp 171–175 KB/s. Package unchanged.
