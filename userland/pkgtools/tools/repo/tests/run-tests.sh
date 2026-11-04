@@ -320,6 +320,29 @@ check "the docroot keeps its mode" test "$(stat -c %a "$D11b")" = 755
 check "verify fetched <url>/1.1/catalog" \
     grep -qF "publish: OK -- served catalog matches staging" "$WORK/t11b.out"
 
+# --------------------------------------------------------------- T11d ---
+# A staging with pkgs/ below the catalog (assemble-release's layout, T34 runs
+# the real one): the packages land in <tree>/pkgs/, not <tree>/pkgs/pkgs/, and
+# a second publish replaces a changed package and prunes a removed one.
+echo "T11d: publish.sh with pkgs/ below the catalog"
+S11d="$WORK/t11d-tree"; D11d="$WORK/t11d-dest"; mkdir -p "$S11d/pkgs" "$D11d"
+cp -R "$S10/stock" "$S10/base" "$S10/TSTpkg.pkg" "$S11d/pkgs/"
+cp "$S10/catalog" "$S10/catalog.md5" "$S11d/"
+PUBLISH_DEST="$D11d" bash "$PUB" --dry-run 1.1 "$S11d" >"$WORK/t11d-dry.out" 2>&1
+check "dry-run: exit 0" test $? -eq 0
+check "dry-run: lists the package below pkgs/ without the pkgs/ prefix" \
+    bash -c "grep -qx 'stock/TESTpkg.pkg' '$WORK/t11d-dry.out' && ! grep -q '^pkgs/stock/' '$WORK/t11d-dry.out'"
+check "dry-run: writes nothing" test -z "$(find "$D11d" -mindepth 1 -print -quit)"
+PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d.out" 2>&1
+check "publish: exit 0" test $? -eq 0
+check "publish: the served tree is the staged tree" diff -r "$S11d" "$D11d/1.1"
+check "publish: no pkgs/pkgs" test ! -e "$D11d/1.1/pkgs/pkgs"
+cp "$FIX/toy.pkg" "$S11d/pkgs/TSTpkg.pkg"; rm -f "${S11d:?}/pkgs/stock/TESTpkg.pkg"
+PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d-2.out" 2>&1
+check "re-publish: exit 0" test $? -eq 0
+check "re-publish: a changed package is replaced" cmp -s "$FIX/toy.pkg" "$D11d/1.1/pkgs/TSTpkg.pkg"
+check "re-publish: a removed package is pruned" test ! -e "$D11d/1.1/pkgs/stock/TESTpkg.pkg"
+
 # --------------------------------------------------------------- T11c ---
 # move-1.0-tree.sh, the one-time move of the 1.0 tree from the docroot into
 # <docroot>/1.0/, on a temp docroot: plan writes nothing, --apply copies and
@@ -2767,7 +2790,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
     python3 "$GEN" --packages-conf none -o "$S34/ul" "$S34/ul/pkgs" >/dev/null 2>&1
     # kspace: an ordinary row and a #kpkg line
     toy34 ktool 1.0 "$S34/ks/pkgs/ktool-1.0.pkg" "" "$S34/g.elf"
-    echo "module bytes" > "$S34/ks/pkgs/kmod46-1.0.pkg"
+    toy34 kmod46 1.0 "$S34/ks/pkgs/kmod46-1.0.pkg"
     {   echo "#apkg-catalog 1"
         echo "ktool|1.0|ktool|ktool-1.0.pkg|$(md5sum < "$S34/ks/pkgs/ktool-1.0.pkg" | cut -c1-32)|$(wc -c < "$S34/ks/pkgs/ktool-1.0.pkg")|none|system|toy"
         echo "#ext kpkg 1"
@@ -2916,6 +2939,15 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
         bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|\|^#isize apkg ' '$C34') <(grep -v '^apkg|\|^#isize apkg \|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
     check "  ... apkg reads one row per name (the older block is skipped)" \
         grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.p"
+    # publish.sh takes an assembled tree as it is, and the follow-on release
+    # over it keeps the older versions served
+    D34="$WORK/t34-docroot"; mkdir -p "$D34"
+    PUBLISH_DEST="$D34" PUBLISH_URL="file://$D34" bash "$PUB" 1.1 "$S34/out/1.1" >"$WORK/t34.pub" 2>&1
+    check "publish.sh takes an assembled tree: rc 0, served as assembled" \
+        bash -c "test $? -eq 0 && diff -r '$S34/out/1.1' '$D34/1.1' >/dev/null && test ! -e '$D34/1.1/pkgs/pkgs'"
+    PUBLISH_DEST="$D34" PUBLISH_URL="file://$D34" bash "$PUB" 1.1 "$S34/out3/1.1" >"$WORK/t34.pub3" 2>&1
+    check "  ... and the follow-on over it: rc 0, served as assembled, the older APKG still there" \
+        bash -c "test $? -eq 0 && diff -r '$S34/out3/1.1' '$D34/1.1' >/dev/null && cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$D34/1.1/pkgs/base/APKG-0.3.6.pkg'"
     ar34 "$S34/out4/1.1" --previous "$S34/out3/1.1" >/dev/null 2>&1
     check "a third assembly over that tree keeps the older block: rc 0, same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C3' '$S34/out4/1.1/catalog'"

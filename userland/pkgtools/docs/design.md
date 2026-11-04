@@ -421,7 +421,9 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   below.
 - `publish.sh [--dry-run] <release> <staging>`: rsync staging → `$PUBLISH_DEST/<release>/`
   (`$PUBLISH_DEST` = `<user>@<host>:<docroot>`; `catalog`, `catalog.md5`, `pkgs/`), verify via
-  `curl $PUBLISH_URL/<release>/catalog`. The release (`<major>.<minor>`) is **required** and
+  `curl $PUBLISH_URL/<release>/catalog`. Staging is an assembled tree (`pkgs/` below the catalog,
+  synced from there) or a gen-catalog root (packages beside the catalog); `PUBLISH_DEST` names the
+  docroot, and the tool adds `<release>` itself. The release (`<major>.<minor>`) is **required** and
   checked to be exactly that, so it names a directory and nothing else; a publish writes and
   prunes only inside its own release's tree. `PUBLISH_DEST` is
   **required** — there is no default host, so every publish names its destination — and the
