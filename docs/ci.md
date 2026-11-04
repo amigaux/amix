@@ -18,6 +18,7 @@ finding to fix, not a gate.
 | tests | kernel/drivers z3660scsi host tests | `make -C kernel/drivers/z3660scsi/test/host check` |
 | tests | kernel/drivers z3660eth host test (its parameter parser) | `make -C kernel/drivers/z3660eth/module test` |
 | tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
+| tests | pkgtools: the host engine, then its eight suites (apkg, the kbootset consumer, conffile end to end, the no-http variant, conffile, contents-fsck, migrate, the repository tools) | `PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make -C userland/pkgtools test` |
 | tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim, check-image) | `sh toolchain/test-tools` |
 | tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
@@ -80,6 +81,17 @@ on the host (`toolchain/extract-g14.sh` copies it out). The kit job checks
 the image against its pin first, so the gcc14 gates' selftest runs against
 the pinned compiler.
 
+The pkgtools step needs m68k binutils (`binutils-m68k-linux-gnu`), `fakeroot`
+and `compress` (`ncompress`), which the job installs. `PKGTOOLS_REQUIRE` makes
+each of them, and the host engine, a requirement: a missing one fails the step
+instead of skipping the checks that use it. The checks that need inputs kept
+outside this repository still skip, each named on its own line in the log:
+contents-fsck's factory database cases; and among the repository tools, the
+published tree's pinned constants, the amix-packages kernel-space comparison,
+the m4 checks (the stock Cdev package and the install disk), and the checks
+that need the cross-built Amix binaries (apkg.conf's classes, installf, APKG
+removing itself, the APKGENG mark).
+
 What CI does not build yet: the kernels and the boot media. Host-test cases
 that need inputs outside this repository (stock kernels, floppies) skip
 themselves and say so.
@@ -88,7 +100,8 @@ themselves and say so.
 
 Each step is an ordinary command; run it from the top of the repository. The
 host tests need a C compiler, `make`, `python3` and zlib's headers
-(`zlib1g-dev` on Debian and Ubuntu). The kit job needs docker (or podman,
+(`zlib1g-dev` on Debian and Ubuntu); the pkgtools step also needs
+`binutils-m68k-linux-gnu`, `fakeroot` and `ncompress`. The kit job needs docker (or podman,
 with `CONTAINER=podman`) and network access to GitHub and the GNU mirrors.
 
 ## The dist workflow
