@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — privacy-check reads binaries (a31b586)
+
+tools: privacy-check searches binary files for the local patterns (also as UTF-16) and refuses compiled Python (*.pyc, __pycache__/) in class 4. The repository's .gitignore now keeps compiled Python out everywhere.
+
 ## 2026-11-04 — NOTICES: rdate's acknowledgement (3135981)
 
 release/NOTICES.md adds the acknowledgement rdate's rdate.c and rfc868time.c require ("This product includes software developed by Christos Zoulas.").
