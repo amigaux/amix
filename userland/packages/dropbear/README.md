@@ -280,12 +280,21 @@ covers the big-endian and 32-bit word paths.
 - **Host keys are made at the first start, never shipped.** The boot script
   runs `dropbearkey -t ed25519` from `/dev/urandom` when
   `/etc/dropbear/host_ed25519` is missing. With `dropbear_rsa=yes` in
-  `/etc/rc.conf` it also makes a 3072-bit RSA key, which takes minutes on a
-  68030, and passes it with `-r`. While a key is missing, the keys are made
-  and the server started in the background (`rc_bg`, bound by
-  `dropbear_keytime=`, default 900 s), so the first boot goes on; each key is
-  written as `new_<type>` and renamed when complete, so a stopped run leaves
-  no half key and the next start tries again. The keys are no object of the
+  `/etc/rc.conf` it also makes a 3072-bit RSA key and passes it with `-r`.
+  The server starts as soon as the ed25519 key exists: at once, or at the
+  first start in the background (`rc_bg`) a few seconds later, so the boot
+  goes on. The RSA key comes after that, in the same background run at
+  `nice -10`, with the server already answering. It takes over 12 minutes of
+  CPU on a 68060 (12:32 measured on an A4000) and hours on a 68030. When it's
+  ready, the server is restarted with both keys. The run is bounded by
+  `dropbear_keytime=` (default 86400 s): the old 900 s bound killed the RSA
+  run on every boot before its key was renamed, so the server never started.
+  The run's shell and `dropbearkey` are in `/etc/dropbear/keygen.pid`, so
+  `stop` ends them at any stage, and a start after a run that died ends its
+  leftover `dropbearkey` first. The run ignores the hangup signal, so a start
+  by hand survives the end of the login that ran it. Each key is written as `new_<type>` and
+  renamed when complete, so a stopped run leaves no half key and the next
+  start begins that key again. The keys are no object of the
   package, so no two machines share one, an update never replaces one, and
   `pkgrm` leaves them (and so `/etc/dropbear`). There are no install scripts.
 - **No conffile.** Dropbear has no configuration file. Its settings are

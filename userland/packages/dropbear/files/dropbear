@@ -6,17 +6,20 @@
 # On unless /etc/rc.conf says dropbear=no.  Settings, each a line in
 # /etc/rc.conf (rc.conf(4)), all optional:
 #   dropbear_port=22          the TCP port, on every address
-#   dropbear_rsa=no           yes: also an RSA host key, made at the first
-#                             start that finds none (slow on a 68030)
+#   dropbear_rsa=no           yes: also an RSA host key (3072 bits: over 12
+#                             CPU minutes on a 68060, hours on a 68030)
 #   dropbear_flags=           more options for dropbear(8), e.g. -s -g
-#   dropbear_keytime=900      seconds the first start may take to make the
-#                             host keys before it is stopped
-# The host keys are made here at the first start, from /dev/urandom, and
-# never come from the package.  With every key present the server starts at
-# once; with one missing, the keys are made and the server started in the
-# background (rc_bg), so the boot goes on.  A key is written under a new
-# name and renamed when complete, so a stopped run leaves no half key and
-# the next start tries again.  See dropbear(8).
+#   dropbear_keytime=86400    seconds the background key making may take
+#                             before it is stopped
+# The host keys are made here, from /dev/urandom, and never come from the
+# package.  The server starts as soon as the ed25519 key exists: at once
+# when it does, or in the background (rc_bg) once it is made, so the boot
+# goes on.  A wanted RSA key is made after that, in the same background
+# run at a low priority, and the server is restarted with both keys.  The
+# run's shell and dropbearkey are recorded in keygen.pid, so stop ends
+# them at any stage.  A key is written under a new name and renamed when
+# complete, so a stopped run leaves no half key and the next start tries
+# again.  See dropbear(8).
 #
 # The system's /bin/sh of 1992: backticks, no $(...), no `local', no `!'.
 
@@ -26,12 +29,27 @@ DROPBEARKEY=${DROPBEARKEY:-/opt/amix/bin/dropbearkey}
 KEYDIR=${KEYDIR:-/etc/dropbear}
 URANDOM=${URANDOM:-/dev/urandom}
 PIDFILE=$KEYDIR/dropbear.pid
+KEYJOB=$KEYDIR/keygen.pid
 SELF=${SELF:-/etc/init.d/dropbear}
 umask 022
 
-pid=`cat "$PIDFILE" 2>/dev/null`
+# running: succeeds when the server of the pid file is alive
+running() {
+	pid=`cat "$PIDFILE" 2>/dev/null`
+	[ -n "$pid" ] && kill -0 $pid 2> /dev/null
+}
 
-# hostkey <type>: make $KEYDIR/host_<type> if it is missing
+# keyjob: succeeds when a background key run (keygen.pid) is alive; a
+# record left by an earlier boot names a process that is not this script
+keyjob() {
+	jsh= jkey=
+	[ -f "$KEYJOB" ] || return 1
+	read jsh jkey < "$KEYJOB"
+	[ -n "$jsh" ] && ps -fp $jsh 2> /dev/null | grep "dropbear keys" > /dev/null
+}
+
+# hostkey <type>: make $KEYDIR/host_<type> if it is missing; dropbearkey
+# runs at a low priority, its process recorded in keygen.pid
 hostkey() {
 	if [ -f "$KEYDIR/host_$1" ]; then
 		return 0
@@ -39,8 +57,11 @@ hostkey() {
 	# dropbearkey also writes the public half as new_<type>.pub (cut
 	# to 14 bytes on s5); "dropbearkey -y" prints it, so it is not kept
 	rm -f "${KEYDIR:?}/new_$1" "${KEYDIR:?}"/new_$1.p*
-	if "$DROPBEARKEY" -t $1 -f "$KEYDIR/new_$1" > /dev/null 2>&1 &&
-	    mv "$KEYDIR/new_$1" "$KEYDIR/host_$1"; then
+	nice -10 "$DROPBEARKEY" -t $1 -f "$KEYDIR/new_$1" > /dev/null 2>&1 &
+	kpid=$!
+	echo "$$ $kpid" > "$KEYJOB"
+	wait $kpid
+	if [ $? -eq 0 ] && mv "$KEYDIR/new_$1" "$KEYDIR/host_$1"; then
 		rm -f "${KEYDIR:?}"/new_$1.p*
 		rc_log dropbear "made the $1 host key $KEYDIR/host_$1"
 		return 0
@@ -55,26 +76,34 @@ wantrsa() {
 	[ "`rc_conf dropbear rsa no`" = yes ]
 }
 
-# serve: the host keys, then the server
-serve() {
-	hostkey ed25519 || exit 1
+# startserver: the server with every host key there is
+startserver() {
 	keys="-r $KEYDIR/host_ed25519"
-	if wantrsa; then
-		hostkey rsa && keys="$keys -r $KEYDIR/host_rsa"
+	names=ed25519
+	if wantrsa && [ -f "$KEYDIR/host_rsa" ]; then
+		keys="$keys -r $KEYDIR/host_rsa"
+		names="ed25519, rsa"
 	fi
 	port=`rc_conf dropbear port 22`
 	flags=`rc_conf dropbear flags`
 	if "$DROPBEAR" -p $port -P "$PIDFILE" $keys $flags; then
-		rc_log dropbear "started on port $port"
+		rc_log dropbear "started on port $port (host keys $names)"
 	else
 		st=$?
 		rc_log dropbear "did not start (exit $st)"
-		exit $st
+		return $st
+	fi
+}
+
+# stopserver: end the server of the pid file
+stopserver() {
+	if running && kill $pid 2> /dev/null; then
+		rm -f "${PIDFILE:?}"
 	fi
 }
 
 case "$1" in
-start|serve)
+start|keys)
 	if [ ! -f "$RC_SUBR" ]; then
 		echo "dropbear: no $RC_SUBR (amix-base); not started" >&2
 		exit 0
@@ -89,32 +118,52 @@ start|serve)
 		rc_log dropbear "no $URANDOM (the random module); not started"
 		exit 0
 	fi
-	if [ -n "$pid" ] && kill -0 $pid 2> /dev/null; then
-		exit 0
-	fi
 	[ -d "$KEYDIR" ] || mkdir "$KEYDIR"
 	chmod 700 "$KEYDIR"
-	if [ "$1" = serve ]; then
-		serve
+	if [ "$1" = keys ]; then
+		# the background run: the ed25519 key and the server, then RSA
+		trap '' 1
+		hostkey ed25519 || { rm -f "${KEYJOB:?}"; exit 1; }
+		running || startserver
+		if wantrsa && [ ! -f "$KEYDIR/host_rsa" ]; then
+			if hostkey rsa; then
+				rc_log dropbear "restarting with the RSA host key"
+				stopserver
+				startserver
+			fi
+		fi
+		rm -f "${KEYJOB:?}"
 		exit 0
 	fi
-	missing=no
-	[ -f "$KEYDIR/host_ed25519" ] || missing=yes
-	if wantrsa && [ ! -f "$KEYDIR/host_rsa" ]; then
-		missing=yes
+	if keyjob; then
+		exit 0		# a key run is at work and starts the server itself
 	fi
-	if [ $missing = no ]; then
-		serve
-	else
-		bound=`rc_conf dropbear keytime 900`
-		rc_log dropbear "making the host keys, then starting, in the background (bound $bound s)"
-		rc_bg $bound dropbear /sbin/sh "$SELF" serve
+	# a run whose shell is gone (its bound, a crash) may have left its
+	# dropbearkey computing: end it before starting over
+	if [ -n "$jkey" ] && ps -fp $jkey 2> /dev/null | grep dropbearkey > /dev/null; then
+		kill $jkey 2> /dev/null
+	fi
+	rm -f "${KEYJOB:?}"
+	if [ -f "$KEYDIR/host_ed25519" ]; then
+		running || startserver
+	fi
+	if [ ! -f "$KEYDIR/host_ed25519" ] ||
+	    { wantrsa && [ ! -f "$KEYDIR/host_rsa" ]; }; then
+		bound=`rc_conf dropbear keytime 86400`
+		rc_log dropbear "making the missing host keys in the background (bound $bound s)"
+		# ignored here, the hangup stays ignored in everything rc_bg
+		# starts: a start by hand survives the end of its login
+		trap '' 1
+		rc_bg $bound dropbear /sbin/sh "$SELF" keys
 	fi
 	;;
 stop)
-	if [ -n "$pid" ] && kill $pid 2> /dev/null; then
-		rm -f "${PIDFILE:?}"
+	# the key run first, so that it starts no server after this
+	if keyjob; then
+		kill $jsh $jkey 2> /dev/null
 	fi
+	rm -f "${KEYJOB:?}" "${KEYDIR:?}"/new_*
+	stopserver
 	;;
 *)
 	echo "usage: $0 start | stop" >&2
