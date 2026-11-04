@@ -1,0 +1,19 @@
+# package.sh -- openrdate 1.11 (rdate); assignments only.
+NAME=rdate
+PKG=rdate
+VERSION=1.11
+PKGREV=1
+SOURCE_EPOCH=1793750400   # 2026-11-04 00:00 UTC, the time stamp of this version
+SUMMARY="rdate 1.11 - set the clock from a time server (SNTP or RFC 868)"
+DESC="openrdate 1.11, OpenBSD's rdate: sets the system clock from an SNTP (-n) or RFC 868 time server, by a step or, with -a, adjtime. Every try is bounded (-t, default 15 s, the name lookup included) and retried (-r, default 1); several servers are tried in order. Exit status names the failure. No configuration file and no daemon: the base system's ntpsync runs it. Installs /opt/amix/sbin/rdate."
+CATEGORY=network
+SET=base
+LICENSE="BSD-4-Clause AND BSD-3-Clause AND MIT"
+URL=https://github.com/resurrecting-open-source-projects/openrdate/archive/refs/tags/1.11.tar.gz
+SHA256=931c4ad143421e516bfd8c964a6e125ec193d5f1e524262a8a6a011181df4721
+SRCDIR=openrdate-1.11
+STYLE=hooks
+TOOLCHAIN=gcc14
+PREFIX=/opt/amix
+DEPENDS=""
+BUILD_DEPENDS=""

@@ -1,7 +1,7 @@
 .\" dropbear(8) for Amix: Dropbear 2026.94 as this package builds it.
 .\" From upstream's page by Gerrit Pape and Matt Johnston (MIT, see
 .\" /opt/amix/doc/dropbear/LICENSE), rewritten in -man for the system's nroff.
-.TH DROPBEAR 8 "3 November 2026" "dropbear 2026.94"
+.TH DROPBEAR 8 "4 November 2026" "dropbear 2026.94"
 .SH NAME
 dropbear \- small SSH server
 .SH SYNOPSIS
@@ -265,27 +265,44 @@ fails until the lease comes.
 .BR dropbear_rsa= yes | no
 Also an RSA host key, for clients that know no ed25519 (default
 .BR no ).
+Making it takes over 12 minutes of CPU on a 68060 and hours on a 68030;
+see below.
 .TP
 .BI dropbear_flags= options
 More options for the server, such as
 .BR "\-s \-g" .
 .TP
 .BI dropbear_keytime= seconds
-How long the first start may take to make the host keys (default 900).
+How long the background key making may take before it is stopped
+(default 86400, a day).
 .PP
-At its first start the script makes the ed25519 host key, and with
+The host keys are made from
+.BR /dev/urandom .
+The server starts as soon as the ed25519 key exists: at once when it
+does, or, at the first start, in the background with
+.BR rc_bg
+once the key is made (a few seconds), so the boot goes on.
+With
 .B dropbear_rsa=yes
-a 3072-bit RSA key, from
-.BR /dev/urandom ;
-making the RSA key takes minutes on a 68030.
-While a key is missing, the keys are made and the server started in the
-background, with
-.BR rc_bg ,
-so the boot goes on; the server listens once the keys are made.
+a 3072-bit RSA key is made after that, in the same background run at a
+low priority
+.RB ( "nice \-10" ),
+while the server already answers with the ed25519 key; when the RSA key
+is ready the server is restarted with both keys, which takes it off the
+port for a moment and leaves running sessions alone.
+The run's shell and
+.B dropbearkey
+are recorded in
+.BR /etc/dropbear/keygen.pid ,
+so
+.B "/etc/init.d/dropbear stop"
+ends them, and the server, at any stage.
 A key is written under a new name and renamed when it is complete, so a
-start stopped after
-.B dropbear_keytime
-leaves no half key, and the next start tries again.
+run stopped part-way, by
+.BR stop ,
+a shutdown or
+.BR dropbear_keytime ,
+leaves no half key, and the next start begins that key again.
 A host key never comes from the package, so no two machines share one,
 and neither an update nor
 .BR pkgrm (1M)
@@ -375,6 +392,11 @@ The host keys, readable by root only.
 .TP
 .B /etc/dropbear/dropbear.pid
 The server's process number.
+.TP
+.B /etc/dropbear/keygen.pid
+The background key run's shell and
+.BR dropbearkey ,
+while one is at work.
 .TP
 .B /etc/rc.conf
 The switch and settings of the boot script (above).
