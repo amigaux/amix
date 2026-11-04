@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-04 — rdate 1.11-1, new in the base set; dropbear 2026.94-4 (ab9d403, b4d4ca7)
+
+rdate: openrdate's rdate as /opt/amix/sbin/rdate. It sets the clock by SNTP (-n) or RFC 868, as a step or slewed with adjtime (-a). Every try is bounded by -t (default 15 s, the name lookup included, which runs in a child killed at the bound) with -r retries (default 1); several servers are tried in order, and the exit codes name the failure. The SNTP arithmetic is fixed point, with no FPU instructions, and right across 2036. No config file; the base system's ntpsync runs it. rdate(1M).
+
+dropbear 2026.94-4: with dropbear_rsa=yes the server starts as soon as the ed25519 host key exists, and the RSA key is made afterwards in the background at low priority, then the server restarts with both keys (before, the 900 s bound killed the RSA run on every boot and SSH never came up). /etc/dropbear/keygen.pid lets stop end the key run at any stage; a start after a dead run ends its leftover dropbearkey; the run survives the end of the login that started it. dropbear_keytime defaults to 86400 s.
+
 ## 2026-11-03 — dropbear 2026.94-3: in the base set (4f332a8)
 
 dropbear moves into the base set, so every install has an SSH server, on unless /etc/rc.conf says dropbear=no. A first start with no host key makes it and starts the server in the background (rc_bg, bounded by dropbear_keytime=, default 900 s), so the boot is never held; keys are written under a new name and renamed when complete, and no host key is ever shipped. dropbear(8) documents the boot keys, the rc.conf switches and that root may log in by password (empty passwords refused). Proven on fresh installs on the 060 and 030 rows and by the full acceptance against OpenSSH 10.2.
