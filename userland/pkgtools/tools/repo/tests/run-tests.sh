@@ -2620,14 +2620,17 @@ if [ -n "${P23:-}" ] && [ -f "$P23" ] && [ -x "$APKGH" ]; then
 else
     echo "  skip- APKG self-removal checks (T23 did not run or no host apkg)"
 fi
-if [ -x "$HB/pkgmk" ] && [ -f "$HERE/../../../heirloom/build-amix/bin/pkgadd" ]; then
+# build-packages.sh --eng gates the roll with scan060.py, which needs an m68k objdump
+if [ -x "$HB/pkgmk" ] && [ -f "$HERE/../../../heirloom/build-amix/bin/pkgadd" ] &&
+   { command -v m68k-linux-gnu-objdump || command -v m68k-elf-objdump ||
+     command -v m68k-cbm-sysv4-objdump; } >/dev/null 2>&1; then
     S31="$WORK/t31"; mkdir -p "$S31"
     bash "$BP" --eng "$S31/stg" >"$WORK/t31.eng" 2>&1
     check "build-packages.sh --eng mints into a scratch staging root" test $? -eq 0
     check "the minted APKGENG pkginfo says APKG_ESSENTIAL=yes" \
         grep -aqx 'APKG_ESSENTIAL=yes' "$(ls "$S31"/stg/*/APKGENG-*.pkg 2>/dev/null | head -1)"
 else
-    echo "  skip- APKGENG mark check (host pkgmk or heirloom/build-amix missing)"
+    echo "  skip- APKGENG mark check (host pkgmk, heirloom/build-amix or an m68k objdump missing)"
 fi
 
 # --------------------------------------------------------------- T32 ----
@@ -2737,7 +2740,8 @@ for n, l in enumerate(open(sys.argv[1]), 1):
 echo "T34: assemble-release.py writes one release tree"
 AR="$HERE/../assemble-release.py"
 S34="$WORK/t34"
-if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
+if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
+   command -v m68k-linux-gnu-as >/dev/null 2>&1 && command -v m68k-linux-gnu-ld >/dev/null 2>&1; then
     mkdir -p "$S34/src" "$S34/ul/pkgs" "$S34/ks/pkgs" "$S34/ap" "$S34/st" "$S34/bin"
     toy34() {   # toy34 <PKG> <VERSION> <out.pkg> [payload word] [ELF to ship as /opt/<PKG>.elf] [pkginfo line]
         printf 'PKG=%s\nNAME=%s toy\nVERSION=%s\nARCH=Amiga\nCATEGORY=system\n%s\n' "$1" "$1" "$2" "${6:-}" > "$S34/pkginfo"
@@ -2934,7 +2938,7 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ]; then
     t34no 1 "a version older than the published one: refused" "older than the published apkg 0.3.6" \
         --previous "$S34/out/1.1"
 else
-    echo "  skip- assemble-release checks (no host pkgmk/pkgtrans or host apkg)"
+    echo "  skip- assemble-release checks (no host pkgmk/pkgtrans, no host apkg or no m68k-linux-gnu-as/ld)"
 fi
 
 # -------------------------------------------------------------- done ----

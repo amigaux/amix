@@ -1,5 +1,31 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — make test: every pkgtools suite, skips visible, PKGTOOLS_REQUIRE for CI
+
+T15 failed on master unnoticed: the repo-tools suite ran nowhere automatically.
+
+`make -C userland/pkgtools test` (tools/test-all.sh):
+- builds the host engine, then runs the apkg suite (which builds the host apkg) and its
+  kbootset-consumer, conffile-e2e and nohttp-variant runs, then conffile, contents-fsck, migrate
+  and the repo tools;
+- prints each suite's summary line and every check it skipped, and lists a suite that skipped
+  itself whole (exit 77);
+- stops at the first red suite, with its log's tail. About 110 s on this host.
+
+`PKGTOOLS_REQUIRE="objdump fakeroot compress engine"`:
+- checks those tools before anything runs (m68k-linux-gnu-objdump/as/ld, fakeroot, compress,
+  and the host pkgmk/pkgtrans/pkgadd the run builds);
+- fails on any skip their absence would cause, matched by its exact wording;
+- leaves skips that need workstation-only inputs as skips (a published tree, old staging
+  dirs, the amix-packages kspace, stock media).
+
+On this host: 8 suites passed, 5 skip lines. On a PATH without those tools: 6 passed, 2 skipped
+whole, 14 skip lines. Each required tool missing fails at once (exit 1); an unknown token exits 2.
+
+Two checks that needed tools they did not test for now skip instead of failing:
+- T34 builds its toy ELFs with m68k-linux-gnu-as/ld;
+- T31's APKGENG roll gates through scan060.py, which needs an m68k objdump.
+
 ## 2026-11-04 — assemble-release needs the gcc14 sysroot; scan060-g14 says when it has none
 
 A repository build that ran assemble-release.py directly, without AMIX_SYSROOT, refused dropbear

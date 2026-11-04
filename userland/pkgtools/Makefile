@@ -13,6 +13,10 @@
 #   make repro-check        dist twice, from this checkout and from a
 #                           `git archive` of HEAD at another path under
 #                           another umask, and compare the bytes
+#   make test               every pkgtools suite on the host (tools/test-all.sh),
+#                           the checks each skipped printed; PKGTOOLS_REQUIRE=
+#                           "objdump fakeroot compress engine" makes the skips
+#                           those tools' absence would cause failures (CI)
 #
 # Each package rolls under its version's own epoch, pinned beside the
 # version in tools/repo/build-packages.sh (EPOCH_APKG, EPOCH_ENG);
@@ -26,7 +30,7 @@ STAGE ?= $(TOP)/out/build/pkgtools
 GCA ?=
 CROSS := $(if $(wildcard $(GCA)/env.sh),. $(GCA)/env.sh &&,)
 
-.PHONY: dist engine-host cross repro-check
+.PHONY: dist engine-host cross repro-check test
 
 dist: engine-host cross
 	STAGE='$(STAGE)'; rm -rf "$${STAGE:?}"
@@ -56,3 +60,6 @@ cross: engine-host
 
 repro-check:
 	GCA=$(GCA) bash tools/repo/dist-repro.sh
+
+test:
+	sh tools/test-all.sh
