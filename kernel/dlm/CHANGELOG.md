@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — kbootset 1.1.0.261104-38 (b7f6447, 22fab4f)
+
+`namelist`, `status` and `mark-good` no longer walk and free an unset module list when a brel kernel's namelist cannot be made (k30, after a kernel upgrade or rollback). Host test knlinit.sh. Box binary 7de82527; floor unchanged.
+
 ## 2026-11-04 — modtools 1.0.261104-14: modadmin(1M) (569ddc8, 8c2755b)
 
 The manual page modadmin(1M) and its whatis fragment; modadmin unchanged (fd8e8a20).
