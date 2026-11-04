@@ -280,6 +280,95 @@ def added_lines(t, env, root, local_env):
          "--pre-push checks them when no remote has them", out)
 
 
+def binaries_and_compiled(t, env, root):
+    """Local patterns in binary files; compiled Python refused by name."""
+    repo = Repo(env, os.path.join(root, "repo3"))
+    pats = os.path.join(root, "patterns3")
+    with open(pats, "w") as f:
+        f.write("frobnicator[0-9]*\n")
+    local = {"PRIVACY_PATTERNS": pats}
+    path_bytes = b"/srv/frobnicator/tool.py"
+    head = b"\xa7\r\r\n\0\0\0\0"
+
+    clean = repo.commit(OURS, {
+        "data/clean.bin": head + j("gw ", dotted(10, 0, 0, 1), "\n").encode(),
+        "notes/pyc.txt": "about pyc files\n",
+        "tools/mod.pyc.txt": "not compiled\n",
+        "pycache/notes.txt": "not the directory\n",
+        "src/__pycache__x/mod.py": "x = 1\n"}, "Add near misses")
+    binary = repo.commit(OURS, {"bin/tool.bin": head + path_bytes + b"\0tail"},
+                         "Add a binary holding a local path")
+    far = repo.commit(OURS, {"bin/far.bin": head + b"\x80" * 100000 + path_bytes},
+                      "Add a binary with the path past the text probe")
+    wide = repo.commit(OURS, {"bin/wide.bin": head + "frobnicator".encode("utf-16-le")},
+                       "Add a binary with the name in UTF-16")
+    same = repo.commit(OURS, {"bin/tool.bin": head + path_bytes + b"\0other"},
+                       "Change a binary, the same local path stays")
+    grew = repo.commit(OURS, {"bin/tool.bin": head + path_bytes + b"\0frobnicator7"},
+                       "Change a binary, a new local name")
+    pyc = repo.commit(OURS, {
+        "probe/__pycache__/tap.cpython-314.pyc": head + path_bytes,
+        "old/mod.pyc": head + b"nothing private",
+        "more/__pycache__/notes.txt": "plain text\n"}, "Add compiled Python")
+    contrib = repo.commit(OTHER, {"up/__pycache__/m.cpython-39.pyc": head},
+                          "Add compiled Python from upstream")
+    os.remove(os.path.join(repo.path, "old/mod.pyc"))
+    os.remove(os.path.join(repo.path, "probe/__pycache__/tap.cpython-314.pyc"))
+    gone = repo.commit(OURS, {"notes/gone.txt": "removed\n"}, "Remove compiled Python")
+
+    rc, hits, out = repo.check(["--all", "master"])
+    t.ok(not [h for h in hits if h[1] == 1],
+         "no local list: nothing searched in a binary", out)
+    t.ok(has(hits, pyc, 4, "probe/__pycache__/tap.cpython-314.pyc")
+         and has(hits, pyc, 4, "old/mod.pyc")
+         and has(hits, pyc, 4, "more/__pycache__/notes.txt"),
+         ".pyc and __pycache__/ refused, without a local list", out)
+    t.ok(has(hits, contrib, 4, "up/__pycache__/m.cpython-39.pyc"),
+         "compiled Python refused in a contributor's commit too", out)
+    t.ok(not of(hits, clean), "near misses and an address in a binary pass", out)
+    t.ok(not of(hits, gone), "removing compiled Python passes", out)
+
+    rc, hits, out = repo.check(["--all", "master"], env=local)
+    t.ok(rc == 1 and has(hits, binary, 1, "bin/tool.bin")
+         and any("local pattern #1 in a binary file at offset 13" in h[3]
+                 for h in of(hits, binary)),
+         "binary holding a local path refused, with its offset", out)
+    t.ok(has(hits, far, 1, "bin/far.bin"), "found past the first 8 KiB", out)
+    t.ok(has(hits, wide, 1, "bin/wide.bin"), "found in UTF-16", out)
+    t.ok(not of(hits, same), "a string the binary already held is not new", out)
+    t.ok(has(hits, grew, 1, "bin/tool.bin"), "a new string in a changed binary", out)
+    t.ok(has(hits, pyc, 1, "probe/__pycache__/tap.cpython-314.pyc")
+         and has(hits, pyc, 4, "probe/__pycache__/tap.cpython-314.pyc"),
+         ".pyc holding a local path: both classes", out)
+    t.ok("frobnicator" not in out and "/srv/" not in out,
+         "the string in a binary is never printed", out)
+
+    rc, hits, out = repo.check(["--tree", same], env=local)
+    t.ok(rc == 1 and has(hits, same, 1, "bin/tool.bin"),
+         "--tree judges a binary whole", out)
+
+    allow = os.path.join(root, "allow3")
+    with open(allow, "w") as f:
+        f.write("1 bin/*.bin frobnicator\n")
+    rc, hits, out = repo.check(["--range", "%s..%s" % (clean, far), "--allow", allow],
+                               env=local)
+    t.ok(rc == 0 and not hits, "the allowlist reads the string in a binary", out)
+
+    # The whole of a binary is read, or the check fails.
+    big = 16 * 1024 * 1024 + 1024
+    large = repo.commit(OURS, {"bin/large.bin": head + b"\0" * big + path_bytes},
+                        "Add a binary over the 16 MiB read")
+    rng = "%s..%s" % (gone, large)
+    rc, hits, out = repo.check(["--range", rng], env=local)
+    t.ok(rc == 2 and "not read whole" in out, "a binary not read whole exits 2", out)
+    rc, hits, out = repo.check(["--range", rng])
+    t.ok(rc == 1 and [h[1] for h in hits] == [4],
+         "no local list: only the size hit on that binary", out)
+    rc, hits, out = repo.check(["--range", rng, "--max-size", "32M"], env=local)
+    t.ok(rc == 1 and has(hits, large, 1, "bin/large.bin"),
+         "--max-size reads it whole, the string at its end is found", out)
+
+
 def main():
     root = tempfile.mkdtemp(prefix="privacy-check-test.")
     t = Tally()
@@ -419,6 +508,7 @@ def main():
         t.ok(rc == 0 and not hits, "--pre-push skips a deleted ref", out)
 
         added_lines(t, env, root, local_env)
+        binaries_and_compiled(t, env, root)
 
         # Fail closed.
         rc, _, out = repo.check(["--tree", "master", "--exclude-remotes"])

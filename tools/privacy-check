@@ -21,15 +21,22 @@ is limited first to the paths that differ from every parent); for a root
 commit, every line. Line numbers are those of the new file. Classes 2 and 4
 judge every added or modified file whole; --tree judges whole files.
 
+A binary file (a NUL in its first 8 KiB) is searched for the local patterns
+only, in its bytes as they are and with its NUL bytes taken out, which reads
+ASCII held as UTF-16. In commit modes a string the file already held at the
+first parent does not count. Compressed content is not looked inside.
+
 Classes:
-  1  private network addresses (RFC 1918 IPv4, IPv6 ULA) and local patterns
+  1  private network addresses (RFC 1918 IPv4, IPv6 ULA) and local patterns,
+     the patterns in binary files too
   2  local tool files (CLAUDE.md, CLAUDE.local.md, AGENTS.md, .claude/) in our
      commits, and at the tip when the last change to them was ours
   3  secrets: private keys, token shapes, passwords in config files,
      password hashes in shadow files, .netrc and SSH key files
-  4  disk/ROM images, blobs over the size limit, system files listed in
-     system/MANIFEST.sha256 (at the commit or at any tip checked; an empty
-     file matches nothing), and locally blocked blobs
+  4  disk/ROM images, compiled Python (*.pyc, __pycache__/), blobs over the
+     size limit, system files listed in system/MANIFEST.sha256 (at the commit
+     or at any tip checked; an empty file matches nothing), and locally
+     blocked blobs
   5  AI attribution in our commit messages
 
 Output: one line per hit, "<short sha> <class> <path|message> <detail>".
@@ -161,6 +168,11 @@ def is_tool_file_path(path):
     return False
 
 
+def is_compiled_python(path):
+    parts = path.lower().split("/")
+    return parts[-1].endswith(".pyc") or "__pycache__" in parts
+
+
 def is_config_like(path):
     base = basename(path).lower()
     if extension(path) in CONFIG_EXTS or base.startswith(".env"):
@@ -251,6 +263,25 @@ def load_patterns(path):
         except re.error:
             raise UsageError("PRIVACY_PATTERNS line %d: invalid regex" % n)
     return pats
+
+
+def bytes_patterns(patterns):
+    """The local patterns as bytes regexes, for binary files."""
+    out = []
+    for n, pat in patterns:
+        try:
+            out.append((n, re.compile(pat.pattern.encode("utf-8"), re.IGNORECASE)))
+        except re.error:
+            raise UsageError("PRIVACY_PATTERNS line %d: not usable on bytes" % n)
+    return out
+
+
+def first_new(rx, data, known):
+    """The first match of `rx` in `data` whose string is not in `known`."""
+    for m in rx.finditer(data):
+        if m.group(0) not in known:
+            return m
+    return None
 
 
 def load_blocked(path):
@@ -351,6 +382,7 @@ class Checker(object):
             self.allow = load_allowlist(allow)
         pp = os.environ.get("PRIVACY_PATTERNS")
         self.patterns = load_patterns(pp) if pp else []
+        self.binary_patterns = bytes_patterns(self.patterns)
         pb = os.environ.get("PRIVACY_BLOCKED")
         self.blocked = load_blocked(pb) if pb else {}
         self.objects = Objects()
@@ -449,6 +481,8 @@ class Checker(object):
         ext = extension(path)
         if ext in IMAGE_EXTS:
             self.hit(sha, 4, path, "image file extension %s" % ext)
+        if is_compiled_python(path):
+            self.hit(sha, 4, path, "compiled Python file")
         for m in IPV4_RE.finditer(path):
             if private_ipv4(m.groups()):
                 self.hit(sha, 1, path, "private IPv4 address in path", m.group(0))
@@ -487,6 +521,35 @@ class Checker(object):
             self.merged[key] = merged
         return self.merged[key]
 
+    def scan_binary(self, sha, path, oid, blob, base):
+        """The local patterns over a binary file, one hit per pattern. The
+        other text classes stay out: dotted quads occur in binary data by
+        chance. With `base`, a string the file already held there is not
+        new."""
+        if not self.binary_patterns:
+            return
+        if blob.size > len(blob.head):
+            raise GitError("binary blob %s (%s) was not read whole; raise "
+                           "--max-size" % (oid, path))
+        wide = blob.head.replace(b"\0", b"")
+        old = []
+        if base is not None:
+            older = self.objects.get(base, self.keep)
+            if older is None or older.size > len(older.head):
+                raise GitError("blob %s (%s) was not read whole; raise "
+                               "--max-size" % (base, path))
+            old = [older.head, older.head.replace(b"\0", b"")]
+        for n, rx in self.binary_patterns:
+            known = set(m.group(0) for data in old for m in rx.finditer(data))
+            m = first_new(rx, blob.head, known)
+            where = "at offset %d" % m.start() if m else ""
+            if not m:
+                m = first_new(rx, wide, known)
+                where = "with its NUL bytes taken out"
+            if m:
+                self.hit(sha, 1, path, "local pattern #%d in a binary file %s"
+                         % (n, where), m.group(0).decode("latin-1"))
+
     def scan_blob(self, sha, path, oid, manifest, base=None):
         """Classes 1-4 on one file. With `base` (the file's blob at the first
         parent), classes 1 and 3 see only the lines added relative to it."""
@@ -507,6 +570,7 @@ class Checker(object):
             self.hit(sha, 4, path, "blocked list line %d"
                      % self.blocked[blob.sha256])
         if b"\0" in blob.head[:TEXT_PROBE]:
+            self.scan_binary(sha, path, oid, blob, base)
             return
         if blob.size > len(blob.head):
             raise GitError("text blob %s (%s) was not read whole" % (oid, path))
@@ -724,8 +788,8 @@ def build_parser():
         prog="privacy-check",
         description="Check commits or a tree for material that must not be "
                     "published: private addresses (1), local tool files (2), "
-                    "secrets (3), images and system files (4), AI attribution "
-                    "in our messages (5).",
+                    "secrets (3), images, compiled Python and system files "
+                    "(4), AI attribution in our messages (5).",
         epilog="Exit 0 clean, 1 hits, 2 usage or git error. Environment: "
                "PRIVACY_OURS, PRIVACY_PATTERNS, PRIVACY_BLOCKED.")
     mode = p.add_mutually_exclusive_group(required=True)

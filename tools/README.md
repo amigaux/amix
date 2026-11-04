@@ -13,7 +13,7 @@ checks commits (`--range A..B`, `--all REF`, or `--pre-push` fed by git's
 pre-push hook) or a single tree (`--tree REF`) and refuses five classes of
 material: private network addresses, the maintainers' local tool files,
 secrets such as private keys and access tokens, disk and ROM images,
-oversized blobs and the system files listed in `system/MANIFEST.sha256`, and
+compiled Python (`*.pyc`, `__pycache__/`), oversized blobs and the system files listed in `system/MANIFEST.sha256`, and
 AI attribution in our own commit messages. Contributors' commits are kept as
 written, so the tool-file and attribution classes apply only to our
 commits. It prints one line per hit and exits 0 when clean, 1 on hits and 2 on
@@ -22,7 +22,10 @@ read only the lines it adds relative to its first parent (all of them for a
 root commit or a project moved in by a subtree merge), so a change to a file
 does not inherit what earlier contributors wrote there, and a push skips
 commits that any remote-tracking ref already has (`--exclude-remotes` does the
-same for `--range` and `--all`). Public exemptions live in `privacy-allow.txt`, each with its
+same for `--range` and `--all`). A binary file is searched only for the local
+patterns, in its bytes as they are and with its NUL bytes taken out (ASCII held
+as UTF-16), and a string it already held at the first parent does not count.
+Compressed content is not looked inside. Public exemptions live in `privacy-allow.txt`, each with its
 reason. A maintainer can add local extras that never enter this repository
 through the `PRIVACY_PATTERNS` and `PRIVACY_BLOCKED` environment variables.
 `test-privacy-check` builds a throwaway repository with one planted hit per
