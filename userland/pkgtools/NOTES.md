@@ -1,5 +1,30 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — APKG 0.3.9 minted (STAGED, NOT PUBLISHED)
+
+**Why.** apkg.conf is a conffile, so what ships stays on a box for good. Two of its comments told test
+history, and apkg.1 cited internal documents by name. Both now say only what a reader of the box needs.
+A test keeps those references out of both files. The measurements behind `rcvbuf=0` stay: they are the
+reason for the default.
+
+`make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this
+entry's commit, `VER_APKG="0.3.9"`, `EPOCH_APKG=1793750400`; `make repro-check` there from `cbc5001`:
+the checkout's roll and a `git archive` copy's are the same bytes, and so is the final `make dist`:
+
+- **md5 `3f796aed7545bcabb4a8937f66876263`**, **sha256
+  `ec0f5c12b87323605948ab396aa86b7713ea641c8e3573d1cc96122c038cffa9`**, **255488 B**; the bytes the
+  emulated box below installed.
+- `apkg.amix`: sha256 `6a6b2fe464d11e694e726f8e0a388c8b892a87d6996996ebca2521d9024836ef`, 133720 B,
+  `sum -r` 53229, text 109487 + data 2472 + bss 4036 (0.3.8's sizes). scan060 clean, link gate OK.
+- Against 0.3.8 only apkg, apkg.1, the two apkg.conf copies, pkginfo and pkgmap differ. apkg differs
+  in 2 bytes, its version string. APKGENG rolls `c1d4831a…`, unchanged.
+- The binary's own messages still name those documents; the next version rewords them.
+
+**On an emulated k46 box with DNS on,** first boot through the real dialog, the hosts line removed:
+`apkg upgrade apkg` from 0.3.6; `pkgchk -n APKG` clean; `sum -r` as above; `/etc/apkg.conf` 5844 B,
+the template's size, with neither the address nor the old wording in either copy. Then `apkg update`
+against the published 1.1 tree over DNS: 43 packages, 29 kernel-space; `apkg download rdate` fetched it.
+
 ## 2026-11-04 — APKG 0.3.8 minted (STAGED, NOT PUBLISHED)
 
 **Why.** The repository goes by name, so nothing 1.1 ships names its address. The apkg.conf template

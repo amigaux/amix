@@ -1034,6 +1034,13 @@ if [ -s "$TMPL" ]; then
     else
         ok "the shipped apkg.conf names no address"
     fi
+    # What ships stays on the box: no internal document, no test history.
+    if grep -Eq 'C[0-9]-[0-9]|bench-proven|on metal|contract' "$TMPL" "$SRC/apkg.1"; then
+        bad "the shipped apkg.conf or apkg.1 cites an internal document or test" \
+            "$(grep -En 'C[0-9]-[0-9]|bench-proven|on metal|contract' "$TMPL" "$SRC/apkg.1")"
+    else
+        ok "the shipped apkg.conf and apkg.1 cite no internal document or test"
+    fi
     TMPLREPO=$(sed -n 's/^repo=//p' "$TMPL" | head -1)
     [ "$TMPLREPO" = "$CANON_REPO" ] \
         && ok "the shipped apkg.conf template names the canonical repository" \
