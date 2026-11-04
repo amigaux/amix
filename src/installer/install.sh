@@ -3404,7 +3404,8 @@ fi
 # time. Ours (tools/build-setclk.sh: the stock source + src/setclk/setclk-y2k.patch)
 # passes a 4-digit year, leaves the clock alone for an RTC outside 1992..2037 (a clock
 # set back past root's password age makes every login "expired", grimoire quirk 20)
-# and prints one console line either way; it never writes the RTC. It is copied ONTO
+# and prints one console line either way; the boot path never writes the RTC (`setclk -s`, by hand or
+# from base's ntpsync after a sync, does: the system time, to the minute). It is copied ONTO
 # the stock file: cp into an existing file keeps its inode, owner and group
 # (amiga:amiga, as stock -- the miniroot has no chown), and /sbin/setclk and
 # /etc/setclk are symlinks to it already. /etc/clkzone names the zone the RTC keeps.

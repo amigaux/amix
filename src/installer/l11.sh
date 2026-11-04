@@ -493,8 +493,9 @@ l11_bits()
 #     static line for FB_ETHER_IF, a zen0 line beside it from FB_ZEN_IP, a MAC line per
 #     FB_ZEN_CARDS row (the address-by-card table, docs/address-by-card.md), and dns/domain;
 #     FB_IP empty (public) gives `* dhcp`, with the profile's name, else `hostname dhcp`.
-#   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; dropbear=yes, the SSH server's
-#     switch shown where a user looks for it (its own default is on too); swap_add= from
+#   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; dropbear=yes and ntp=yes, the SSH
+#     server's and the network time sync's switches shown where a user looks for them (their own
+#     defaults are on too); swap_add= from
 #     SWAP_ADD_MB, the sizes amix-base's boot swap step tries (bootswap(1M)); every other service
 #     keeps its own default.
 #   /etc/display (display(4)): card auto (the first card whose device answers, the chipset
@@ -533,6 +534,7 @@ l11_admin()
 		case "$FB_SYSLOG" in n) echo "syslogd=no" ;; *) echo "syslogd=yes" ;; esac
 		echo "# set to no to disable the SSH server"
 		echo "dropbear=yes"
+		echo "ntp=yes          # set the clock from time servers at boot and hourly: ntpsync(1M)"
 		[ -z "$SWAP_ADD_MB" ] || echo "swap_add=$SWAP_ADD_MB"
 	} > "$TARGET/etc/rc.conf" || die "cannot write $TARGET/etc/rc.conf"
 	run chmod 0644 "$TARGET/etc/rc.conf"

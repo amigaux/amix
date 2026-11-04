@@ -4899,7 +4899,8 @@ sysinit read ran before the dialog, in the image's default zone).
   on the box: `timezone`/`altzone`/`daylight` are right, `tm_isdst = 1` is honoured), which
   put a summer-time clock one hour ahead; setclk reads the value as standard time first and,
   if `localtime` says that instant is in summer time, again with `tm_isdst = 1`. Console: `setclk: RTC MM/DD hh:mm:ss YYYY (:ZONE) -> system clock set`;
-- it never writes the RTC.
+- the boot path never writes the RTC; `setclk -s` writes it from the system time, to the minute
+  (minute resolution, seconds as 0; the year right from 2000 on), and base's ntpsync runs it after a sync.
 
 **The year encoding (measured on metal, T-16 F4).** The RTC's year register holds the
 AmigaOS battclock encoding — years since 1900, so the tens digit runs past 9 (nibble
@@ -5316,10 +5317,11 @@ is installed in two stages:
 
 Disk space: the second stage holds one package's downloaded copy and its spool at once. For the
 full set the peak is about 350 MiB of data (x11r5src's 60 MiB twice on top of the tree so far),
-about 375 MiB with ufs metadata, so a full network install wants a 512 MB disk; standard peaks near
-70 MiB.
+about 375 MiB with ufs metadata. The interview's network free-space check (the set's packages plus twice
+the largest datastream) refuses the full set on a 512 MiB disk, whose default root is 416 MiB, and offers
+the menu again (`uni-ni-k46-tight`); a full network install wants a 1 GiB disk. Standard peaks near 70 MiB.
 
-The cells: `uni-ni-k46` (the full set, 512 MiB), `uni-ni-k30` (standard) and `uni-ni-k46-resume`
+The cells: `uni-ni-k46` (the full set, 1 GiB), `uni-ni-k30` (standard) and `uni-ni-k46-resume`
 (the first boot's repository goes away after three datastreams; a second boot finishes the stage)
 name the repository `amixrepo`, which the miniroot resolves to the tap anchor and the first-boot
 dialog to the rig host's slot-network address, where the cell serves the same snapshot.

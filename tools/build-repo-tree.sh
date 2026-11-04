@@ -38,6 +38,13 @@ L11_IN="${L11_IN:-$repo/work/l11}"
 # the pinned tools ($L11_IN: pkgtools and amix tools/ at the set's revision), never the amix checkout's tip
 AR="$L11_IN/pkgtools/tools/repo/assemble-release.py" RC="$L11_IN/amix-tools/release-check"
 [ -f "$AR" ] && [ -x "$RC" ] || die "no pinned assemble-release or release-check under $L11_IN (tools/build-l11-inputs.sh)"
+# scan060-g14 applies its KNOWN_STOCK_DATA (the stock archive members whose tables sit in .text, e.g.
+# libcrypt.a's des_crypt.o) only with the GCC 14 sysroot named, as make dist's release step does;
+# without it those tables scan as code (48 movepw in dropbear). G14: build-l11-inputs' toolchain.
+G14="${G14:-$ws/gcc14-cross-amix/build}"
+AMIX_SYSROOT=$("$G14/prefix/bin/m68k-elf-gcc" -print-sysroot 2>/dev/null) && [ -d "$AMIX_SYSROOT/usr/lib" ] \
+	|| die "no GCC 14 sysroot from $G14/prefix/bin/m68k-elf-gcc -print-sysroot (scan060-g14 needs it for its known stock data)"
+export AMIX_SYSROOT
 [ -f "$AR" ] || die "no $AR (amix master)"
 KS="$(sed -n 's/^#   kspace //p' "$L11_IN/INPUTS")"
 [ -n "$KS" ] && [ -f "$ws/$KS/catalog" ] || die "INPUTS names no kernel-space tree ($KS)"

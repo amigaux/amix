@@ -112,6 +112,28 @@ no packages itself.
 
 Publication: unpublished (publishing this medium is a per-artefact owner decision).
 EOF
+# third-party notices on the medium (build-iso.sh's table), each only when the disc carries the code:
+# a base-set package's acknowledgement when the RAM disk's first stage installs it (the inputs'
+# base/sets name its pkginst), the 68040/68060 kernel's when the disc boots that kernel
+while read -r _ai _ad _as; do
+  awk -v p="$_ai" '$1 == p {f = 1} END {exit !f}' "$L11/base/sets" 2>/dev/null || continue
+  printf '\n%s\n(%s, which the installer puts on the system with the base set; its licences are in\n/opt/amix/doc/%s/ on the installed system.)\n' \
+    "$_as" "$_ai" "$_ad" >> "$root/LICENSING"
+done <<'EOF'
+rdate rdate This product includes software developed by Christos Zoulas.
+heirtar heirloom-tar This product includes software developed or owned by Caldera International, Inc.
+EOF
+if [ -d "$root/BOOT/K46" ]; then
+  cat >>"$root/LICENSING" <<'EOF'
+
+The 68040/68060 kernel (kern46m; its full notices are in /var/sadm/pkg/kern46m/install/copyright
+on an installed system):
+This product includes software developed by Gordon Ross
+This product includes software developed by the University of California, Lawrence Berkeley Laboratory.
+M68040 Software Package Copyright (c) 1993, 1994 Motorola Inc. All rights reserved.
+M68060 Software Package Copyright (C) 1993, 1994, 1995, 1996 Motorola Inc. All rights reserved.
+EOF
+fi
 mkdir -p "$(dirname "$ISO")"; rm -f "${ISO:?}"
 xorriso -as mkisofs ${SOURCE_DATE_EPOCH:+--set_all_file_dates "=$SOURCE_DATE_EPOCH"} -o "$ISO" -V "$VOLID" -publisher "amix-installng" -A "AMIX 2.1 NETINSTALL" \
   -iso-level 3 -rational-rock -sysid "AMIGA BOOT" "$root" > "$W/xorriso.log" 2>&1 \
