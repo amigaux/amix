@@ -39,6 +39,57 @@ sel_rto1(const char *line, const char *want)
 	       hexeq(r, AX_RTO1_LEN, want);
 }
 
+/* AllocAbs as exec gives it: [at, at + n) must lie in one free range */
+struct rdmem {
+	int nfree, tries;
+	ax_u32 lo[4], hi[4];
+};
+
+static int
+rd_claim(void *ctx, ax_u32 at, ax_u32 n)
+{
+	struct rdmem *m = (struct rdmem *)ctx;
+	int i;
+
+	m->tries++;
+	for (i = 0; i < m->nfree; i++)
+		if (at >= m->lo[i] && at + n <= m->hi[i])
+			return 1;
+	return 0;
+}
+
+static void
+rd_cases(void)
+{
+	/* a 16 MiB region 0x08000000-0x09000000, the kernel ending at
+	 * 0x08200000, a 5632 KiB image (the netinstall miniroot) */
+	ax_u32 top = 0x09000000UL, end = 0x08200000UL, sz = 5632UL * 1024;
+	struct rdmem m;
+
+	m.nfree = 1, m.tries = 0, m.lo[0] = end, m.hi[0] = top;
+	T_EQ(ax_rd_place(top, sz, end, rd_claim, &m), top - sz);	/* free: the top, as before */
+	T_EQ(m.tries, 1);
+	/* the top 512 KiB kept (a Kickstart copy): the block just below,
+	 * 64 KiB aligned */
+	m.nfree = 1, m.tries = 0, m.hi[0] = top - 0x80000;
+	T_EQ(ax_rd_place(top, sz, end, rd_claim, &m), (top - 0x80000 - sz) & ~0xFFFFUL);
+	/* an odd top and holes: the highest 64 KiB-aligned block that fits */
+	m.nfree = 3, m.tries = 0;
+	m.lo[0] = end, m.hi[0] = 0x08600000UL;			/* too small */
+	m.lo[1] = 0x08640000UL, m.hi[1] = 0x08c20000UL;		/* fits: 6016 KiB */
+	m.lo[2] = 0x08c40000UL, m.hi[2] = 0x08ff0000UL;		/* too small */
+	T_EQ(ax_rd_place(0x08fff000UL, sz, end, rd_claim, &m), 0x086a0000UL);
+	/* every place taken: in use, never below the kernel's end */
+	m.nfree = 1, m.tries = 0, m.lo[0] = 0, m.hi[0] = end + sz - 1;
+	T_EQ(ax_rd_place(top, sz, end, rd_claim, &m), AX_RD_INUSE);
+	T_EQ(m.tries, (int)(((top - sz) & ~0xFFFFUL) - ((end + 0xFFFFUL) & ~0xFFFFUL)) / 0x10000 + 1);
+	/* larger than the room above the kernel, or no aligned place in it */
+	T_EQ(ax_rd_place(top, top - end + 1, end, rd_claim, &m), AX_RD_TOOBIG);
+	T_EQ(ax_rd_place(0x08210000UL, 0x8000, 0x08201000UL, rd_claim, &m), AX_RD_TOOBIG);
+	T_EQ(ax_rd_place(top, 0, end, rd_claim, &m), AX_RD_TOOBIG);
+	T_EQ(ax_rd_place(end - 1, 16, end, rd_claim, &m), AX_RD_TOOBIG);
+}
+
 void
 test_bootinfo(void)
 {
@@ -50,6 +101,7 @@ test_bootinfo(void)
 	ax_u32 sum;
 	int i;
 
+	rd_cases();
 	/* rth1-record.py rootrec --unit 6 --id 0x144b0100 */
 	T_CHECK(sel_rto1("sd id=144b0100 base=00000000 unit=6 slice=1",
 			 "52544f310001001c0000000600000000144b010000000000995fafad"));

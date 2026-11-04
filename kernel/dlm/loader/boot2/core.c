@@ -182,23 +182,35 @@ load_member(const struct ax_member *mb, ax_u32 id)
 static ax_u32 rd_addr, rd_room;	/* the RAM-disk image (C4-3); its region's top */
 static const char needs[] = "the %s needs %u bytes, it has %u\n";
 
+static int
+rd_claim(void *ctx, ax_u32 at, ax_u32 size)
+{
+	(void)ctx;
+	return x_allocabs(size, (void *)at) != 0;
+}
+
 /*
- * The RAM-disk image at the top of the kernel's region (C4-3 section 2):
- * claimed in place with AllocAbs while exec still runs, so the hand-off
- * moves nothing more; 64 KiB aligned, above the kernel's end.  0, or the
- * L code.
+ * The RAM-disk image in the kernel's region (C4-3 section 2): claimed in
+ * place with AllocAbs while exec still runs, so the hand-off moves nothing
+ * more; 64 KiB aligned, above the kernel's end; at the top, or as high
+ * below it as is free (ax_rd_place: AmigaOS may keep a Kickstart copy or
+ * a reset-proof RAM disk there).  0, or the L code.
  */
 static int
 ramdisk_place(void)
 {
-	ax_u32 top = vaddr + rd_room, at = (top - man.ramdisk.size) & ~0xffffUL;
+	ax_u32 top = vaddr + rd_room, at = ax_rd_place(top, man.ramdisk.size, bd.end, rd_claim, 0);
 
-	if (man.ramdisk.size > rd_room || at < bd.end || !x_allocabs(top - at, (void *)at)) {
+	if (at == AX_RD_TOOBIG) {
 		con_say(needs, "RAM disk", man.ramdisk.size, top - bd.end);
-		return 4;	/* too big, or its place already in use */
+		return 4;
+	}
+	if (at == AX_RD_INUSE) {
+		con_say("the RAM disk's place is in use\n");
+		return 4;
 	}
 	if (load_into(&man.ramdisk, gen, (ax_u8 *)at)) {
-		x_freemem((void *)at, top - at);	/* the next generation may place its own */
+		x_freemem((void *)at, man.ramdisk.size);	/* the next generation may place its own */
 		return -1;
 	}
 	rd_addr = at;

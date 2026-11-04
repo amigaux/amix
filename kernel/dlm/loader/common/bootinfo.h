@@ -126,6 +126,19 @@ struct ax_memr {
 int ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap);
 ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
 
+/*
+ * The RAM-disk image's place in the kernel's region (10 section 5.4): the
+ * highest 64 KiB-aligned address at, with [at, at + size) inside
+ * [end, top), that claim(ctx, at, size) accepts (boot2: AllocAbs), tried
+ * from the top down, so memory AmigaOS keeps at the top (a Kickstart copy,
+ * a reset-proof RAM disk) is stepped over.  at, or AX_RD_TOOBIG when no
+ * such address exists, or AX_RD_INUSE when every one was refused.
+ */
+#define AX_RD_TOOBIG	1UL
+#define AX_RD_INUSE	2UL
+ax_u32 ax_rd_place(ax_u32 top, ax_u32 size, ax_u32 end,
+		   int (*claim)(void *ctx, ax_u32 at, ax_u32 size), void *ctx);
+
 /* the 0x38-byte RTH1 record; root may be 0 */
 void ax_rth1_build(ax_u32 flags, ax_u32 boot_unit, ax_u32 boot_base, ax_u32 boot_id,
 		   const ax_u8 *root, ax_u8 out[AX_RTH1_LEN]);

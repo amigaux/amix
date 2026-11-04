@@ -257,6 +257,23 @@ ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap)
 }
 
 ax_u32
+ax_rd_place(ax_u32 top, ax_u32 size, ax_u32 end,
+	    int (*claim)(void *ctx, ax_u32 at, ax_u32 size), void *ctx)
+{
+	ax_u32 at;
+
+	if (top < end || size == 0 || size > top - end || ((top - size) & ~0xFFFFUL) < end)
+		return AX_RD_TOOBIG;
+	for (at = (top - size) & ~0xFFFFUL; at >= end; at -= 0x10000UL) {
+		if (claim(ctx, at, size))
+			return at;
+		if (at < 0x10000UL)
+			break;
+	}
+	return AX_RD_INUSE;
+}
+
+ax_u32
 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size)
 {
 	ax_u32 base = 0, max = 0, lower, upper;
