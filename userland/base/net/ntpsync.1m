@@ -1,0 +1,177 @@
+.TH NTPSYNC 1M "4 November 2026" "amix-base"
+.SH NAME
+ntpsync \- set the clock from time servers, at boot and hourly
+.SH SYNOPSIS
+.B ntpsync
+.RB [ \-b " | " \-c " | " \-n " | " \-i " | " \-l ]
+.SH DESCRIPTION
+.B ntpsync
+asks time servers for the time over SNTP, through
+.BR rdate (1M),
+sets the clock from the first good answer, and then sets the Amiga's
+battery clock from it, so that a boot without the network still starts
+close to the right time.
+Nothing stays in memory between runs.
+.PP
+It runs at boot, from
+.B /etc/init.d/ntp
+.RB ( /etc/rc2.d/S77ntp ),
+in the background: it waits there for
+.BR ifup (1M)
+to give an interface its address, so the boot never waits for it.
+It then runs every hour from root's
+.BR crontab (1),
+at a minute picked once for each machine, so that machines do not all ask
+at the same time.
+.PP
+The servers are asked in this order, each once:
+the time servers the DHCP server named (option 42, recorded by
+.BR dhcpc (1M)
+in the leases it holds now; those of the interface
+.B ifup
+brought up first, first), then
+.BR rc.conf 's
+.BR ntp_servers .
+Each server gets
+.B ntp_timeout
+seconds, the name lookup included, and
+.B ntp_retries
+more tries before the next server.
+.PP
+A sync is one line in
+.BR /var/adm/rc.log ,
+and so is a run that could not sync, whatever the number of servers
+asked.
+The hourly run writes a line only when the outcome changes (synced, then
+not; not, then synced again), so a machine that stays off the network
+writes one line, not one an hour.
+.SH OPTIONS
+With no option, sync now: the clock is stepped and the outcome is printed
+as well as logged.
+This works with
+.B ntp=no
+too.
+.TP
+.B \-b
+the boot run: wait up to
+.B ntp_wait
+seconds for the network, then sync, stepping the clock.
+.TP
+.B \-c
+the hourly run: sync, slewing an offset under a minute with
+.BR adjtime (2)
+instead of stepping, so that the clock never goes back: to lose time it
+stands still until it is right, and to gain it runs fast; it prints
+nothing.
+.TP
+.B \-n
+say what would be done: whether the boot and hourly runs are on, the
+servers in order, the
+.B rdate
+command, the hourly run's minute, and the last outcome.
+.TP
+.B \-i
+put the hourly line in root's crontab, or take it out, as
+.BR rc.conf 's
+.B ntp
+says; the boot step runs it.
+.TP
+.B \-l
+print the boot run's time bound in seconds, for the boot step.
+.SH "RC.CONF KEYS"
+.TP
+.BR ntp= yes | no
+the boot and hourly runs; default
+.BR yes .
+With
+.BR no ,
+the next boot takes the hourly line out of root's crontab, and the hourly
+run does nothing until then.
+.TP
+.BI ntp_servers= "\(dqname ...\(dq"
+the servers, after DHCP's; default
+.BR "0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org" .
+A name needs DNS
+.RB ( interfaces (4)'s
+.B dns
+line or a DHCP server's); an address does not.
+.TP
+.BI ntp_timeout= seconds
+the bound of one try at one server; default 15.
+.TP
+.BI ntp_retries= n
+the tries after the first, at each server; default 1.
+.TP
+.BI ntp_wait= seconds
+how long the boot run waits for the network; default 120, which is
+.BR ifup 's
+own bound.
+.SH "THE BATTERY CLOCK"
+After a sync,
+.B ntpsync
+waits for the start of the next minute and runs
+.BR "setclk \-s" ,
+which writes the system time to the battery clock in the zone
+.B /etc/clkzone
+names, to the minute.
+The
+.B setclk
+of the stock system writes the wrong year after 1999 and is never run;
+the line in the log says so, and the install's corrected
+.B setclk
+is the one used.
+.SH FILES
+.TP
+.B /etc/rc.conf
+the keys above.
+.TP
+.BI /var/inet/dhcpc/ interface .lease
+the DHCP server's time servers, in
+.BR DHCP_NTP .
+.TP
+.B /var/inet/ifup.primary
+the interface
+.B ifup
+brought up first; without it there is no network to ask.
+.TP
+.B /var/inet/ntp.state
+the last outcome.
+.TP
+.B /var/adm/rc.log
+one line for each outcome.
+.TP
+.B /var/adm/rclog/ntp
+the boot run's output: each server that did not answer.
+.TP
+.B /usr/amiga/bin/setclk
+writes the battery clock.
+.SH EXIT STATUS
+0 when the clock was set, and for
+.B \-b
+and
+.B \-c
+with
+.BR ntp=no ;
+1 otherwise.
+.SH EXAMPLE
+.nf
+.ft CW
+# /etc/rc.conf
+ntp=yes          # set the clock from time servers at boot and hourly: ntpsync(1M)
+ntp_servers="192.0.2.5 time.example.com"
+.ft R
+.fi
+.SH SEE ALSO
+.BR dhcpc (1M),
+.BR ifup (1M),
+.BR rdate (1M),
+.BR setclk (1M),
+.BR crontab (1),
+.BR rc.conf (4)
+.SH NOTES
+A machine whose clock is far off (a flat battery) is stepped at boot by
+the whole difference, and so is one more than a minute off at an hourly
+run.
+Password ageing counts days from the clock: see
+.BR shadow (4)
+before setting a clock forward by hand.

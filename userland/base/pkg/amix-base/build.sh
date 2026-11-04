@@ -36,6 +36,10 @@ stage() {
 	put 0444 rc/devnodes /etc/init.d/devnodes
 	mkdir -p "$DEST/etc/rc2.d"
 	ln "$DEST/etc/init.d/devnodes" "$DEST/etc/rc2.d/S20devnodes"
+	# the time sync: the boot step after cron's S75, the tool it runs
+	put 0444 net/ntp /etc/init.d/ntp
+	ln "$DEST/etc/init.d/ntp" "$DEST/etc/rc2.d/S77ntp"
+	put 0555 net/ntpsync /usr/sbin/ntpsync
 	# the swap step in the stock swap script's place and shape (S90swap the
 	# file, init.d/swap and K05swap linked to it)
 	put 0444 rc/swap /etc/rc2.d/S90swap
@@ -91,6 +95,7 @@ stage() {
 	put 0644 net/dlpi-mac/dlpi-mac.1m /opt/amix/man/1m/dlpi-mac
 	put 0644 net/ifup.1m /opt/amix/man/1m/ifup
 	put 0644 net/ifdown.1m /opt/amix/man/1m/ifdown
+	put 0644 net/ntpsync.1m /opt/amix/man/1m/ntpsync
 	put 0644 rc/rc.conf.4 /opt/amix/man/4/rc.conf
 	put 0644 net/interfaces.4 /opt/amix/man/4/interfaces
 	put 0644 net/link.d.4 /opt/amix/man/4/link.d

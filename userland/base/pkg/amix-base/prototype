@@ -16,6 +16,9 @@ l none /etc/rc0.d/K69inet=/etc/rc2.d/S69inet
 l none /etc/rc1.d/K69inet=/etc/rc2.d/S69inet
 f none /etc/init.d/devnodes 0444 root sys
 l none /etc/rc2.d/S20devnodes=/etc/init.d/devnodes
+f none /etc/init.d/ntp 0444 root sys
+l none /etc/rc2.d/S77ntp=/etc/init.d/ntp
+f none /usr/sbin/ntpsync 0555 root sys
 f none /etc/rc2.d/S90swap 0444 root sys
 l none /etc/init.d/swap=/etc/rc2.d/S90swap
 l none /etc/rc0.d/K05swap=/etc/rc2.d/S90swap
@@ -66,6 +69,7 @@ f none /opt/amix/man/1m/bootswap 0644 root bin
 f none /opt/amix/man/1m/dlpi-mac 0644 root bin
 f none /opt/amix/man/1m/ifup 0644 root bin
 f none /opt/amix/man/1m/ifdown 0644 root bin
+f none /opt/amix/man/1m/ntpsync 0644 root bin
 f none /opt/amix/man/4/rc.conf 0644 root bin
 f none /opt/amix/man/4/interfaces 0644 root bin
 f none /opt/amix/man/4/link.d 0644 root bin

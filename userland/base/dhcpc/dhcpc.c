@@ -88,6 +88,7 @@ extern int optind;
 #define DHCPRELEASE	7
 
 #define MAXDNS		3
+#define MAXNTP		3
 
 union buf {
 	long	align;
@@ -99,6 +100,8 @@ struct lease {
 	unsigned long	addr, mask, router, server;
 	unsigned long	dns[MAXDNS];
 	int		ndns;
+	unsigned long	ntp[MAXNTP];	/* time servers, option 42 */
+	int		nntp;
 	char		host[64];
 	unsigned long	secs, t1, t2;
 	long		got;		/* when it was obtained (time()) */
@@ -419,7 +422,7 @@ int type;
 unsigned long ciaddr, requested, sid;
 {
 	unsigned char *o;
-	static unsigned char prl[] = { 1, 3, 6, 12, 51, 54, 58, 59 };
+	static unsigned char prl[] = { 1, 3, 6, 12, 42, 51, 54, 58, 59 };
 
 	memset((char *)p, 0, 300);
 	p[0] = 1;
@@ -486,6 +489,10 @@ struct lease *l;
 		case 6:
 			for (i = 0; i + 4 <= o[1] && l->ndns < MAXDNS; i += 4)
 				l->dns[l->ndns++] = get32(o + 2 + i);
+			break;
+		case 42:
+			for (i = 0; i + 4 <= o[1] && l->nntp < MAXNTP; i += 4)
+				l->ntp[l->nntp++] = get32(o + 2 + i);
 			break;
 		case 12:
 			/* a host name: letters, digits and '-' only */
@@ -846,6 +853,10 @@ unsigned long old;
 	for (i = 0; i < l->ndns; i++)
 		p += sprintf(p, "%s%s", i ? " " : "", ipstr(l->dns[i]));
 	p += sprintf(p, "\nDHCP_HOSTNAME=%s\nDHCP_SERVER=%s\n", l->host, ipstr(l->server));
+	p += sprintf(p, "DHCP_NTP=");
+	for (i = 0; i < l->nntp; i++)
+		p += sprintf(p, "%s%s", i ? " " : "", ipstr(l->ntp[i]));
+	p += sprintf(p, "\n");
 	p += sprintf(p, "DHCP_LEASE=%lu\nDHCP_T1=%lu\nDHCP_T2=%lu\n", l->secs, l->t1, l->t2);
 	if (old && old != l->addr)
 		p += sprintf(p, "DHCP_OLD_ADDR=%s\n", ipstr(old));
@@ -906,7 +917,7 @@ char *why;
 struct lease *l;
 unsigned long old;
 {
-	char buf[1024], *env[16], *argv[4], *p;
+	char buf[1024], *env[20], *argv[4], *p;
 	int pid, st, n = 0;
 
 	if (l)
@@ -920,7 +931,7 @@ unsigned long old;
 		sprintf(tz, "TZ=%.70s", getenv("TZ"));
 		env[n++] = tz;
 	}
-	for (p = buf; *p && n < 14; ) {
+	for (p = buf; *p && n < 19; ) {
 		env[n++] = p;
 		p = strchr(p, '\n');
 		*p++ = 0;

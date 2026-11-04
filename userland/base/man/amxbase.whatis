@@ -13,6 +13,7 @@ link.d(4)        link.d - the network drivers present, one file each
 man(1)           man - display a manual page, from the add-on packages or from the stock system
 network-config(4) network-config, rc.inet - network commands run at every boot
 nodename(4)      nodename - the machine's name
+ntpsync(1m)      ntpsync - set the clock from time servers, at boot and hourly
 profile(4)       profile - the login shell's start-up commands for every user
 profile.d(4)     profile.d - the packages' additions to the login environment
 rc.conf(4)       rc.conf - which boot services run, and their settings

@@ -96,7 +96,9 @@ what the installer does with them.
 
 Environment: `DHCP_IF`, `DHCP_ADDR`, `DHCP_MASK`, `DHCP_ROUTER` (the first
 router), `DHCP_DNS` (space-separated), `DHCP_HOSTNAME` (option 12; applied only
-under `hostname dhcp`), `DHCP_SERVER`, `DHCP_LEASE`, `DHCP_T1`,
+under `hostname dhcp`), `DHCP_SERVER`, `DHCP_NTP` (option 42, the time
+servers, space-separated; the hook leaves it to `ntpsync`, which reads it
+from the lease file), `DHCP_LEASE`, `DHCP_T1`,
 `DHCP_T2`, `DHCP_OLD_ADDR` (the address before this event, when it changed).
 `resolv.conf` gets nameservers only, merged with the static `dns` line unless
 it says `dns static`.

@@ -4,7 +4,7 @@
     tapdhcpd.py --tap TAP --client-mac MAC --client-ip ADDR/BITS --router ADDR
                 --server-ip ADDR [--server-mac MAC] [--lease SECS] --log FILE
                 [--noise-flag FILE] [--control FILE] [--dns ADDR,...]
-                [--hostname NAME] [--seconds N]
+                [--hostname NAME] [--ntp ADDR,...] [--sntp] [--seconds N]
 
 It attaches to an existing tap that the calling user owns (TUNSETIFF needs no
 capability then), so it needs no root and no listener on the host. On the
@@ -30,7 +30,11 @@ of "silent" (answer nothing), "norenew" (ignore a unicast REQUEST from a
 bound client, so it has to rebind), "nak" (refuse every REQUEST) or
 "conflict" (answer the client's ARP probe for its address as another
 station, 02:00:de:ad:be:ef, so it has to decline it); no file or any other
-word, normal. The client's ARP probes and its DECLINE are logged. --dns and --hostname add options 6 and 12.
+word, normal. The client's ARP probes and its DECLINE are logged. --dns, --hostname and --ntp add options 6, 12 and 42.
+With --sntp it also answers the client's SNTP requests (UDP port 123) to
+--server-ip, with this host's clock, as a stratum 2 server, so a box on a
+network with no route out for UDP can still be set from a real clock
+(--ntp <server-ip> names it in the lease).
 
 While the file named by --noise-flag exists, it also sends the client 20
 unsolicited ICMP echo replies a second (IP drops them without answering), so
@@ -199,6 +203,9 @@ class Responder:
             o += bytes([6, 4 * len(dns)]) + b"".join(ip_b(d) for d in dns)
             if self.a.hostname:
                 o += bytes([12, len(self.a.hostname)]) + self.a.hostname.encode()
+            if self.a.ntp:
+                ntp = self.a.ntp.split(",")
+                o += bytes([42, 4 * len(ntp)]) + b"".join(ip_b(d) for d in ntp)
         o += b"\xff"
         r[240:240 + len(o)] = o
         r = bytes(r)
@@ -220,6 +227,22 @@ class Responder:
                 return (c.readline().split() or [""])[0]
         except (OSError, TypeError):
             return ""
+
+    def on_sntp(self, ip, ihl, udp, data):
+        if len(data) < 48 or ip[16:20] != self.sip:
+            return
+        now = time.time()
+
+        def ts(t):
+            t += 2208988800
+            return struct.pack("!II", int(t) & 0xFFFFFFFF, int((t - int(t)) * 2**32))
+        vn = (data[0] >> 3) & 7 or 4
+        r = (struct.pack("!BBbbII", (vn << 3) | 4, 2, 6, -20, 0, 0) + b"LOCL" +
+             ts(now) + data[40:48] + ts(now) + ts(now))
+        src, sport = ip[12:16], struct.unpack("!H", udp[0:2])[0]
+        self.say("RX SNTP v%d from=%s:%d" % (vn, ip_s(src), sport))
+        f = self.cmac + self.smac + b"\x08\x00" + self.ipv4(src, 17, self.udp(self.sip, src, 123, sport, r))
+        self.send(f, "SNTP reply to %s:%d" % (ip_s(src), sport))
 
     def on_icmp(self, ip, ihl):
         icmp = ip[ihl:]
@@ -249,9 +272,12 @@ class Responder:
             self.on_icmp(ip, ihl)
         elif ip[9] == 17:
             udp = ip[ihl:]
-            if struct.unpack("!H", udp[2:4])[0] == 67:
-                ulen = struct.unpack("!H", udp[4:6])[0]
+            dport = struct.unpack("!H", udp[2:4])[0]
+            ulen = struct.unpack("!H", udp[4:6])[0]
+            if dport == 67:
                 self.on_dhcp(f, ip, udp, udp[8:ulen])
+            elif dport == 123 and self.a.sntp:
+                self.on_sntp(ip, ihl, udp, udp[8:ulen])
 
     def noise(self):
         payload = struct.pack("!BBHHH", 0, 0, 0, 0x4242, 1) + b"dhcprobe-noise"
@@ -291,6 +317,8 @@ def main():
     p.add_argument("--control")
     p.add_argument("--dns", help="comma-separated; default the router")
     p.add_argument("--hostname")
+    p.add_argument("--ntp", help="comma-separated time servers (option 42)")
+    p.add_argument("--sntp", action="store_true", help="answer SNTP to --server-ip")
     p.add_argument("--seconds", type=int, default=900)
     Responder(p.parse_args()).run()
 
