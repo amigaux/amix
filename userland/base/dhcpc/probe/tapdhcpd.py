@@ -77,6 +77,13 @@ def ip_s(b):
     return ".".join(str(x) for x in b)
 
 
+def server_mac(ip):
+    """The default --server-mac: 02:00 and the server's address, so two
+    responders on one bridge never share a MAC (the bridge would hand a
+    client's unicast to whichever of them spoke last)."""
+    return "02:00:" + mac_s(ip_b(ip))[:11]
+
+
 def csum(data):
     if len(data) % 2:
         data += b"\0"
@@ -95,6 +102,7 @@ class Responder:
         self.mask = struct.pack("!I", (0xFFFFFFFF << (32 - int(bits))) & 0xFFFFFFFF)
         self.router = ip_b(a.router)
         self.sip = ip_b(a.server_ip)
+        a.server_mac = a.server_mac or server_mac(a.server_ip)
         self.smac = mac_b(a.server_mac)
         self.log = open(a.log, "a", buffering=1)
         self.fd = os.open("/dev/net/tun", os.O_RDWR)
@@ -310,7 +318,7 @@ def main():
     p.add_argument("--client-ip", required=True, help="ADDR/BITS")
     p.add_argument("--router", required=True)
     p.add_argument("--server-ip", required=True)
-    p.add_argument("--server-mac", default="02:00:00:00:d4:c9")
+    p.add_argument("--server-mac", help="default: 02:00 and the --server-ip address")
     p.add_argument("--lease", type=int, default=120)
     p.add_argument("--log", required=True)
     p.add_argument("--noise-flag")
