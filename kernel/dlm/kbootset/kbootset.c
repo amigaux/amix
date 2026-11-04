@@ -1163,6 +1163,12 @@ main(int argc, char **argv)
 			usage();
 		}
 	}
+	/* what left the store leaves the root too; only for the store of this root,
+	 * and with the running generation known */
+	if (rc == KS_OK && (root_given || image == dev) && have_kinfo && ki.has_axl1 && !KB_MEDIUM(&ki) &&
+	    (!strcmp(cmd[0], "commit") || !strcmp(cmd[0], "mark-good") || !strcmp(cmd[0], "collect") ||
+	     !strcmp(cmd[0], "rollback") || !strcmp(cmd[0], "default") || !strcmp(cmd[0], "mark-bad")))
+		kb_gen_sweep(&k, root, ki.gen_id);
 	if (k.msg[0])
 		printf("kbootset: %s\n", k.msg);
 	fclose(d.f);

@@ -90,6 +90,11 @@ int kb_check(struct ks *k, const char *root, void (*say)(const char *line));
  * and CRC-32)?  An upgraded package does not touch the store; 0 when no such file */
 int kb_loader_new(struct ks *k, const char *root);
 
+/* remove root/stand/gen/<id> of the generations gone from the store: never
+ * booted's, whose demand modules the running kernel still loads from there,
+ * nor one at or above the next id, a build not yet committed */
+void kb_gen_sweep(struct ks *k, const char *root, ax_u32 booted);
+
 /* the booted kernel's namelist, root/stand/unix (40 §4.2, C2-4 §12):
  * made from the booted generation's kernel (or the line's unix.sym for a
  * brel) at kinfo's bind address, its layout checked against kinfo's

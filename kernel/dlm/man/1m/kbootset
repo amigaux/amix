@@ -287,6 +287,9 @@ request, or generation
 .TP
 .B collect
 Removes the generations outside the kept set.
+Whatever removes a generation from the store also removes its
+.BI /stand/gen/ id
+from the root, except the running generation's, which goes after the next boot.
 .TP
 .BI loader-install " boot2" " \fR[\fP\fB\-\-version\fP \fIn\fP\fR] [\fP\fB\-\-boot1\fP \fIfile\fP\fR]\fP"
 Installs a new boot loader as the primary one; the old primary becomes the

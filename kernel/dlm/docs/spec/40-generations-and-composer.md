@@ -86,7 +86,7 @@ program against an image file, so media and boxes cannot drift).
 | `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
 | `kbootset mark-bad <id>` | administrator verdict |
 | `kbootset check` | recompute every member's SHA-256 in the store and in `/stand/gen` against the manifests and the package database; compare the installed packages with the default generation; never writes |
-| `kbootset collect` | remove generations outside the kept set (also done by `commit`) |
+| `kbootset collect` | remove generations outside the kept set (also done by `commit`), and the directories under `/stand/gen` of generations gone from the store, except the booted one's (C2-4 §19) |
 | `kbootset major <name>` | the majors the registry gives module `<name>`, one `c <n>` or `b <n>` line each; needs no store and no `kinfo` (C2-4 §15) |
 | `kbootset loader-install` | install a new boot2 as primary (old one becomes secondary) and, only with an explicit flag, a new boot1 |
 | `-R <root>`, `--image <file>` | operate on a mounted target (installer, repair mode) or a disk image (host media builds) |

@@ -1974,6 +1974,37 @@ mods_remove(const char *root, ax_u32 id)
 	rmdir(under(root, p));
 }
 
+void
+kb_gen_sweep(struct ks *k, const char *root, ax_u32 booted)
+{
+	char p[80], f[80];
+	struct dirent *e, *x;
+	DIR *d, *g;
+	ax_u32 next = ks_next_id(k);
+
+	if ((d = opendir(under(root, "/stand/gen"))) == 0)
+		return;
+	while ((e = readdir(d)) != 0) {
+		char *end;
+		unsigned long o = strtoul(e->d_name, &end, 10);
+
+		if (*end != 0 || o == 0 || o >= next || o == booted || ks_find(k, (ax_u32)o))
+			continue;
+		mods_remove(root, (ax_u32)o);
+		sprintf(p, "/stand/gen/%lu", o);
+		if ((g = opendir(under(root, p))) != 0) {
+			while ((x = readdir(g)) != 0)
+				if (strcmp(x->d_name, ".") && strcmp(x->d_name, "..")) {
+					sprintf(f, "%.40s/%.32s", p, x->d_name);
+					remove(under(root, f));
+				}
+			closedir(g);
+		}
+		rmdir(under(root, p));
+	}
+	closedir(d);
+}
+
 int
 kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 {
@@ -2207,33 +2238,19 @@ nl_is_booted(const ax_u8 *n, ax_u32 len, const struct kb_kinfo *ki)
  * A brel has no symbols, and the package replaces /stand/<line>/unix.sym with
  * the kernel: so a generation keeps its own, for a boot of it once another
  * kernel is installed (a rollback).  Written at a boot of the generation, when
- * the installed file is known to be its; the copies of generations no longer
- * in the store go.  Best effort: without one the namelist says why.
+ * the installed file is known to be its.  Best effort: without one the namelist
+ * says why.
  */
 static void
-sym_keep(struct ks *k, const char *root, ax_u32 id, const ax_u8 *sym, ax_u32 slen)
+sym_keep(const char *root, ax_u32 id, const ax_u8 *sym, ax_u32 slen)
 {
 	char p[64], np[1100];
-	struct dirent *e;
-	DIR *d;
 	FILE *f;
 
 	sprintf(p, "/stand/gen/%lu/unix.sym", (unsigned long)id);
 	if ((f = fopen(under(root, p), "rb")) != 0) {
 		fclose(f);
 		return;
-	}
-	if ((d = opendir(under(root, "/stand/gen"))) != 0) {
-		while ((e = readdir(d)) != 0) {
-			char *end;
-			unsigned long o = strtoul(e->d_name, &end, 10);
-
-			if (*end == 0 && o != 0 && !ks_find(k, (ax_u32)o)) {
-				sprintf(p, "/stand/gen/%lu/unix.sym", o);
-				remove(under(root, p));
-			}
-		}
-		closedir(d);
 	}
 	mkdir(under(root, "/stand/gen"), 0755);
 	sprintf(p, "/stand/gen/%lu", (unsigned long)id);
@@ -2403,7 +2420,7 @@ have_sym:
 		goto out;
 	}
 	if (fresh && write && buf)
-		sym_keep(k, root, ki->gen_id, sym, slen);
+		sym_keep(root, ki->gen_id, sym, slen);
 	old = slurp(under(root, "/stand/unix"), &olen);
 	if (old && olen == nlen && !memcmp(old, nl, nlen)) {
 		if (KB_MEDIUM(ki))

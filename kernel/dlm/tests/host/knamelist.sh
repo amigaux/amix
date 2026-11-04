@@ -244,6 +244,36 @@ if [ -f "$K46" ]; then
 	grep -q "^modx_ops value 40500010 global 1$" $T/q
 	unset KBOOTSET_KSYMS
 	echo "knamelist: k46 module symbols (in while loaded, kept to the module's run, out once unloaded, rewritten) ok"
+
+	# a generation gone from the store leaves the root too, except the one
+	# running, whose demand modules still load from there, and a build not
+	# yet committed (C2-4 section 19)
+	gendir() {
+		mkdir -p $R/stand/gen/$1/mod
+		for f in build facts unix.sym mod/x; do echo x > $R/stand/gen/$1/$f; done
+	}
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
+	$KB commit --spec $T/spec > /dev/null 2>&1		# generation 2, the trial
+	gendir 2; gendir 3
+	python3 -I $T/kinfo.py $T/kinfo 3 2 $T/lay46		# it runs
+	$KB commit --spec $T/spec > /dev/null 2>&1		# 3 replaces it in the store
+	[ -f $R/stand/gen/2/mod/x ]				# running: stays
+	gendir 4						# the next id: a build
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 0 cd	# a medium: no running generation of this store
+	$KB collect > /dev/null
+	[ -f $R/stand/gen/2/mod/x ]
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
+	$KB status > /dev/null					# a reader does not
+	$KB next none > /dev/null				# nor what collects nothing
+	[ -f $R/stand/gen/2/mod/x ]
+	$KB collect > /dev/null
+	[ ! -e $R/stand/gen/2 ]
+	[ -f $R/stand/gen/1/mod/modx ] && [ -f $R/stand/gen/3/mod/x ] && [ -f $R/stand/gen/4/mod/x ]
+	gendir 2
+	$KB mark-good > /dev/null				# each boot finishes what a cut left
+	[ ! -e $R/stand/gen/2 ]
+	[ -f $R/stand/gen/1/mod/modx ] && [ -f $R/stand/gen/3/mod/x ] && [ -f $R/stand/gen/4/mod/x ]
+	echo "knamelist: k46 collected generations' directories (removed; the running one, the store's and a build stay) ok"
 	rm -rf "${R:?}"
 else
 	echo "knamelist: no k46 kernel, skipped"
@@ -298,17 +328,13 @@ if [ -f "$K30E" ] && [ -f "$K30B" ]; then
 	rm "${R:?}"/stand/unix
 	no 3 "generation 1's kernel is not the installed one" $KB namelist
 	$KB status | grep -q "^namelist: none (generation 1's kernel is not the installed one"
-	# the kernel installed again: kept again; a generation gone from the
-	# store loses its copy
+	# the kernel installed again: kept again
 	cp "$K30B" $R/stand/k30/unix
 	cp $T/sym1 $R/stand/k30/unix.sym
 	sidecar "" "$SYM"
-	mkdir -p $R/stand/gen/9
-	echo stale > $R/stand/gen/9/unix.sym
 	$KB namelist | grep -q "written for generation 1"
 	cmp -s $R/stand/gen/1/unix.sym $T/sym1
-	[ ! -e $R/stand/gen/9/unix.sym ]
-	echo "knamelist: k30 a generation's own unix.sym (kept at its boot, used after the package changed, swept) ok"
+	echo "knamelist: k30 a generation's own unix.sym (kept at its boot, used after the package changed) ok"
 else
 	echo "knamelist: no k30 kernels, skipped"
 fi
