@@ -75,7 +75,11 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # the engine quits on any installed instance), and a kernel-space install
 # over an engine instance with no record (files a bare pkgadd laid) does
 # the same.  0.3.5 (3d2f8737...) stays what it is.
-VER_APKG="0.3.6"
+# 0.3.7 (2026-11-04, not minted yet): with no nameserver= the stub resolver
+# asks the servers /etc/resolv.conf names, so a box with DNS on and no hosts
+# line reaches the repository.  apkg.1 gets the local repository's layout.
+# 0.3.6 (f87c02e0...) stays what it is.
+VER_APKG="0.3.7"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -116,10 +120,11 @@ VER_ENG="1.12.6"
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
 # 2026-11-02 00:00:00 UTC, the day 1.12.6 was set (1.12.5's was
-# 1793318400); EPOCH_APKG: 2026-11-02
-# 00:00:00 UTC, the day 0.3.6 was set (0.3.5's was 1793491200, 0.3.4's
+# 1793318400); EPOCH_APKG: 2026-11-04
+# 00:00:00 UTC, the day 0.3.7 was set (0.3.6's was 1793577600, 0.3.5's
+# 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
-EPOCH_APKG=1793577600
+EPOCH_APKG=1793750400
 EPOCH_ENG=1793577600
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
@@ -397,28 +402,28 @@ rcvbuf=0
 sndbuf=0
 #
 # --- name resolution (all optional; these ARE the built-in defaults) ---
-# Stock Amix has NO resolver. gethostbyname() reads /etc/inet/hosts and
-# nothing else; a resolv.conf on this box is inert, nothing reads it. And the
-# package repository is a NAME-BASED VIRTUAL HOST -- a request whose Host: is
-# a bare IP is answered 404 -- so the repo URL must carry the NAME. On a
-# stock box that means one of these two:
+# The gethostbyname() apkg links reads /etc/inet/hosts and nothing else. And
+# the package repository is a NAME-BASED VIRTUAL HOST -- a request whose Host:
+# is a bare IP is answered 404 -- so the repo URL must carry the NAME. apkg
+# turns the name into an address with the first of these that has an answer:
 #
-#   1. a hosts line, which is what the demo media ships:
+#   1. a hosts line:
 #        echo '52.59.174.203   pkg.amigaux.org' >> /etc/inet/hosts
-#   2. a nameserver here, which makes apkg resolve the name itself.
+#   2. a nameserver here;
+#   3. with none here, the nameserver lines of /etc/resolv.conf, which a box
+#      with DNS turned on has.
 #
 # apkg's resolver is a STUB: one UDP A query per attempt, recursion
-# requested, no cache, no search list, no TCP fallback, no resolv.conf. It
-# answers apkg's OWN lookups and nothing else -- telnet, ftp and the rest of
-# the box still read /etc/inet/hosts, so keep that file as you need it.
+# requested, no cache, no search list, no TCP fallback. It answers apkg's OWN
+# lookups and nothing else.
 #
-# The default list is EMPTY: with no nameserver line apkg resolves exactly as
-# it always did, out of the hosts file alone. The hosts file is consulted
-# FIRST in any case, so a line you wrote by hand always wins over DNS and a
-# box that works today cannot regress. Repeat the key for more than one
-# server; they are tried in the order written. An IPv4 address only (a name
-# here would be a bootstrap problem); ':port' is accepted after it but is
-# only for testing. A line with an empty value clears the list.
+# The default list is EMPTY. The hosts file is consulted FIRST in any case,
+# so a line you wrote by hand always wins over DNS (a stale one too: remove
+# it to let DNS answer) and a box that works today cannot regress. A server
+# here is the override: resolv.conf is then not read. Repeat the key for more
+# than one server; they are tried in the order written. An IPv4 address only
+# (a name here would be a bootstrap problem); ':port' is accepted after it but
+# is only for testing. A line with an empty value clears the list.
 nameserver=
 # seconds per QUERY ATTEMPT (a UDP query comes back fast or is lost), and
 # extra attempts per nameserver. Every configured server is asked in turn
@@ -569,6 +574,9 @@ EOF
   # Version 0.3.6 (2026-11-02; minted 2026-11-02).  The apkg binary and apkg.1
   # change (a reinstall passes instance=overwrite); every other payload
   # byte is 0.3.5's.
+  # Version 0.3.7 (2026-11-04, not minted).  The apkg binary, apkg.1,
+  # apkg.conf.5 and the apkg.conf template's comments change (resolv.conf);
+  # every other payload byte is 0.3.6's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile

@@ -1,6 +1,6 @@
 .\" apkg.conf.5 - manual page for /etc/apkg.conf.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG.CONF 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.TH APKG.CONF 5 "November 2026" "apkg 0.3.7" "Amix File Formats"
 .SH NAME
 apkg.conf \- configuration file of the apkg package client
 .SH SYNOPSIS
@@ -67,7 +67,9 @@ how many HTTP redirects to follow
 .B nameserver
 a DNS server to ask when
 .B /etc/inet/hosts
-has no answer (repeatable)
+has no answer (repeatable); with none here, apkg asks those
+.B /etc/resolv.conf
+names
 .TP
 .B dns_timeout\fR, \fBdns_retries
 seconds per DNS query attempt, and further attempts per nameserver

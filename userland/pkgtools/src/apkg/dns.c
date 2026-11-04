@@ -19,9 +19,12 @@
  * This file closes that gap for apkg's OWN lookups and for nothing
  * else.  It is a stub resolver in the strict sense: one UDP query per
  * attempt, A records only, recursion requested, no EDNS, no cache
- * beyond the life of the process, no search list, no TCP fallback, no
- * /etc/resolv.conf.  The nameservers come from the apkg config, the
- * same place every other knob on the fetch path comes from.
+ * beyond the life of the process, no search list, no TCP fallback.  The
+ * nameservers come from nameserver= in the apkg config; with none there,
+ * from the nameserver lines of /etc/resolv.conf (0.3.7), which is what a
+ * box with DNS turned on has.  apkg links the static libsocket, whose
+ * gethostbyname() reads the hosts file whatever the box's shared
+ * libsocket does, so nothing else would make those servers reach it.
  *
  * ORDER, AND WHY IT IS THIS WAY ROUND:
  *
@@ -29,7 +32,9 @@
  *      guaranteed to take dotted quads);
  *   2. the HOST DATABASE, via gethostbyname() - unchanged behaviour,
  *      and on Amix that IS /etc/inet/hosts;
- *   3. only if that says nothing, the stub resolver below.
+ *   3. only if that says nothing, the stub resolver below: nameserver=,
+ *      else /etc/resolv.conf.  One or the other, never both: nameserver=
+ *      is the override, so a dead one does not fall through to the file.
  *
  * Hosts-first means an existing box cannot regress: every card with a
  * hosts line resolves exactly as it did, whatever nameserver= says, and
@@ -656,6 +661,110 @@ int apkg_dns_query(const char *host, const struct dnsopts *d,
 }
 
 /*
+ * The nameservers of a resolv.conf: each "nameserver <addr>" line, in order,
+ * into servers[] (allocated), at most max.  Every other line is ignored, as
+ * any resolver ignores what it has no use for (domain, search, options,
+ * comments).  An address this resolver cannot use, an IPv6 one above all, is
+ * skipped quietly: such a line is normal in that file, unlike in apkg.conf.
+ * A missing or unreadable file has no nameservers.  -> how many.
+ */
+static int resolv_read(const char *path, char **servers, int max)
+{
+    FILE *fp;
+    char line[256];
+    char *p;
+    char *q;
+    unsigned long a;
+    int port;
+    int n;
+    int at_start;
+    int started;
+
+    fp = fopen(path, "r");
+    if (fp == NULL) {
+        note("dns: no %s (%s)", path, strerror(errno));
+        return 0;
+    }
+    n = 0;
+    at_start = 1;
+    while (fgets(line, (int)sizeof(line), fp) != NULL) {
+        /* the rest of an overlong line is not a line of its own */
+        started = at_start;
+        at_start = strchr(line, '\n') != NULL;
+        if (!started)
+            continue;
+        p = line;
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (strncmp(p, "nameserver", 10) != 0 ||
+            (p[10] != ' ' && p[10] != '\t'))
+            continue;
+        p += 10;
+        while (*p == ' ' || *p == '\t')
+            p++;
+        q = p;
+        while (*q != '\0' && !isspace((unsigned char)*q))
+            q++;
+        *q = '\0';
+        if (*p == '\0')
+            continue;
+        if (server_parse(p, &a, &port) != 0) {
+            note("dns: %s: skipping nameserver %s (not an IPv4 address)",
+                 path, p);
+            continue;
+        }
+        if (n >= max) {
+            note("dns: %s: more than %d nameservers, using the first %d",
+                 path, max, max);
+            break;
+        }
+        servers[n++] = xstrdup(p);
+    }
+    fclose(fp);
+    return n;
+}
+
+/*
+ * Step (b) of a resolution, after the host database said nothing: the
+ * nameserver= list when there is one, else the servers of resolv.conf, else
+ * a message saying which things were looked at.
+ *
+ * Returns 0 (addr filled, network byte order) / -1 with a message printed.
+ */
+int apkg_dns_fallback(const char *host, const struct dnsopts *d,
+                      unsigned long *addr)
+{
+    struct dnsopts rd;
+    char *servers[APKG_MAX_NAMESERVERS];
+    const char *path;
+    int n;
+    int rc;
+
+    if (d != NULL && d->nservers > 0) {
+        note("resolve: %s is not in the hosts file; asking %d nameserver(s)",
+             host, d->nservers);
+        return apkg_dns_query(host, d, addr);
+    }
+    path = d != NULL ? d->resolvconf : NULL;
+    n = path != NULL ? resolv_read(path, servers, APKG_MAX_NAMESERVERS) : 0;
+    if (n <= 0) {
+        warnx2("cannot resolve host %s: it is not in the hosts file, no "
+               "nameserver= is configured and %s names no nameserver",
+               host, path != NULL ? path : "/etc/resolv.conf");
+        return -1;
+    }
+    note("resolve: %s is not in the hosts file; asking %d nameserver(s) "
+         "from %s", host, n, path);
+    rd = *d;
+    rd.servers = servers;
+    rd.nservers = n;
+    rc = apkg_dns_query(host, &rd, addr);
+    while (n > 0)
+        free(servers[--n]);
+    return rc;
+}
+
+/*
  * The whole resolution step: literal, then the host database, then the
  * stub resolver.  hosts_timeout bounds step 2 (a hung host database is
  * not a reason to skip step 3).
@@ -713,14 +822,7 @@ int apkg_resolve(const char *host, const struct dnsopts *d,
     }
 
     /* (b) the stub resolver */
-    if (d == NULL || d->nservers <= 0) {
-        warnx2("cannot resolve host %s: it is not in the hosts file and no "
-               "nameserver= is configured", host);
-        return -1;
-    }
-    note("resolve: %s is not in the hosts file; asking %d nameserver(s)",
-         host, d->nservers);
-    return apkg_dns_query(host, d, addr);
+    return apkg_dns_fallback(host, d, addr);
 }
 
 #else  /* APKG_NO_HTTP */

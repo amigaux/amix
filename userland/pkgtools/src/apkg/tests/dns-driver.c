@@ -18,8 +18,11 @@
  * ordering rules (literal, then hosts, then DNS) are what the
  * end-to-end apkg tests cover, using names every machine agrees about.
  *
- * usage: dns-driver [-v] [-D] [-t secs] [-r n] -s <ip[:port]> ... <host>
+ * usage: dns-driver [-v] [-D|-F] [-f resolv.conf] [-t secs] [-r n]
+ *                   -s <ip[:port]> ... <host>
  *   -D  query the nameservers only (skip literal + host database)
+ *   -F  step (b) whole, nameserver= else resolv.conf (skip the same two)
+ *   -f  the resolv.conf step (b) reads; none given, it reads none
  *   -v  apkg's -v: the resolver prints what it did and how
  * Prints "resolved <host> <ip>" and exits 0, or a message and exits 1.
  */
@@ -38,8 +41,8 @@ int opt_verbose = 0;
 static void usage(void)
 {
     fprintf(stderr,
-            "usage: dns-driver [-v] [-D] [-t secs] [-r n] "
-            "[-s ip[:port]]... <host>\n");
+            "usage: dns-driver [-v] [-D|-F] [-f resolv.conf] [-t secs] "
+            "[-r n] [-s ip[:port]]... <host>\n");
     exit(2);
 }
 
@@ -51,13 +54,16 @@ int main(int argc, char **argv)
     char ip[16];
     const char *host;
     int dns_only;
+    int fallback;
     int i;
 
     d.servers = servers;
     d.nservers = 0;
     d.timeout = APKG_DEF_DNSTIMEO;
     d.retries = APKG_DEF_DNSRETRIES;
+    d.resolvconf = NULL;
     dns_only = 0;
+    fallback = 0;
     host = NULL;
 
     for (i = 1; i < argc; i++) {
@@ -65,6 +71,10 @@ int main(int argc, char **argv)
             opt_verbose = 1;
         } else if (strcmp(argv[i], "-D") == 0) {
             dns_only = 1;
+        } else if (strcmp(argv[i], "-F") == 0) {
+            fallback = 1;
+        } else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            d.resolvconf = argv[++i];
         } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
             if (d.nservers >= APKG_MAX_NAMESERVERS)
                 usage();
@@ -86,6 +96,8 @@ int main(int argc, char **argv)
 
     if (dns_only)
         i = apkg_dns_query(host, &d, &addr);
+    else if (fallback)
+        i = apkg_dns_fallback(host, &d, &addr);
     else
         i = apkg_resolve(host, &d, APKG_DEF_CONNTIMEO, &addr);
     if (i != 0) {

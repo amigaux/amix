@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.6" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.7" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -544,9 +544,10 @@ lays the catalog's version again over the installed instance
 with no record at all a plain
 .B install
 does the same.  A package not in the repository's catalog goes into a
-local repository (a directory with its catalog, named by
-.BR repo )
-first.
+local repository first; see
+.B repo
+under
+.BR CONFIGURATION .
 .PP
 After a transaction that installed or removed kernel space, and only
 when every package in it is done, apkg calls
@@ -724,13 +725,21 @@ for 1.1); the base URL names the release's tree, and apkg fetches
 and
 .IB repo /pkgs/ filename
 below it.  One trailing slash is ignored.
+A local repository has the same layout: the datastreams in
+.IB dir /pkgs/ \fR,
+.B "gen-catalog.py \-o"
+.I dir dir\fB/pkgs
+on the host that made them, and
+.BI repo=file:// dir
+or
+.BI repo= dir \fR.
 The host is a name-based virtual host, so the repository must be named by
-hostname; a bare IP address is answered 404.  Stock Amix has no resolver, so
-either add the address to
-.B /etc/inet/hosts
-or configure
+hostname; a bare IP address is answered 404.  The name is resolved through
+.BR /etc/inet/hosts ,
 .B nameserver
-below (see
+below or
+.B /etc/resolv.conf
+(see
 .BR "NAME RESOLUTION" ).
 The catalog is fetched from
 .IB repo /catalog
@@ -990,9 +999,10 @@ asymmetric pair would be a trap.
 .TP
 .B nameserver
 IPv4 address of a nameserver for apkg's stub resolver.
-.B The default list is empty,
-i.e. no DNS at all \- exactly the behaviour apkg has always had.  The key
-is
+.B The default list is empty;
+apkg then asks the servers
+.B /etc/resolv.conf
+names, if it names any.  The key is
 .B repeatable
 and the servers are tried in the order written; a line with an empty value
 clears the list.  A
@@ -1018,22 +1028,17 @@ answers
 has answered: it is not retried.
 .SH NAME RESOLUTION
 .B Stock Amix has no resolver.
-The system
+The
 .BR gethostbyname (3N)
-reads
+apkg links reads
 .B /etc/inet/hosts
-and nothing else; a
-.B resolv.conf
-on an Amix box is inert, because nothing reads it.  The package repository
+and nothing else, also on a box with DNS turned on.  The package repository
 is a
 .B name-based virtual host
 \- a request whose
 .B Host:
 header carries a bare IP address is answered 404 \- so the repository has
-to be named by hostname, and on a stock box that means somebody must add a
-line to
-.B /etc/inet/hosts
-by hand before apkg can reach it at all.
+to be named by hostname.
 .PP
 apkg therefore carries its own
 .B stub resolver.
@@ -1050,19 +1055,31 @@ on Amix;
 .IP 3. 4
 only if that says nothing, each configured
 .B nameserver
-is asked, in order.
+is asked, in order; with none configured, each
+.B nameserver
+line of
+.BR /etc/resolv.conf ,
+which is what a box with DNS turned on has (from apkg 0.3.7).  Under
+.BR \-R ,
+that is the file of the system apkg runs on, not the target's.
 .RE
+.PP
+A
+.B nameserver
+in the configuration is the override: the file is then not read, also when
+those servers do not answer.  With no hosts line and no name server in
+either place, apkg says so and stops.
 .PP
 The hosts file is consulted
 .B first
 on purpose: a box that resolves today cannot regress when a nameserver is
 configured, and a line an operator wrote by hand can never be shadowed by
-DNS.
+DNS.  So a hosts line whose address has gone stale still wins: remove it
+to let DNS answer.
 .PP
 The resolver is a stub in the strict sense: one UDP query per attempt, A
 records only, recursion requested, no EDNS, no cache beyond the process, no
-search list, no TCP fallback and no
-.BR resolv.conf .
+search list and no TCP fallback.
 It follows a CNAME chain to an A record and ignores TTLs.  A reply that does
 not match the query it answers \- wrong transaction id, wrong question,
 malformed, or a compression pointer that does not point backwards \- is
@@ -1100,7 +1117,7 @@ Success (including "nothing to do").
 Usage or configuration error.
 .TP
 .B 2
-Network failure (name not resolved by the hosts file or any configured
+Network failure (name not resolved by the hosts file or any
 nameserver, connect, inactivity timeout with the configured retries
 exhausted, HTTP error status).
 .TP
@@ -1175,6 +1192,11 @@ verb; rewritten on every use
 .B /etc/inet/hosts
 the host database, consulted before any nameserver (read only, and never
 written by apkg)
+.TP
+.B /etc/resolv.conf
+the nameservers to ask when
+.B nameserver
+names none (read only)
 .TP
 .B /var/sadm/pkg/*/pkginfo
 installed-package state (read only)

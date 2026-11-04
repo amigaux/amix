@@ -295,17 +295,16 @@ it as `<file>.new` and listed in `/var/sadm/conffiles/PENDING`. The shipped defa
 | redirects | `1` — 301/302 hops followed; `0` follows none |
 | rcvbuf   | `0` — **the TCP receive window; 0 = leave the stack alone.** An operator knob (STREAMS `INITQPARMS` as root), *not* a speed fix — see below |
 | sndbuf   | `0` — `SO_SNDBUF`; `0` leaves the stack default |
-| nameserver | *(empty)* — an IPv4 nameserver for the stub resolver; **repeatable**, tried in order; empty value clears the list. Empty = hosts file only, i.e. what apkg always did |
+| nameserver | *(empty)* — an IPv4 nameserver for the stub resolver; **repeatable**, tried in order; empty value clears the list. Empty = the servers `/etc/resolv.conf` names, if any |
 | dns_timeout | `5` — seconds per DNS query *attempt* |
 | dns_retries | `2` — extra attempts per nameserver |
 
 ### `dns.c`: a stub resolver, because stock Amix has none
 
-`gethostbyname()` on Amix reads `/etc/inet/hosts` **and nothing else** —
-`resolv.conf` is inert, nothing reads it.  The repository is a *name-based
-virtual host* (a bare-IP `Host:` is answered 404), so on a stock box "no
-resolver" means "no repository" until somebody hand-writes a hosts line.
-The Saku demo cards carry exactly such a line.
+The `gethostbyname()` apkg links reads `/etc/inet/hosts` **and nothing else**,
+also on a box with DNS turned on.  The repository is a *name-based virtual
+host* (a bare-IP `Host:` is answered 404), so without a resolver of its own
+apkg could reach it only through a hand-written hosts line.
 
 `dns.c` closes that for **apkg's own lookups and nothing else** — `telnet`,
 `ftp` and the rest of the box still read `/etc/inet/hosts`.  Resolution is
@@ -314,15 +313,20 @@ three steps, in this order:
 1. an IPv4 literal is used as it stands (the SVR4 `gethostbyname` need not
    accept dotted quads);
 2. the **host database** via `gethostbyname()` — unchanged behaviour;
-3. only if that says nothing, each configured `nameserver`, in order.
+3. only if that says nothing, each configured `nameserver`, in order; with
+   none configured, each `nameserver` line of `/etc/resolv.conf` (0.3.7; under
+   `-R`, the file of the system apkg runs on).  With none in either place,
+   apkg says so and stops.
 
 Hosts-first is the load-bearing choice: no box that resolves today can
 regress when a nameserver is configured, and a line an operator wrote by
-hand can never be shadowed by DNS.
+hand can never be shadowed by DNS.  A stale one too: remove it to let DNS
+answer.  `nameserver=` is the override of `resolv.conf`: when it names any
+server the file is not read, also if those servers do not answer.
 
 It is a stub in the strict sense: one UDP A query per attempt, recursion
 requested, no EDNS, no cache beyond the process, no search list, no TCP
-fallback, no `resolv.conf`.  It follows a CNAME chain to an A record and
+fallback.  It follows a CNAME chain to an A record and
 ignores TTLs.  Root is not required.  Defensive by construction: the socket
 is `connect()`ed (the kernel drops anything not from the server asked); the
 transaction id, QR bit, opcode and the echoed question must all match what
