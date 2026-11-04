@@ -17,6 +17,9 @@ mentions the feature named.
   "This product includes software developed by the University of
   California, Berkeley and its contributors." Full texts in
   `/opt/amix/doc/prngd/LICENSE`.
+- Time sync (package `rdate`, its `rdate.c` and `rfc868time.c`): "This
+  product includes software developed by Christos Zoulas." Full texts in
+  `/opt/amix/doc/rdate/`.
 
 A package whose licence adds such an acknowledgement adds its line here in
 the same change.
