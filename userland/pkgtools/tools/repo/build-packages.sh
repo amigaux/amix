@@ -86,7 +86,8 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # 0.3.9 (2026-11-04; minted 2026-11-04, md5 3f796aed...): the apkg.conf
 # template's comments and apkg.1 cite no
 # internal document and no test history.  0.3.8 (d0bdd279...) stays what it is.
-# 0.3.10 (2026-11-04): apkg passes -S to pkgadd, so no licence is printed at
+# 0.3.10 (2026-11-04; minted 2026-11-04, md5 53426b21...): apkg passes -S to
+# pkgadd, so no licence is printed at
 # install or upgrade.  0.3.9 (3f796aed...) stays what it is.
 VER_APKG="0.3.10"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
@@ -121,7 +122,7 @@ VER_APKG="0.3.10"
 # Xa (ANSI mode, libm's error handling among it; the engine calls no libm
 # function), +4 bytes of .text each.  1.12.5's a49452d8 cannot be rolled
 # from master, so the number moves.  NOTES 2026-11-02.
-# 1.12.7 (2026-11-04) -- pkginstall prints no notice by default; -S stays
+# 1.12.7 (2026-11-04; minted 2026-11-04, md5 c200b28b...) -- pkginstall prints no notice by default; -S stays
 # accepted.  The notice is still saved.  copyright(5) says so.  1.12.6
 # (c1d4831a...) stays what it is.
 VER_ENG="1.12.7"
@@ -593,7 +594,7 @@ EOF
   # other payload byte is 0.3.7's.
   # Version 0.3.9 (2026-11-04; minted 2026-11-04).  Comments of the apkg.conf template, apkg.1's
   # text and the version strings; every other payload byte is 0.3.8's.
-  # Version 0.3.10 (2026-11-04).  The apkg binary (-S to pkgadd) and apkg.1;
+  # Version 0.3.10 (2026-11-04; minted 2026-11-04).  The apkg binary (-S to pkgadd) and apkg.1;
   # every other payload byte is 0.3.9's.
   cat > "$A/prototype" <<EOF
 i pkginfo

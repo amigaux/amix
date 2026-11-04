@@ -1,5 +1,32 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this
+entry's commit; `make repro-check` there from `b6aa4ef`: the checkout's roll and a `git archive` copy's
+are the same bytes, and so is the final `make dist`:
+
+- **APKG 0.3.10: md5 `53426b21d4312d3e274de604386b3cf1`**, **sha256
+  `866948464cbc2ba0d621204079ad2c5a03d99a3285b0a05ef44fb400553cf888`**, **256000 B**. `apkg.amix` sha256
+  `a096c600a02d5b47083cb1262ab906ed4c97cafc76c50df3b539d9d04bb236e8`, 133866 B, `sum -r` 21956, text
+  109599 + data 2472 + bss 4036 (0.3.9: text 109487). Against 0.3.9 only apkg, apkg.1, pkginfo and pkgmap differ.
+- **APKGENG 1.12.7: md5 `c200b28bd9c792712dc2ceedcaaa56eb`**, **sha256
+  `9560b9bfc30b7ae6e08ff87c0810ee7b75ab776c888a2a8b611e91a28cd05293`**, **2318336 B**. Against 1.12.6 only
+  pkginstall (1 byte, that default), copyright.5, pkginfo and pkgmap differ. `EPOCH_ENG=1793750400`.
+- scan060 clean on both, link gates OK.
+- The static engine built from this tree: only `apkg` and `sadm-helpers/pkginstall` should move; its
+  `bin/pkgadd`, `pkgchk`, `pkginfo` and `pkgtrans` are the same bytes as before.
+
+**On emulated k46 boxes:**
+- `apkg -v upgrade` against the published 1.1 tree, and `apkg -v -f install kernel-k46-m`: pkgadd ran as
+  `pkgadd -n -S -a ...`; no licence text in either log. The loader's and the kernel's notices (564 lines)
+  are in /var/sadm/pkg/<pkginst>/install/ and the pspool copy; `pkgchk -n` clean.
+- A plain `pkgadd` by hand on APKGENG 1.12.7, and the static pkgadd with its own pkginstall: no notice,
+  with and without `-S`; "Installation of <x> was successful." stays; the notice saved in both places.
+- 1.12.6's pkgadd by hand printed it, so the check tells the two apart.
+- Stock /usr/sbin/pkgadd: refuses `-S`; under `-n` prints no notice, on stdout or stderr. With APKGENG's
+  pkgadd moved away, apkg fell back to it, rc 0, no notice.
+
 ## 2026-11-04 — APKGENG 1.12.7: pkgadd prints no notice, by hand either
 
 pkginstall's default is now no notice, the one line in pkgcmds/pkginstall/main.c, so a plain pkgadd by
