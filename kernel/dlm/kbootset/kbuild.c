@@ -2093,6 +2093,7 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 	int rc = KB_NL_NONE;
 	FILE *f;
 
+	memset(&ms, 0, sizeof(ms));	/* before any goto out */
 	if (!ki || !ki->has_axl1) {
 		strcpy(line, "no namelist: which generation booted is unknown (no kinfo loader record)");
 		return KB_NL_NONE;
@@ -2177,7 +2178,6 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		}
 	}
 	/* the modules loaded from this generation: their globals */
-	memset(&ms, 0, sizeof(ms));
 	for (i = 0; buf && i < ki->nmods; i++)
 		for (j = 0; j < m.nmod; j++) {
 			ax_u8 *mb;
