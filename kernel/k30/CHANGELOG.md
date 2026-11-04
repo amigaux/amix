@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — kern30m k30.1.4.261103-71.2 (161e3e2)
+
+Same cut and objects: the copyright file names the amix-distfiles copy of GCC 2.7.2.3's source first and GNU's site as the original.
+
 ## 2026-11-04 — kern30m k30.1.4.261103-71.1 (08092ce)
 
 Same cut and objects: the copyright file names the libgcc routines linked in (__udivdi3, __umoddi3, __lshrdi3, __clz_tab), quotes libgcc2.c's exception, carries GCC 2.7.2.3's GPL-2 text and says where the source is. DESC no longer names an internal recipe or a cut path. build.sh takes a .<r> re-mint, as kern46m's does.
