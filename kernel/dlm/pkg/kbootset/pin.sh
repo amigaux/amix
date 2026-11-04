@@ -12,6 +12,17 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -39 (2026-11-04): amix 515c516 -- kbootset default ID makes a good or
+# pristine generation the default again, and rollback and build name it;
+# check names the generation that holds the installed kernel; commit's last
+# line, status and check name a loader in /stand/loader the store does not
+# hold; a brel generation keeps its own unix.sym for a boot after a rollback;
+# status tells a namelist lacking a loaded module from another kernel's; an
+# unchanged commit removes the build's module copies (C2-4 v27 section 19).
+# Built in amix-toolchain:dist: the box binary cd647fe3 (179032 bytes, text +
+# data + bss 5436 more than -38); kbootset(1M) 3fd9f0c6; whatis and rc scripts
+# as -38.
+#
 # -38 (2026-11-04): amix b7f6447 -- kbootset namelist and status no longer
 # walk and free an unset module list on the five refusals of a brel kernel
 # (k30: another kernel installed, or kabi or unix.sym wrong), which ran before
@@ -249,15 +260,15 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=b7f6447
-KB_SHA=7de82527d3b527295f1e62613bb186d62cc15f47e202f28e6a57391cb403ffa6
+KB_DLM_COMMIT=515c516
+KB_SHA=cd647fe36de2e858efc8899000f4e8498ce526ec9aa006ef61b63e3c9a8ed955
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
-KB_MAN_SHA=26334a46c68cd49f572ce33815669260a974806c8ba6a1415b8f7c0f8e39c946
+KB_MAN_SHA=3fd9f0c6fa08dc29db2a1d191fe147c0444e73bdc75408bb06e6dd119c667d6e
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 
 # the rc scripts, from the same commit (kernel/dlm/kbootset/rc)
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261104-38
+KB_VERSION=1.1.0.261104-39
 KB_SOURCE_EPOCH=1793750400
