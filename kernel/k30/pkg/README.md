@@ -27,7 +27,9 @@ from, and the ufs and s5 modules, which it rebuilds from the cut's carve
 sources with the kit of the pinned commit. `elf2brel.py` and the licences of
 the code linked in come from amix at the cut's commit, the port's and
 paula's licences from those forks at their pinned commits, fetched by hash
-(`AMIX_PORT_REPO`/`AMIX_PORT_URL`, `AMIX_PAULA_REPO`/`AMIX_PAULA_URL`). Every
+(`AMIX_PORT_REPO`/`AMIX_PORT_URL`, `AMIX_PAULA_REPO`/`AMIX_PAULA_URL`).
+`GCC-LIBGCC.txt`, last in the copyright file, names the libgcc routines linked
+in, with their licence, exception and source. Every
 time stamp of the roll is `pin.sh`'s `SOURCE_EPOCH`.
 
 **Versions up to k30.1.3.261031-63 were minted by amix-packages' older

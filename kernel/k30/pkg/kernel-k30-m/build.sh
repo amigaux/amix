@@ -63,6 +63,7 @@ echo "$K30M_LICENCES" | while read n h w; do
 done
 
 echo "--- verify the inputs against the pins ---"
+amix_verify "$HERE/$K30M_LIBGCC_COPY" "$K30M_LIBGCC_COPY_SHA"
 amix_verify "$SRC/unix.brel" "$K30M_BREL_SHA"
 amix_verify "$SRC/kabi" "$K30M_KABI_SHA"
 amix_verify "$SRC/unix.sym" "$K30M_SYM_SHA"
@@ -114,7 +115,11 @@ set -- $(sed -n 's/^sym=//p' "$SRC/kabi")
 	echo "[FAIL] sym= '$*' does not name the shipped unix.sym" >&2; exit 1; }
 echo "  sym=unix.sym $2 ${3%${3#????????}}...: size and SHA-256 of the shipped unix.sym"
 _v=$(echo "$K30M_BUILDID" | awk -F- -v k="$K30M_KABI" '{print k "." $2 "-" $3}')
-[ "$_v" = "$K30M_VERSION" ] || { echo "[FAIL] version $K30M_VERSION, the build id gives $_v" >&2; exit 1; }
+# a re-mint of the same build adds .<r>
+case "$K30M_VERSION" in
+"$_v"|"$_v".[1-9]|"$_v".[1-9][0-9]) ;;
+*) echo "[FAIL] version $K30M_VERSION, the build id gives $_v" >&2; exit 1 ;;
+esac
 _abi=$(sha256sum < "$X/abi/k30/abi-$K30M_KABI.txt" | cut -c1-64)
 grep -qx "abi=$_abi" "$SRC/kabi" || { echo "[FAIL] abi= is not abi/k30/abi-$K30M_KABI.txt ($_abi)" >&2; exit 1; }
 echo "  kabi=$K30M_KABI family=generic line=k30 build=$K30M_BUILDID loader-min=2 bss=$K30M_BSS; ident/arena/ksym; abi=${_abi%${_abi#????????}}... = the reference; arena $_arena; sdcards=$(sed -n 's/^sdcards=//p' "$SRC/kabi"); rth1=2, no rootfs="
@@ -217,8 +222,8 @@ cp "$SRC/unix.sym" "$DEST/stand/k30/unix.sym"
 	echo "build harness's generated tables (amix-kerntools), and the module core:"
 	echo "amix-dlm (MIT) on the adopted DLM core (MIT, kdedon).  The 64-bit"
 	echo "arithmetic helpers the module core exports to modules come from GCC"
-	echo "2.7.2.3's libgcc (GPL-2.0 with the libgcc linking exception: linking it"
-	echo "does not put this kernel under the GPL).  The A4091/A4092/A4770 SCSI"
+	echo "2.7.2.3's libgcc under the GPL with its linking exception: the last notice"
+	echo "names them and says where their source is.  The A4091/A4092/A4770 SCSI"
 	echo "driver, the Gayle IDE driver and the cdfs CD filesystem are not linked"
 	echo "in: they come as module packages (a4091-k30, gayle-k30, cdfs-k30)."
 	echo "The stock audio driver (amiga/driver/audio.c) is compiled with"
@@ -240,6 +245,8 @@ cp "$SRC/unix.sym" "$DEST/stand/k30/unix.sym"
 		echo; echo "======== amix-dlm $n ========"; echo
 		cat "$X/$n"
 	done
+	echo; echo "======== GCC 2.7.2.3 libgcc ========"; echo
+	cat "$HERE/$K30M_LIBGCC_COPY"
 } > "$WORK/copyright"
 
 find "$DEST" -exec touch -h -d "@$K30M_SOURCE_EPOCH" {} +
