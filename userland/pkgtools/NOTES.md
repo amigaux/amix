@@ -3,7 +3,7 @@
 ## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this
-entry's commit; `make repro-check` there from `b6aa4ef`: the checkout's roll and a `git archive` copy's
+entry's commit; `make repro-check` there from `0982dbd`: the checkout's roll and a `git archive` copy's
 are the same bytes, and so is the final `make dist`:
 
 - **APKG 0.3.10: md5 `53426b21d4312d3e274de604386b3cf1`**, **sha256

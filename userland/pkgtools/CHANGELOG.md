@@ -1,3 +1,8 @@
+## 2026-11-04 — apkg 0.3.10; APKGENG 1.12.7 (7754325, 40aafbc, 0982dbd, 16bc693)
+
+apkg 0.3.10: pass -S to pkgadd, so no licence is printed at install. APKG 0.3.10 minted, md5 53426b21, staged, not published.
+APKGENG 1.12.7: pkgadd prints no licence notice by default, -S still accepted. Minted, md5 c200b28b, staged, not published.
+
 ## 2026-11-04 — apkg 0.3.9 (cbc5001, 1e45f27)
 
 apkg 0.3.9: what ships cites no internal document or test history. APKG 0.3.9 minted, md5 3f796aed, staged, not published.
