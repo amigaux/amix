@@ -126,7 +126,7 @@ try:
                 os.remove(f)
         script = ('. "$AMIX_PKG_COMMON/fetch.sh"; . "$AMIX_PKG_COMMON/kmodpkg.sh"; '
                   'amix_dlm_kit() { echo "$*" > %s; AMIX_DLM_TREE=%s; }; '
-                  'amix_kpkgroll() { echo "ROLLED $3 $4"; sed -n 2p "$1/copyright"; '
+                  'amix_kpkgroll() { echo "ROLLED $3 $4"; sed -n 2p "$1/copyright"; grep "^========" "$1/copyright"; '
                   'sed "s/^/PROTO /" "$1/prototype"; [ ! -f "$1/depend" ] || sed "s/^/DEP /" "$1/depend"; '
                   '(cd "$2" && find . -type f | sed "s/^/STAGED /"); }; amix_kmodpkg "$1" k30'
                   % (kitargs, os.path.join(tmp, "dlm")))
@@ -151,6 +151,12 @@ try:
     check("KM_PKG_VERSION: a package-only revision rolls as 1.0.0-2, module/VERSION still checked as 1.0.0-1",
           rc == 0 and "ROLLED zz30 1.0.0-2" in out and "module 1.0.0-1" in out
           and "kernel/drivers/zz/module/VERSION = 1.0.0-1" in out, out)
+    check("a licence in the checkout is headed by its path", "======== kernel/drivers/zz/LICENSE ========" in out, out)
+    write(os.path.join(checkout, "out/cache/forks/zz/LICENSE"), "MIT\n")
+    rc, out, args = run(checkout, dc, checkout, KM_LICENCES="out/cache/forks/zz/LICENSE %s"
+                        % sha(os.path.join(checkout, "out/cache/forks/zz/LICENSE")))
+    check("a fork's licence is headed by the component, without the build path",
+          rc == 0 and "======== zz/LICENSE ========" in out and "======== out/" not in out, out)
     rc, out, args = run(checkout, dc, checkout, FAKE_KABI="k30.1.3")
     check("a .moddata kabi other than the one modcheck says ok for is refused",
           rc != 0 and "[FAIL] .moddata kabi= is not k30.1.3" in out and "ROLLED" not in out, out)

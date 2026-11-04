@@ -1,15 +1,15 @@
 PKG=gayle46
-NAME=gayle-k46 1.1.0-8 - Gayle IDE (A4000, A1200) driver module (root class), k46 line
+NAME=gayle-k46 1.1.0-9 - Gayle IDE (A4000, A1200) driver module (root class), k46 line
 ARCH=Amiga
-VERSION=1.1.0-8
+VERSION=1.1.0-9
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-gayle46-1.1.0-8
+PSTAMP=amix-gayle46-1.1.0-9
 # Kernel space (amix-dlm C2-2, C3-5 v9 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k46, kabi=k46.1.2), class root, never an ordinary
 # entry.  Catalog name gayle-k46, pkginst gayle46; VERSION is the package's:
-# 1.1.0-8 is the module's 1.1.0-5 (the fork's module/VERSION at
+# 1.1.0-9 is the module's 1.1.0-5 (the fork's module/VERSION at
 # kernel/drivers/gayle-ide/gayle-ide.pin), its object built with the
 # gcc-2.7.2.3-33ebadc kit, rolled from amix.
 APKG_DESC=Gayle IDE (A4000, A1200) as a root-class kernel module for the 68040/68060 root-class module kernel kernel-k46-m (kabi k46.1.2): /etc/conf/mod.d/gayle, interrupt I/O by default (param intr=0: polled), the board from the Kickstart ROM (param board=1 A4000, 2 A1200).

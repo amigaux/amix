@@ -17,12 +17,14 @@
 # pin gcc-2.7.2.3-33ebadc: the objects differ from 1.1.0-5 only in that tag.
 # 1.1.0-7 (2026-11-02): the module 1.1.0-5 (fork 215936f): memset by bzero,
 # no CDDA and no read-ahead on the AMIX kernel.
+# 1.1.0-8 (2026-11-04): the same module and objects; the copyright file's licence
+# headings name the component, without the build path.
 
 KM_NAME=cdfs
 KM_SHORT=cdfs
 KM_REPO=kernel/drivers/cdfs
 KM_VERSION=1.1.0-5
-KM_PKG_VERSION=1.1.0-7
+KM_PKG_VERSION=1.1.0-8
 KM_VERSION_FILE=out/cache/forks/cdfs/platform/amix-kernel/module/VERSION
 
 KM_K30_SHA=01c02625064bb3b320418bfa5da1b338b88713a17ffab1b297b532c09ae4692e

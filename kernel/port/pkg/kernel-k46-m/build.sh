@@ -74,6 +74,7 @@ while read h n; do
 		echo "[FAIL] the cut's $K46M_SUMS does not name $n $h" >&2; exit 1; }
 done
 echo "$K46M_NOTICES" | while read n h; do [ -n "$n" ] && amix_verify "$K46M_SRC/port/$n" "$h"; done
+amix_verify "$HERE/$K46M_FPE_COPY" "$K46M_FPE_COPY_SHA"
 amix_dlm_build "$K46M_DLM_COMMIT" axrel
 X="$AMIX_DLM_TREE"
 echo "$K46M_DLM_LICENCES" | while read n h; do [ -n "$n" ] && amix_verify "$X/$n" "$h"; done
@@ -128,9 +129,13 @@ amix_kcore_strips "$K46M_SRC/port/build/dlm-rev/.rev" "$K46M_DLM_COMMIT" "$K46M_
 amix_kbuildid3 "$SRC/unix" "$SRC/kabi" "$BUILD.kbuildid" $(echo "$K46M_FSMODS" | awk -v d="$SRC" 'NF { print d "/" $4 }') || exit 1
 [ "$(od -An -tx1 -j16 -N2 "$SRC/unix" | tr -d ' ')" = 0001 ] || {
 	echo "[FAIL] $SRC/unix is not ET_REL" >&2; exit 1; }
-# the version is <kabi>.<yymmdd>-<nn> of the build id (C2-3 sec 1.1)
+# the version is <kabi>.<yymmdd>-<nn> of the build id, and a re-mint of the
+# same build adds .<r> (C2-3 sec 1.1)
 _v=$(echo "$K46M_BUILDID" | awk -F- -v k="$K46M_KABI" '{print k "." $2 "-" $3}')
-[ "$_v" = "$K46M_VERSION" ] || { echo "[FAIL] version $K46M_VERSION, the build id gives $_v" >&2; exit 1; }
+case "$K46M_VERSION" in
+"$_v"|"$_v".[1-9]|"$_v".[1-9][0-9]) ;;
+*) echo "[FAIL] version $K46M_VERSION, the build id gives $_v" >&2; exit 1 ;;
+esac
 # abi= is the reference fingerprint of the pinned kabi (C3-3 v4)
 _abi=$(sha256sum < "$X/abi/k46/abi-$K46M_KABI.txt" | cut -c1-64)
 grep -qx "abi=$_abi" "$SRC/kabi" || { echo "[FAIL] abi= is not abi/k46/abi-$K46M_KABI.txt ($_abi)" >&2; exit 1; }
@@ -184,7 +189,7 @@ cp "$SRC/kabi" "$DEST/stand/k46/kabi"
 	echo "The 68040/68060 port (amix-040-060-port) is MIT, below; the Motorola"
 	echo "FPSP/ISP and NetBSD FPE code linked into this kernel carry the notices"
 	echo "after it.  Linked in from another repository, under the licence after"
-	echo "those: the W-D7 support probe and the sddevsize constant written in after"
+	echo "those: the A3000 SCSI probe and the sddevsize constant written in after"
 	echo "the link (amix-kerntools); the module core linked in is amix-dlm's (MIT)"
 	echo "on the adopted DLM core (MIT, kdedon), last.  The Z3660 SCSI driver is"
 	echo "not linked in: it comes as a root module package.  The stock audio"
@@ -202,7 +207,10 @@ cp "$SRC/kabi" "$DEST/stand/k46/kabi"
 	echo "$K46M_NOTICES" | while read n h; do
 		[ -n "$n" ] || continue
 		echo; echo "======== $n ========"; echo
-		cat "$K46M_SRC/port/$n"
+		case "$n" in
+		*/"$K46M_FPE_COPY") cat "$HERE/$K46M_FPE_COPY" ;;
+		*) cat "$K46M_SRC/port/$n" ;;
+		esac
 	done
 	echo "$K46M_LICENCES" | while read n h w; do
 		[ -n "$n" ] || continue
