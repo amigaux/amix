@@ -80,7 +80,9 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # on and no hosts line reaches the repository.  apkg.1 gets the local
 # repository's layout.
 # 0.3.6 (f87c02e0...) stays what it is.
-VER_APKG="0.3.7"
+# 0.3.8 (2026-11-04): the apkg.conf template names no address: the repository
+# goes by name, and the box needs DNS.  0.3.7 (69d439ea...) stays what it is.
+VER_APKG="0.3.8"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -122,7 +124,7 @@ VER_ENG="1.12.6"
 # file's last commit (which every arm here shares).  EPOCH_ENG:
 # 2026-11-02 00:00:00 UTC, the day 1.12.6 was set (1.12.5's was
 # 1793318400); EPOCH_APKG: 2026-11-04
-# 00:00:00 UTC, the day 0.3.7 was set (0.3.6's was 1793577600, 0.3.5's
+# 00:00:00 UTC, the day 0.3.8 was set, as 0.3.7 was (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793750400
@@ -405,11 +407,11 @@ sndbuf=0
 # --- name resolution (all optional; these ARE the built-in defaults) ---
 # The gethostbyname() apkg links reads /etc/inet/hosts and nothing else. And
 # the package repository is a NAME-BASED VIRTUAL HOST -- a request whose Host:
-# is a bare IP is answered 404 -- so the repo URL must carry the NAME. apkg
-# turns the name into an address with the first of these that has an answer:
+# is a bare IP is answered 404 -- so the repo URL must carry the NAME, and the
+# box needs DNS to resolve it: netconfig's DNS, or DHCP. apkg turns the name
+# into an address with the first of these that has an answer:
 #
-#   1. a hosts line:
-#        echo '52.59.174.203   pkg.amigaux.org' >> /etc/inet/hosts
+#   1. a line you wrote by hand in /etc/inet/hosts;
 #   2. a nameserver here;
 #   3. with none here, the nameserver lines of /etc/resolv.conf, which a box
 #      with DNS turned on has.
@@ -578,6 +580,9 @@ EOF
   # Version 0.3.7 (2026-11-04; minted 2026-11-04).  The apkg binary, apkg.1,
   # apkg.conf.5 and the apkg.conf template's comments change (resolv.conf);
   # every other payload byte is 0.3.6's.
+  # Version 0.3.8 (2026-11-04).  The apkg.conf template's comment names no
+  # address, and the version strings in the binary and apkg.1 move; every
+  # other payload byte is 0.3.7's.
   cat > "$A/prototype" <<EOF
 i pkginfo
 i i.conffile=$REPO/src/conffile/i.conffile
