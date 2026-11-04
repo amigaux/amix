@@ -1,5 +1,5 @@
-Every try bounded, several servers, exit codes that name the failure, and
-SNTP without floating point.
+Every try bounded, several servers, exit codes that name the failure, a
+polite resend, and SNTP without floating point.
 - rdate.c: each try runs under an alarm of -t seconds (default 15), name
   lookup included, so a dead name server or a silent network cannot hang
   it; -r retries (default 1); every host given is tried in order.  Exit
@@ -7,11 +7,17 @@ SNTP without floating point.
   (maximum round trip, msec) is -d.  -a steps a difference over -b
   seconds (default 60).  The "adjust local clock by" line names the
   address and is printed with -v and -p too.  -c (leap seconds from
-  zoneinfo/right/UTC, which Amix lacks) is gone.
-- ntp.c: NTP timestamps stay 64-bit fixed point (32.32 since 1900);
-  offsets are signed differences, right within 68 years and across 2036.
-  Stratum 0 (kiss-o'-death) and leap indicator 3 are refused (code 5).
-  The cookie comes from /dev/urandom (no arc4random here).
+  zoneinfo/right/UTC, which Amix lacks) is gone.  A refused reply is not
+  retried.
+- ntp.c: upstream sends a new query every 0.6 s, up to 25 a try, each with
+  a new cookie, so a reply slower than 0.6 s is rejected and never counts.
+  Here a silent server is asked again after 2 s, then 4 s, and not once
+  under 2 s of the try are left; a reply to any datagram of the try counts,
+  and the first good one ends it.  NTP timestamps stay 64-bit fixed point
+  (32.32 since 1900); offsets are signed differences, right within 68
+  years and across 2036.  Stratum 0 (kiss-o'-death) and leap indicator 3
+  are refused (code 5).  The cookie comes from /dev/urandom (no arc4random
+  here).
 - rfc868time.c: returns a code instead of exiting.
 
 --- /dev/null
@@ -214,7 +220,7 @@ SNTP without floating point.
              maxdelay = atoi(optarg);
              break;
  
-@@ -161,33 +224,47 @@
+@@ -161,33 +224,49 @@
  
          default:
              usage();
@@ -257,8 +263,10 @@ SNTP without floating point.
 +            ret = try_host(argv[h], ntp, family, port, useudp, tmo,
 +                           verbose, &new, &adjust);
 +            gettimeofday(&netdelay2, NULL);
-+            if (ret == RD_OK || ret == RD_NOHOST)
-+                break;	/* a name that does not resolve is not retried */
++            /* a name that does not resolve is not retried, and a server
++             * that refused (a kiss-o'-death: stop asking) is not asked again */
++            if (ret == RD_OK || ret == RD_NOHOST || ret == RD_REFUSED)
++                break;
 +        }
 +        if (ret == RD_OK && maxdelay) {
 +            netdelay = (netdelay2.tv_sec - netdelay1.tv_sec) * 1000;
@@ -283,7 +291,7 @@ SNTP without floating point.
  
      if (!pr) {
  
-@@ -202,12 +279,18 @@
+@@ -202,12 +281,18 @@
  
          if (!slidetime) {
              logwtmp("|", "date", "");
@@ -306,7 +314,7 @@ SNTP without floating point.
          }
      }
  
-@@ -215,42 +298,37 @@
+@@ -215,42 +300,37 @@
          struct tm      *ltm;
          char		buf[80];
          time_t		tim = new.tv_sec;
@@ -417,12 +425,11 @@ SNTP without floating point.
  
  #define NTP_MODE_CLIENT       3		/* NTP client mode */
  #define NTP_MODE_SERVER       4		/* NTP server mode */
-@@ -78,12 +77,13 @@
+@@ -78,12 +77,12 @@
  #define NTP_VERSION_MIN       1		/* The minimum valid version */
  #define NTP_VERSION_MAX       4		/* The maximum valid version */
  #define NTP_STRATUM_MAX      14		/* The maximum valid stratum */
 -#define NTP_INSANITY     3600.0		/* Errors beyond this are hopeless */
-+#define NTP_INSANITY     (3600 * NTP_ONE)	/* Errors beyond this are hopeless */
  
  #define NTP_PACKET_MIN       48		/* Without authentication */
  #define NTP_PACKET_MAX       68		/* With authentication (ignored) */
@@ -432,14 +439,25 @@ SNTP without floating point.
  #define NTP_REFERENCE        16		/* Offset of reference timestamp */
  #define NTP_ORIGINATE        24		/* Offset of originate timestamp */
  #define NTP_RECEIVE          32		/* Offset of receive timestamp */
-@@ -96,78 +96,77 @@
+@@ -94,80 +93,92 @@
+ #define STATUS_LEAPLOW        2		/* Last Minute Has 59 Seconds */
+ #define STATUS_ALARM          3		/* Server Clock Not Synchronized */
  
- #define MAX_QUERIES         25
- #define MAX_DELAY           15
+-#define MAX_QUERIES         25
+-#define MAX_DELAY           15
 -
 -#define MILLION_L    1000000l		/* For conversion to/from timeval */
 -#define MILLION_D       1.0e6		/* Must be equal to MILLION_L */
-+#define WAIT_USEC   (1000000L * MAX_DELAY / MAX_QUERIES)	/* per reply */
++/*
++ * The resend schedule: a silent server is asked again after FIRST_WAIT
++ * seconds, then after twice that each time, and not again once less than
++ * FIRST_WAIT seconds of the try are left, so -t 15 sends at 0, 2 and 6 s and
++ * listens to the end.  A reply to any datagram of this try counts, however
++ * late, and the first good one ends the try: a server that answers is asked
++ * once, and one whose answer is slower than the wait still sets the clock.
++ */
++#define FIRST_WAIT           2
++#define MAX_SENDS           16		/* -t 65535 stays under it */
  
  struct ntp_data {
      u_char		status;
@@ -457,16 +475,24 @@ SNTP without floating point.
  
      /* Local State */
 -    double		originate;
+-    uint64_t	xmitck;
 +    ntp_ts		originate;
-     uint64_t	xmitck;
  };
  
 -void	ntp_client(const char *, int, struct timeval *, struct timeval *, int, int, int);
 -int	sync_ntp(int, const struct sockaddr *, socklen_t, double *, double *, int);
-+int	sync_ntp(int, const struct sockaddr *, socklen_t, ntp_diff *, ntp_diff *, int, int);
- int	write_packet(int, struct ntp_data *);
+-int	write_packet(int, struct ntp_data *);
 -int	read_packet(int, struct ntp_data *, double *, double *);
-+int	read_packet(int, struct ntp_data *, ntp_diff *, ntp_diff *);
++/* every datagram of this try: the cookie it carried and when it left */
++static struct {
++    uint64_t	cookie;
++    ntp_ts	originate;
++} sent[MAX_SENDS];
++static int nsent;
++
++int	sync_ntp(int, const struct sockaddr *, socklen_t, ntp_diff *, ntp_diff *, int, int);
++int	write_packet(int);
++int	read_packet(int, struct ntp_data *, ntp_diff *, ntp_diff *, const struct timeval *);
  void	unpack_ntp(struct ntp_data *, u_char *);
 -double	current_time(double);
 -void	create_timeval(double, struct timeval *, struct timeval *);
@@ -543,7 +569,7 @@ SNTP without floating point.
              continue;
          }
  
-@@ -176,33 +175,32 @@
+@@ -176,106 +187,101 @@
      }
      freeaddrinfo(res0);
  
@@ -564,23 +590,25 @@ SNTP without floating point.
 -         double *offset, double *error, int verbose)
 +         ntp_diff *offset, ntp_diff *error, int verbose, int tmo)
  {
-     int attempts = 0, accepts = 0, rejects = 0;
-     int delay = MAX_DELAY, ret;
+-    int attempts = 0, accepts = 0, rejects = 0;
+-    int delay = MAX_DELAY, ret;
 -    double deadline;
 -    double a, b, x, y;
 -    double minerr = 0.1;		/* Maximum ignorable variation */
-+    ntp_ts deadline;
-+    ntp_diff a, b, x, y;
-+    ntp_diff minerr = NTP_ONE / 10;	/* Maximum ignorable variation */
++    int ret;
++    long wait = FIRST_WAIT;
++    ntp_ts now, deadline, next_send;
++    ntp_diff left;
++    struct timeval tv;
      struct ntp_data data;
  
 -    deadline = current_time(JAN_1970) + delay;
 -    *offset = 0.0;
-+    if (tmo < delay)
-+        delay = tmo;
-+    deadline = current_time() + (ntp_ts)delay * NTP_ONE;
-+    *offset = 0;
-     *error = NTP_INSANITY;
+-    *error = NTP_INSANITY;
++    now = current_time();
++    deadline = now + (ntp_ts)tmo * NTP_ONE;
++    next_send = now;
++    nsent = 0;
  
      if (connect(fd, peer, addrlen) < 0) {
 -        warn("Failed to connect to server");
@@ -588,78 +616,106 @@ SNTP without floating point.
          return (-1);
      }
  
-@@ -213,8 +211,12 @@
+-    while (accepts < MAX_QUERIES && attempts < 2 * MAX_QUERIES) {
+-        if (verbose >= 2) {
+-            fprintf(stderr, ".\n");
+-            fflush(stderr);
++    for (;;) {
++        now = current_time();
++        if ((ntp_diff)(deadline - now) <= 0) {
++            timedout = 1;
++            (void) snprintf(rdate_err, sizeof rdate_err,
++                            "no usable answer in %d s", tmo);
++            return (-1);
          }
-         memset(&data, 0, sizeof(data));
+-        memset(&data, 0, sizeof(data));
  
 -        if (current_time(JAN_1970) > deadline) {
 -            warnx("Not enough valid responses received in time");
-+        if ((ntp_diff)(current_time() - deadline) > 0) {
-+            if (accepts > 0)
-+                break;
-+            timedout = 1;
-+            (void) snprintf(rdate_err, sizeof rdate_err,
-+                            "no usable answer in %d s", delay);
-             return (-1);
+-            return (-1);
++        if ((ntp_diff)(next_send - now) <= 0) {
++            if (nsent == 0 || ((ntp_diff)(deadline - now) >= FIRST_WAIT * NTP_ONE &&
++                               nsent < MAX_SENDS)) {
++                if (verbose >= 2) {
++                    fprintf(stderr, ".\n");
++                    fflush(stderr);
++                }
++                if (write_packet(fd) < 0)
++                    return (-1);
++                next_send = now + (ntp_ts)wait * NTP_ONE;
++                wait *= 2;
++            } else {
++                next_send = deadline;	/* no more sends: listen to the end */
++            }
          }
  
-@@ -226,43 +228,31 @@
+-        if (write_packet(fd, &data) < 0)
+-            return (-1);
++        /* listen until the next send or the deadline, whichever comes first */
++        left = (ntp_diff)(next_send - now);
++        if ((ntp_diff)(deadline - now) < left)
++            left = (ntp_diff)(deadline - now);
++        if (left < 0)
++            left = 0;
++        tv.tv_sec = (long)(left >> 32);
++        tv.tv_usec = (long)(((uint64_t)(left & 0xffffffffU) * 1000000) >> 32);
+ 
+-        ret = read_packet(fd, &data, &x, &y);
++        memset(&data, 0, sizeof(data));
++        ret = read_packet(fd, &data, offset, error, &tv);
+ 
          if (ret < 0)
              return (-1);
-         else if (ret > 0) {
+-        else if (ret > 0) {
 -#ifdef DEBUG
 -            print_packet(&data);
 -#endif
 -
-+            if (refused)
-+                return (-1);
-             if (++rejects > MAX_QUERIES) {
+-            if (++rejects > MAX_QUERIES) {
 -                warnx("Too many bad or lost packets");
-+                (void) snprintf(rdate_err, sizeof rdate_err,
-+                                "too many bad or lost packets");
-                 return (-1);
-             } else
-                 continue;
-         } else
-             ++accepts;
- 
+-                return (-1);
+-            } else
+-                continue;
+-        } else
+-            ++accepts;
+-
 -#ifdef DEBUG
 -        fprintf(stderr, "Offset: %.6f +/- %.6f\n", x, y);
 -#endif
 -
 -        if ((a = x - *offset) < 0.0)
-+        if ((a = x - *offset) < 0)
-             a = -a;
-         if (accepts <= 1)
+-            a = -a;
+-        if (accepts <= 1)
 -            a = 0.0;
-+            a = 0;
-         b = *error + y;
-         if (y < *error) {
-             *offset = x;
-             *error = y;
-         }
- 
+-        b = *error + y;
+-        if (y < *error) {
+-            *offset = x;
+-            *error = y;
+-        }
+-
 -#ifdef DEBUG
 -        fprintf(stderr, "Best: %.6f +/- %.6f\n", *offset, *error);
 -#endif
 -
-         if (a > b) {
+-        if (a > b) {
 -            warnx("Inconsistent times received from NTP server");
--            return (-1);
++        if (ret == 0)
++            return (1);
++        if (refused)
+             return (-1);
 -        }
 -
 -        if ((data.status & STATUS_ALARM) == STATUS_ALARM) {
 -            warnx("Ignoring NTP server with alarm flag set");
-+            refused = 1;
-+            (void) snprintf(rdate_err, sizeof rdate_err,
-+                            "refused: inconsistent times received");
-             return (-1);
-         }
+-            return (-1);
+-        }
+-
+-        if (*error <= minerr)
+-            break;
+     }
++}
  
-@@ -273,6 +263,24 @@
-     return (accepts);
- }
- 
+-    return (accepts);
 +/* a random 64-bit cookie, from /dev/urandom when there is one */
 +static uint64_t
 +cookie(void)
@@ -676,29 +732,35 @@ SNTP without floating point.
 +    gettimeofday(&tv, NULL);
 +    mix = mix * 6364136223846793005ULL + 1442695040888963407ULL;
 +    return (mix ^ ((uint64_t)tv.tv_sec << 32) ^ (uint64_t)tv.tv_usec ^ (uint64_t)getpid() << 16);
-+}
-+
- /* Send out NTP packet. */
+ }
+ 
+-/* Send out NTP packet. */
++/* Send out NTP packet, and remember what it carried. */
  int
- write_packet(int fd, struct ntp_data *data)
-@@ -284,7 +292,7 @@
+-write_packet(int fd, struct ntp_data *data)
++write_packet(int fd)
+ {
+     u_char	packet[NTP_PACKET_MIN];
+     ssize_t	length;
+@@ -284,7 +290,7 @@
  
      packet[0] = (NTP_VERSION << 3) | (NTP_MODE_CLIENT);
  
 -    data->xmitck = (uint64_t)arc4random() << 32 | arc4random();
-+    data->xmitck = cookie();
++    sent[nsent].cookie = cookie();
  
      /*
       * Send out a random 64-bit number as our transmit time.  The NTP
-@@ -302,14 +310,15 @@
+@@ -302,14 +308,16 @@
       * the transmit field intelligible.
       */
  
 -    *(uint64_t *)(packet + NTP_TRANSMIT) = data->xmitck;
-+    memcpy(packet + NTP_TRANSMIT, &data->xmitck, 8);
++    memcpy(packet + NTP_TRANSMIT, &sent[nsent].cookie, 8);
  
 -    data->originate = current_time(JAN_1970);
-+    data->originate = current_time();
++    sent[nsent].originate = current_time();
++    nsent++;
  
      length = write(fd, packet, sizeof(packet));
  
@@ -709,7 +771,7 @@ SNTP without floating point.
          return (-1);
      }
  
-@@ -317,97 +326,91 @@
+@@ -317,97 +325,96 @@
  }
  
  /*
@@ -724,7 +786,8 @@ SNTP without floating point.
   */
  int
 -read_packet(int fd, struct ntp_data *data, double *off, double *error)
-+read_packet(int fd, struct ntp_data *data, ntp_diff *off, ntp_diff *error)
++read_packet(int fd, struct ntp_data *data, ntp_diff *off, ntp_diff *error,
++            const struct timeval *wait)
  {
      u_char	receive[NTP_PACKET_MAX];
      struct	timeval tv;
@@ -742,11 +805,11 @@ SNTP without floating point.
 +    fd_set	rfds;
  
  retry:
+-    tv.tv_sec = 0;
+-    tv.tv_usec = 1000000 * MAX_DELAY / MAX_QUERIES;
 +    FD_ZERO(&rfds);
 +    FD_SET(fd, &rfds);
-     tv.tv_sec = 0;
--    tv.tv_usec = 1000000 * MAX_DELAY / MAX_QUERIES;
-+    tv.tv_usec = WAIT_USEC;
++    tv = *wait;
  
 -    r = select(fd + 1, rfds, NULL, NULL, &tv);
 +    r = select(fd + 1, &rfds, NULL, NULL, &tv);
@@ -788,9 +851,14 @@ SNTP without floating point.
  
 -    if (data->recvck != data->xmitck) {
 -        warnx("Invalid cookie received, packet rejected");
-+    if (data->recvck != data->xmitck)
++    /* the reply to any datagram of this try, late or not; its own send time */
++    for (i = 0; i < nsent; i++)
++        if (data->recvck == sent[i].cookie)
++            break;
++    if (i == nsent)
          return (1);
 -    }
++    data->originate = sent[i].originate;
  
      if (data->version < NTP_VERSION_MIN ||
 -            data->version > NTP_VERSION_MAX) {
@@ -835,11 +903,11 @@ SNTP without floating point.
 -    y = data->transmit - data->current;
 +    if (data->transmit == 0)
 +        return (1);
- 
--    *off = (x + y) / 2;
++
 +    x = (ntp_diff)(data->receive - data->originate);
 +    y = (ntp_diff)(data->transmit - data->current);
-+
+ 
+-    *off = (x + y) / 2;
 +    *off = (x >> 1) + (y >> 1);
      *error = x - y;
  
@@ -848,7 +916,7 @@ SNTP without floating point.
  
      if (x > *error)
          *error = x;
-@@ -424,52 +427,39 @@
+@@ -424,52 +431,39 @@
  unpack_ntp(struct ntp_data *data, u_char *packet)
  {
      int i;
@@ -905,12 +973,12 @@ SNTP without floating point.
 -     * At this point, current has the current TAI time.
 -     * Now subtract leap seconds to set the posix tick.
 -     */
-+    uint32_t sec;
- 
+-
 -    t = SEC_TO_TAI64(current.tv_sec);
 -    if (corrleaps)
 -        ntpleaps_sub(&t);
--
++    uint32_t sec;
+ 
 -    return (offset + TAI64_TO_SEC(t) + 1.0e-6 * current.tv_usec);
 +    gettimeofday(&current, NULL);
 +    sec = (uint32_t)current.tv_sec + JAN_1970;	/* wraps in 2036, as NTP's does */
@@ -919,7 +987,7 @@ SNTP without floating point.
  }
  
  /*
-@@ -477,45 +467,23 @@
+@@ -477,45 +471,23 @@
   * struct timeval uses an unsigned long for tv_sec.
   */
  void

@@ -37,14 +37,23 @@ which this port drops (below).
   more. The defaults are generous on purpose: a busy box lags, so a short bound would
   fail on a loaded machine, and the service runs in the background, so a
   long one costs nothing at boot.
-- **Several hosts** are tried in order, with every address of each.
+- **A polite resend** (`-n`). Within a try a silent server is asked again
+  after 2 s, then 4 s, doubling, but not once under 2 s of the try are left:
+  at the defaults that's datagrams at 0, 2 and 6 s, and six per silent server
+  in a run. A reply to any of them counts, however late, and the first good
+  one ends the try, so a server that answers is asked once and a box that lags
+  still gets its time. A refusal is not asked again. Upstream sends every
+  0.6 s with a new cookie each time; see the table under Acceptance.
+- **Several hosts** are tried in order. Of a name's several addresses, the
+  next is tried if one fails outright; a silent one takes the whole try.
 - **Exit codes** name the failure:
   - 0 set (or printed with `-p`);
-  - 1 other (refused, no route);
+  - 1 other (a socket error; a refused RFC 868 connection);
   - 2 usage;
   - 3 host not found;
-  - 4 timeout;
-  - 5 reply refused (kiss-o'-death, leap indicator 3, inconsistent times);
+  - 4 timeout, which with `-n` includes no route and a closed port, since
+    this system reports neither to a program sending UDP;
+  - 5 reply refused (kiss-o'-death, leap indicator 3);
   - 6 round trip over `-d`;
   - 7 setting the clock failed.
 
@@ -77,7 +86,7 @@ instruction and that it gets `settimeofday`, `adjtime` and `getaddrinfo`.
 
 | Patch | Why |
 |---|---|
-| `01-bounded-tries-integer-sntp.patch` | The interface above: an alarm per try, retries, several hosts, exit codes, the output lines, `-d` for upstream's `-t`, `-a` stepping over `-b`, no `-c`. SNTP in 64-bit fixed point instead of `double`: NTP timestamps stay 32.32 since 1900, and offsets are differences taken modulo 2^64, right within 68 years either way and across NTP's 2036 era change. A clock that booted at 1970 is set in one step. The program has no floating point, so it runs on an FPU-less 68LC040/68LC060 without the kernel's emulator (the Z3660's 68LC060 has none). A stratum 0 (kiss-o'-death) or leap indicator 3 reply is refused, not retried. A reply-less deadline is a timeout (4), not an error (1). The cookie comes from `/dev/urandom`. |
+| `01-bounded-tries-integer-sntp.patch` | The interface above: an alarm per try, retries, several hosts, exit codes, the output lines, `-d` for upstream's `-t`, `-a` stepping over `-b`, no `-c`. SNTP in 64-bit fixed point instead of `double`: NTP timestamps stay 32.32 since 1900, and offsets are differences taken modulo 2^64, right within 68 years either way and across NTP's 2036 era change. A clock that booted at 1970 is set in one step. The program has no floating point, so it runs on an FPU-less 68LC040/68LC060 without the kernel's emulator (the Z3660's 68LC060 has none). Upstream's resend every 0.6 s with a new cookie, which rejects any reply slower than that, becomes the backoff above. A stratum 0 (kiss-o'-death) or leap indicator 3 reply is refused, not retried. A reply-less deadline is a timeout (4), not an error (1). The cookie comes from `/dev/urandom`. |
 
 ### `port/` (MIT)
 
@@ -135,9 +144,28 @@ The resolver is the system's:
 | 1.1 A4000D disk, 68060, after first boot | 68060-261103-62 |
 | 1.1 A4000D disk, 68030, after first boot | kern30m 68030-261101-68 |
 
-- **Package:** `rdate-1.11-1.pkg`, rolled in the build container (gcc14
-  dcfd12d), every gate passes. The program is 28 KB, has no FPU instruction
-  and no 64-bit multiply or divide.
+- **Package:** `rdate-1.11-2.pkg`, 56832 bytes, md5
+  `adf8d188e072237ee6eebc4685e09d2b`, sha256 `c01743fa…2c2e`. Two rolls in the
+  build container (gcc14 dcfd12d) are identical, every gate passes. The program is 29072 bytes (text + data +
+  bss), with no FPU instruction and no 64-bit multiply or divide.
+- **Datagrams per server, counted at fake servers on the host** (`-n`, both
+  systems; 1.11-1 was the first package):
+
+| Server | 1.11-1 | 1.11-2 |
+|---|---|---|
+| answers at once | 1, set | 1, set |
+| answers 0.3 s late | 25, set | 1, set |
+| answers 1 s late | 52, exit 1 | 1, set |
+| answers 2.5 s late | 52, exit 1 | 2, set |
+| answers 5 s late | 52, exit 1 | 2, set |
+| answers 9 s late | 52, exit 1 | 3, set |
+| kiss-o'-death; leap indicator 3 | 2, exit 5 | 1, exit 5 |
+| silent, `-t 5 -r 1` | 16–17, exit 4 | 4, exit 4 |
+| silent, `-t 15 -r 0` | 23, exit 4 | 3, exit 4 |
+| silent, `-t 15 -r 1` (what `ntpsync` passes) | 49, exit 4 | 6, exit 4 |
+
+- **A reply 2.5 s late on a clock in 1970:** 1.11-2 set the right date, exit 0;
+  1.11-1 failed, exit 1, with the clock left in 1970.
 - **Install:** apkg's pkgadd rc 0 on both.
 - **A clock in 1970 set right:**
   - `date 1105074470` put both clocks in November 1970;
@@ -148,7 +176,9 @@ The resolver is the system's:
   - A fake SNTP server on the host did the same, and so did RFC 868 over TCP
     and over UDP (`-p`).
 - **Failures, each with one stderr line:**
-  - no route (192.0.2.1, `-t 5 -r 1`): exit 4 after 10 s;
+  - an address nothing answers at (192.0.2.1, `-t 5 -r 1`): exit 4 after
+    10 s, and exit 4 too with the default route deleted (the send still
+    returns 48 bytes, so rdate cannot tell);
   - a name server that never answers: exit 4 after 10 s (185 s before the
     lookup moved into a child), no process left behind;
   - DNS off and a pool name: exit 3 at once;

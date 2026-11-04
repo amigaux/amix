@@ -2,7 +2,7 @@
 NAME=rdate
 PKG=rdate
 VERSION=1.11
-PKGREV=1
+PKGREV=2
 SOURCE_EPOCH=1793750400   # 2026-11-04 00:00 UTC, the time stamp of this version
 SUMMARY="rdate 1.11 - set the clock from a time server (SNTP or RFC 868)"
 DESC="openrdate 1.11, OpenBSD's rdate: sets the system clock from an SNTP (-n) or RFC 868 time server, by a step or, with -a, adjtime. Every try is bounded (-t, default 15 s, the name lookup included) and retried (-r, default 1); several servers are tried in order. Exit status names the failure. No configuration file and no daemon: the base system's ntpsync runs it. Installs /opt/amix/sbin/rdate."

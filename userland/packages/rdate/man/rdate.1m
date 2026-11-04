@@ -33,8 +33,9 @@ server answers; without it, the older RFC 868 time protocol to TCP port
 37.
 Each
 .I host
-is tried in turn, each of its addresses in turn, until one gives a usable
-time.
+is tried in turn until one gives a usable time.
+When a name has several addresses, the next one is tried if one fails
+outright; a silent address takes the whole try.
 .PP
 Every try is bounded: the name lookup, the connection and the exchange
 together get
@@ -51,6 +52,19 @@ For one host the longest
 can take is
 .RI ( n "+1) \(mu " sec
 seconds, and about one more.
+.PP
+Within a try,
+.B \-n
+asks a silent server again after 2 seconds, then after 4, doubling each
+time, but not once fewer than 2 seconds of the try are left.
+With the default
+.BR \-t ,
+that is three datagrams, at 0, 2 and 6 seconds, and with the default
+.B \-r
+six per silent server in a run.
+A reply to any of them counts, however late, and the first good one ends
+the try, so a server that answers is not asked again and a slow answer
+still sets the clock.
 .PP
 The clock is stepped with
 .BR settimeofday (3),
@@ -77,18 +91,18 @@ runs it at boot and every hour, with the servers named in
 .B \-n
 Use SNTP.
 The reply is checked: the server's mode, a version from 1 to 4, the
-random cookie this request sent echoed back, a stratum from 1 to 14, a
-leap indicator other than 3 (not synchronised), and offsets that agree
-from one reply to the next.
+random cookie of a request of this try echoed back, a stratum from 1 to
+14, and a leap indicator other than 3 (not synchronised).
+One good reply is enough.
 A stratum of 0 is a kiss-o'-death, by which a server asks its clients to
-stop or slow down: it is refused, not retried.
+stop or slow down: it is refused and that host is not asked again.
 .TP
 .BI \-t " sec"
 The time allowed for each try, the name lookup included (default 15).
 .TP
 .BI \-r " n"
 How many more times to try a host before the next one (default 1).
-A name that does not resolve is not tried again.
+A name that does not resolve, or a server that refused, is not tried again.
 .TP
 .B \-a
 Slew the clock with
@@ -179,7 +193,8 @@ The clock was set, or with
 the time printed.
 .TP
 .B 1
-Another failure: the connection was refused, no route, a socket error.
+Another failure: a socket error or, with the RFC 868 protocol, a refused
+connection.
 .TP
 .B 2
 A usage error.
@@ -191,10 +206,13 @@ The name did not resolve.
 No usable answer within
 .B \-t
 seconds, on any try.
+With
+.B \-n
+that includes no route to the server and a closed port: this system
+reports neither to a program sending UDP.
 .TP
 .B 5
-The server's reply was refused (kiss-o'-death, not synchronised, times
-that disagree).
+The server's reply was refused (kiss-o'-death, not synchronised).
 .TP
 .B 6
 The exchange took longer than
