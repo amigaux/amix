@@ -91,10 +91,24 @@ run does nothing until then.
 .BI ntp_servers= "\(dqname ...\(dq"
 the servers, after DHCP's; default
 .BR "0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org" .
-A name needs DNS
+A name needs a name server
 .RB ( interfaces (4)'s
 .B dns
-line or a DHCP server's); an address does not.
+line or a DHCP server's), or a line in
+.BR /etc/inet/hosts ;
+an address needs neither.
+A machine with no name server cannot look up the default names and is never
+set: the log and
+.B \-n
+say so.
+Add a
+.B dns
+line to
+.BR /etc/inet/interfaces ,
+or addresses to
+.B ntp_servers
+in
+.BR /etc/rc.conf .
 .TP
 .BI ntp_timeout= seconds
 the bound of one try at one server; default 15.

@@ -20,7 +20,7 @@ expect() { case "$3" in *"$2"*) ok ;; *) bad "$1: want [$2] got [$3]" ;; esac; }
 refuse() { case "$3" in *"$2"*) bad "$1: unwanted [$2] in [$3]" ;; *) ok ;; esac; }
 
 B=$T/bin
-mkdir -p "$B" "$T/st" "$T/var/dhcpc" "$T/run"
+mkdir -p "$B" "$T/st" "$T/var/dhcpc" "$T/run" "$T/lib"
 # mkdir as the stock one: -p on a directory already there exits 2
 printf '#!/bin/sh\nif [ "$1" = -p ]; then for d; do [ "$d" != -p ] && [ -d "$d" ] && { echo "mkdir: $d: File exists" >&2; exit 2; }; done; fi\nexec %s "$@"\n' "$(command -v mkdir)" > "$B/mkdir"
 # rdate: st/rdate says "ok <address> <offset> [suffix]" or "fail"; each call
@@ -40,6 +40,11 @@ case "\$1" in
 ok)
 	echo "rdate: adjust local clock by \$3 seconds\${4:+ \$4} (\$2)"
 	exit 0
+	;;
+nohost)
+	shift
+	for h; do echo "rdate: \$h: host not found" >&2; done
+	exit 3
 	;;
 esac
 shift
@@ -74,18 +79,26 @@ exit 0
 EOF
 chmod +x "$B"/*
 
+# dns on|off: the resolver switch, as ifup leaves it (libsocket.so one file
+# with libsockdns.so, or not)
+dns() {
+	rm -f "${T:?}/lib/libsocket.so" "${T:?}/lib/libsockdns.so"
+	: > "$T/lib/libsockdns.so"
+	if [ "$1" = on ]; then ln "$T/lib/libsockdns.so" "$T/lib/libsocket.so"; else : > "$T/lib/libsocket.so"; fi
+}
 reset() {
 	rm -f "${T:?}/st/calls" "${T:?}/st/upafter" "${T:?}/rc.log" "${T:?}/ntp.state" "${T:?}/var/dhcpc/"* "${T:?}/st/"held.*
 	rm -rf "${T:?}/run/ntpsync.lock"
 	echo aen0 > "$T/var/ifup.primary"
 	echo "ok 192.0.2.123 -12.482113" > "$T/st/rdate"
+	dns off
 	: > "$T/rc.conf"
 }
 run() { # run <args...>: ntpsync with the test tree
 	env PATH="$B:$PATH" RC_SUBR="$here/../rc/rc.subr" RC_CONF="$T/rc.conf" RC_LOG="$T/rc.log" \
 	    RC_RUN="$T/run" RC_BGLOG="$T/rclog" RC_KBOOTSET="$T/none" \
 	    NTP_RDATE="${RDATE_:-$B/rdate}" NTP_SETCLK="${SETCLK_:-$B/setclk}" NTP_CRONTAB="$B/crontab" \
-	    NTP_STATE="$T/ntp.state" IF_STATE="$T/var" IF_LEASES="$T/var/dhcpc" NTP_DHCPC="$B/dhcpc" \
+	    NTP_STATE="$T/ntp.state" IF_STATE="$T/var" IF_LEASES="$T/var/dhcpc" NTP_DHCPC="$B/dhcpc" IF_LIB="$T/lib" \
 	    $SH "$here/ntpsync" "$@"
 }
 calls() { cat "$T/st/calls" 2>/dev/null; }
@@ -197,6 +210,31 @@ same "unreachable: each host on stderr" 3 "$(grep -c 'no usable answer' "$T/err"
 refuse "unreachable: no battery clock" "setclk" "$(calls)"
 expect "state: fail" "fail " "$(cat "$T/ntp.state")"
 
+# --- names that cannot be looked up: says why; one line
+reset
+echo nohost > "$T/st/rdate"
+o=$(run 2> "$T/err"); r=$?
+same "no name server: status" 1 "$r"
+same "no name server: one log line" 1 "$(log | wc -l | tr -d ' ')"
+expect "no name server: says why" "names cannot be looked up: no name server; add a dns line to /etc/inet/interfaces, or addresses to ntp_servers in /etc/rc.conf" "$(log)"
+refuse "no name server: not \"answered\"" "no time server answered" "$(log)"
+expect "no name server: rdate's lines" "0.pool.ntp.org: host not found" "$(cat "$T/err")"
+expect "no name server: -n says so" "no name server: a name is looked up in /etc/inet/hosts only; add a dns line to /etc/inet/interfaces, or addresses to ntp_servers in /etc/rc.conf" "$(run -n)"
+: > "$T/rc.log"
+o=$(run -c 2>&1)
+same "no name server, hourly: nothing printed" "" "$o"
+same "no name server, hourly: no line while it stays so" 0 "$(log | wc -l | tr -d ' ')"
+reset
+echo nohost > "$T/st/rdate"
+dns on
+o=$(run 2> /dev/null); r=$?
+same "DNS on, names not found: status" 1 "$r"
+expect "DNS on, names not found: said" "time servers not found by name (3 tried, rdate status 3)" "$(log)"
+refuse "DNS on: -n has no note" "no name server" "$(run -n)"
+reset
+echo 'ntp_servers="192.0.2.5 198.51.100.7"' > "$T/rc.conf"
+refuse "addresses only: -n has no note" "no name server" "$(run -n)"
+
 # --- the hourly run: slews; quiet; one line only when the outcome changes
 reset
 echo fail > "$T/st/rdate"
@@ -302,7 +340,7 @@ boot() {
 #!/bin/sh
 PATH="$B:\$PATH" RC_SUBR="$here/../rc/rc.subr" RC_CONF="$T/rc.conf" RC_LOG="$T/rc.log" \\
 RC_RUN="$T/run" RC_BGLOG="$T/rclog" NTP_RDATE="$B/rdate" NTP_SETCLK="$B/setclk" \\
-NTP_CRONTAB="$B/crontab" NTP_STATE="$T/ntp.state" IF_STATE="$T/var" IF_LEASES="$T/var/dhcpc" NTP_DHCPC="$B/dhcpc" \\
+NTP_CRONTAB="$B/crontab" NTP_STATE="$T/ntp.state" IF_STATE="$T/var" IF_LEASES="$T/var/dhcpc" NTP_DHCPC="$B/dhcpc" IF_LIB="$T/lib" \\
 exec $SH "$here/ntpsync" "\$@"
 EOF
 	chmod +x "$T/ntpsync-wrap"

@@ -525,16 +525,22 @@ if_apply() {
 		return 1
 	fi
 	[ -d "$IF_STATE" ] || mkdir -p "$IF_STATE"
+	_if_p=
 	if [ "$_if_g" != - ] && "$ROUTE" add default "$_if_g" 1 > /dev/null 2>&1
 	then
-		echo "$_if_i" > "$IF_STATE/ifup.primary"
+		_if_p=1
 		_if_say "$_if_i: default route $_if_g"
 	elif [ ! -s "$IF_STATE/ifup.primary" ]
 	then
-		echo "$_if_i" > "$IF_STATE/ifup.primary"
+		_if_p=1
 	fi
-	_if_name "$_if_i" "$_if_h" "$_if_a"
+	# DNS before the primary record: that record tells ntpsync the network is
+	# up, so names resolve by then. The name step reads the record.
 	if_dns_apply "$@"
+	_if_r=$?
+	[ -z "$_if_p" ] || echo "$_if_i" > "$IF_STATE/ifup.primary"
+	_if_name "$_if_i" "$_if_h" "$_if_a"
+	return $_if_r
 }
 
 if_unapply() {

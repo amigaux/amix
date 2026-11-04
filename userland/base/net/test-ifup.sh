@@ -112,7 +112,8 @@ esac
 EOF
 printf '#!/bin/sh\necho "mknod $*" >> %s/st/calls\n: > "$1"\n' "$T" > "$B/mknod"
 # domainname: no argument prints the kernel's domain (st/kdomain), one sets it
-printf '#!/bin/sh\nif [ $# -eq 0 ]; then cat %s/st/kdomain 2>/dev/null; else printf "%%s" "$1" > %s/st/kdomain; fi\n' "$T" "$T" > "$B/domainname"
+# (and records what ifup.primary holds when the DNS step asks: st/primary-at-dns)
+printf '#!/bin/sh\nif [ $# -eq 0 ]; then cat %s/var/ifup.primary > %s/st/primary-at-dns 2>/dev/null; cat %s/st/kdomain 2>/dev/null; else printf "%%s" "$1" > %s/st/kdomain; fi\n' "$T" "$T" "$T" "$T" > "$B/domainname"
 chmod +x "$B/"*
 
 printf 'aen\t%s/dev/aen\t0\t18\ttrue\n' "$T" > "$T/link.d/aen"
@@ -125,7 +126,7 @@ echo "example.com" > "$T/domain"
 
 reset() {
 	rm -f "${T:?}/st/"if.* "${T:?}/st/"linked.* "${T:?}/st/route" "${T:?}/st/calls" "${T:?}/st/dhcpc.rc" "${T:?}/st/slinkfail" \
-	    "${T:?}/st/held" "${T:?}/st/kdomain" \
+	    "${T:?}/st/held" "${T:?}/st/kdomain" "${T:?}/st/primary-at-dns" \
 	    "${T:?}/primary" "${T:?}/var/ifup.primary" "${T:?}/var/dhcpc/"*
 	echo "oldname" > "$T/st/nodename"
 	printf '# hosts\n127.0.0.1\tlocalhost\n192.0.2.99\toldname oldname.example.com\n192.0.2.5\tother\n' > "$T/hosts"
@@ -320,6 +321,29 @@ o=$(run ifup aen0)
 expect "bad row reported" "ifup: interfaces:1: aen0: the mode must be dhcp, static or off" "$o"
 expect "bad row: off" "ifup: aen0 (00:80:10:ff:ff:01): off" "$o"
 refuse "not the * address" "192.0.2.50" "$o"
+
+# --- the primary record comes after the DNS step: ntpsync takes it to mean
+# the network is up, so names must resolve by then; the hosts row still follows it
+printf 'aen0 static 192.0.2.38/24 gw 192.0.2.1 name tower\ndns 192.0.2.14\n' > "$T/interfaces"
+reset
+run ifup aen0 > /dev/null
+same "static: no primary record yet at the DNS step" "" "$(cat "$T/st/primary-at-dns" 2>/dev/null)"
+same "static: the primary record after it" aen0 "$(cat "$T/var/ifup.primary")"
+expect "static: the hosts row still written" "192.0.2.38	tower" "$(cat "$T/hosts")"
+printf 'aen0 dhcp\n' > "$T/interfaces"
+reset
+: > "$T/st/linked.aen0"
+DHCP_ADDR=192.0.2.77 DHCP_MASK=255.255.255.0 DHCP_ROUTER=192.0.2.1 DHCP_DNS=192.0.2.53 run dhcpc-hook aen0 BOUND > /dev/null
+same "lease: no primary record yet at the DNS step" "" "$(cat "$T/st/primary-at-dns" 2>/dev/null)"
+same "lease: the primary record after it" aen0 "$(cat "$T/var/ifup.primary")"
+# a DNS step that fails still says so in the status, the record written
+printf 'aen0 static 192.0.2.38/24 gw 192.0.2.1\ndns 192.0.2.14\n' > "$T/interfaces"
+reset
+mv "$T/lib/libsockdns.so" "$T/lib/libsockdns.keep"
+o=$(run ifup aen0); r=$?
+same "DNS step failed: status 1" 1 "$r"
+same "DNS step failed: the record written" aen0 "$(cat "$T/var/ifup.primary")"
+mv "$T/lib/libsockdns.keep" "$T/lib/libsockdns.so"
 
 # --- the stock mkdir: the apply step makes IF_STATE only when it is missing,
 # so ifup runs again over the directory it made
