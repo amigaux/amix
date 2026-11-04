@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — amix-base 1.0-30: names resolve when ntpsync is told the network is up (5f8da50)
+
+ifup writes /var/inet/ifup.primary after the DNS step: that file ends ntpsync's boot wait, and a sync started in the gap found no name. ntpsync says what to do when names cannot be looked up (a dns line in /etc/inet/interfaces, or addresses in ntp_servers), in the log, on a run by hand and in ntpsync -n.
+
 ## 2026-11-04 — time sync at boot and hourly; amix-base 1.0-29, dhcp-client 1.0-8 (075b143, a2c2222, b1e256b)
 
 ntpsync and /etc/init.d/ntp (S77ntp) set the clock through rdate (SNTP) at boot, in the background, and hourly from root's crontab. The servers are the DHCP option 42 time servers of the leases dhcpc holds, then rc.conf's ntp_servers (default the pool), each bounded by ntp_timeout and ntp_retries. Each outcome is one rc.log line; the hourly run slews and logs only changes. After a sync the battery clock is set with the corrected setclk -s, never the stock one, whose -s writes the wrong year. dhcpc requests option 42 and records it as DHCP_NTP. rc_bg ignores SIGHUP, so a boot script run by hand from a login keeps its background run. xstart's failing exits returned 0 under the stock sh, which exits with an EXIT trap's last status; xstart now ends in finish <status>, and test-lint.sh flags an EXIT trap in any shipped script. ntpsync(1M).
