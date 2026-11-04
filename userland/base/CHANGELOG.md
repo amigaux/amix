@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — time sync at boot and hourly; amix-base 1.0-29, dhcp-client 1.0-8 (075b143, a2c2222, b1e256b)
+
+ntpsync and /etc/init.d/ntp (S77ntp) set the clock through rdate (SNTP) at boot, in the background, and hourly from root's crontab. The servers are the DHCP option 42 time servers of the leases dhcpc holds, then rc.conf's ntp_servers (default the pool), each bounded by ntp_timeout and ntp_retries. Each outcome is one rc.log line; the hourly run slews and logs only changes. After a sync the battery clock is set with the corrected setclk -s, never the stock one, whose -s writes the wrong year. dhcpc requests option 42 and records it as DHCP_NTP. rc_bg ignores SIGHUP, so a boot script run by hand from a login keeps its background run. xstart's failing exits returned 0 under the stock sh, which exits with an EXIT trap's last status; xstart now ends in finish <status>, and test-lint.sh flags an EXIT trap in any shipped script. ntpsync(1M).
+
 ## 2026-11-03 — amix-base 1.0-28; mkdir -p lint (4dcf3f6, fd63efb)
 
 ifup no longer expands a "*" row key as a file name pattern (ifup -n printed a file name as the row); amix-base 1.0-28. test-lint.sh checks that every mkdir -p in the scripts base installs stands behind [ -d <dir> ] || for the same directory (the stock mkdir -p exits 2 on a directory already there); "# lint: mkdir-p" marks an intended exception. The ifup, devnodes, syslogd and rc_bg tests run under a mkdir that refuses an existing directory and make each directory twice. The four shipped sites were already guarded.
