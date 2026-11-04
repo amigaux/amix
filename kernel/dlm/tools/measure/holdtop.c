@@ -67,7 +67,7 @@ ados_main(void *execbase, const char *args, long arglen)
 	long i = 0;
 	int n;
 
-	(void)execbase;
+	ax_execbase = execbase;		/* adstart.s leaves it to C, as for axtime */
 	dosbase = x_openlib("dos.library", 36);
 	if (!dosbase)
 		return RETURN_FAIL;
