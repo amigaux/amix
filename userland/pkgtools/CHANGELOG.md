@@ -2,6 +2,10 @@
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
 
+## 2026-11-04 — make test passes in a fresh clone (3c1c615)
+
+`make -C userland/pkgtools test` builds the host contents-fsck through that suite's own make test, and the real-engine apkg checks use a short target root: heirloom's pkginfo.c builds the lock path in a 256-byte buffer, noted for the next APKGENG.
+
 ## 2026-11-04 — make test runs every pkgtools suite (01097f9)
 
 `make -C userland/pkgtools test` builds the host engine and runs every pkgtools suite, printing each summary and every skipped check and stopping at the first red one. PKGTOOLS_REQUIRE="objdump fakeroot compress engine" makes the skips those tools' absence would cause into failures, for CI. T31 and T34 skip instead of failing without the m68k binutils.
