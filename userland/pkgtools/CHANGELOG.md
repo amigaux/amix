@@ -1,3 +1,9 @@
+## 2026-11-04 — apkg 0.3.8; publish.sh; requirements (2996a5b, a5344fb, 02b8b1f, 63324c8)
+
+apkg 0.3.8: the shipped apkg.conf names no address; the repository goes by name and the box needs DNS. APKG 0.3.8 minted, md5 d0bdd279, staged, not published.
+publish.sh takes a tree with pkgs/ below the catalog, as assemble-release writes it.
+Requirements say the repository needs DNS, not a hosts address.
+
 ## 2026-11-02 — the local-repository layout documented (c963d61)
 
 gen-catalog's --help and design.md say how a local repository is laid out (datastreams in R/pkgs/, gen-catalog -o R R/pkgs, repo=file:///R).
