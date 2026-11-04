@@ -94,6 +94,10 @@ rc_conf() {
 #
 # The command's output goes to a file of its own: this sh opens ">>" without
 # O_APPEND, so two long-lived writers of one file overwrite each other.
+#
+# The subshell ignores SIGHUP, and the command inherits that through exec: a
+# boot script run by hand from a login (sh /etc/init.d/<svc> start) would
+# otherwise lose its background run, and the watcher, when the login ends.
 rc_bg() {
 	_rc_t=$1
 	_rc_s=$2
@@ -103,6 +107,7 @@ rc_bg() {
 	[ -d "$RC_BGLOG" ] || mkdir -p "$RC_BGLOG" 2>/dev/null
 	rc_log "$_rc_s" "started, bound $_rc_t s: $*"
 	(
+		trap '' 1
 		rm -f "${_rc_f:?}" "${_rc_f:?}.t"
 		(
 			_RC_PF=$_rc_f.t sh -c '[ "$1" = _rc ] && shift; echo $$ > "$_RC_PF"; exec sleep "$1"' _rc $_rc_t

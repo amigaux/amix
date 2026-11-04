@@ -103,6 +103,10 @@ Only the command itself is stopped, not programs it started, so a script
 given to
 .B rc_bg
 should bound what it runs.
+The command starts with the hangup signal ignored, so a boot script run by
+hand from a login keeps its background run when the login ends; a daemon
+that rereads its configuration on a hangup sets its own handler, as
+daemons do.
 .TP
 .B rc_mknod
 makes the device
