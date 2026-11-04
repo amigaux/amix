@@ -1548,7 +1548,7 @@ s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
 # port: while the server holds it, our bind fails
 wait_udp() {
     n=0
-    while [ $n -lt 50 ]; do
+    while [ $n -lt 200 ]; do    # up to 20 s: python starts slowly on a loaded host
         python3 -c "import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 try:
