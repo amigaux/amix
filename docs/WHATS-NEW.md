@@ -3,7 +3,14 @@
 New packages and features, one line each, newest release first. Fixes and
 internals are in each directory's `CHANGELOG.md`.
 
-## Planned after 1.1
+## Coming to 1.1 as packages
+
+Added to the repository as they are ready and installed with `apkg`; no new release is needed.
+
+- A web browser with HTTPS (text mode first, then graphical), and the HTTPS library and root certificates it needs.
+- More window managers.
+
+## Planned for 1.2
 
 Plans, with no dates; they may change.
 
@@ -11,11 +18,9 @@ Plans, with no dates; they may change.
 - The A600 (with a 68030 accelerator).
 - Fast RAM at or above 1 GiB on the 68030 and 68040/68060, which opens the Blizzard 1230-IV/1240/1260, TF536, TF330 and ACA cards.
 - Gigabit Ethernet on the Z3660 with a real 68060, without lost frames.
-- A web browser with HTTPS (text mode first, then graphical).
-- An emulator-tested compatibility table of machines, accelerators and controllers.
-- Upgrades in place from 1.1 on.
 - Shared libraries for packages, to save memory and disk.
 - `crash` and `adb` on the 68040/68060 kernel, as a boot option.
+- Upgrading an installed 1.1 in place.
 
 ## 1.1 (unreleased)
 
