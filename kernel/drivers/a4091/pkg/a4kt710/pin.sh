@@ -30,12 +30,14 @@
 # 1.0.0-7 (2026-11-02): module 1.0.0-4: a Kickstart with a card.resource ROM
 # tag (A1200, A600) is refused before any $DD access, even with declared=1;
 # declared=1 now reads the Kickstart once for that tag.
+# 1.0.0-8 (2026-11-04): the same module 1.0.0-4, objects unchanged: the
+# copyright note says what is known in plain words.
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
 KM_VERSION=1.0.0-4
-KM_PKG_VERSION=1.0.0-7
+KM_PKG_VERSION=1.0.0-8
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
 KM_K30_SHA=04ec15f0c083fec6bb8ad7221780745a0f958588ea92136d2623ff5aab9027b1
@@ -51,22 +53,23 @@ kernel/drivers/a4091/NOTICE f37c3ca7dba3c5b572e961a2ce1bd67e13ecf2eed9f341221866
 
 KM_EXTRA_NOTE="The module drives the A4000T's onboard NCR 53C710 at 0xDD0000 and touches
 nothing there unless the running Kickstart carries the A4000T's cold-start
-NCR scsi.device ROM tag (amix-dlm C4-2 v6 sec 8.1), the chipset is AGA and
-a read-only probe of the chip answers; otherwise it returns ENXIO, silent.
-The parameter declared (default -1, the tag decides; 0 never; 1 without the
-tag) overrides that tag: param declared=0 in /etc/conf/modreg.local.d/a4kt710
-disables the controller.  A Kickstart with a card.resource ROM tag (every
-A1200 and A600 one) is refused before any access, whatever declared says.  On the 68030 line (a4kt710-k30) the DMA goes
-through the module core's 030 provider, a bounce pool below 0x08000000
-(boot2 at amix-dlm 4003c9f or later); it is not supported with a Z3660 in
-030 mode and is untested on metal.  On the
-68040/68060 line (a4kt710-k46) the provider is the identity: an A4000T with
-a Z3660 has booted with its root on the onboard bus through this module,
-the DMA buffer in the Z3660's memory; a byte compare of that DMA is still
-open (kernel/drivers/a4091/docs/A4000T-ONBOARD-710.md sec 10.6).  The
-objects carry cc=gcc-2.7.2.3-33ebadc, so they load on kernel-k30-m -68 or
-later (a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The
-module is built from src/a4kt710.c and src/a4091-wr.c, part 1 of the NOTICE
-below (MIT); none of the NOTICE's other parts is in the object."
+NCR scsi.device ROM tag, the chipset is AGA and a read-only probe of the
+chip answers; otherwise it returns ENXIO, silent.  The parameter declared
+(default -1, the tag decides; 0 never; 1 without the tag) overrides that
+tag: param declared=0 in /etc/conf/modreg.local.d/a4kt710 disables the
+controller.  A Kickstart with a card.resource ROM tag (every A1200 and A600
+one) is refused before any access, whatever declared says.  On the 68030
+line (a4kt710-k30) the DMA goes through the module core's 030 provider, a
+bounce pool below 0x08000000, which needs the boot loader of amix 1.1 or
+later.  That form is not supported with a Z3660 in 030 mode, and it has run
+only under emulation, never on a real machine.  On the 68040/68060 line
+(a4kt710-k46) the chip's DMA goes straight to memory, with no bounce pool.
+With module 1.0.0-1, an A4000T with a Z3660 booted with its root on the onboard
+bus, the DMA buffer in the Z3660's memory, and raw reads of 16 MiB through
+that bus matched the host's checksum of the disk.  The objects carry
+cc=gcc-2.7.2.3-33ebadc, so they load on kernel-k30-m -68 or later
+(a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The module is
+built from src/a4kt710.c and src/a4091-wr.c, part 1 of the NOTICE below
+(MIT); none of the NOTICE's other parts is in the object."
 
 KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
