@@ -1,4 +1,4 @@
-# C4-3 — the RAM-disk hand-off, version 4
+# C4-3 — the RAM-disk hand-off, version 5
 
 - **Status:** agreed 2026-10-26; in force from commit 4003c9f (2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
@@ -7,7 +7,9 @@
   port): `swap none` is the stock dummy swap device `/dev/fakeswap`, not
   no device (§3); version 4 (2026-10-27, from amix-installng):
   `media --disk --ramdisk` writes the netinstall raw image, and an image
-  serves one generation id (§1). Other repositories build against
+  serves one generation id (§1); version 5 (2026-11-04): the image goes
+  as high in the region as is free, below memory AmigaOS keeps at its
+  top, and an L4 says which of "too big" and "in use" it was (§2). Other repositories build against
   this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
@@ -62,9 +64,13 @@ After the kernel is relocated and before the hand-off copy:
    member) to **the top of the largest fast-memory region the kernel can
    use**: below 0x40000000, and on k30 within the 64 MiB the kernel can
    describe (`AX_K30_MEMCAP`). The image starts on a 64 KiB
-   boundary;
-2. it shortens that region's entry in `bootinfo.memory[]` by the image's
-   size rounded up to 64 KiB, so the kernel never uses those pages;
+   boundary. It is claimed with AllocAbs while AmigaOS still runs; when
+   the top is in use (a software MapROM tool's Kickstart copy, a
+   reset-proof RAM disk), it goes at the highest free 64 KiB boundary
+   below, still above the kernel's end (version 5, `ax_rd_place`);
+2. it ends that region's entry in `bootinfo.memory[]` at the image's
+   start, so the kernel never uses the image's pages, nor anything above
+   them;
 3. it writes the image's **physical address and size** into the loader
    record (`AXL1` offsets 116 and 120);
 4. it writes the root selector `ramdisk` (kind 2) and the swap selector
@@ -73,8 +79,10 @@ After the kernel is relocated and before the hand-off copy:
 
 If the region cannot hold the kernel, its arena and the image, boot2
 refuses the generation with L4, giving the needed and the available
-bytes. The image and the kernel never overlap: the kernel binds at the
-region's low end and the image at its top.
+bytes. When it could, but no free place of the image's size is left
+above the kernel, the L4 says `the RAM disk's place is in use`. The
+image and the kernel never overlap: the kernel binds at the region's low
+end and the image above its end.
 
 ## 3. What the kernel does
 

@@ -548,8 +548,9 @@ already refused such a generation when it composed it.
 Media that root on a decompressed miniroot (CD, floppy RAM-disk profile,
 netinstall floppies) name it in the manifest:
 `ramdisk miniroot <size> at=… z=deflate crc32=…`. boot2 decompresses it to the
-top of the largest fast-memory region, shortens that region in
-`bootinfo.memory[]` by the image size rounded up to 64 KiB, and puts the
+top of the largest fast-memory region (or, when AmigaOS keeps memory
+there, as high below it as is free, C4-3 §2), ends that region in
+`bootinfo.memory[]` at the image's start, and puts the
 physical address and size in the loader record. The `ramdisk` root-class
 module presents it as a block device (`30-module-core.md` §7). The manifest
 of such a medium says `root ramdisk` and `swap none`; the loader record's

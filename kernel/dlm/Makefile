@@ -51,9 +51,9 @@ TSRC    := tests/host/t_main.c tests/host/t_crc32.c tests/host/t_store.c \
 
 TOOLS   := $(B)/bbframe $(B)/mkstore $(B)/lsstore $(B)/b2link $(B)/kbootset
 
-.PHONY: FORCE need-gca need-g14 need-port all test tools toolchain-check cross boot1 boot2 cdboot axtime box hashbench core b2test kit kit-test clean
+.PHONY: FORCE need-gca need-g14 need-port all test tools toolchain-check cross boot1 boot2 cdboot axtime holdtop box hashbench core b2test kit kit-test clean
 
-all: test tools cross boot1 boot2 cdboot axtime box b2test
+all: test tools cross boot1 boot2 cdboot axtime holdtop box b2test
 
 $(B):
 	mkdir -p $(B)
@@ -394,6 +394,26 @@ $(B)/axtime-chip: $(B)/axtime.r.o $(B)/b2link $(B)/hunkcheck
 	$(B)/hunkcheck $< $@ 0x00200000
 
 axtime: toolchain-check $(B)/axtime $(B)/axtime-chip
+
+# holdtop (10 section 5.4's bench row): an AmigaDOS program that keeps the
+# top of the kernel's region allocated, as a software MapROM tool or a
+# reset-proof RAM disk does; the same entry and writer as amix-cdboot
+HTOBJ  := $(B)/cross/adstart.o $(B)/cross/amiga.o $(B)/cross/holdtop.o \
+          $(B)/cross/b2_sys.o $(B)/cross/bootinfo.o
+
+$(B)/cross/holdtop.o: tools/measure/holdtop.c loader/boot2/*.h $(COMMON)/*.h
+	@mkdir -p $(B)/cross
+	$(CROSS)gcc $(CROSSCFLAGS) -Iloader/boot2 -I$(COMMON) -c -o $@ $<
+
+$(B)/holdtop.r.o: $(HTOBJ)
+	$(CROSS)ld -r -o $@ $(HTOBJ)
+
+$(B)/holdtop: $(B)/holdtop.r.o $(B)/b2link $(B)/hunkcheck
+	$(CROSS)scan060 $(HTOBJ)
+	$(B)/b2link -h $< $@
+	$(B)/hunkcheck $< $@ 0x00200000
+
+holdtop: toolchain-check $(B)/holdtop
 
 # The boot2 build path end to end with a stand-in boot2: cross-compile, ld -r
 # with start.s first, b2link, then b2check proves the table reproduces the
