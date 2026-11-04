@@ -3,6 +3,20 @@
 New packages and features, one line each, newest release first. Fixes and
 internals are in each directory's `CHANGELOG.md`.
 
+## Planned after 1.1
+
+Plans, with no dates; they may change.
+
+- Offloading work such as crypto and video to the Z3660/ZZ9000's second core when one is present.
+- The A600 (with a 68030 accelerator).
+- Fast RAM at or above 1 GiB on the 68030 and 68040/68060, which opens the Blizzard 1230-IV/1240/1260, TF536, TF330 and ACA cards.
+- Gigabit Ethernet on the Z3660 with a real 68060, without lost frames.
+- A web browser with HTTPS (text mode first, then graphical).
+- An emulator-tested compatibility table of machines, accelerators and controllers.
+- Upgrades in place from 1.1 on.
+- Shared libraries for packages, to save memory and disk.
+- `crash` and `adb` on the 68040/68060 kernel, as a boot option.
+
 ## 1.1 (unreleased)
 
 - Loadable kernel modules on the 68030 and the 68040/68060, loaded at boot or on demand.
