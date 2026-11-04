@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — What's new: the RAM-disk boot (38cb1f1)
+
+docs: What's new lists the RAM-disk boot beside a software MapROM copy or a reset-proof RAD:.
+
 ## 2026-11-04 — release-check reads binaries; CI's merge-base fallback (ddb403c, 62e9598)
 
 tools: release-check searches binary files and package members, images included, for the local patterns, by privacy-check's search and exemptions. ci: a push with no usable previous tip is checked from its merge base with origin/master; the logic moves to tools/ci-privacy-check.
