@@ -1,0 +1,267 @@
+.TH RDATE 1M "4 November 2026" "rdate 1.11"
+.SH NAME
+rdate \- set the clock from a time server
+.SH SYNOPSIS
+.B /opt/amix/sbin/rdate
+[
+.B \-46anpsuv
+] [
+.B \-t
+.I sec
+] [
+.B \-r
+.I n
+] [
+.B \-b
+.I sec
+] [
+.B \-d
+.I msec
+] [
+.B \-o
+.I port
+]
+.I host
+\&...
+.SH DESCRIPTION
+.B rdate
+asks a time server for the time and sets the system clock from it.
+With
+.B \-n
+it speaks SNTP (RFC 5905) to UDP port 123, which every public time
+server answers; without it, the older RFC 868 time protocol to TCP port
+37.
+Each
+.I host
+is tried in turn, each of its addresses in turn, until one gives a usable
+time.
+.PP
+Every try is bounded: the name lookup, the connection and the exchange
+together get
+.B \-t
+seconds, after which the try is given up, so neither a silent network nor
+a name server that does not answer can hold
+.B rdate
+up.
+A host is tried
+.B \-r
+more times before the next one.
+For one host the longest
+.B rdate
+can take is
+.RI ( n "+1) \(mu " sec
+seconds, and about one more.
+.PP
+The clock is stepped with
+.BR settimeofday (3),
+which sets it through
+.BR stime (2)
+to the whole second (a fraction of half a second or more rounds up), or,
+with
+.BR \-a ,
+slewed with
+.BR adjtime (2),
+which runs the clock slightly fast or slow until the difference is gone.
+Setting the clock needs root;
+.B \-p
+does not.
+.PP
+.B rdate
+has no configuration file and runs no daemon.
+The base system's
+.BR ntpsync (1M)
+runs it at boot and every hour, with the servers named in
+.BR /etc/rc.conf .
+.SH OPTIONS
+.TP
+.B \-n
+Use SNTP.
+The reply is checked: the server's mode, a version from 1 to 4, the
+random cookie this request sent echoed back, a stratum from 1 to 14, a
+leap indicator other than 3 (not synchronised), and offsets that agree
+from one reply to the next.
+A stratum of 0 is a kiss-o'-death, by which a server asks its clients to
+stop or slow down: it is refused, not retried.
+.TP
+.BI \-t " sec"
+The time allowed for each try, the name lookup included (default 15).
+.TP
+.BI \-r " n"
+How many more times to try a host before the next one (default 1).
+A name that does not resolve is not tried again.
+.TP
+.B \-a
+Slew the clock with
+.BR adjtime (2)
+instead of stepping it, when the difference is at most
+.B \-b
+seconds (default 60 with
+.BR \-a );
+a bigger difference is stepped.
+.TP
+.BI \-b " sec"
+Step the clock when the difference is more than
+.I sec
+seconds, slew it otherwise.
+.B "\-b 0"
+with
+.B \-a
+always slews.
+.TP
+.BI \-d " msec"
+Leave the clock alone when the exchange took more than
+.I msec
+milliseconds.
+.TP
+.B \-p
+Print the time and the difference, but do not set the clock.
+.TP
+.B \-s
+Do not print the date.
+.TP
+.B \-v
+Also print the difference applied, as described under OUTPUT.
+.TP
+.B \-u
+Use UDP for the RFC 868 protocol.
+.TP
+.BI \-o " port"
+Use
+.I port
+instead of 123 or 37.
+.TP
+.B \-4
+Use IPv4 addresses, the only ones this system has.
+.TP
+.B \-6
+Use IPv6 addresses: on this system the lookup fails.
+.SH OUTPUT
+On success,
+.B rdate
+prints the new date to the standard output, unless
+.B \-s
+is given, and, with
+.BR \-v ,
+.B \-p
+or
+.BR \-a ,
+one line
+.PP
+.nf
+.ft CW
+rdate: adjust local clock by -12.482113 seconds (192.0.2.1)
+.ft R
+.fi
+.PP
+naming the difference and the address that answered.
+When
+.B \-b
+decided, the line says
+.B (adjtime)
+or
+.B (instant change)
+before the address.
+On a failure it prints one line to the standard error for each host that
+gave no usable time, such as
+.PP
+.nf
+.ft CW
+rdate: 0.pool.ntp.org: no usable answer in 15 s (2 tries)
+rdate: time.example: host not found
+rdate: 192.0.2.1: refused: stratum 0 (kiss-o'-death RATE)
+.ft R
+.fi
+.SH EXIT STATUS
+.TP
+.B 0
+The clock was set, or with
+.BR \-p ,
+the time printed.
+.TP
+.B 1
+Another failure: the connection was refused, no route, a socket error.
+.TP
+.B 2
+A usage error.
+.TP
+.B 3
+The name did not resolve.
+.TP
+.B 4
+No usable answer within
+.B \-t
+seconds, on any try.
+.TP
+.B 5
+The server's reply was refused (kiss-o'-death, not synchronised, times
+that disagree).
+.TP
+.B 6
+The exchange took longer than
+.BR \-d .
+.TP
+.B 7
+Setting the clock failed (not root, or the system refused).
+.PP
+With several hosts, the status is the last host's.
+.SH EXAMPLES
+What
+.BR ntpsync (1M)
+runs at boot, which steps the clock:
+.PP
+.nf
+.ft CW
+/opt/amix/sbin/rdate -n -s -v -t 15 -r 1 0.pool.ntp.org 1.pool.ntp.org
+.ft R
+.fi
+.PP
+and every hour, which slews a small difference so that the clock never
+runs backwards under
+.BR cron (1M):
+.PP
+.nf
+.ft CW
+/opt/amix/sbin/rdate -n -a -s -v -t 15 -r 1 0.pool.ntp.org 1.pool.ntp.org
+.ft R
+.fi
+.PP
+To look without changing anything:
+.PP
+.nf
+.ft CW
+rdate -n -p pool.ntp.org
+.ft R
+.fi
+.SH SEE ALSO
+.BR ntpsync (1M),
+.BR date (1),
+.BR adjtime (2),
+.BR stime (2)
+.SH NOTES
+Names resolve as the system's resolver does: with DNS off (the default
+of a stock system), only
+.B /etc/hosts
+is read, and a pool name fails at once with
+.BR "host not found" .
+.PP
+The SNTP arithmetic keeps NTP's 64-bit fixed point and takes differences
+modulo 2^64, so a clock up to 68 years wrong (such as one the battery
+clock never set, in 1977) is set correctly, also across NTP's 2036 era
+change.
+The program has no floating point, so it runs on an FPU-less 68LC040 or
+68LC060 without the kernel's emulator.
+.PP
+This kernel's
+.BR adjtime (2)
+slews at about one second per second: to gain, the clock runs about twice
+as fast; to lose, it stands still until the difference is gone, and never
+runs backwards.
+A slew of 20 seconds takes about 20 seconds, during which a lost second
+is a second in which the clock does not move; hourly differences are
+fractions of a second.
+.PP
+A step is not recorded in
+.B /var/adm/wtmp
+as
+.BR date (1)
+records one.

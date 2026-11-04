@@ -1,0 +1,1090 @@
+Every try bounded, several servers, exit codes that name the failure, and
+SNTP without floating point.
+- rdate.c: each try runs under an alarm of -t seconds (default 15), name
+  lookup included, so a dead name server or a silent network cannot hang
+  it; -r retries (default 1); every host given is tried in order.  Exit
+  codes in rdate.h; one stderr line per failed host.  Upstream's -t
+  (maximum round trip, msec) is -d.  -a steps a difference over -b
+  seconds (default 60).  The "adjust local clock by" line names the
+  address and is printed with -v and -p too.  -c (leap seconds from
+  zoneinfo/right/UTC, which Amix lacks) is gone.
+- ntp.c: NTP timestamps stay 64-bit fixed point (32.32 since 1900);
+  offsets are signed differences, right within 68 years and across 2036.
+  Stratum 0 (kiss-o'-death) and leap indicator 3 are refused (code 5).
+  The cookie comes from /dev/urandom (no arc4random here).
+- rfc868time.c: returns a code instead of exiting.
+
+--- /dev/null
++++ b/src/rdate.h
+@@ -0,0 +1,28 @@
++/*
++ * rdate.h -- what rdate.c, ntp.c and rfc868time.c share (Amix port).
++ * Each client returns one of the exit codes below and, on failure, says
++ * why in rdate_err; the address that answered goes to rdate_addr.  rdate.c
++ * bounds each try with an alarm and closes rdate_sock when it fires.
++ */
++#ifndef RDATE_H
++#define RDATE_H
++
++#include <sys/time.h>
++
++#define RD_OK      0	/* set, or printed with -p */
++#define RD_OTHER   1	/* refused, no route, a socket error */
++#define RD_USAGE   2
++#define RD_NOHOST  3	/* the name did not resolve */
++#define RD_TIMEOUT 4	/* no usable answer within -t */
++#define RD_REFUSED 5	/* the server's reply was refused */
++#define RD_DELAY   6	/* the round trip was longer than -d */
++#define RD_SET     7	/* setting the clock failed */
++
++extern char rdate_err[160];
++extern char rdate_addr[64];
++extern int rdate_sock;
++
++int ntp_client(const char *, int, struct timeval *, struct timeval *, int, int, int);
++int rfc868time_client(const char *, int, struct timeval *, struct timeval *, int, int);
++
++#endif
+--- a/src/rdate.c
++++ b/src/rdate.c
+@@ -52,64 +52,123 @@
+ #include <sys/socket.h>
+ #include <sys/time.h>
+ 
++#include <errno.h>
++#include <setjmp.h>
++#include <signal.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <ctype.h>
+-#include <err.h>
+ #include <string.h>
+ #include <unistd.h>
+ #include <time.h>
+ 
+-/* there are systems without libutil; for portability */
++#include "rdate.h"
++
+ #ifdef HAVE_UTIL_H
+ #include <util.h>
+ #else
+ #define logwtmp(a,b,c)
+ #endif
+ 
+-void rfc868time_client (const char *, int, struct timeval *, struct timeval *, int, int, int);
+-void ntp_client (const char *, int, struct timeval *, struct timeval *, int, int, int);
++char rdate_err[160];		/* why the last try failed, for its one line */
++char rdate_addr[64];		/* the address that answered */
++int rdate_sock = -1;		/* the socket of the try in progress */
+ 
+-extern char    *__progname;
++static sigjmp_buf alarm_env;
++
++static void
++on_alarm(int sig)
++{
++    (void) sig;
++    siglongjmp(alarm_env, 1);
++}
+ 
+ void
+ usage(void)
+ {
+-    (void) fprintf(stderr, "Usage: %s [-46acnpsv] [ -b sec ] [-o port] [ -t msec ] host\n", __progname);
++    (void) fprintf(stderr, "Usage: rdate [-46anpsuv] [-t sec] [-r n] [-b sec] [-d msec] [-o port] host ...\n");
+     (void) fprintf(stderr, "  -4: use IPv4 only\n");
+     (void) fprintf(stderr, "  -6: use IPv6 only\n");
+     (void) fprintf(stderr, "  -a: use adjtime instead of instant change\n");
+-    (void) fprintf(stderr, "  -b num: use instant change if difference is greater than\n"
+-                   "          num seconds, or else use adjtime\n");
+-    (void) fprintf(stderr, "  -c: correct leap second count\n");
++    (void) fprintf(stderr, "  -b sec: use instant change if difference is greater than\n"
++                   "          sec seconds, or else use adjtime (default 60 with -a)\n");
++    (void) fprintf(stderr, "  -d msec: does not set clock if network delay greater than msec\n");
+     (void) fprintf(stderr, "  -n: use SNTP instead of RFC868 time protocol\n");
+     (void) fprintf(stderr, "  -o num: override time port with num\n");
+     (void) fprintf(stderr, "  -p: just print, don't set\n");
+-    (void) fprintf(stderr, "  -s: just set, don't print\n");
++    (void) fprintf(stderr, "  -r n: tries after the first for each host (default 1)\n");
++    (void) fprintf(stderr, "  -s: don't print the date\n");
++    (void) fprintf(stderr, "  -t sec: time allowed for each try, the name lookup included (default 15)\n");
+     (void) fprintf(stderr, "  -u: use UDP instead of TCP as transport\n");
+-    (void) fprintf(stderr, "  -t msec: does not set clock if network delay greater than msec\n");
+     (void) fprintf(stderr, "  -v: verbose output\n");
+ }
+ 
++/* one try at one host, bounded by an alarm of tmo seconds */
++static int
++try_host(const char *hname, int ntp, int family, int port, int useudp,
++         int tmo, int verbose, struct timeval *new, struct timeval *adjust)
++{
++    struct sigaction sa, osa;
++    volatile int ret;
++
++    rdate_err[0] = '\0';
++    rdate_addr[0] = '\0';
++    rdate_sock = -1;
++    memset(&sa, 0, sizeof(sa));
++    sa.sa_handler = on_alarm;
++    sigemptyset(&sa.sa_mask);
++    sigaction(SIGALRM, &sa, &osa);
++    if (sigsetjmp(alarm_env, 1) == 0) {
++        alarm(tmo);
++        if (ntp)
++            ret = ntp_client(hname, family, new, adjust, port, verbose, tmo);
++        else
++            ret = rfc868time_client(hname, family, new, adjust, useudp, port);
++        alarm(0);
++    } else {
++        ret = RD_TIMEOUT;
++    }
++    alarm(0);
++    sigaction(SIGALRM, &osa, NULL);
++    if (rdate_sock >= 0) {
++        close(rdate_sock);
++        rdate_sock = -1;
++    }
++    return ret;
++}
++
++/* adjust as "-12.482113": no floating point, so no FPU instruction */
++static void
++format_adjust(char *buf, size_t len, const struct timeval *adj)
++{
++    long s = adj->tv_sec, u = adj->tv_usec;
++
++    if (s < 0 && u > 0)
++        (void) snprintf(buf, len, "-%ld.%06ld", -(s + 1), 1000000L - u);
++    else if (s < 0)
++        (void) snprintf(buf, len, "-%ld.%06ld", -s, u);
++    else
++        (void) snprintf(buf, len, "%ld.%06ld", s, u);
++}
++
+ int
+ main(int argc, char **argv)
+ {
+     int             pr = 0, silent = 0, ntp = 0, verbose = 0;
+-    int		slidetime = 0, corrleaps = 0, useudp = 0;
+-    char           *hname;
++    int		slidetime = 0, useudp = 0;
+     extern int      optind;
+-    int             c;
++    int             c, h, k, ret = RD_OTHER;
+     int		family = PF_UNSPEC;
+     int		port = 0;
++    int		tmo = 15, retries = 1;
+ 
+     struct timeval new, adjust;
+     int		maxdelay = 0;
+     int		netdelay = 0;
+     struct timeval  netdelay1, netdelay2;
+-    struct timezone tz;
+-    int             conditionalslide = 0;
++    int             conditionalslide = -1;
+ 
+-    while ((c = getopt(argc, argv, "46psancvuo:t:b:")) != -1)
++    while ((c = getopt(argc, argv, "46psanvuo:t:r:b:d:")) != -1)
+         switch (c) {
+         case '4':
+             family = PF_INET;
+@@ -135,10 +194,6 @@
+             ntp++;
+             break;
+ 
+-        case 'c':
+-            corrleaps = 1;
+-            break;
+-
+         case 'v':
+             verbose++;
+             break;
+@@ -152,6 +207,14 @@
+             break;
+ 
+         case 't':
++            tmo = atoi(optarg);
++            break;
++
++        case 'r':
++            retries = atoi(optarg);
++            break;
++
++        case 'd':
+             maxdelay = atoi(optarg);
+             break;
+ 
+@@ -161,33 +224,47 @@
+ 
+         default:
+             usage();
+-            return 1;
++            return RD_USAGE;
+         }
+ 
+-    if (argc - 1 != optind) {
++    if (optind >= argc || tmo < 1 || retries < 0 || conditionalslide < -1) {
+         usage();
+-        return 1;
+-    }
+-    hname = argv[optind];
+-
+-    if (maxdelay) {
+-        gettimeofday(&netdelay1, &tz);
++        return RD_USAGE;
+     }
+-    if (ntp)
+-        ntp_client(hname, family, &new, &adjust, corrleaps, port, verbose);
+-    else
+-        rfc868time_client(hname, family, &new, &adjust, corrleaps, useudp, port);
+-
+-    if (maxdelay) {
+-        gettimeofday(&netdelay2, &tz);
+-        netdelay = (netdelay2.tv_sec - netdelay1.tv_sec) * 1000;
+-        netdelay += (netdelay2.tv_usec - netdelay1.tv_usec) / 1000;
+-        if (netdelay > maxdelay) {
+-            fprintf(stderr, "%s: Network delay exceeded (%i msec)\n",
+-                    __progname, netdelay);
+-            exit(2);
++    if (slidetime && conditionalslide < 0)
++        conditionalslide = 60;	/* -a: step a bigger difference */
++    if (conditionalslide < 0)
++        conditionalslide = 0;
++
++    for (h = optind; h < argc; h++) {
++        for (k = 0; k <= retries; k++) {
++            gettimeofday(&netdelay1, NULL);
++            ret = try_host(argv[h], ntp, family, port, useudp, tmo,
++                           verbose, &new, &adjust);
++            gettimeofday(&netdelay2, NULL);
++            if (ret == RD_OK || ret == RD_NOHOST)
++                break;	/* a name that does not resolve is not retried */
++        }
++        if (ret == RD_OK && maxdelay) {
++            netdelay = (netdelay2.tv_sec - netdelay1.tv_sec) * 1000;
++            netdelay += (netdelay2.tv_usec - netdelay1.tv_usec) / 1000;
++            if (netdelay > maxdelay) {
++                (void) snprintf(rdate_err, sizeof rdate_err,
++                                "network delay exceeded (%i msec)", netdelay);
++                ret = RD_DELAY;
++            }
+         }
++        if (ret == RD_OK)
++            break;
++        if (ret == RD_TIMEOUT)
++            (void) fprintf(stderr, "rdate: %s: no usable answer in %d s (%d %s)\n",
++                           argv[h], tmo, k > retries ? retries + 1 : k + 1,
++                           (k > retries ? retries + 1 : k + 1) == 1 ? "try" : "tries");
++        else
++            (void) fprintf(stderr, "rdate: %s: %s\n", argv[h], rdate_err);
+     }
++    if (ret != RD_OK)
++        return ret;
+ 
+     if (!pr) {
+ 
+@@ -202,12 +279,18 @@
+ 
+         if (!slidetime) {
+             logwtmp("|", "date", "");
+-            if (settimeofday(&new, NULL) == -1)
+-                err(1, "Could not set time of day");
++            if (settimeofday(&new, NULL) == -1) {
++                (void) fprintf(stderr, "rdate: could not set the clock: %s\n",
++                               strerror(errno));
++                return RD_SET;
++            }
+             logwtmp("{", "date", "");
+         } else {
+-            if (adjtime(&adjust, NULL) == -1)
+-                err(1, "Could not adjust time of day");
++            if (adjtime(&adjust, NULL) == -1) {
++                (void) fprintf(stderr, "rdate: could not adjust the clock: %s\n",
++                               strerror(errno));
++                return RD_SET;
++            }
+         }
+     }
+ 
+@@ -215,42 +298,37 @@
+         struct tm      *ltm;
+         char		buf[80];
+         time_t		tim = new.tv_sec;
+-        double		adjsec;
+ 
+         ltm = localtime(&tim);
+         (void) strftime(buf, sizeof buf, "%a %b %e %H:%M:%S %Z %Y\n", ltm);
+         (void) fputs(buf, stdout);
++    }
+ 
+-        adjsec  = adjust.tv_sec + adjust.tv_usec / 1.0e6;
+-
+-        if (slidetime || verbose) {
+-            char slidemsg[32];
+-            if (conditionalslide) {
+-                if (slidetime) {
+-                    strcpy(slidemsg," (adjtime)");
+-                } else {
+-                    strcpy(slidemsg," (instant change)");
+-                }
++    if (slidetime || verbose || pr) {
++        char slidemsg[32], adj[48];
++        if (conditionalslide && !pr) {
++            if (slidetime) {
++                strcpy(slidemsg," (adjtime)");
+             } else {
+-                strcpy(slidemsg,"");
++                strcpy(slidemsg," (instant change)");
+             }
+-            if (ntp)
+-                (void) fprintf(stdout,
+-                               "%s: adjust local clock by %.6f seconds%s\n",
+-                               __progname, adjsec, slidemsg);
+-            else
+-                (void) fprintf(stdout,
+-                               "%s: adjust local clock by %ld seconds%s\n",
+-                               __progname, adjust.tv_sec, slidemsg);
+-        }
+-
+-        if (verbose && maxdelay) {
+-            (void) fprintf(stdout,
+-                           "%s: network delay %i msecs\n",
+-                           __progname, netdelay);
++        } else {
++            strcpy(slidemsg,"");
+         }
++        if (ntp)
++            format_adjust(adj, sizeof adj, &adjust);
++        else
++            (void) snprintf(adj, sizeof adj, "%ld", (long) adjust.tv_sec);
++        (void) fprintf(stdout,
++                       "rdate: adjust local clock by %s seconds%s (%s)\n",
++                       adj, slidemsg, rdate_addr);
++    }
+ 
++    if (verbose && maxdelay) {
++        (void) fprintf(stdout,
++                       "rdate: network delay %i msecs\n",
++                       netdelay);
+     }
+ 
+-    return 0;
++    return RD_OK;
+ }
+--- a/src/ntp.c
++++ b/src/ntp.c
+@@ -44,12 +44,9 @@
+ #include <arpa/inet.h>
+ 
+ #include <ctype.h>
+-#include <err.h>
+ #include <errno.h>
+ #include <fcntl.h>
+-#include <float.h>
+ #include <limits.h>
+-#include <math.h>
+ #include <netdb.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -58,19 +55,21 @@
+ #include <time.h>
+ #include <unistd.h>
+ 
+-#include "ntpleaps.h"
+-#include <bsd/stdlib.h>
++#include "rdate.h"
+ 
+ /*
+- * NTP definitions.  Note that these assume 8-bit bytes - sigh.  There
+- * is little point in parameterising everything, as it is neither
+- * feasible nor useful.  It would be very useful if more fields could
+- * be defined as unspecified.  The NTP packet-handling routines
+- * contain a lot of extra assumptions.
++ * NTP timestamps are kept as they travel: 64-bit unsigned fixed point,
++ * seconds since 1900 in the high 32 bits and the fraction in the low 32.
++ * Differences are taken modulo 2^64 and read as signed, which is right
++ * for any two times within 68 years of each other (also across the 2036
++ * era boundary); offsets and errors are signed 32.32.  No floating point:
++ * the program carries no FPU instruction (the Amix port, see README).
+  */
++typedef uint64_t ntp_ts;
++typedef int64_t ntp_diff;
+ 
+-#define JAN_1970   2208988800.0		/* 1970 - 1900 in seconds */
+-#define NTP_SCALE  4294967296.0		/* 2^32, of course! */
++#define JAN_1970   2208988800UL		/* 1970 - 1900 in seconds */
++#define NTP_ONE    ((ntp_diff)1 << 32)	/* one second */
+ 
+ #define NTP_MODE_CLIENT       3		/* NTP client mode */
+ #define NTP_MODE_SERVER       4		/* NTP server mode */
+@@ -78,12 +77,13 @@
+ #define NTP_VERSION_MIN       1		/* The minimum valid version */
+ #define NTP_VERSION_MAX       4		/* The maximum valid version */
+ #define NTP_STRATUM_MAX      14		/* The maximum valid stratum */
+-#define NTP_INSANITY     3600.0		/* Errors beyond this are hopeless */
++#define NTP_INSANITY     (3600 * NTP_ONE)	/* Errors beyond this are hopeless */
+ 
+ #define NTP_PACKET_MIN       48		/* Without authentication */
+ #define NTP_PACKET_MAX       68		/* With authentication (ignored) */
+ 
+ #define NTP_DISP_FIELD        8		/* Offset of dispersion field */
++#define NTP_REFID            12		/* Offset of the reference id */
+ #define NTP_REFERENCE        16		/* Offset of reference timestamp */
+ #define NTP_ORIGINATE        24		/* Offset of originate timestamp */
+ #define NTP_RECEIVE          32		/* Offset of receive timestamp */
+@@ -96,78 +96,77 @@
+ 
+ #define MAX_QUERIES         25
+ #define MAX_DELAY           15
+-
+-#define MILLION_L    1000000l		/* For conversion to/from timeval */
+-#define MILLION_D       1.0e6		/* Must be equal to MILLION_L */
++#define WAIT_USEC   (1000000L * MAX_DELAY / MAX_QUERIES)	/* per reply */
+ 
+ struct ntp_data {
+     u_char		status;
+     u_char		version;
+     u_char		mode;
+     u_char		stratum;
+-    double		receive;
+-    double		transmit;
+-    double		current;
++    u_char		refid[4];
++    ntp_ts		receive;
++    ntp_ts		transmit;
++    ntp_ts		current;
+     uint64_t	recvck;
+ 
+     /* Local State */
+-    double		originate;
++    ntp_ts		originate;
+     uint64_t	xmitck;
+ };
+ 
+-void	ntp_client(const char *, int, struct timeval *, struct timeval *, int, int, int);
+-int	sync_ntp(int, const struct sockaddr *, socklen_t, double *, double *, int);
++int	sync_ntp(int, const struct sockaddr *, socklen_t, ntp_diff *, ntp_diff *, int, int);
+ int	write_packet(int, struct ntp_data *);
+-int	read_packet(int, struct ntp_data *, double *, double *);
++int	read_packet(int, struct ntp_data *, ntp_diff *, ntp_diff *);
+ void	unpack_ntp(struct ntp_data *, u_char *);
+-double	current_time(double);
+-void	create_timeval(double, struct timeval *, struct timeval *);
+-
+-#ifdef DEBUG
+-void	print_packet(const struct ntp_data *);
+-#endif
++ntp_ts	current_time(void);
++void	create_timeval(ntp_diff, struct timeval *, struct timeval *);
+ 
+-int	corrleaps;
++/* the code a refused reply gives; read_packet sets it with rdate_err */
++static int refused;
++/* no usable reply before the deadline: a timeout, not an error */
++static int timedout;
+ 
+-void
++int
+ ntp_client(const char *hostname, int family, struct timeval *new,
+-           struct timeval *adjust, int leapflag, int port, int verbose)
++           struct timeval *adjust, int port, int verbose, int tmo)
+ {
+     struct addrinfo hints, *res0, *res;
+-    double offset, error;
+-    int accept = 0, ret, s, ierror;
++    ntp_diff offset, error;
++    int accept = 0, ret = RD_OTHER, s, ierror;
+ 
+     memset(&hints, 0, sizeof(hints));
+     hints.ai_family = family;
+     hints.ai_socktype = SOCK_DGRAM;
+     ierror = getaddrinfo(hostname, port ? NULL : "ntp", &hints, &res0);
+     if (ierror) {
+-        errx(1, "%s: %s", hostname, gai_strerror(ierror));
+-        /*NOTREACHED*/
++        (void) snprintf(rdate_err, sizeof rdate_err, "%s", gai_strerror(ierror));
++        return (ierror == EAI_NONAME ? RD_NOHOST :
++                ierror == EAI_AGAIN ? RD_TIMEOUT : RD_OTHER);
+     }
+ 
+-    corrleaps = leapflag;
+-    if (corrleaps)
+-        ntpleaps_init();
+-
+     s = -1;
+     for (res = res0; res; res = res->ai_next) {
+         s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+         if (s < 0)
+             continue;
++        rdate_sock = s;
+ 
+         if (port) {
+             ((struct sockaddr_in*)res->ai_addr)->sin_port = htons(port);
+         }
++        if (res->ai_family == AF_INET)
++            (void) snprintf(rdate_addr, sizeof rdate_addr, "%s",
++                            inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr));
+ 
++        refused = 0;
++        timedout = 0;
+         ret = sync_ntp(s, res->ai_addr, res->ai_addrlen, &offset,
+-                       &error, verbose);
++                       &error, verbose, tmo);
++        close(s);
++        rdate_sock = -1;
++        s = -1;
+         if (ret < 0) {
+-#ifdef DEBUG
+-            fprintf(stderr, "try the next address\n");
+-#endif
+-            close(s);
+-            s = -1;
++            ret = refused ? RD_REFUSED : timedout ? RD_TIMEOUT : RD_OTHER;
+             continue;
+         }
+ 
+@@ -176,33 +175,32 @@
+     }
+     freeaddrinfo(res0);
+ 
+-#ifdef DEBUG
+-    fprintf(stderr, "Correction: %.6f +/- %.6f\n", offset, error);
+-#endif
+-
+     if (accept < 1)
+-        errx(1, "Unable to get a reasonable time estimate");
++        return (ret == RD_OK ? RD_OTHER : ret);
+ 
+     create_timeval(offset, new, adjust);
++    return (RD_OK);
+ }
+ 
+ int
+ sync_ntp(int fd, const struct sockaddr *peer, socklen_t addrlen,
+-         double *offset, double *error, int verbose)
++         ntp_diff *offset, ntp_diff *error, int verbose, int tmo)
+ {
+     int attempts = 0, accepts = 0, rejects = 0;
+     int delay = MAX_DELAY, ret;
+-    double deadline;
+-    double a, b, x, y;
+-    double minerr = 0.1;		/* Maximum ignorable variation */
++    ntp_ts deadline;
++    ntp_diff a, b, x, y;
++    ntp_diff minerr = NTP_ONE / 10;	/* Maximum ignorable variation */
+     struct ntp_data data;
+ 
+-    deadline = current_time(JAN_1970) + delay;
+-    *offset = 0.0;
++    if (tmo < delay)
++        delay = tmo;
++    deadline = current_time() + (ntp_ts)delay * NTP_ONE;
++    *offset = 0;
+     *error = NTP_INSANITY;
+ 
+     if (connect(fd, peer, addrlen) < 0) {
+-        warn("Failed to connect to server");
++        (void) snprintf(rdate_err, sizeof rdate_err, "%s", strerror(errno));
+         return (-1);
+     }
+ 
+@@ -213,8 +211,12 @@
+         }
+         memset(&data, 0, sizeof(data));
+ 
+-        if (current_time(JAN_1970) > deadline) {
+-            warnx("Not enough valid responses received in time");
++        if ((ntp_diff)(current_time() - deadline) > 0) {
++            if (accepts > 0)
++                break;
++            timedout = 1;
++            (void) snprintf(rdate_err, sizeof rdate_err,
++                            "no usable answer in %d s", delay);
+             return (-1);
+         }
+ 
+@@ -226,43 +228,31 @@
+         if (ret < 0)
+             return (-1);
+         else if (ret > 0) {
+-#ifdef DEBUG
+-            print_packet(&data);
+-#endif
+-
++            if (refused)
++                return (-1);
+             if (++rejects > MAX_QUERIES) {
+-                warnx("Too many bad or lost packets");
++                (void) snprintf(rdate_err, sizeof rdate_err,
++                                "too many bad or lost packets");
+                 return (-1);
+             } else
+                 continue;
+         } else
+             ++accepts;
+ 
+-#ifdef DEBUG
+-        fprintf(stderr, "Offset: %.6f +/- %.6f\n", x, y);
+-#endif
+-
+-        if ((a = x - *offset) < 0.0)
++        if ((a = x - *offset) < 0)
+             a = -a;
+         if (accepts <= 1)
+-            a = 0.0;
++            a = 0;
+         b = *error + y;
+         if (y < *error) {
+             *offset = x;
+             *error = y;
+         }
+ 
+-#ifdef DEBUG
+-        fprintf(stderr, "Best: %.6f +/- %.6f\n", *offset, *error);
+-#endif
+-
+         if (a > b) {
+-            warnx("Inconsistent times received from NTP server");
+-            return (-1);
+-        }
+-
+-        if ((data.status & STATUS_ALARM) == STATUS_ALARM) {
+-            warnx("Ignoring NTP server with alarm flag set");
++            refused = 1;
++            (void) snprintf(rdate_err, sizeof rdate_err,
++                            "refused: inconsistent times received");
+             return (-1);
+         }
+ 
+@@ -273,6 +263,24 @@
+     return (accepts);
+ }
+ 
++/* a random 64-bit cookie, from /dev/urandom when there is one */
++static uint64_t
++cookie(void)
++{
++    static int fd = -2;
++    static uint64_t mix;
++    uint64_t v = 0;
++    struct timeval tv;
++
++    if (fd == -2)
++        fd = open("/dev/urandom", O_RDONLY);
++    if (fd >= 0 && read(fd, &v, sizeof v) == sizeof v)
++        return (v);
++    gettimeofday(&tv, NULL);
++    mix = mix * 6364136223846793005ULL + 1442695040888963407ULL;
++    return (mix ^ ((uint64_t)tv.tv_sec << 32) ^ (uint64_t)tv.tv_usec ^ (uint64_t)getpid() << 16);
++}
++
+ /* Send out NTP packet. */
+ int
+ write_packet(int fd, struct ntp_data *data)
+@@ -284,7 +292,7 @@
+ 
+     packet[0] = (NTP_VERSION << 3) | (NTP_MODE_CLIENT);
+ 
+-    data->xmitck = (uint64_t)arc4random() << 32 | arc4random();
++    data->xmitck = cookie();
+ 
+     /*
+      * Send out a random 64-bit number as our transmit time.  The NTP
+@@ -302,14 +310,15 @@
+      * the transmit field intelligible.
+      */
+ 
+-    *(uint64_t *)(packet + NTP_TRANSMIT) = data->xmitck;
++    memcpy(packet + NTP_TRANSMIT, &data->xmitck, 8);
+ 
+-    data->originate = current_time(JAN_1970);
++    data->originate = current_time();
+ 
+     length = write(fd, packet, sizeof(packet));
+ 
+     if (length != sizeof(packet)) {
+-        warn("Unable to send NTP packet to server");
++        (void) snprintf(rdate_err, sizeof rdate_err,
++                        "unable to send an NTP packet: %s", strerror(errno));
+         return (-1);
+     }
+ 
+@@ -317,97 +326,91 @@
+ }
+ 
+ /*
+- * Check the packet and work out the offset and optionally the error.
+- * Note that this contains more checking than xntp does. Return 0 for
+- * success, 1 for failure. Note that it must not change its arguments
+- * if it fails.
++ * Check the packet and work out the clock offset and its error bound;
++ * the offset is (T2 - T1 + T3 - T4) / 2, halved before the sum, so that
++ * two offsets of decades do not overflow.  0: accepted; 1: rejected,
++ * keep trying (refused set: refused for good); -1: failed.
+  */
+ int
+-read_packet(int fd, struct ntp_data *data, double *off, double *error)
++read_packet(int fd, struct ntp_data *data, ntp_diff *off, ntp_diff *error)
+ {
+     u_char	receive[NTP_PACKET_MAX];
+     struct	timeval tv;
+-    double	x, y;
+-    int	length, r;
+-    fd_set	*rfds;
+-
+-    rfds = calloc(howmany(fd + 1, NFDBITS), sizeof(fd_mask));
+-    if (rfds == NULL)
+-        err(1, "calloc");
+-
+-    FD_SET(fd, rfds);
++    ntp_diff	x, y;
++    int	length, r, i;
++    fd_set	rfds;
+ 
+ retry:
++    FD_ZERO(&rfds);
++    FD_SET(fd, &rfds);
+     tv.tv_sec = 0;
+-    tv.tv_usec = 1000000 * MAX_DELAY / MAX_QUERIES;
++    tv.tv_usec = WAIT_USEC;
+ 
+-    r = select(fd + 1, rfds, NULL, NULL, &tv);
++    r = select(fd + 1, &rfds, NULL, NULL, &tv);
+ 
+     if (r < 0) {
+         if (errno == EINTR)
+             goto retry;
+-        else
+-            warn("select");
+-
+-        free(rfds);
++        (void) snprintf(rdate_err, sizeof rdate_err, "select: %s", strerror(errno));
+         return (r);
+     }
+ 
+-    if (r != 1 || !FD_ISSET(fd, rfds)) {
+-        free(rfds);
++    if (r != 1 || !FD_ISSET(fd, &rfds))
+         return (1);
+-    }
+-
+-    free(rfds);
+ 
+     length = read(fd, receive, NTP_PACKET_MAX);
+ 
+     if (length < 0) {
+-        warn("Unable to receive NTP packet from server");
++        (void) snprintf(rdate_err, sizeof rdate_err, "%s", strerror(errno));
+         return (-1);
+     }
+ 
+-    if (length < NTP_PACKET_MIN || length > NTP_PACKET_MAX) {
+-        warnx("Invalid NTP packet size, packet rejected");
++    if (length < NTP_PACKET_MIN || length > NTP_PACKET_MAX)
+         return (1);
+-    }
+ 
+     unpack_ntp(data, receive);
+ 
+-    if (data->recvck != data->xmitck) {
+-        warnx("Invalid cookie received, packet rejected");
++    if (data->recvck != data->xmitck)
+         return (1);
+-    }
+ 
+     if (data->version < NTP_VERSION_MIN ||
+-            data->version > NTP_VERSION_MAX) {
+-        warnx("Received NTP version %u, need %u or lower",
+-              data->version, NTP_VERSION);
++            data->version > NTP_VERSION_MAX)
+         return (1);
+-    }
+ 
+-    if (data->mode != NTP_MODE_SERVER) {
+-        warnx("Invalid NTP server mode, packet rejected");
++    if (data->mode != NTP_MODE_SERVER)
+         return (1);
+-    }
+ 
+-    if (data->stratum > NTP_STRATUM_MAX) {
+-        warnx("Invalid stratum received, packet rejected");
++    if (data->stratum == 0) {
++        /* a kiss-o'-death: the reference id is its four-letter code */
++        for (i = 0; i < 4; i++)
++            if (!isprint(data->refid[i]))
++                data->refid[i] = '?';
++        refused = 1;
++        (void) snprintf(rdate_err, sizeof rdate_err,
++                        "refused: stratum 0 (kiss-o'-death %.4s)", (char *)data->refid);
+         return (1);
+     }
+ 
+-    if (data->transmit == 0.0) {
+-        warnx("Server clock invalid, packet rejected");
++    if (data->stratum > NTP_STRATUM_MAX)
++        return (1);
++
++    if ((data->status & STATUS_ALARM) == STATUS_ALARM) {
++        refused = 1;
++        (void) snprintf(rdate_err, sizeof rdate_err,
++                        "refused: server not synchronised (leap indicator 3)");
+         return (1);
+     }
+ 
+-    x = data->receive - data->originate;
+-    y = data->transmit - data->current;
++    if (data->transmit == 0)
++        return (1);
+ 
+-    *off = (x + y) / 2;
++    x = (ntp_diff)(data->receive - data->originate);
++    y = (ntp_diff)(data->transmit - data->current);
++
++    *off = (x >> 1) + (y >> 1);
+     *error = x - y;
+ 
+-    x = (data->current - data->originate) / 2;
++    x = (ntp_diff)(data->current - data->originate) >> 1;
+ 
+     if (x > *error)
+         *error = x;
+@@ -424,52 +427,39 @@
+ unpack_ntp(struct ntp_data *data, u_char *packet)
+ {
+     int i;
+-    double d;
++    ntp_ts d;
+ 
+-    data->current = current_time(JAN_1970);
++    data->current = current_time();
+ 
+     data->status = (packet[0] >> 6);
+     data->version = (packet[0] >> 3) & 0x07;
+     data->mode = packet[0] & 0x07;
+     data->stratum = packet[1];
++    memcpy(data->refid, packet + NTP_REFID, 4);
+ 
+-    for (i = 0, d = 0.0; i < 8; ++i)
+-        d = 256.0*d+packet[NTP_RECEIVE+i];
+-
+-    data->receive = d / NTP_SCALE;
+-
+-    for (i = 0, d = 0.0; i < 8; ++i)
+-        d = 256.0*d+packet[NTP_TRANSMIT+i];
+-
+-    data->transmit = d / NTP_SCALE;
++    for (i = 0, d = 0; i < 8; ++i)
++        d = (d << 8) | packet[NTP_RECEIVE+i];
++    data->receive = d;
++
++    for (i = 0, d = 0; i < 8; ++i)
++        d = (d << 8) | packet[NTP_TRANSMIT+i];
++    data->transmit = d;
+ 
+     /* See write_packet for why this isn't an endian problem. */
+     memcpy(&data->recvck,packet+NTP_ORIGINATE,8);
+ }
+ 
+-/*
+- * Get the current UTC time in seconds since the Epoch plus an offset
+- * (usually the time from the beginning of the century to the Epoch)
+- */
+-double
+-current_time(double offset)
++/* The current UTC time as an NTP timestamp (seconds since 1900, 32.32). */
++ntp_ts
++current_time(void)
+ {
+     struct timeval current;
+-    uint64_t t;
+-
+-    if (gettimeofday(&current, NULL))
+-        err(1, "Could not get local time of day");
+-
+-    /*
+-     * At this point, current has the current TAI time.
+-     * Now subtract leap seconds to set the posix tick.
+-     */
++    uint32_t sec;
+ 
+-    t = SEC_TO_TAI64(current.tv_sec);
+-    if (corrleaps)
+-        ntpleaps_sub(&t);
+-
+-    return (offset + TAI64_TO_SEC(t) + 1.0e-6 * current.tv_usec);
++    gettimeofday(&current, NULL);
++    sec = (uint32_t)current.tv_sec + JAN_1970;	/* wraps in 2036, as NTP's does */
++    return (((ntp_ts)sec << 32) |
++            (((ntp_ts)current.tv_usec << 32) / 1000000));
+ }
+ 
+ /*
+@@ -477,45 +467,23 @@
+  * struct timeval uses an unsigned long for tv_sec.
+  */
+ void
+-create_timeval(double difference, struct timeval *new, struct timeval *adjust)
++create_timeval(ntp_diff difference, struct timeval *new, struct timeval *adjust)
+ {
+     struct timeval old;
+     long n;
+ 
+-    /* Start by converting to timeval format. Note that we have to
+-     * cater for negative, unsigned values. */
+-    if ((n = (long) difference) > difference)
+-        --n;
+-    adjust->tv_sec = n;
+-    adjust->tv_usec = (long) (MILLION_D * (difference-n));
+-    errno = 0;
+-    if (gettimeofday(&old, NULL))
+-        err(1, "Could not get local time of day");
++    /* whole seconds rounded down, so the microseconds are 0..999999 */
++    adjust->tv_sec = (long)(difference >> 32);
++    adjust->tv_usec = (long)(((uint64_t)(difference & 0xffffffffU) * 1000000) >> 32);
++    gettimeofday(&old, NULL);
+     new->tv_sec = old.tv_sec + adjust->tv_sec;
+     new->tv_usec = (n = (long) old.tv_usec + (long) adjust->tv_usec);
+ 
+     if (n < 0) {
+-        new->tv_usec += MILLION_L;
++        new->tv_usec += 1000000L;
+         --new->tv_sec;
+-    } else if (n >= MILLION_L) {
+-        new->tv_usec -= MILLION_L;
++    } else if (n >= 1000000L) {
++        new->tv_usec -= 1000000L;
+         ++new->tv_sec;
+     }
+ }
+-
+-#ifdef DEBUG
+-void
+-print_packet(const struct ntp_data *data)
+-{
+-    printf("status:      %u\n", data->status);
+-    printf("version:     %u\n", data->version);
+-    printf("mode:        %u\n", data->mode);
+-    printf("stratum:     %u\n", data->stratum);
+-    printf("originate:   %f\n", data->originate);
+-    printf("receive:     %f\n", data->receive);
+-    printf("transmit:    %f\n", data->transmit);
+-    printf("current:     %f\n", data->current);
+-    printf("xmitck:      0x%0llX\n", data->xmitck);
+-    printf("recvck:      0x%0llX\n", data->recvck);
+-};
+-#endif
+--- a/src/rfc868time.c
++++ b/src/rfc868time.c
+@@ -47,33 +47,32 @@
+ #include <sys/socket.h>
+ #include <sys/time.h>
+ #include <netinet/in.h>
++#include <arpa/inet.h>
+ 
+ #include <stdio.h>
+ #include <ctype.h>
+-#include <err.h>
++#include <errno.h>
+ #include <stdint.h>
+ #include <string.h>
+ #include <netdb.h>
+ #include <unistd.h>
+ #include <time.h>
+ 
+-/* Obviously it is not just for SNTP clients... */
+-#include "ntpleaps.h"
++#include "rdate.h"
+ 
+ /* seconds from midnight Jan 1900 - 1970 */
+ #define DIFFERENCE 2208988800UL
+ 
+ 
+-void
++int
+ rfc868time_client (const char *hostname, int family, struct timeval *new,
+-                   struct timeval *adjust, int leapflag, int useudp, int port)
++                   struct timeval *adjust, int useudp, int port)
+ {
+     struct addrinfo hints, *res0, *res;
+     struct timeval old;
+     uint32_t tim;	/* RFC 868 states clearly this is an uint32 */
+     int s;
+     int error;
+-    uint64_t td;
+ 
+     memset(&hints, 0, sizeof(hints));
+     hints.ai_family = family;
+@@ -82,8 +81,9 @@
+      * probably not due to the Y2038 issue  -mirabile */
+     error = getaddrinfo(hostname, port ? NULL : "time", &hints, &res0);
+     if (error) {
+-        errx(1, "%s: %s", hostname, gai_strerror(error));
+-        /*NOTREACHED*/
++        (void) snprintf(rdate_err, sizeof rdate_err, "%s", gai_strerror(error));
++        return (error == EAI_NONAME ? RD_NOHOST :
++                error == EAI_AGAIN ? RD_TIMEOUT : RD_OTHER);
+     }
+ 
+     s = -1;
+@@ -91,43 +91,50 @@
+         s = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+         if (s < 0)
+             continue;
++        rdate_sock = s;
+ 
+         if (port) {
+             ((struct sockaddr_in*)res->ai_addr)->sin_port = htons(port);
+         }
+ 
+         if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
++            (void) snprintf(rdate_err, sizeof rdate_err, "%s", strerror(errno));
+             close(s);
++            rdate_sock = -1;
+             s = -1;
+             continue;
+         }
++        if (res->ai_family == AF_INET)
++            (void) snprintf(rdate_addr, sizeof rdate_addr, "%s",
++                            inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr));
+ 
+         break;
+     }
+-    if (s < 0)
+-        err(1, "Could not connect socket");
+     freeaddrinfo(res0);
++    if (s < 0)
++        return (RD_OTHER);
+ 
+     /* UDP requires us to send an empty datagram first */
+     if (useudp)
+         send(s, NULL, 0, 0);
+ 
+-    if (read(s, &tim, sizeof(tim)) != sizeof(tim))
+-        err(1, "Could not read data");
++    if (read(s, &tim, sizeof(tim)) != sizeof(tim)) {
++        (void) snprintf(rdate_err, sizeof rdate_err, "could not read the time");
++        close(s);
++        rdate_sock = -1;
++        return (RD_OTHER);
++    }
+ 
+     (void) close(s);
++    rdate_sock = -1;
+     tim = ntohl(tim) - DIFFERENCE;
+ 
+-    if (gettimeofday(&old, NULL) == -1)
+-        err(1, "Could not get local time of day");
+-
+-    td = SEC_TO_TAI64(old.tv_sec);
+-    if (leapflag)
+-        ntpleaps_sub(&td);
++    gettimeofday(&old, NULL);
+ 
+-    adjust->tv_sec = tim - TAI64_TO_SEC(td);
++    adjust->tv_sec = (long)tim - (long)old.tv_sec;
+     adjust->tv_usec = 0;
+ 
+     new->tv_sec = old.tv_sec + adjust->tv_sec;
+     new->tv_usec = 0;
++    return (RD_OK);
+ }

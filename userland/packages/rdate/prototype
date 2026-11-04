@@ -1,0 +1,29 @@
+#
+# prototype -- rdate (openrdate 1.11).
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  One program, /opt/amix/sbin/rdate; no
+# configuration file, no boot script, no install scripts: the base
+# system's ntpsync decides when it runs and against which servers.  Every
+# basename <= 14 bytes.
+#
+i pkginfo
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/sbin 0755 root sys
+f none /opt/amix/sbin/rdate 0755 root bin
+#
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/rdate 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/rdate 0644 root bin
+#
+# the licences travel with the binary: rdate.c, rfc868time.c, ntp.c and ours
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/rdate 0755 root sys
+f none /opt/amix/doc/rdate/LICENSE 0644 root bin
+f none /opt/amix/doc/rdate/LICENSES 0644 root bin
+f none /opt/amix/doc/rdate/LICENSE.amix 0644 root bin
+f none /opt/amix/doc/rdate/NEWS 0644 root bin
