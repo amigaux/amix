@@ -864,6 +864,9 @@ char *yytext;
  * information: Portions Copyright [yyyy] [name of copyright owner]
  *
  * CDDL HEADER END
+ *
+ * Portions Copyright 2026 Jussi Alanärä.  Amix port changes are marked
+ * "AMIX PORT" at each site and listed in heirloom/AMIX-PORT.md.
  */
 /*
  * Copyright 1995 Sun Microsystems, Inc.  All rights reserved.

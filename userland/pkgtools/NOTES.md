@@ -5,6 +5,10 @@
 The engine is CDDL 1.0, not our own code. The package carried the licence text, and nothing said how to
 get the source, which CDDL 3.1 asks for. `/usr/apkg/doc/SOURCE` and `i copyright` now say it. Text only.
 
+CDDL 3.3 asks each modification to name who made it. Against upstream (aflat/heirloom-pkgtools `bfc8d02`),
+49 changed CDDL files; 6 had no "Portions Copyright" line, nor did the committed scanner libinst/scriptvfy.c
+and the new libpkg/ainfo.c. They all have one now.
+
 ## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this

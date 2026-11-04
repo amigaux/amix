@@ -14,6 +14,8 @@
  * (strcpy) or left the field unterminated (strncpy).  These setters
  * truncate at ATRSIZ, ALWAYS NUL-terminate, and emit a LOUD diagnostic
  * on truncation so a pathological name is never silently accepted.
+ *
+ * Copyright 2026 Jussi Alanärä.  CDDL, as the surrounding tree.
  */
 
 #include <stdio.h>
