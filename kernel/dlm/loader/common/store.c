@@ -83,6 +83,8 @@ ax_hdr_parse(const ax_u32 *crctab, const ax_u8 buf[512], struct ax_header *h)
 	return AX_OK;
 }
 
+#ifndef AX_LOADER	/* boot1's rule and the tools' writers: the loader build (boot2,
+			 * amix-cdboot) never writes a header or the tally */
 void
 ax_hdr_write(const ax_u32 *crctab, const struct ax_header *h, ax_u8 buf[512])
 {
@@ -113,6 +115,8 @@ ax_hdr_write(const ax_u32 *crctab, const struct ax_header *h, ax_u8 buf[512])
 	AX_PUT32(buf + 508, ax_crc32(crctab, buf, 508));
 }
 
+#endif
+
 int
 ax_hdr_pick(const ax_u32 *crctab, const ax_u8 a[512], const ax_u8 b[512],
 	    struct ax_header *h)
@@ -132,6 +136,7 @@ ax_hdr_pick(const ax_u32 *crctab, const ax_u8 a[512], const ax_u8 b[512],
 	return AX_ENONE;
 }
 
+#ifndef AX_LOADER
 int
 ax_tally_parse(const ax_u32 *crctab, const ax_u8 buf[2048], struct ax_tally *t)
 {
@@ -154,6 +159,8 @@ ax_tally_write(const ax_u32 *crctab, const struct ax_tally *t, ax_u8 buf[2048])
 	AX_PUT32(buf + 8, t->attempts);
 	AX_PUT32(buf + 2044, ax_crc32(crctab, buf, 2044));
 }
+
+#endif
 
 int
 ax_ctl_parse(const ax_u32 *crctab, const ax_u8 buf[2048], struct ax_ctl *c)
@@ -253,6 +260,7 @@ ax_ctl_pick(const ax_u32 *crctab, const ax_u8 a[2048], const ax_u8 b[2048],
 	return AX_ENONE;
 }
 
+#ifndef AX_LOADER
 int
 ax_ldrtrial_choice(const struct ax_header *h, int tally_valid,
 		   const struct ax_tally *t, int *write_tally)
@@ -265,3 +273,4 @@ ax_ldrtrial_choice(const struct ax_header *h, int tally_valid,
 	*write_tally = 1;
 	return 0;
 }
+#endif
