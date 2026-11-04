@@ -99,7 +99,11 @@ goes on trying.
 .BI /var/inet/dhcpc/ interface .lease
 the lease held, in the hook's
 .B DHCP_
-names.
+names;
+.B DHCP_NTP
+holds the time servers the server named (option 42), which
+.BR ntpsync (1M)
+asks first.
 .TP
 .BI /var/inet/dhcpc/ interface .pid
 the background
@@ -114,6 +118,7 @@ did.
 where the interface's device is found.
 .SH SEE ALSO
 .BR ifup (1M),
+.BR ntpsync (1M),
 .BR interfaces (4)
 .SH NOTES
 .B dhcpc

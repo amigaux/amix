@@ -1,0 +1,35 @@
+#!/bin/sh
+# ntp -- set the clock from time servers at boot: /etc/init.d/ntp, run as
+# /etc/rc2.d/S77ntp.
+#
+# start: root's crontab gets the hourly ntpsync line, or loses it, as
+# rc.conf's ntp says (default yes); then, when on, "ntpsync -b" in the
+# background, bounded, its output in /var/adm/rclog/ntp. It waits there for
+# the network ifup brings up (S69inet, in the background too), so the boot
+# never waits for it. S77 sorts after cron's S75, so crontab tells the
+# running cron.
+# stop: nothing; the battery clock was set at the last sync.
+#
+# Page ntpsync(1M).
+#
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
+
+NTPSYNC=${NTPSYNC:-/usr/sbin/ntpsync}
+
+case "$1" in
+start)
+	. ${RC_SUBR:-/usr/lib/amix/rc.subr}
+	[ -x "$NTPSYNC" ] || exit 0
+	"$NTPSYNC" -i
+	rc_enabled ntp yes || exit 0
+	rc_bg `"$NTPSYNC" -l` ntp "$NTPSYNC" -b
+	;;
+stop)
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0

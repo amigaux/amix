@@ -131,6 +131,14 @@ same "no timer sleep left" "0" "$(ps -eo args | grep -c '^sleep 247$')"
 expect "brief finished" "brief: finished, status 0" "$(cat "$T/rc.log")"
 expect "instant finished" "instant: finished, status 0" "$(cat "$T/rc.log")"
 same "no pid file left after them" "" "$(ls "$T/run")"
+# a hangup (the login that ran the boot script ended) does not stop the run
+: > "$T/rc.log"
+R "$B; rc_bg 10 hup sh -c 'echo \$\$ > $T/hup.pid; sleep 2; echo alive'" > /dev/null
+n=0; while [ ! -s "$T/hup.pid" ] && [ $n -lt 20 ]; do sleep 0.2; n=$((n + 1)); done
+kill -HUP "$(cat "$T/hup.pid")" 2>/dev/null
+sleep 3
+expect "hangup: the command lives on" "alive" "$(cat "$T/rclog/hup" 2>/dev/null)"
+expect "hangup: finished, status 0" "hup: finished, status 0" "$(cat "$T/rc.log")"
 # a log directory rc_bg makes, then finds there (the stock mkdir -p fails on it)
 D="RC_BGLOG=$T/rclog2 RC_GRACE=1 RC_RUN=$T/run"
 R "$D; rc_bg 5 first echo one" > /dev/null

@@ -1,0 +1,279 @@
+#!/bin/sh
+# ntpsync -- set the clock from time servers (SNTP, through rdate), then the
+# battery clock from it.
+#
+#   ntpsync        once, now: the clock stepped; the outcome said and logged
+#   ntpsync -b     the boot run (/etc/init.d/ntp, in the background): wait
+#                  for the network, then the same
+#   ntpsync -c     the hourly run from root's crontab: a small offset slewed,
+#                  logged only when the outcome changes
+#   ntpsync -n     say what would be done, and the last outcome
+#   ntpsync -i     put the hourly line in root's crontab, or take it out, as
+#                  rc.conf's ntp says (the boot step runs it)
+#   ntpsync -l     the boot run's bound in seconds (for the boot step)
+#
+# The servers: those DHCP named (option 42, DHCP_NTP in the leases dhcpc
+# holds now; the primary interface's first), then rc.conf's ntp_servers,
+# each once.
+# One rdate run asks them in turn, each bounded by ntp_timeout seconds with
+# ntp_retries retries, and the first good answer sets the clock. Nothing
+# stays in memory between runs. The network is there when ifup has given an
+# interface its address (/var/inet/ifup.primary). The battery clock is set
+# with setclk -s at the start of a minute, as setclk writes whole minutes,
+# and never with the stock setclk, which writes the wrong year after 1999.
+#
+# Installed as /usr/sbin/ntpsync. Exit 0 when the clock was set (and for -b
+# and -c with ntp off), 1 otherwise. Page ntpsync(1M).
+#
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+. "$RC_SUBR"
+NTP_RDATE=${NTP_RDATE:-/opt/amix/sbin/rdate}
+NTP_SETCLK=${NTP_SETCLK:-/usr/amiga/bin/setclk}
+NTP_CRONTAB=${NTP_CRONTAB:-/usr/bin/crontab}
+NTP_STATE=${NTP_STATE:-/var/inet/ntp.state}
+NTP_LOCK=${NTP_LOCK:-$RC_RUN/ntpsync.lock}
+NTP_CMD=${NTP_CMD:-/usr/sbin/ntpsync}
+IF_STATE=${IF_STATE:-/var/inet}
+IF_LEASES=${IF_LEASES:-/var/inet/dhcpc}
+NTP_DHCPC=${NTP_DHCPC:-/usr/sbin/dhcpc}
+# the stock setclk (sum, bytes): its -s writes 2012 for 2026
+NTP_STOCKCLK="60596 7120"
+NTP_POOL="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org"
+
+mode=now
+case "$1" in
+-b) mode=boot ;;
+-c) mode=cron ;;
+-n) mode=dry ;;
+-i) mode=cron-line ;;
+-l) mode=bound ;;
+"") ;;
+*)
+	echo "usage: ntpsync [-b | -c | -n | -i | -l]" >&2
+	exit 1
+	;;
+esac
+
+# num <value> <default>: the value when it is a whole number, else the default
+num() {
+	if expr "$1" : '[0-9][0-9]*$' > /dev/null 2>&1
+	then
+		echo "$1"
+	else
+		echo "$2"
+	fi
+}
+timeout=`num "\`rc_conf ntp timeout 15\`" 15`
+retries=`num "\`rc_conf ntp retries 1\`" 1`
+wait=`num "\`rc_conf ntp wait 120\`" 120`
+conf=`rc_conf ntp servers "$NTP_POOL"`
+
+# servers: DHCP's (the primary interface's lease first; only a lease dhcpc
+# holds now, not one a daemon that ended left behind), then rc.conf's, each
+# once; dhcp: how many came from DHCP
+servers=
+dhcp=0
+add() {
+	for s
+	do
+		case " $servers " in
+		*" $s "*) ;;
+		*) servers=`echo $servers $s` ;;
+		esac
+	done
+}
+pick() {
+	servers=
+	dhcp=0
+	p=`cat "$IF_STATE/ifup.primary" 2>/dev/null`
+	for i in $p `ls "$IF_LEASES" 2>/dev/null | sed -n 's/\.lease$//p'`
+	do
+		[ -x "$NTP_DHCPC" ] || break
+		"$NTP_DHCPC" -q "$i" > /dev/null 2>&1 &&
+			add `sed -n 's/^DHCP_NTP=//p' "$IF_LEASES/$i.lease" 2>/dev/null`
+	done
+	dhcp=`echo $servers | wc -w | tr -d ' '`
+	add $conf
+}
+
+# say <message>: the outcome, in the log (the hourly run only when it
+# changed) and on the terminal for a run by hand; NTP_STATE keeps the last
+_say() {
+	w=$1
+	shift
+	last=`sed -n 's/ .*//p' "$NTP_STATE" 2>/dev/null`
+	echo "$w `date '+%Y-%m-%d %H:%M:%S'` $*" > "$NTP_STATE" 2>/dev/null
+	if [ $mode != cron ] || [ "$w" != "$last" ]
+	then
+		rc_log ntp "$*"
+	fi
+	[ $mode = now ] && echo "ntpsync: $*"
+}
+
+# clock: set the battery clock from the system's; says how in $clock
+clock() {
+	if [ ! -x "$NTP_SETCLK" ]
+	then
+		clock="battery clock not set: no $NTP_SETCLK"
+		return
+	fi
+	c=`sum "$NTP_SETCLK" 2>/dev/null | sed 's/[ 	].*//'`
+	c="$c `wc -c < "$NTP_SETCLK" | tr -d ' '`"
+	if [ "$c" = "$NTP_STOCKCLK" ]
+	then
+		clock="battery clock not set: $NTP_SETCLK is the stock one, which writes the wrong year"
+		return
+	fi
+	# setclk writes whole minutes: at the start of the next one
+	s=`date +%S`
+	s=`expr $s + 0`
+	[ $s -gt 0 ] && sleep `expr 60 - $s`
+	if "$NTP_SETCLK" -s > /dev/null 2>&1
+	then
+		clock="battery clock set"
+	else
+		clock="battery clock not set: setclk -s failed"
+	fi
+}
+
+# the hourly line of root's crontab, as rc.conf's ntp says
+cron_line() {
+	t=$RC_RUN/ntpsync.$$
+	"$NTP_CRONTAB" -l 2> /dev/null | awk '{ print }' > "$t"
+	n=`grep -c "$NTP_CMD -c" "$t"`
+	if rc_enabled ntp yes
+	then
+		if [ "$n" -eq 0 ]
+		then
+			# a minute of its own, so boxes do not ask at the same time
+			set -- `(dd if=/dev/urandom bs=8 count=1 2>/dev/null; date; uname -n) | sum`
+			m=`expr $1 % 58 + 1`
+			echo "$m * * * * [ -x $NTP_CMD ] && $NTP_CMD -c > /dev/null 2>&1" >> "$t"
+			"$NTP_CRONTAB" "$t" > /dev/null 2>&1 &&
+				rc_log ntp "hourly run put in root's crontab, at minute $m"
+		fi
+	elif [ "$n" -gt 0 ]
+	then
+		grep -v "$NTP_CMD -c" "$t" > "$t.new"
+		"$NTP_CRONTAB" "$t.new" > /dev/null 2>&1 &&
+			rc_log ntp "ntp=no: hourly run taken out of root's crontab"
+	fi
+	rm -f "${t:?}" "${t:?}.new"
+}
+
+case $mode in
+cron-line)
+	cron_line
+	exit 0
+	;;
+bound)
+	# the wait, each server's tries (three from DHCP at most), the minute
+	# for the battery clock, and room
+	n=`echo $conf | wc -w | tr -d ' '`
+	expr $wait + \( $n + 3 \) \* \( \( $retries + 1 \) \* $timeout + 2 \) + 90
+	exit 0
+	;;
+dry)
+	pick
+	if rc_enabled ntp yes
+	then
+		echo "ntp=yes: at boot and hourly"
+	else
+		echo "ntp=no: no boot or hourly run"
+	fi
+	if [ -n "$servers" ]
+	then
+		echo "servers, in turn: $servers ($dhcp from DHCP)"
+	else
+		echo "servers: none"
+	fi
+	if [ -x "$NTP_RDATE" ]
+	then
+		echo "would run: $NTP_RDATE -n -s -v -t $timeout -r $retries $servers"
+	else
+		echo "no $NTP_RDATE: nothing would be run"
+	fi
+	[ -s "$IF_STATE/ifup.primary" ] || echo "no network now: no interface has its address"
+	m=`"$NTP_CRONTAB" -l 2> /dev/null | grep "$NTP_CMD -c" | sed 's/ .*//'`
+	[ -n "$m" ] && echo "hourly at minute $m (root's crontab)"
+	[ -s "$NTP_STATE" ] && echo "last: `cat "$NTP_STATE"`"
+	exit 0
+	;;
+boot|cron)
+	rc_enabled ntp yes || exit 0
+	;;
+esac
+
+# one run at a time; a lock left by a run that died is taken over
+if mkdir "$NTP_LOCK" 2> /dev/null
+then
+	:
+else
+	p=`cat "$NTP_LOCK/pid" 2>/dev/null`
+	if [ -n "$p" ] && kill -0 "$p" 2> /dev/null
+	then
+		[ $mode = cron ] && exit 0
+		echo "ntpsync: another run is going (pid $p)" >&2
+		exit 1
+	fi
+	rm -rf "${NTP_LOCK:?}"
+	mkdir "$NTP_LOCK" 2> /dev/null || exit 1
+fi
+echo $$ > "$NTP_LOCK/pid"
+# finish <status>: the lock removed, then exit. Not an EXIT trap: this sh
+# exits with the trap's last status, not the one exit was given.
+finish() {
+	rm -rf "${NTP_LOCK:?}"
+	exit $1
+}
+trap 'finish 1' 1 2 15
+
+if [ ! -x "$NTP_RDATE" ]
+then
+	_say fail "no $NTP_RDATE; not synced"
+	finish 1
+fi
+
+# the boot run waits for ifup, which runs in the background too
+if [ $mode = boot ]
+then
+	n=0
+	while [ ! -s "$IF_STATE/ifup.primary" ] && [ $n -lt $wait ]
+	do
+		sleep 5
+		n=`expr $n + 5`
+	done
+fi
+if [ ! -s "$IF_STATE/ifup.primary" ]
+then
+	_say fail "no network (no interface has its address); not synced"
+	finish 1
+fi
+
+pick
+if [ -z "$servers" ]
+then
+	_say fail "no time server named (ntp_servers is empty, DHCP gave none)"
+	finish 1
+fi
+slew=
+[ $mode = cron ] && slew=-a
+"$NTP_RDATE" -n -s -v $slew -t $timeout -r $retries $servers > "$NTP_LOCK/out" 2> "$NTP_LOCK/err"
+r=$?
+# each server that failed, for the boot run's file and a run by hand
+[ $mode = cron ] || cat "$NTP_LOCK/err" >&2
+if [ $r -ne 0 ]
+then
+	n=`echo $servers | wc -w | tr -d ' '`
+	_say fail "no time server answered ($n tried, rdate status $r)"
+	finish 1
+fi
+# "rdate: adjust local clock by <x> seconds [(adjtime)] (<address>)"
+set -- `sed -n 's/^rdate: adjust local clock by \([^ ]*\) seconds.*(\([^()]*\))$/\1 \2/p' "$NTP_LOCK/out" | sed -n 1p`
+o=`echo "${1:-?}" | sed 's/\(\.[0-9][0-9][0-9]\)[0-9]*$/\1/'`
+clock
+_say ok "synced from ${2:-?}, offset $o s; $clock"
+finish 0

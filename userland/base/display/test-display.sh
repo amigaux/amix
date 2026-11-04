@@ -234,6 +234,14 @@ printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\nenv SCREEN_GROUP=
 o=$(run card=r6env)
 expect "once: through the env wrapper too" "/tmp/xstart." "$(cat "$T/calls")"
 expect "once: the wrapper's line ends with it" " :0 -terminate" "$(cat "$T/calls")"
+# the wrapper cannot be written (XSTART_TMP a file): said, status 1, no
+# session (the box's sh would lose the status to an EXIT trap)
+mv "$T/tmp" "$T/tmp.d"; : > "$T/tmp"
+o=$(run card=r6env)
+expect "no wrapper: said" "cannot write $T/tmp/xstart." "$o"
+expect "no wrapper: status 1" "rc=1" "$o"
+same "no wrapper: no session" "" "$(cat "$T/calls")"
+rm -f "${T:?}/tmp"; mv "$T/tmp.d" "$T/tmp"
 rm -f "${T:?}/d/r6env"
 same "native card file: once -once" "-once" "$(sh -c ". '$here/display.subr'; disp_val '$here/display.d/native' once")"
 

@@ -4,9 +4,10 @@
 #   dhcpc-hook <if> BOUND|RENEW|REBIND|EXPIRE|RELEASE
 #
 # Called by dhcpc only, with the lease in DHCP_ADDR, DHCP_MASK, DHCP_ROUTER,
-# DHCP_DNS, DHCP_HOSTNAME, DHCP_SERVER, DHCP_LEASE, DHCP_T1, DHCP_T2 and
-# DHCP_OLD_ADDR (the contract: userland/base/docs/package-split.md). dhcpc
-# itself never edits a system file.
+# DHCP_DNS, DHCP_HOSTNAME, DHCP_SERVER, DHCP_NTP, DHCP_LEASE, DHCP_T1,
+# DHCP_T2 and DHCP_OLD_ADDR (the contract: userland/base/docs/package-split.md).
+# dhcpc itself never edits a system file. DHCP_NTP is not applied here:
+# ntpsync reads it from the lease file.
 #
 #   BOUND           address, mask, route, host name, hosts line, DNS
 #   RENEW, REBIND   the same when the address changed; else DNS and route

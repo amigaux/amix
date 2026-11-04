@@ -9,6 +9,12 @@
 # behind [ -d <dir> ] || for the same <dir>, one directory a call. A line
 # that is meant to differ carries the marker "# lint: mkdir-p".
 #
+# trap ... 0: the stock sh exits with an EXIT trap's last status, not the
+# one exit was given (exit 3 under trap "true" 0 gives 0), and the trap sees
+# $? as 0, so a script that cleans up in one loses every failing status.
+# Clean up in a function that ends with exit $1 instead. The marker for a
+# line that is meant to differ: "# lint: trap-0".
+#
 # MIT licence, see LICENSE at the top of the repository.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -65,6 +71,14 @@ lint_mkdir() {
 	}' "$1"
 }
 
+# lint_trap <file>: "<file>:<line>: <text>" for each EXIT trap
+lint_trap() {
+	$AWK -v f="$1" '
+	/^[ \t]*#/ { next }
+	index($0, "# lint: trap-0") { next }
+	/(^|[;&|])[ \t]*trap[ \t].*[ \t](0|EXIT)([ \t]|$)/ { print f ":" NR ": " $0 }' "$1"
+}
+
 # --- the rule itself, on lines made for it
 cat > "$T/sample" <<'EOF'
 [ -d "$d" ] || mkdir -p "$d"
@@ -83,6 +97,20 @@ $T/sample:6: [ -d \"\$a\" ] || mkdir -p \"\$b\"
 $T/sample:7: [ -d \"\$a\" ] || mkdir -p \"\$a\" \"\$b\"
 $T/sample:9: x=1; mkdir -p /var/x; y=2" "$o"
 
+cat > "$T/traps" <<'EOF'
+trap 'rm -f "$t"' 0
+	trap finish 0 1 2
+trap 'finish 1' 1 2 15
+trap '' 1
+x=1; trap "echo bye" EXIT
+trap 'rm -f "$t"' 0   # lint: trap-0 (nothing fails after it)
+# trap 'x' 0 in a comment
+EOF
+o=$(lint_trap "$T/traps")
+same "rule: the EXIT traps flagged" "$T/traps:1: trap 'rm -f \"\$t\"' 0
+$T/traps:2: 	trap finish 0 1 2
+$T/traps:5: x=1; trap \"echo bye\" EXIT" "$o"
+
 # --- the shipped set: the box's scripts are in it, the man pages are not
 s=$(shipped)
 for f in net/ifup net/ifdown net/ifup.subr net/inetinit net/dhcpc-hook rc/rc.subr \
@@ -99,6 +127,8 @@ do
 	n=$((n + 1))
 	o=$(lint_mkdir "$here/$f")
 	same "mkdir -p behind [ -d ]: $f" "" "$o"
+	o=$(lint_trap "$here/$f")
+	same "no EXIT trap: $f" "" "$o"
 done
 [ "$n" -ge 12 ] && ok || bad "only $n shipped files found"
 
