@@ -1,5 +1,10 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-04 — APKGENG 1.12.8: the package says where its source is
+
+The engine is CDDL 1.0, not our own code. The package carried the licence text, and nothing said how to
+get the source, which CDDL 3.1 asks for. `/usr/apkg/doc/SOURCE` and `i copyright` now say it. Text only.
+
 ## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this

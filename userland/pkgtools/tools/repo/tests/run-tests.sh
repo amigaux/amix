@@ -2678,6 +2678,8 @@ if [ -x "$HB/pkgmk" ] && [ -f "$HERE/../../../heirloom/build-amix/bin/pkgadd" ] 
     S31="$WORK/t31"; mkdir -p "$S31"
     bash "$BP" --eng "$S31/stg" >"$WORK/t31.eng" 2>&1
     check "build-packages.sh --eng mints into a scratch staging root" test $? -eq 0
+    check "the minted APKGENG says where its source is, as a file and as its notice" \
+        bash -c "f=\$(ls '$S31'/stg/*/APKGENG-*.pkg | head -1); grep -aq '/usr/apkg/doc/SOURCE' \"\$f\" && grep -aq '1 i copyright' \"\$f\" && grep -aq 'github.com/amigaux/amix' \"\$f\""
     check "the minted APKGENG pkginfo says APKG_ESSENTIAL=yes" \
         grep -aqx 'APKG_ESSENTIAL=yes' "$(ls "$S31"/stg/*/APKGENG-*.pkg 2>/dev/null | head -1)"
 else

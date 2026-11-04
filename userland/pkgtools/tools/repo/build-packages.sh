@@ -125,14 +125,17 @@ VER_APKG="0.3.10"
 # 1.12.7 (2026-11-04; minted 2026-11-04, md5 c200b28b...) -- pkginstall prints no notice by default; -S stays
 # accepted.  The notice is still saved.  copyright(5) says so.  1.12.6
 # (c1d4831a...) stays what it is.
-VER_ENG="1.12.7"
+# 1.12.8 (2026-11-04) -- /usr/apkg/doc/SOURCE and i copyright say where the
+# source is and which licence covers it, as CDDL 3.1 asks.  Text only: every
+# program is 1.12.7's.  1.12.7 (c200b28b...) stays what it is.
+VER_ENG="1.12.8"
 # EPOCH_APKG, EPOCH_ENG: each version's own epoch: every
 # time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
-# 2026-11-04 00:00:00 UTC, the day 1.12.7 was set (1.12.6's was 1793577600,
+# 2026-11-04 00:00:00 UTC, the day 1.12.8 was set, as 1.12.7 was (1.12.6's was 1793577600,
 # 1.12.5's 1793318400); EPOCH_APKG: 2026-11-04
 # 00:00:00 UTC, the day 0.3.10 was set, as 0.3.7 to 0.3.9 were (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
@@ -648,6 +651,7 @@ APKG_ESSENTIAL=yes
 EOF
   {
     echo "i pkginfo"
+    echo "i copyright=$REPO/heirloom/LICENSE/SOURCE"
     echo "d none /usr/apkg 0755 root sys"
     echo "d none /usr/apkg/bin 0755 root sys"
     for t in pkginfo pkgparam pkgtrans pkgadd pkgrm installf pkgchk pkgmk pkgproto; do
@@ -662,6 +666,7 @@ EOF
     echo "f none /usr/apkg/sadm/install/bin/pkginstall=$B/sadm-helpers/pkginstall 0755 root sys"
     echo "f none /usr/apkg/sadm/install/bin/pkgremove=$B/sadm-helpers/pkgremove 0755 root sys"
     echo "d none /usr/apkg/doc 0755 root sys"
+    echo "f none /usr/apkg/doc/SOURCE=$REPO/heirloom/LICENSE/SOURCE 0644 root sys"
     echo "f none /usr/apkg/doc/OPENSOLARIS.LICENSE=$REPO/heirloom/LICENSE/OPENSOLARIS.LICENSE 0644 root sys"
     echo "f none /usr/apkg/doc/CALDERA.LICENSE=$REPO/heirloom/LICENSE/CALDERA.LICENSE 0644 root sys"
     # compat/fnmatch (BSD-3: binaries carry the notice) and compat/snprintf;

@@ -1,0 +1,9 @@
+APKGENG: the Heirloom Packaging Tools (the OpenSolaris SVR4 package tools),
+ported to Amiga UNIX.
+
+Licence: CDDL 1.0, in /usr/apkg/doc/OPENSOLARIS.LICENSE, with the notices of
+other parts beside it (CALDERA.LICENSE, FNMATCH.LIC, SNPRINTF.LIC).
+
+Source, with the Amiga UNIX changes: https://github.com/amigaux/amix,
+in userland/pkgtools/heirloom.
+Upstream: http://heirloom.sourceforge.net/pkgtools.html
