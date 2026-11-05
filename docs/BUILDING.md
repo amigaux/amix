@@ -25,9 +25,9 @@ make dist  SYSTEM=../amix-system
 ```
 
 Every step runs in the build container, as you, with this checkout at `/src`
-and the system input read-only at `/system`. The fixed path is what makes the
-period compiler (gcc 2.7.2.3, which cannot remap paths) build the same bytes
-on every machine. The image carries the toolchain pins it was built from, and
+and the system input read-only at `/system`. The fixed path keeps the period
+compiler (gcc 2.7.2.3, which cannot remap paths) from building a checkout's
+own location into its bytes. The image carries the toolchain pins it was built from, and
 make dist stops before any step if they are not this checkout's
 (`toolchain/check-image`): after a pin changes, run `make tools` again.
 `AMIX_IMAGE` names another image, and `CONTAINER=podman` uses podman. `DIST_HOST=1` runs the steps on your host instead, with the
@@ -114,6 +114,26 @@ did, and on which machine. `ELSEWHERE=<empty directory on another filesystem>`
 puts the second clone there, which also compares the order directories list in;
 without it the summary says that order was not compared. CI runs it by hand as
 the dist workflow (`docs/ci.md`).
+
+What this has shown so far, all on 2026-11-05, as public rebuilds:
+
+- At commit 82e1740, run 42059378055: one CI runner of one CPU type (AMD EPYC
+  9V45, 4 CPUs), the toolchain image from its cache, the second clone on a
+  filesystem of its own. Both clones built every step but `media`, and their locks
+  are the same 245 lines. A rebuild at that commit on a local machine (Intel
+  i9-13980HX, 32 CPUs) gives that lock byte for byte.
+- At commit fb95904, run 42042522114: a toolchain image built cold, shown once, on
+  one CI runner of another CPU type (AMD EPYC 7763, 4 CPUs). The first clone's lock
+  is byte for byte a rebuild's at that commit on the same local machine. The second
+  clone lost a stock package's download, so its release step was not compared.
+- That cold image and the cached one differ in five files: four logs of the image
+  build and the ldconfig cache. The local image's file contents differ from the cold
+  image's in the same five only; some of its file modes and empty directories differ
+  too, and no lock line shows them.
+
+Each run is one runner, so this is two CI CPU models each agreeing with one local
+machine, each at its own commit, and says nothing about any other machine. `media` is not in it, nor a tree with older
+versions. Another commit needs a proof of its own.
 
 ## out/
 
