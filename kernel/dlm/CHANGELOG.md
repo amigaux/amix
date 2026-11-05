@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-06 — kbootset 1.1.0.261105-43: a loader trial survives its failures (4629b30, 6862f1f)
+
+A retry keeps the loader that last booted; mark-good accepts a new loader only after it completes a boot and is still whole; a read error stops an install; an install with neither loader whole goes ahead without a fallback. Each store write is fsynced, and on Gayle IDE the drive cache flushed, before the next. New: kbootset flush CARD UNIT. The refusal of a misplaced `safe` mark calls it the administrator's, and the package description no longer names a commit. Box binary a94fd8d4.
+
+## 2026-11-06 — boot2 says when a memory limit takes memory; k46 capped at 128 MiB; loader-amix 1.0.261105-16 (b1f3838, 3928135, 8704b52)
+
+One console line from core_boot, on boot2 and amix-cdboot: "k30 kernel: using 64 MiB of the 128 MiB here", none at or below the limit. A k46 kernel's bind region is at most 128 MiB, where its segmap window reaches kvsegu; a bank touching it is left as it is, as the k46 kernel does not use it. boot2 bbcc4376, image + bss 28524 of 28672; loader version 3. loader-amix's recipe builds amix-cdboot at the loader's pin, beside the package (27936 B, 5e9de648), and refuses other bytes. The package description no longer names a commit.
+
+## 2026-11-06 — modtools 1.0.261105-15; the kit records commits in eight digits (8704b52, 7a4d6c0)
+
+modtools: the package description no longer names a commit; pin 569ddc8 and modadmin fd8e8a20 as -14. KIT_REV, MONSW_REV and PORT_REV come from the full hash, so the lock's kit lines no longer differ by clone.
+
 ## 2026-11-05 — kbootset 1.1.0.261104-39: a default verb, plainer words after an upgrade, old generations cleaned up (515c516, 3b2e7e7, e6dd2ac, f9929fd)
 
 `kbootset default ID` makes a good or pristine generation the default. rollback's line names the way back and build says when a good generation holds its members; check names the generation holding the installed kernel; commit, status and check name a loader in `/stand/loader` the store does not hold. A brel generation keeps its own `unix.sym` for a boot after a rollback, and status tells a namelist lacking a loaded module from another kernel's. The directories of generations gone from the store are removed, about 181 KB plus modules each on a k30 root; the booted generation keeps its own until the next boot. Box binary c3c59269, 179080 bytes. The floor stays 1.1.0.261103-37.
