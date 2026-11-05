@@ -2,7 +2,7 @@
 NAME=vim
 PKG=vim
 VERSION=9.1.0000
-PKGREV=2   # -2: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=3   # -3: out of memory, no file written with "???" lines; errors under -es; 'maxmem' from the limit
 SUMMARY="Vim 9.1 - the editor, terminal only"
 DESC="Vim 9.1.0000 with the normal feature set, terminal only (no GUI, no X), linked statically against ncurses 6.6, with its runtime (syntax, filetype plugins, help) in /opt/amix/share/vim, vimtutor and xxd. Installs /opt/amix/bin/vim with ex, view, vimdiff, rvim and rview; the stock vi is untouched. Needs a UFS file system (runtime names over 14 bytes)."
 CATEGORY=editor
