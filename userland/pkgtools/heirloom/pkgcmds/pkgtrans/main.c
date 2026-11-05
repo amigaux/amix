@@ -134,7 +134,8 @@ main(int argc, char *argv[])
 	func = signal(SIGINT, trap);
 	if (func != SIG_DFL)
 		(void) signal(SIGINT, func);
-	(void) signal(SIGHUP, trap);
+	if (!pkg_sighup_ignored())
+		(void) signal(SIGHUP, trap);
 	(void) signal(SIGQUIT, trap);
 	(void) signal(SIGTERM, trap);
 	(void) signal(SIGPIPE, trap);

@@ -423,9 +423,7 @@ unmount_client()
 
 				/* reset any signals to default */
 
-				for (i = 0; i < NSIG; i++) {
-					(void) sigset(i, SIG_DFL);
-				}
+				pkg_sig_default();
 
 				/*
 				 * Redirect output to /dev/null because the
@@ -555,9 +553,7 @@ mount_client()
 
 				/* reset all signals to default */
 
-				for (i = 0; i < NSIG; i++) {
-					(void) sigset(i, SIG_DFL);
-				}
+				pkg_sig_default();
 
 				/*
 				 * Redirect output to /dev/null because the

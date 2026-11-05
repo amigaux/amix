@@ -3047,6 +3047,26 @@ raise SystemExit(0 if v(b + '62.1', b + '62') == 1 and v(b + '62', b + '62.1') =
     ar34 "$S34/out6/1.1" --previous "$S34/out5/1.1" --userland "$S34/ul3" >/dev/null 2>&1
     check "  ... and an assembly over that tree reads the #old #fstype line back: same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C5' '$S34/out6/1.1/catalog'"
+    # a published catalog older than the mark: the row stays, the mark is carried
+    rm -rf "${S34:?}/nofs"; mkdir -p "$S34/nofs"; cp -r "$S34/out3/1.1" "$S34/nofs/1.1"
+    sed -i '/^#ext fstype 1$/d; /^#fstype /d' "$S34/nofs/1.1/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/nofs/1.1/catalog" | cut -c1-32)" > "$S34/nofs/1.1/catalog.md5"
+    ar34 "$S34/out7/1.1" --previous "$S34/nofs/1.1" >"$WORK/t34.7" 2>&1
+    C7="$S34/out7/1.1/catalog"
+    check "a published row with no #fstype: this build's is carried, and said" \
+        bash -c "test $? -eq 0 && grep -A1 -x '#ext fstype 1' '$C7' | grep -qx '#fstype ufst ufs' && grep -q 'the published row has no #fstype line; this build.s is carried' '$WORK/t34.7'"
+    check "  ... no 'differs' note about it, and the row itself is the published one" \
+        bash -c "! grep -q 'differs from the published row.*#fstype' '$WORK/t34.7' && test \"\$(grep '^ufst|' '$C7')\" = \"\$(grep '^ufst|' '$S34/nofs/1.1/catalog')\""
+    ar34 "$S34/out7b/1.1" --previous "$S34/out7/1.1" >"$WORK/t34.7b" 2>&1
+    check "  ... the next assembly over that tree changes nothing and carries nothing" \
+        bash -c "test $? -eq 0 && cmp -s '$C7' '$S34/out7b/1.1/catalog' && ! grep -q 'no #fstype line' '$WORK/t34.7b'"
+    # a published mark that disagrees is still only noted: the published row stands
+    rm -rf "${S34:?}/difs"; mkdir -p "$S34/difs"; cp -r "$S34/out3/1.1" "$S34/difs/1.1"
+    sed -i 's/^#fstype ufst ufs$/#fstype ufst s5/' "$S34/difs/1.1/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/difs/1.1/catalog" | cut -c1-32)" > "$S34/difs/1.1/catalog.md5"
+    ar34 "$S34/out8/1.1" --previous "$S34/difs/1.1" >"$WORK/t34.8" 2>&1
+    check "a published #fstype that disagrees: kept, and noted as a difference" \
+        bash -c "test $? -eq 0 && grep -qx '#fstype ufst s5' '$S34/out8/1.1/catalog' && grep -q 'differs from the published row in: the #fstype line' '$WORK/t34.8'"
     toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "${S34:?}/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a published version with other bytes: refused" "is published with other bytes" \
@@ -3252,6 +3272,59 @@ if [ -x "$PUBPT" ]; then
         bash -c "test $? -eq 1 && grep -q 'FATAL cdfs Gate 3: cannot read' '$WORK/t35.cd' && test -z \"\$(find '$S35/cdfs-out' -name '*.pkg' -print -quit)\""
 else
     echo "  skip- the cdfs lineage gate (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
+
+# --------------------------------------------------------------- T36 ----
+# A login's end during an install: an ignored SIGHUP stays ignored in the engine
+# and in what it starts, so nohup works; one that is not ignored still interrupts,
+# and the next install puts the package right.
+echo "T36: the engine and a hangup"
+S36="$WORK/t36"; mkdir -p "$S36/src/opt/hupt"
+if [ -x "$HB/pkgadd" ] && [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1; then
+    echo data > "$S36/src/opt/hupt/data"
+    # each script says what it inherited, marks its start and takes a moment
+    hold36() { printf '#!/bin/sh\ngrep SigIgn /proc/$$/status > %s/sigign\n: > %s/mark\nsleep 2\n: > %s/done\nexit 0\n' "$S36" "$S36" "$S36"; }
+    hold36 > "$S36/postinstall"; hold36 > "$S36/preremove"
+    printf 'PKG=HUPT\nNAME=hupt\nVERSION=1.0\nARCH=Amiga\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' > "$S36/pkginfo"
+    printf 'i pkginfo=%s/pkginfo\ni postinstall=%s/postinstall\ni preremove=%s/preremove\nd none /opt 0755 root sys\nd none /opt/hupt 0755 root sys\nf none /opt/hupt/data=%s/src/opt/hupt/data 0644 root sys\n' \
+        "$S36" "$S36" "$S36" "$S36" > "$S36/prototype"
+    mkdir -p "$S36/spool"
+    ( cd "$S36" && "$HB/pkgmk" -o -d "$S36/spool" -f prototype && "$HB/pkgtrans" -s "$S36/spool" "$S36/HUPT.pkg" HUPT ) >"$WORK/t36.mk" 2>&1
+    printf 'mail=\ninstance=overwrite\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' > "$S36/admin"
+    R36="$S36/root"; mkdir -p "$R36/etc" "$R36/var/sadm/install"
+    printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$R36/etc/passwd"
+    printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$R36/etc/group"
+    SAVE36="$WORK/t36-fake"
+    clr36() { rm -f "${S36:?}/mark" "${S36:?}/done" "${S36:?}/sigign"; }
+    run36() { # run36 <ignore|default> <engine command> <args>: the hangup at the script's start
+        local m="$1" c="$2"; shift 2; clr36
+        fakeroot -i "$SAVE36" -s "$SAVE36" python3 -I -B "$HERE/hup-run.py" "$m" "$S36/mark" "$HB/$c" -R "$R36" -n -a "$S36/admin" "$@" >"$WORK/t36.out" 2>&1
+    }
+    add36() { run36 "$1" pkgadd -d "$S36/HUPT.pkg" HUPT; }
+    rm36()  { run36 "$1" pkgrm HUPT; }
+    q36()   { fakeroot -i "$SAVE36" -s "$SAVE36" "$HB/pkginfo" -R "$R36" "$@" >/dev/null 2>&1; }
+    : > "$SAVE36"
+    add36 ignore
+    check "SIGHUP ignored, hung up during an install: pkgadd rc 0" test $? -eq 0
+    check "  ... the install script ran to its end" test -e "$S36/done"
+    check "  ... and inherited SIGHUP ignored" \
+        bash -c "m=\$(awk '{print \$2}' '$S36/sigign'); test \$((0x\$m & 1)) -eq 1"
+    check "  ... the package is whole" bash -c "! grep -q partial <<<\"\$(fakeroot -i '$SAVE36' -s '$SAVE36' '$HB/pkginfo' -R '$R36' -l HUPT)\" && test -f '$R36/opt/hupt/data'"
+    rm36 ignore
+    check "SIGHUP ignored, hung up during a removal: pkgrm rc 0, the package gone" \
+        bash -c "test $? -eq 0 && test -e '$S36/done' && test ! -e '$R36/opt/hupt/data'"
+    add36 default
+    check "SIGHUP at its default, hung up during an install: pkgadd rc 3, interrupted" test $? -eq 3
+    check "  ... the install script did not finish" test ! -e "$S36/done"
+    check "  ... the package is left marked partial" q36 -p HUPT
+    clr36; touch "$S36/mark"
+    fakeroot -i "$SAVE36" -s "$SAVE36" "$HB/pkgadd" -R "$R36" -n -a "$S36/admin" -d "$S36/HUPT.pkg" HUPT >"$WORK/t36.re" 2>&1
+    check "  ... the next pkgadd puts it right: rc 0, no longer partial" \
+        bash -c "test $? -eq 0 && ! fakeroot -i '$SAVE36' -s '$SAVE36' '$HB/pkginfo' -R '$R36' -p HUPT >/dev/null 2>&1 && test -e '$S36/done'"
+    rm36 default
+    check "SIGHUP at its default, hung up during a removal: pkgrm rc 3, interrupted" test $? -eq 3
+else
+    echo "  skip- the engine and a hangup (no host engine or fakeroot: heirloom/build-host.sh)"
 fi
 
 # -------------------------------------------------------------- done ----

@@ -93,6 +93,37 @@ sig_trap(int a_signo)
 }
 
 /*
+ * AMIX PORT: a SIGHUP that is ignored on entry, as nohup leaves it, stays
+ * ignored here and in everything started from here, so an install started
+ * with nohup outlives the login that started it.  A hangup that is not
+ * ignored still interrupts, as it always did.
+ */
+
+int
+pkg_sighup_ignored(void)
+{
+	struct sigaction	oact;
+
+	return (sigaction(SIGHUP, (struct sigaction *)NULL, &oact) == 0 &&
+	    oact.sa_handler == SIG_IGN);
+}
+
+/* reset every signal to default for a child, but for an ignored SIGHUP */
+
+void
+pkg_sig_default(void)
+{
+	int	n;
+	int	keep = pkg_sighup_ignored();
+
+	for (n = 0; n < NSIG; n++) {
+		if (n != SIGHUP || !keep) {
+			(void) sigset(n, SIG_DFL);
+		}
+	}
+}
+
+/*
  * Name:	pkgexecv
  * Description:	Asynchronously execute a package command in a separate process
  *		and return results - the subprocess MUST arm it's own SIGINT
@@ -258,7 +289,9 @@ pkgexecv(char *filein, char *fileout, char *uname, char *gname, char *arg[])
 		nact.sa_flags = SA_RESTART;
 		(void) sigemptyset(&nact.sa_mask);
 
-		if (sigaction(SIGHUP, &nact, &oact) < 0) {
+		if (pkg_sighup_ignored()) {
+			funcSighup = SIG_IGN;
+		} else if (sigaction(SIGHUP, &nact, &oact) < 0) {
 			funcSighup = SIG_DFL;
 		} else {
 			funcSighup = oact.sa_handler;
@@ -357,9 +390,7 @@ pkgexecv(char *filein, char *fileout, char *uname, char *gname, char *arg[])
 
 	/* reset all signals to default */
 
-	for (n = 0; n < NSIG; n++) {
-		(void) sigset(n, SIG_DFL);
-	}
+	pkg_sig_default();
 
 	/* release hold on signals held by parent before fork() */
 

@@ -452,6 +452,13 @@ def merge(inputs, prev_live, prev_older):
                 raise Refused("%s: version %s is published with other bytes "
                               "(%s, md5 %s); a published version never changes"
                               % (e.who(), e.version, p.filename, p.file_md5))
+            # The published catalog may predate the mark.  The bytes are the
+            # same and the mark is true of them, and without it apkg's UFS-only
+            # check would not apply to this package.
+            if "fstype" in e.ann and "fstype" not in p.ann:
+                p.ann["fstype"] = e.ann["fstype"]
+                notes.append("%s: the published row has no #fstype line; this "
+                             "build's is carried" % e.who())
             what = row_differences(p, e)
             if what:
                 notes.append("%s differs from the published row in: %s; the "
