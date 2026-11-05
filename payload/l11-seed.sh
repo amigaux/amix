@@ -3,7 +3,7 @@
 # before pkgadd of <pkginst>. A conffile whose size and sum still match its contents record is
 # unedited, so its baseline is seeded and the conffile class takes the new default silently; any
 # other is left alone (kept, with a .new). The install step of amix userland/base/docs/package-split.md,
-# as base-e2 tried it on E1 (tmp/2026-10-31-s2/box/seed.sh); the 4.0 mkdir -p fails on a
+# as first tried on a box; the 4.0 mkdir -p fails on a
 # directory that exists, so the directory is made only when it is missing.
 pkg=$1
 shift

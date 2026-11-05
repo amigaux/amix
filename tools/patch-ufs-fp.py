@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""patch-ufs-fp.py -- BLIZZARD F2-M1: take the FP out of mkfs_ufs and fsck_ufs.
+"""patch-ufs-fp.py -- the Blizzard FP fix: take the FP out of mkfs_ufs and fsck_ufs.
 
 The stock Amix 2.1 ufs tools execute floating point in exactly two places, both of
 them display-only, and both fatal on a 68060 with no FPU (BLIZZARD census):

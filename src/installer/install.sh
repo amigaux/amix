@@ -486,7 +486,7 @@ net_record()
 }
 
 # emit_zen_hook FILE -- write the target's rc2 Z3660-native-ethernet (zen0) bring-up
-# to FILE (METAL-FIX.4). Like S16firstboot above, this is DRIVER-WRITTEN and additive
+# to FILE. Like S16firstboot above, this is DRIVER-WRITTEN and additive
 # -- NOT a package member, so it never reaches the pkgadd contents DB (invisible to
 # pkgchk / altroot-attest). It is laid down ONLY for zen0 (metal z3660eth) profiles
 # (guarded on FB_ETHER_IF=zen0 in the arm step); the stock a2065/aen0 userland a base
@@ -854,7 +854,7 @@ esac
 #                                 startx-rtg, zz9k_monsw (/opt/amix/bin, 755),
 #                                 /.xinitrc-rtg (644), /dev/zz9000 c 49 0 and
 #                                 /usr/X/bin on /etc/profile's PATH -- the Z3660
-#                                 MG5 kit; empty or "none" = nothing
+#                                 RTG kit; empty or "none" = nothing
 #   RTC              setclk       IN-rtc: the battery clock at boot. "setclk" = lay
 #                                 our Y2K-fixed, plausibility-gated setclk over the
 #                                 stock /usr/amiga/bin/setclk (which /etc/sysinit
@@ -1232,7 +1232,7 @@ DISK_RAW="/dev/rdsk/c${ID}d0s0"          # whole-disk node for /etc/rdb
 #   disk it was booted from (or the one an RTO1 root record names, see ROOT_RECORD_DISK).
 #   ROOTDEV/KERNEL_BREL_SUMR stay the family's (its built-in root is unit 6, card 0); the
 #   vfstab / first-boot unit becomes the chosen id.
-# RUN_UNIT=stamp (fallback B, owner rule: kept warm): the family chain + the chosen unit's
+# RUN_UNIT=stamp (fallback B: kept warm): the family chain + the chosen unit's
 #   patch rows (boot/<p>/stamp/u<N>.patch, from tools/rth1-media.py) -- the rootdev byte,
 #   the swap-name digit, the IBLK checksum -- applied to the WRITTEN slice and verified byte
 #   by byte and against the unit's own manifest; /stand/unix is then read out of the patched
@@ -1377,7 +1377,7 @@ plan_partitions() {
 
 	# swap default: BREAKPT rule
 	if [ "$disk_mb" -gt "$BREAKPT" ]; then DEFSWAP="$LGSWAP"; else DEFSWAP="$SMSWAP"; fi
-	# r6 (owner 2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile; a shorter
+	# r6 (2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile; a shorter
 	# slice 2 leaves the tail of that swap failing with EIO -- so 30 MB is the default AND the floor.
 	if [ "${INSTALL_CPU:-030}" = 040 ] || [ "${INSTALL_CPU:-030}" = 060 ]; then
 		DEFSWAP=30; MINSWAP=30; SWAPWHY=" (the 68040/68060 kernels link a 30 MB swap area)"
@@ -1810,19 +1810,19 @@ msg "ufs target: no pre-mount fsck (stock ran none between mkfs and mount); the 
 # `ufsinit` linked, so `... 0 ufs` needs no kernel change (kerntools' UFS capability
 # paper §4, all ten kernels examined).
 run /etc/mount "$ROOT_BLK" "$TARGET" 0 "$TARGET_ROOT_FSTYPE"
-# --- target-root mount note (mnttab written at seed, METAL-FIX.2) ------
+# --- target-root mount note (mnttab written at seed) ------
 # The miniroot's /etc/mount is a direct mount(2) and writes NO /etc/mnttab entry.
 # pkgadd/apkg read the RUNNING miniroot's /etc/mnttab via get_mntinfo(), keying off
 # the SHORTEST mount point being exactly "/". The engine tolerates a missing entry:
 # get_mntinfo SYNTHESIZEs the "/" root when the table lacks the line (amix-package-
-# manager 0d3a21c), and METAL-FIX.1 (pkgmgr 3b9b7a1) extended that to a wholly
+# manager 0d3a21c), and pkgmgr 3b9b7a1 extended that to a wholly
 # ABSENT file (ENOENT -> synthesize).
 #
 # BUT the engine tolerance alone is NOT enough on fresh media. A freshly built
-# miniroot ships NO /etc/mnttab at all, and M-RUN froze exactly here:
+# miniroot ships NO /etc/mnttab at all, and a metal run froze exactly here:
 #     pkgadd: ERROR: unable to open mount table (/etc/mnttab)
 # The open() fails before get_mntinfo's synthesize path is reached, so the base-OS
-# transplant never starts. This was MASKED for two waves because the REUSED bench
+# transplant never starts. This was MASKED for a while because the REUSED bench
 # floppy carried a stale/contaminated /etc/mnttab whose mere presence let open()
 # succeed (acceptance runs must use FRESH media -- see docs/installer.md). So the
 # seed step (section 4) now WRITES the root line UNCONDITIONALLY, naming the
@@ -1831,7 +1831,7 @@ run /etc/mount "$ROOT_BLK" "$TARGET" 0 "$TARGET_ROOT_FSTYPE"
 # belt-and-suspenders with the engine tolerance -- and the OVERWRITE (`>`, not `>>`)
 # also replaces any stale/contaminated table rather than appending to it. A "/mnt"
 # line does NOT satisfy get_mntinfo (that mount point is not "/") and must never be
-# used. Metal citation: METAL-FIX.2 (M-RUN2, 2026-07-23).
+# used. Seen on metal, 2026-07-23.
 # -----------------------------------------------------------------------------
 msg "target root mounted at $TARGET"
 
@@ -2084,7 +2084,7 @@ TMPDIR="$TARGET/tmp"; export TMPDIR
 # The RUNNING miniroot ships NO /etc/mnttab (its /etc/mount is a direct mount(2)
 # that records none), yet pkgadd/apkg open() /etc/mnttab before installing. On
 # FRESH media that open() fails -- `unable to open mount table (/etc/mnttab)` --
-# and the base-OS transplant never starts (M-RUN froze exactly here; METAL-FIX.2).
+# and the base-OS transplant never starts (a metal run froze exactly here).
 # Write the root mnttab line so pkgadd/apkg always find a table; get_mntinfo keys
 # off the SHORTEST mount point being exactly "/". OVERWRITE (`>`, not `>>`) so any
 # stale/contaminated table (e.g. a reused-media leftover) is REPLACED, not appended
@@ -2289,7 +2289,7 @@ fi
 if [ "$SOURCE_KIND" = cdfs ]; then
 	# --- cdfs: pkgadd -R down the order file, one /cdrom/pkgs file per line ---
 	#     pkgadd -R /mnt -n -a <admin> -d <pkgfile> <pkgname>
-	# mirroring the proven altroot-acceptance.sh invocation (Wave-2, 4/4 rc=0,
+	# mirroring the proven altroot-acceptance.sh invocation (4/4 rc=0,
 	# canonical tree digest 86e1ceb144f1328bf441c5df38fc2798). apkg is NOT in this
 	# loop -- it is the remote client, not part of the base-OS transplant.
 	#
@@ -2578,7 +2578,7 @@ if [ "$TARGET_ROOT_FSTYPE" = ufs ] && [ -d "$FPFIX" ]; then
 		fi
 		if [ "$fp_got" = "$fp_exp" ]; then
 			echo "$fp_nm" >> "$fpok"
-			msg "5b: FP-patched installed $fp_rel (sum -r $fp_got, verified) [BLIZZARD F2-M1]"
+			msg "5b: FP-patched installed $fp_rel (sum -r $fp_got, verified) [Blizzard FP fix]"
 		else
 			echo "FP-patched $fp_rel sum -r $fp_got != expected $fp_exp (a mis-patched fsck is worse than none)" >> "$fpfail"
 		fi
@@ -3132,7 +3132,7 @@ if [ "$INSTALL_LAYOUT" != 1.1 ]; then
 # /tmp IS the 880-block install floppy, whose 46 free blocks are also where the
 # static pkgadd builds its packaging directory. 15,427 bytes of updbootpart is
 # 16 of those 46 blocks, on every install since updbootpart joined the driver -- the real reason this
-# floppy has been "six blocks from death" for three waves. build-install-iso.sh
+# floppy has been "six blocks from death" for a long time. build-install-iso.sh
 # stages payload/updbootpart at $INST/updbootpart (byte-identity gated there),
 # and the copy below costs the floppy nothing.
 #
@@ -3144,9 +3144,9 @@ run cp "$INST/updbootpart" "$TARGET/usr/sbin/updbootpart"
 run chmod 0755 "$TARGET/usr/sbin/updbootpart"
 msg "installed /usr/sbin/updbootpart from $INST/updbootpart (on-box boot-slice reframe tool; additive, not a package member)"
 
-# --- LAY DOWN the /stand framing tools updbootpart needs (P5.4-FT) -----------
+# --- LAY DOWN the /stand framing tools updbootpart needs -----------
 # updbootpart's reframe pipeline (its gate 5a) fails closed without
-# /stand/boot1.boot and an executable local /stand/makeiblk. On M-RUN4b the
+# /stand/boot1.boot and an executable local /stand/makeiblk. On a metal run the
 # KERN-package handoff on a fresh metal base-8 install died exactly there
 # ("framed image is empty") until the pair was ferried by hand from the bench
 # golden -- so their presence is now a DRIVER-GUARANTEED invariant, not
@@ -3167,7 +3167,7 @@ msg "laid down /stand framing tools: boot1.boot (41892) + makeiblk (2.1c, 58483)
 
 fi	# INSTALL_LAYOUT 1.0: updbootpart + /stand framing
 
-# --- LAY DOWN the syslog unit (P5.4 queue: base-8 ships none) ----------------
+# --- LAY DOWN the syslog unit (base-8 ships none) ----------------
 # A base-8 install carries core's /usr/sbin/syslogd BINARY (2.1, 22,368 B) but
 # NO unit around it: no /etc/init.d/syslogd, no rc links, no /etc/syslog.conf,
 # no /var/log -- so the box cannot log at all, and the inetd-throttle hunt
@@ -3239,12 +3239,12 @@ run chmod 0222 "$TARGET/dev/conslog"
 msg "laid down the syslog unit (2.1c conf+daemon, init ENABLED, S70/K50 hard links, 8 /var/log stubs, /dev/conslog) -- fresh installs log from day one"
 fi	# INSTALL_LAYOUT 1.1: the syslog package
 
-# --- LAY DOWN the zen0 (Z3660 native ethernet) bring-up (METAL-FIX.4) --------
+# --- LAY DOWN the zen0 (Z3660 native ethernet) bring-up --------
 # The installed metal kernel already contains z3660eth, but a base install ships
 # only the STOCK a2065/aen0 inet userland -- inert on metal (no A2065 board), so a
 # fresh metal install has NO working ethernet. Metal ethernet is interface zen0
 # (cdevsw major 51, /dev/zen0 c 51 0 -- renumbered from 48 on 2026-07-30; media
-# mastered from this tree REQUIRE 51-registering kernels, the P5.4 set), brought up
+# mastered from this tree REQUIRE 51-registering kernels), brought up
 # by z3660net's proven
 # `slink addaen /dev/zen0 zen0` + `ifconfig zen0 <LITERAL-IP> up -trailers` (SVR4.0
 # -- NOT plumb, NOT uname -n). We lay that bring-up down as /etc/rc2.d/S99zen,
@@ -3254,7 +3254,7 @@ fi	# INSTALL_LAYOUT 1.1: the syslog package
 # The IP is the profile's FB_IP (never a hardcoded golden .39); zen0 profiles MUST
 # carry one. /dev/zen0 is self-healed by S99zen's own mknod at first boot. NB: the
 # zen0 LINK is metal-only-testable (no z3660eth under emulation) -- the laydown is
-# bench-provable, and the actual traffic was PROVEN on metal by M-RUN3 (2026-07-24:
+# bench-provable, and the actual traffic was PROVEN on metal (2026-07-24:
 # zen0 UP, ping 3/3, bidirectional telnet, surviving 4 cold boots).
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	# /etc/inet/interfaces (l11_admin) and amix-base's ifup bring every interface up;
@@ -3318,8 +3318,8 @@ elif [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
 fi
 
 # --- LAY DOWN the RTG X11 kit (K1, X11KIT=rtg) ---------------------------------
-# The Z3660 RTG desktop exactly as it was installed on metal (MG5/
-# MG9, the maintainer's notes): the Xzz9000 server, the
+# The Z3660 RTG desktop exactly as it was installed on metal (the
+# maintainer's notes): the Xzz9000 server, the
 # startx-rtg launcher, rtg-kbdback (RT-10: gives the console keyboard back after
 # a killed server) and the zz9k_monsw fallback switch in /opt/amix/bin (755),
 # root's session file /.xinitrc-rtg (644), the ZZ9000 node /dev/zz9000 c 49 0, and
@@ -3328,7 +3328,7 @@ fi
 # files ride the medium under $INST/x11kit, staged by build-install-iso.sh only
 # after each hashed to its pin. Driver-written and additive, like S99zen and the
 # monsw bits -- EXCEPT the /etc/profile line, a one-line append to a core member
-# (the same edit MG5 made; the attestation is contents-DB-derived and does not see
+# (the same edit the metal install made; the attestation is contents-DB-derived and does not see
 # it). A fresh install writes it once, so no guard is needed -- and the miniroot
 # has no grep to make one with.
 if [ "$X11KIT" = rtg ] && [ "$INSTALL_LAYOUT" = 1.1 ]; then

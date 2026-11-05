@@ -13,7 +13,7 @@
 #   /pkgs/base/*.pkg    our own apkg client + heirloom engine     (ours, MIT)
 #   /install/           installer driver + engine binaries — structure only for now
 #   /MANIFEST           what this disc is: content set, every package, classification
-#   /LICENSING          release status: cleared 2026-09-23, publication owner-gated
+#   /LICENSING          release status: cleared 2026-09-23, publication per medium
 #   /BOOT/, /S/         --cd-boot only: the CD boot tree amix-dlm's `mkstore -C`
 #                       writes (amix-cdboot, K30/K46 generations, Startup-Sequence)
 #
@@ -70,9 +70,9 @@
 #                    hijacked boot for any other.
 #   RELEASE STAMP.   Stock package content is Commodore material, release-cleared
 #                    2026-09-23 (Amiga Corporation's approval to distribute the
-#                    Commodore Amiga binaries). Publishing a disc is still a per-artefact
-#                    owner decision: the disc records it (/LICENSING + MANIFEST
-#                    "publication:"), --published-by-owner DATE stamps it, and the
+#                    Commodore Amiga binaries). Publishing a disc is still a separate
+#                    decision for each medium: the disc records it (/LICENSING + MANIFEST
+#                    "publication:"), --published DATE stamps it, and the
 #                    image is never written to a git-tracked path. (Until 2026-09-23
 #                    this was a private-only gate; retired 2026-09-26.)
 #
@@ -95,7 +95,7 @@
 # and the RAM-disk root of /BOOT/K30 or /BOOT/K46. The long names (amix-cdboot,
 # Startup-Sequence) resolve through Rock Ridge, already on; the line directories are
 # 8.3 and read the same without it (checked on the plain ISO9660 names). The loader
-# is mastered 0755: without an owner execute bit ODFileSystem reports FIBF_EXECUTE
+# is mastered 0755: without an user execute bit ODFileSystem reports FIBF_EXECUTE
 # and AmigaDOS will not run it. The disc stays an ordinary data CD.
 
 set -euo pipefail
@@ -132,7 +132,7 @@ SET_ALIAS_base=minimal
 usage() {
   cat <<EOF
 usage: $(basename "$0") [--set NAME] [--pkg NAME]... [--out ISO] [--volid ID]
-                        [--staging DIR] [--published-by-owner DATE] [--keep-stage]
+                        [--staging DIR] [--published DATE] [--keep-stage]
                         [--self-test]
 
   --set NAME        content set, resolved from the packagemanager's sets.conf:
@@ -146,9 +146,9 @@ usage: $(basename "$0") [--set NAME] [--pkg NAME]... [--out ISO] [--volid ID]
   --out ISO         output path (default: work/iso/amix21-install-<set>-<date>.iso)
   --volid ID        ISO volume id (default: $VOLID)
   --staging DIR     package staging root (default: $STAGING)
-  --published-by-owner DATE
-                    record on the disc that the owner decided (on DATE,
-                    YYYY-MM-DD) to publish this medium. Without it the disc is
+  --published DATE
+                    record on the disc that this medium was published
+                    on DATE (YYYY-MM-DD). Without it the disc is
                     stamped 'publication: unpublished'. Recording only: the
                     tool never publishes or copies anything.
   --keep-stage      keep the staged disc tree for inspection
@@ -170,9 +170,9 @@ while [ $# -gt 0 ]; do case "$1" in
   --out)             OUT="$2"; shift 2;;
   --volid)           VOLID="$2"; shift 2;;
   --staging)         STAGING="$2"; shift 2;;
-  --published-by-owner) PUBLISHED="$2"; shift 2;;
+  --published) PUBLISHED="$2"; shift 2;;
   --redistributable)
-    echo "build-iso: --redistributable was retired 2026-09-26; use --published-by-owner DATE" >&2
+    echo "build-iso: --redistributable was retired 2026-09-26; use --published DATE" >&2
     exit 2;;
   --keep-stage)      KEEP_STAGE=1; shift;;
   --install-src)     INSTALL_SRC="$2"; shift 2;;
@@ -244,7 +244,7 @@ stamp="$(date -u +%Y%m%d)"
 # ===========================================================================
 # The stock content is release-cleared (2026-09-23), but media are never committed
 # (large build artefacts; this repo is local-only) and publishing one is a
-# per-artefact owner decision the disc records (see --published-by-owner).
+# decision for each medium, which the disc records (see --published).
 
 # Gate 1 — the artifact must not be able to land somewhere committable. A ~300 MB
 # ISO inside a tracked path is one `git add -A` away from being permanent, so we
@@ -364,11 +364,11 @@ basefiles=("${selected_base[@]}")
 
 # Gate 2 — the publication record must be a real date, not a free-form claim.
 if [ -n "$PUBLISHED" ] && ! printf '%s' "$PUBLISHED" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
-  echo "STOP (release gate): --published-by-owner wants the owner's decision date as YYYY-MM-DD, got: $PUBLISHED" >&2
+  echo "STOP (release gate): --published wants the date as YYYY-MM-DD, got: $PUBLISHED" >&2
   exit 2
 fi
 if [ -n "$PUBLISHED" ]; then
-  PUBLINE="published by owner decision $PUBLISHED"
+  PUBLINE="published $PUBLISHED"
 else
   PUBLINE="unpublished when built"
 fi
@@ -733,4 +733,4 @@ printf 'built install CD: %s (%s bytes, %s)\n' \
 echo "content set: $SET — $nstock stock + $nbase base package(s); see /MANIFEST on the disc"
 [ -z "$CDBOOT" ] || echo "cd boot:     System ID AMIGA BOOT, /BOOT + /S from $CDBOOT"
 echo "publication: $PUBLINE"
-echo "Build artefact: never commit it; publishing it is a per-artefact owner decision."
+echo "Build artefact: never commit it; publishing it is a separate decision for each medium."

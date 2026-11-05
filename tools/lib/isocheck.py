@@ -422,7 +422,7 @@ def _sha256(path):
 
 def check_cdboot_disc(tree, disc):
     """The mastered disc carries the mkstore tree byte for byte, and BOOT/amix-cdboot
-    is executable: ODFileSystem turns a Rock Ridge mode without the owner execute bit
+    is executable: ODFileSystem turns a Rock Ridge mode without the user execute bit
     into FIBF_EXECUTE (platform/amiga/handler_main.c:1488-1495), and AmigaDOS then
     refuses to run the loader from S/Startup-Sequence."""
     bad = []
@@ -436,7 +436,7 @@ def check_cdboot_disc(tree, disc):
     if os.path.isfile(ld) and not os.stat(ld).st_mode & 0o100:
         bad.append(Violation(
             "cdboot-not-executable",
-            "BOOT/amix-cdboot has mode %o on the disc: no owner execute bit"
+            "BOOT/amix-cdboot has mode %o on the disc: no user execute bit"
             % (os.stat(ld).st_mode & 0o7777),
             "Stage it 0755 before mastering; -rational-rock keeps an execute bit "
             "only when one is set."))

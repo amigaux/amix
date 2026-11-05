@@ -5625,8 +5625,8 @@ def audit_w2_structure():
         (r'INSTALL_ATTESTED=\$SET_ATT',
          "the set's attestation posture is recorded, so a waived digest gate is "
          "never silent (plan 5.7)"),
-        (r'W2-ANSWERS-BEGIN', "the beacon's BEGIN marker (the blind-console harness greps it)"),
-        (r'W2-ANSWERS-END', "the beacon's END marker"),
+        (r'SETUP-ANSWERS-BEGIN', "the beacon's BEGIN marker (the blind-console harness greps it)"),
+        (r'SETUP-ANSWERS-END', "the beacon's END marker"),
         # ★ THE FLOPPY BUDGET (W4, bench-measured). The root filesystem here is
         # an 880-block floppy with ~46 blocks free; $ANSWERS alone is 12 of them
         # (the base profile is copied whole -- the medium is read-only), and the
@@ -6220,7 +6220,7 @@ def audit_w2_interview():
          ["What is the SCSI id"],
          ["TARGET_SCSI_ID=6", "TARGET_DISK_MB=108", "TARGET_ROOT_MB=79",
           "TARGET_SWAP_MB=18", "INSTALL_VERBOSE=n",
-          "W2-ANSWERS-BEGIN", "W2-ANSWERS-END"]),
+          "SETUP-ANSWERS-BEGIN", "SETUP-ANSWERS-END"]),
         ("all-defaults (bare RETURNs) reproduce the stock layout",
          bench, ["y", "", "", "", "", ""], {}, [], [],
          ["TARGET_ROOT_MB=79", "TARGET_SWAP_MB=18", "INSTALL_VERBOSE=n"]),
@@ -7776,9 +7776,9 @@ def audit_w5_dialog():
     else:
         checks = [
             (r"-e '/\^FB_NODENAME=/d'", "strips the keys it owns before appending"),
-            (r"-e '/\^# W5-DIALOG-/d'", "strips its own previous block markers"),
+            (r"-e '/\^# FIRSTBOOT-DIALOG-/d'", "strips its own previous block markers"),
             (r'> "\$NEWCONF"', "writes to a TEMP file"),
-            (r"grep '\^# W5-DIALOG-END\$' \"\$NEWCONF\"",
+            (r"grep '\^# FIRSTBOOT-DIALOG-END\$' \"\$NEWCONF\"",
              "verifies the closing marker BEFORE it replaces the conf"),
             (r'mv "\$\{NEWCONF:\?\}" "\$\{CONF:\?\}"', "moves it into place (atomic)"),
         ]

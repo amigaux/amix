@@ -103,6 +103,8 @@ python3 "$here/known-bad-scan.py" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 bash "$here/medium-address-check.sh" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
+python3 "$here/public-text-check.py" --disc "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
+[ "${PIPESTATUS[0]}" = 0 ] || bad=1
 bash "$here/sidecar-path-check.sh" "$IMG"/*.MANIFEST "$IMG"/README.txt "$IMG"/SHA256SUMS "$R" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 say "release-files: $( [ $bad = 0 ] && echo 'ALL CLEAN' || echo 'FAILED')"

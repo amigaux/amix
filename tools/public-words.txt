@@ -1,0 +1,25 @@
+# public-words.txt: words of a working process, not of the software, that must not appear in anything public.
+# Read by public-text-check.py. Columns are tab-separated: CLASS, REGEX, an EXAMPLE each regex must hit (self-test).
+# label: distinctive enough to search raw bytes, so whole media and packages are searched for it too.
+# word:  would match binary noise or ordinary English in stock text: tracked text and a disc's own text files only.
+# allow: a path glob and a regex: a real use of the word in tracked text (a file's owner, say).
+label	\bW[0-9]+-[A-Z]{2,}	W9-EXAMPLE
+label	(?<=[ (])W[0-9]+\.[0-9]+[a-z]?\b	(W9.9e)
+label	\bF2-M1\b	F2-M1
+label	METAL-FIX	METAL-FIX.9
+label	\bM-RUN	M-RUN9
+label	\bP5\.[0-9]	P5.9
+label	\bS[0-9]+-[0-9]+\b	S9-99
+label	published-by-owner	--published-by-owner
+label	by owner decision	published by owner decision
+label	\b[Tt]he seat\b	the seat
+label	[Oo]rchestrator	orchestrator
+word	\bW[0-9]+\b	W9
+word	\b[PRTQD]-[0-9]+\b	P-99
+word	\bJ4\b	J4
+word	\bMG[0-9]+\b	MG9
+word	\bM-G[0-9]+\b	M-G9
+word	\b[Tt]he owner\b	the owner
+word	\b[Oo]wner[- ](rule|word|decision|approved|gated|decided|said|asked)	owner rule
+word	\b[Ww]aves?\b	two waves
+word	\bWAVE\b	WAVE

@@ -164,8 +164,8 @@
 # PATH.
 #
 # stdin: the interview OWNS the console; install.sh must NOT. The exec below
-# redirects install.sh's stdin from /dev/null, preserving METAL-FIX.3 (an
-# inherited stdin is what hung M-RUN1 on the 1991 pkgadd's prompt). Anything
+# redirects install.sh's stdin from /dev/null, preserving a metal fix (an
+# inherited stdin is what hung a metal run on the 1991 pkgadd's prompt). Anything
 # still queued in the tty when the interview ends is therefore discarded rather
 # than fed to the transplant.
 
@@ -713,7 +713,7 @@ fi
 # --- CD-2: the scan a profile names, and the units no scan may open ----------
 #   TARGET_SCAN_IDS   when set, the disk scan opens EXACTLY these ids and nothing
 #                     else (CD-2: "9" = card 1 unit 1, the Zulu target behind the
-#                     A4092). The owner's other disks on that bus (the AmigaOS disk,
+#                     A4092). The user's other disks on that bus (the AmigaOS disk,
 #                     an MD-1 root) are then never opened at all, let alone offered.
 # Whatever the list, two kinds of id are dropped from it WITHOUT being opened:
 #   * the install CD's own unit (cdfs <card>,<unit> -> c<card*8+unit>): a 512-byte
@@ -1264,7 +1264,7 @@ plan_root_default()
 		PRE_REMAIN=`expr "$PRE_REMAIN" - "$datalen"`
 	fi
 	if [ "$pdisk" -gt "$BREAKPT" ]; then DEFSWAP="$LGSWAP"; else DEFSWAP="$SMSWAP"; fi
-	# r6 (owner 2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile; a shorter
+	# r6 (2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile; a shorter
 	# slice 2 leaves the tail of that swap failing with EIO -- so 30 MB is the default AND the floor.
 	if [ "${INSTALL_CPU:-030}" = 040 ] || [ "${INSTALL_CPU:-030}" = 060 ]; then
 		DEFSWAP=30; MINSWAP=30
@@ -2477,7 +2477,7 @@ done
 # sourced by sh, comments contribute nothing when sourced, and every key the
 # medium declares still survives into the answers profile untouched. It buys
 # back ~24 blocks -- an order of magnitude more headroom than the margin the
-# last three waves have been living on.
+# earlier media have been living on.
 #
 # `while read ... done < FILE > OUT` is a subshell here (as always on this
 # shell); that is harmless because nothing inside is read afterwards -- the loop
@@ -2505,7 +2505,7 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 # all it needs to carry.
 {
 	echo ""
-	echo "# W2-ANSWERS-BEGIN"
+	echo "# SETUP-ANSWERS-BEGIN"
 	echo "# Composed by $PROG on the box, from $PROFILE_FILE plus the operator's"
 	echo "# answers. A profile is sourced by sh, so these APPENDED assignments"
 	echo "# win over the base profile's -- that is the whole merge mechanism."
@@ -2552,7 +2552,7 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	# byte-identical to one made before the dialog existed. A profile whose disks are configured before they ship
 	# (a test disk with its address and password baked in) says FIRSTBOOT_DIALOG_INTERACTIVE=n.
 	echo "FIRSTBOOT_DIALOG=${FIRSTBOOT_DIALOG_INTERACTIVE:-y}"
-	echo "# W2-ANSWERS-END"
+	echo "# SETUP-ANSWERS-END"
 } > "$ANSWERS_BLOCK" || die "cannot write $ANSWERS_BLOCK"
 cat "$ANSWERS_BLOCK" >> "$ANSWERS" || die "cannot append the answers to $ANSWERS"
 

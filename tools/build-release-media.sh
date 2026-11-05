@@ -125,6 +125,12 @@ python3 "$here/known-bad-scan.py" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$
 bash "$here/medium-address-check.sh" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf "$OUT/stage" "$R46" "$R30" ${N46:+"$N46"} ${N30:+"$N30"} 2>&1 \
 	| tee -a "$OUT/RELEASE-CHECK.txt"
 [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+# no process words: the media and the RAM disks before they are deflated by label, the master stage's own text in full
+python3 "$here/public-text-check.py" --disc "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf "$R46" "$R30" ${N46:+"$N46"} ${N30:+"$N30"} 2>&1 \
+	| tee -a "$OUT/RELEASE-CHECK.txt"
+[ "${PIPESTATUS[0]}" = 0 ] || rc=1
+python3 "$here/public-text-check.py" --stage "$OUT/stage" 2>&1 | tee -a "$OUT/RELEASE-CHECK.txt"
+[ "${PIPESTATUS[0]}" = 0 ] || rc=1
 bash "$here/sidecar-path-check.sh" "$OUT"/MEDIA.txt "$OUT"/SHA256SUMS "$OUT"/*.sha256 "$OUT"/*.MANIFEST "$OUT"/RELEASE-CHECK.txt 2>&1 \
 	| tee -a "$OUT/RELEASE-CHECK.txt"
 [ "${PIPESTATUS[0]}" = 0 ] || rc=1

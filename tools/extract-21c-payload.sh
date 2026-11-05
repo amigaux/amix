@@ -4,12 +4,12 @@
 # lays down out of the USER-SUPPLIED Amix 2.1c patch media, into the gitignored
 # payload/21c/ tree, gated by pinned `sum -r` fingerprints. Fail-closed.
 #
-# WHY. Two P5.4 field findings (M-RUN-P5.4, 2026-08) need vendor bytes on the
+# WHY. Two field findings (2026-08) need vendor bytes on the
 # install media that the base-8 package set does not provide:
 #
 #   * /stand framing tools -- updbootpart's reframe pipeline needs
 #     /stand/boot1.boot and a local /stand/makeiblk (its gate 5a fails closed
-#     without them; on M-RUN4b the KERN handoff died "framed image is empty"
+#     without them; on a metal run the KERN handoff died "framed image is empty"
 #     until the pair was ferried by hand from the bench golden). The goldens run
 #     the 2.1c PATCHED makeiblk (14,924 B, sum -r 58483) -- that is the pair the
 #     metal reframe was PROVEN with, so that is the pair the installer lays down.
@@ -58,7 +58,7 @@ die() { echo "extract-21c-payload: STOP: $*" >&2; exit 1; }
 
 # The pinned fingerprints (BSD `sum -r` checksum + byte size). These are the
 # 2.1c patch's own bytes, cross-checked against the golden lineage: makeiblk
-# 58483/14924 is the value the M-RUN-P5.4 ferry reassembled byte-perfect on
+# 58483/14924 is the value a 2026-08 ferry reassembled byte-perfect on
 # metal; the syslog trio is the unit the throttle doc inventoried on the full
 # 2.1c image (syslogd 22,728 B). A mismatch means the wrong/damaged archive --
 # refuse, never stage.

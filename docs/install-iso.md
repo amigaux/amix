@@ -104,7 +104,7 @@ non-zero (INCOMPLETE) rather than a green — a skip is not a pass.
 
 Invariant: **stock content present ⇒ `/LICENSING` carries the stamp
 `release-cleared 2026-09-23`, `/MANIFEST` carries a well-formed `publication:` line
-(`unpublished …` or `published by owner decision YYYY-MM-DD`), and — if the image
+(`unpublished …` or `published YYYY-MM-DD`), and — if the image
 lives in a git work tree — it sits on a gitignored path.** A disc still carrying the
 retired stamp is refused with a "rebuild" message.
 
@@ -114,7 +114,7 @@ retired stamp is refused with a "rebuild" message.
 build-iso.sh writes the stamps at BUILD time. By default a disc is stamped
 `publication: unpublished`: **publishing any medium is a per-artefact owner
 decision**, and the tools never publish or copy anything. When the owner decides to
-publish a specific medium, rebuild it with `--published-by-owner YYYY-MM-DD` so the
+publish a specific medium, rebuild it with `--published YYYY-MM-DD` so the
 disc records that decision; the date must be well-formed. `--redistributable` is
 retired (it now exits 2 pointing at the new flag). Gate 1 — never write the image to
 a git-tracked path — is unchanged: media are never committed.

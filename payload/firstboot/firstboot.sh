@@ -318,13 +318,13 @@ write_conf()
 			-e '/^FB_REPO_URL=/d' \
 			-e '/^FB_ROOT_TELNET=/d' \
 			-e '/^FB_SYSLOG=/d' \
-			-e '/^# W5-DIALOG-/d' \
+			-e '/^# FIRSTBOOT-DIALOG-/d' \
 			"$CONF" > "$NEWCONF" || return 1
 	else
 		cp /dev/null "$NEWCONF" || return 1
 	fi
 	{
-		echo "# W5-DIALOG-BEGIN -- answered at the console by $PROG"
+		echo "# FIRSTBOOT-DIALOG-BEGIN -- answered at the console by $PROG"
 		echo "FB_NODENAME=$FB_NODENAME"
 		echo "FB_DOMAIN=$FB_DOMAIN"
 		echo "FB_TZ=$FB_TZ"
@@ -343,9 +343,9 @@ write_conf()
 		echo "FB_REPO_URL=$FB_REPO_URL"
 		echo "FB_ROOT_TELNET=$FB_ROOT_TELNET"
 		echo "FB_SYSLOG=$FB_SYSLOG"
-		echo "# W5-DIALOG-END"
+		echo "# FIRSTBOOT-DIALOG-END"
 	} >> "$NEWCONF" || return 1
-	grep '^# W5-DIALOG-END$' "$NEWCONF" > /dev/null || return 1
+	grep '^# FIRSTBOOT-DIALOG-END$' "$NEWCONF" > /dev/null || return 1
 	mv "${NEWCONF:?}" "${CONF:?}" || return 1
 	chmod 600 "$CONF" 2>/dev/null
 	chmod 644 "$CONF" 2>/dev/null
@@ -1939,7 +1939,7 @@ then
 		echo "firstboot: /etc/profile += /usr/bin/X11 on PATH + /usr/lib on LD_LIBRARY_PATH (X easy-start)"
 	fi
 fi
-# --- 8b(ii). apkg PATH: /opt/amix/bin appended LAST on PATH (owner rule: last,
+# --- 8b(ii). apkg PATH: /opt/amix/bin appended LAST on PATH (last,
 #           never first -- stock tools keep precedence; overriding a stock command
 #           is a later deliberate choice). apkg installs packages under /opt/amix/bin
 #           (e.g. `less`), which the stock login PATH does not carry. Same one file
@@ -1971,7 +1971,7 @@ fi
 # A default X session -- the OPEN LOOK desktop (olwm + the olwsm Workspace-menu
 # daemon + a small client set) -- for root (~/ is /) and, via /etc/skel, every user
 # made later. Written every run (idempotent: the same bytes overwrite). The clients
-# resolve through the PATH added just above. Owner-approved layout, 2026-09-16.
+# resolve through the PATH added just above. Layout of 2026-09-16.
 #
 # olwsm is the SEPARATE OPEN LOOK Workspace-menu daemon: olwm alone draws window
 # frames but gives NO root menu (the "no window manager" look seen on the box). Start

@@ -26,7 +26,7 @@
 #                                                 mastered for (setup.sh reads it
 #                                                 when launched with no argument)
 #   /install/stand/{boot1.boot,makeiblk}          /stand framing tools the driver lays
-#                                                 down for updbootpart (P5.4-FT)
+#                                                 down for updbootpart
 #   /install/syslog/{syslog.conf,syslogd.init,syslogd}  the 2.1c syslog unit, init
 #                                                 ENABLED (vendor exit commented, §5)
 #
@@ -38,7 +38,7 @@
 # The staged tree + the ISO are build artefacts (Commodore boot-slice chain, sum
 # binary and packages). Never committed; the staging dir sits under work/
 # (gitignored) and build-iso.sh's release gate refuses a git-tracked ISO path.
-# Publishing a built disc is a per-artefact owner decision (docs/install-iso.md).
+# Publishing a built disc is a separate decision for each medium (docs/install-iso.md).
 #
 #   tools/build-install-iso.sh                       # bench profile, base set
 #   tools/build-install-iso.sh --profile metal-a4000-z3660 --profile bench-a3000-a4091
@@ -161,7 +161,7 @@ usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
   --stage-only      build the /install/ payload tree and STOP -- do NOT master an
                     ISO. This is the reusable staging half: tools/build-raw-source.sh
                     calls it to populate the RAW source disk's payload slice with
-                    the identical /install/ tree (W6-RAW.1). Implies --keep-stage.
+                    the identical /install/ tree. Implies --keep-stage.
   --source-hdf P=H  override a profile's BOOTSLICE_SOURCE_HDF (repeatable)
   --no-require-gate do NOT require the kerntools bootchain-verify round-trip
                     (default: required -- a missing sibling is fatal)
@@ -207,7 +207,7 @@ need_file "$DEPS" "deps.conf (install order)"
 need_file "$SETS_CONF" "sets.conf (the named install sets)"
 need_file "$SETS_PY" "sets.py (the sets.conf reference resolver)"
 need_file "$repo/src/installer/install.sh" "the installer driver"
-need_file "$repo/src/installer/setup.sh" "the W2 interactive interview"
+need_file "$repo/src/installer/setup.sh" "the interactive interview"
 
 # vendor pieces from the user-supplied 2.1c patch media (payload/21c, gitignored):
 # stand/makeiblk + the syslog unit. The extractor is idempotent and verifies its
@@ -240,7 +240,7 @@ shopt -u nullglob
 # order (core bsd net text sysadm cdfs APKGENG APKG) is the one that produced
 # every attested digest this project has. sets.py's `resolve()` returns a SORTED
 # membership, which is right for "is this package in the set" and wrong here: it
-# would have re-ordered the base-8 install for no reason at all, on a wave whose
+# would have re-ordered the base-8 install for no reason at all, on a cut whose
 # whole acceptance is that the base-8 tree does not move.
 #
 # So the AUTHORED order is used, expanded in file order -- and then checked
@@ -392,7 +392,7 @@ done
 # stamps the authored target's partitions with its controller's row (TARGET_HBA)
 python3 "$here/dmamask.py" medium --out "$STAGE/dmamask" || { echo "STOP: cannot write /install/dmamask" >&2; exit 1; }
 
-# optional static apkg (the parallel dispatch may have landed it)
+# optional static apkg (built separately)
 if [ -f "$STATIC/bin/apkg" ]; then
   cp -p "$STATIC/bin/apkg" "$STAGE/bin/apkg"; chmod 0755 "$STAGE/bin/apkg"
   echo "build-install-iso: included static apkg (present)"
@@ -400,7 +400,7 @@ if [ -f "$STATIC/bin/apkg" ]; then
 else
   echo "build-install-iso: NOTE static apkg not present -- shipping without it"
   echo "  (the driver does NOT depend on apkg; it is the remote client, not in"
-  echo "   the pkgadd -R loop). Re-run after the static-apkg dispatch lands to include it."
+  echo "   the pkgadd -R loop). Re-run once static apkg is built to include it."
   APKG_NOTE="apkg: absent (not required)"
 fi
 
@@ -861,7 +861,7 @@ if [ -n "$_want_l11" ]; then
   if [ -n "$CDBOOT" ]; then
     echo "cd-boot ${CDBOOT#$(dirname "$(dirname "$repo")")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
   else
-    echo "# cd-boot: none -- the install kernel boots from the floppy pair; amix-dlm D-3 §10 (option B) adds the CD boot tree (S3-31 part 3)" >> "$STAGE/l11/INPUTS"
+    echo "# cd-boot: none -- the install kernel boots from the floppy pair" >> "$STAGE/l11/INPUTS"
   fi
   stage_sh "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
   # /sbin/bcheckrc with `kbootset retry` before each of the three reboots of its root
@@ -946,7 +946,7 @@ else
   echo "build-install-iso: no requested profile sets INSTALL_LAYOUT=1.1 -- /install/l11 not staged"
 fi
 
-# --- /stand framing tools + the syslog unit (P5.4 field findings) -------------
+# --- /stand framing tools + the syslog unit -------------
 # Every staged byte is fingerprint-gated: `sum -r` checksum AND byte size must
 # match the pin or the build STOPS -- the installer's laydown must be the
 # golden-proven bytes or nothing.
@@ -959,7 +959,7 @@ sum_gate() { # sum_gate FILE WANT_SUM WANT_SIZE DESC
 }
 
 # /install/stand -- the updbootpart framing sources install.sh lays down at
-# /stand (P5.4-FT; M-RUN4b field: the KERN handoff fail-closed without them).
+# /stand (on a metal run the KERN handoff fail-closed without them).
 #   boot1.boot : the 2.1 original (NOT touched by the 2.1c patch, so core's
 #                extracted copy IS the golden's copy) -- 1,024 B, sum -r 41892.
 #   makeiblk   : the 2.1c PATCHED build the goldens run and the metal reframe

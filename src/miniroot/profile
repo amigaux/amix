@@ -1019,6 +1019,6 @@ find_source
 
 # The interview lives on the medium and takes it from here: destination, sizes,
 # packages, verbose, confirmation -- and then it execs the driver itself, with
-# stdin from /dev/null (METAL-FIX.3). No argument: the medium declares its own
+# stdin from /dev/null. No argument: the medium declares its own
 # base profile in /install/profiles/BASE, or BASE.<line> per kernel line.
 exec sh $SETUP

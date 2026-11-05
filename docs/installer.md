@@ -2137,7 +2137,7 @@ offering any other id would install a kernel that cannot find its root. When P6.
 **appended**. A profile is sourced by `sh`, so a later assignment wins — that is
 the entire merge mechanism, and it means every key the medium declares (kernel
 sums, `CD_SPEC`, boot-slice paths, `FB_*`) survives untouched. The appended block
-is fenced by `# W2-ANSWERS-BEGIN` / `# W2-ANSWERS-END` and carries
+is fenced by `# SETUP-ANSWERS-BEGIN` / `# SETUP-ANSWERS-END` and carries
 `TARGET_SCSI_ID`, `TARGET_DISK_MB`, `TARGET_ROOT_MB`, `TARGET_SWAP_MB`,
 `INSTALL_VERBOSE`.
 
@@ -4577,13 +4577,13 @@ was wrong. On a selfboot cell the channel and the source are one physical medium
 slice 1 UNIX_Root    +0x0010000  45,088,768 B   <- the miniroot's root fs = the CHANNEL
 slice 4 InstPayload  +0x2e60000   8,388,608 B   <- the /install payload   = the SOURCE
   APKGENG         first at 0x2e81524  -> slice 4
-  W2-ANSWERS-END  first at 0x308c29a  -> slice 4   (inside setup.sh's own source)
+  SETUP-ANSWERS-END  first at 0x308c29a  -> slice 4   (inside setup.sh's own source)
 ```
 
 A byte scan of the whole image therefore finds every marker string in the payload's own
 copy of the installer. Two consequences, and the second is the dangerous one: the
 freshness checks refuse a perfectly fresh medium, **and** the answers-beacon extractor —
-which reads between `# W2-ANSWERS-BEGIN` and `# W2-ANSWERS-END` — would happily return a
+which reads between `# SETUP-ANSWERS-BEGIN` and `# SETUP-ANSWERS-END` — would happily return a
 slab of `setup.sh`'s own text as if it were a beacon the interview wrote. A gate reading
 the installer's source code as the operator's answers is a false PASS waiting for an
 occasion.

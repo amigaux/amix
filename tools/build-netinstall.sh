@@ -50,7 +50,7 @@
 # --raw-hba NAME: the controller the raw image will hang off (tools/lib/dmamask.py names); its
 # DosEnvec Mask is that controller's DMA reach. The image is written to whatever disk the user has,
 # so absent: the conservative 0x07FFFFFE, with a warning.
-# Publication: unpublished; publishing it is a per-artefact owner decision.
+# Publication: unpublished; publishing it is a separate decision for each medium.
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
