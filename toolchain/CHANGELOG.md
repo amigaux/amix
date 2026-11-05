@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — a frozen image (b62624a, 7bce020, 141c454)
+
+`container-build.sh` exports amix-system at its pin, as it does the toolchains, under a fixed umask, and checks that exported tree; a host's umask and a working copy's empty directories no longer reach the image. The base image's `ca-certificates` and `openssl` are the snapshot's, pinned by sha256 in `base-*.distfile` and installed before apt reads any archive, so the build no longer uses the live archive, and TLS stays verified. `base-*.distfile` joins the image's cache key. `docs/BUILDING.md` says when the image's freeze changed and what that was measured to do.
+
 ## 2026-11-05 — image-manifest (535f3f6, eef9048)
 
 New tool `toolchain/image-manifest`, every file of an image. `test-tools` stops if it has no scratch directory.
