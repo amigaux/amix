@@ -11,7 +11,9 @@ The lock (release/README.md) names every input and output of the build in
 OUT, one line each, in fixed sections whose lines are sorted, so one build
 has one lock. It is written to OUT/lock. With --check, the lock of OUT is
 compared with LOCK instead, and every differing line is printed: a rebuild
-that differs from the lock of record is refused.
+that differs from the lock of record is refused. A build with no output, or a
+step's output directory that holds nothing, is refused either way: a lock of
+it would pass with nothing looked at.
 
 Exit status: 0 written or equal, 1 refused, 2 usage.
 """
@@ -32,7 +34,6 @@ class LockError(Exception):
 EXCEPTIONS = (
     "exception kit-revision-lines kit.conf and NOTICE name the amix and port commits;"
     " the kit's norev digest is compared across commits",
-    "exception amixbench-1.3 kept outside amix (0be17e7)",
     "exception installed-images the disk and SD images are bench-built and proven by"
     " their contents",
 )
@@ -73,8 +74,9 @@ def older_files(catalog):
             row = line[5:].strip()
             if row.startswith("#kpkg "):
                 m = re.search(r"\bfile=(\S+)", row)
-                if m:
-                    found.append(m.group(1))
+                if not m:
+                    raise LockError("%s: an older #kpkg row that names no file" % catalog)
+                found.append(m.group(1))
             elif not row.startswith("#"):
                 found.append(row.split("|")[3])
     return found
@@ -82,10 +84,13 @@ def older_files(catalog):
 
 def check_carried(top, out, rel):
     """A release tree's older versions are release/carried-REL's, byte for byte,
-    both ways: a tree built with no published tree has none, and is not checked."""
+    both ways: a tree built with no published tree has none, and is not checked;
+    one built on a published tree has them."""
     tree = os.path.join(out, "release", rel)
     older = older_files(os.path.join(tree, "catalog"))
     if not older:
+        if os.path.isfile(os.path.join(out, "build", "release-previous")):
+            raise LockError("release/%s was built on a published tree and keeps no older version" % rel)
         return
     table = {}
     path = os.path.join(top, "release", "carried-" + rel)
@@ -155,9 +160,13 @@ def lock(top, out):
             if rel.endswith(".list"):
                 with open(os.path.join(kernels, rel)) as fp:
                     lines += [l.rstrip("\n") for l in fp if l.startswith("kernel ")]
+        if not lines:
+            raise LockError("%s names no kernel" % kernels)
         sections.append(sorted(lines))
     mods = os.path.join(out, "modules")
     if os.path.isdir(mods):
+        if not files(mods):
+            raise LockError("%s holds nothing" % mods)
         sections.append(["module %s %s" % (rel, sha256(os.path.join(mods, rel)))
                          for rel in files(mods)])
     # each space: its datastreams (pkgs/, or the directory itself for apkg)
@@ -167,11 +176,17 @@ def lock(top, out):
     rels = os.path.join(out, "release")
     if os.path.isdir(rels):
         for r in sorted(os.listdir(rels)):
-            if os.path.isfile(os.path.join(rels, r, "catalog")) and not r.endswith(".tmp"):
-                check_carried(top, out, r)
+            if r.endswith(".tmp") or not os.path.isdir(os.path.join(rels, r)):
+                continue
+            if not os.path.isfile(os.path.join(rels, r, "catalog")):
+                raise LockError("release/%s has no catalog" % r)
+            check_carried(top, out, r)
         spaces += [("release/" + r, os.path.join(rels, r), os.path.join(rels, r, "pkgs"))
                    for r in sorted(os.listdir(rels))
                    if os.path.isdir(os.path.join(rels, r)) and not r.endswith(".tmp")]
+    built = len(sections[-1]) if os.path.isdir(mods) else 0
+    if os.path.isdir(kernels) or os.path.isfile(digests):
+        built += 1
     for space, d, pkgs in spaces:
         lines = []
         if os.path.isdir(pkgs):
@@ -190,12 +205,17 @@ def lock(top, out):
             if said != [md5]:
                 raise LockError("%s/catalog.md5 does not say the catalog's md5 %s" % (space, md5))
             lines.append("catalog %s md5 %s sha256 %s" % (space, md5, sha256(cat)))
+        if os.path.isdir(d) and not lines:
+            raise LockError("%s holds no package and no catalog" % d)
+        built += len(lines)
         sections.append(sorted(lines))
     media = os.path.join(out, "media")
     if os.path.isdir(media):
         sections.append(["media %s %d %s" % (rel, os.path.getsize(os.path.join(media, rel)),
                                              sha256(os.path.join(media, rel)))
                          for rel in files(media)])
+    if not built:
+        raise LockError("%s holds no output of make dist: nothing to lock" % out)
     sections.append(list(EXCEPTIONS))
     return head + [l for s in sections for l in s]
 
@@ -220,6 +240,9 @@ def main(argv):
                 sys.stderr.write("  - %s\n" % l)
             for l in new:
                 sys.stderr.write("  + %s\n" % l)
+            return 1
+        if want != lines:
+            sys.stderr.write("[FAIL] mklock: %s holds this build's lines, not in this build's order\n" % argv[3])
             return 1
         print("mklock: this build is the lock %s (%d lines)" % (argv[3], len(lines)))
         return 0

@@ -129,8 +129,27 @@ try:
     check("inputs and outputs, in their sections, each sorted",
           lock[4:4 + len(want)] == want, "\n".join(lock[4:]))
     check("the exceptions last", [l.split()[1] for l in lock[4 + len(want):]]
-          == ["kit-revision-lines", "amixbench-1.3", "installed-images"], "\n".join(lock))
+          == ["kit-revision-lines", "installed-images"], "\n".join(lock))
     check("nothing from out/build", not any("zlib.log" in l for l in lock))
+    # a lock with nothing behind it is refused
+    nothing = os.path.join(tmp, "out-nothing")
+    os.makedirs(os.path.join(nothing, "build"))
+    rc, o, e = run(top, nothing)
+    check("a build with no output: refused", rc == 1 and "nothing to lock" in e and not os.path.exists(os.path.join(nothing, "lock")), e)
+    rc, o, e = run(top, nothing, "--check", os.path.join(out, "lock"))
+    check("--check of a build with no output: refused", rc == 1 and "nothing to lock" in e, e)
+    for name, make, say in (("modules", lambda d: os.makedirs(os.path.join(d, "modules")), "holds nothing"),
+                            ("kernels", lambda d: os.makedirs(os.path.join(d, "kernels")), "names no kernel"),
+                            ("userland", lambda d: os.makedirs(os.path.join(d, "userland", "pkgs")), "no package and no catalog"),
+                            ("a release", lambda d: os.makedirs(os.path.join(d, "release", "1.1", "pkgs")), "has no catalog")):
+        d = os.path.join(tmp, "out-empty-" + name.replace(" ", "-"))
+        shutil.copytree(out, d)
+        shutil.rmtree(os.path.join(d, "release"))
+        if name != "a release":
+            shutil.rmtree(os.path.join(d, name), ignore_errors=True)
+        make(d)
+        rc, o, e = run(top, d)
+        check("%s directory that holds nothing: refused" % name, rc == 1 and say in e, e)
     first = open(os.path.join(out, "lock")).read()
     run(top, out)
     check("the same build, the same lock", open(os.path.join(out, "lock")).read() == first)

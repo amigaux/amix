@@ -164,5 +164,4 @@ out/build/pkgtools-host/      make dist's own host pkgmk and pkgtrans, built fro
   source with no copy simply has no fallback.
 - **Known exceptions**, which the proof lists by name: the kits' revision lines
   (`kit.conf` and `NOTICE` name the commits, so the `norev` digest is the one
-  compared across commits), amixbench 1.3 (kept outside amix), and the installed
-  disk and SD images, which are bench-built and proven by their contents.
+  compared across commits) and the installed disk and SD images, which are bench-built and proven by their contents.

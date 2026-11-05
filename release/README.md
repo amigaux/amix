@@ -55,9 +55,8 @@ exception <name> <why>                what the proof does not compare byte for b
 ```
 
 The exceptions are the kits' revision lines (`kit.conf` and `NOTICE` name the
-commits, so across commits the kit's `norev` digest is the one compared), amixbench 1.3
-(kept outside amix), and the installed disk and SD images (bench-built, proven by
-their contents). A release is built from a clean commit: a lock with a `dirty`
+commits, so across commits the kit's `norev` digest is the one compared) and the installed
+disk and SD images (bench-built, proven by their contents). A release is built from a clean commit: a lock with a `dirty`
 line is not one of record.
 
 ## What a release's packages are
