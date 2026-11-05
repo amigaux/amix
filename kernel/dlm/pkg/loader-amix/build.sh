@@ -7,6 +7,8 @@
 # Outputs ($KSPACE, common.sh):
 #     $KSPACE/loader-amix/dest/stand/loader/{boot1,boot2,ldrinfo}
 #     $KSPACE/pkg/ldramix-<version>.pkg
+#     $KSPACE/loader-amix/amix-cdboot: the CD's loader, boot2's core at the same
+#     commit, for the install media; beside the package, as no box runs it
 
 set -e
 
@@ -22,7 +24,7 @@ OUT="$KSPACE/pkg/$LDR_PKG-$LDR_PKG_VERSION.pkg"
 echo "=== $LDR_CATALOG_NAME $LDR_PKG_VERSION (PKG=$LDR_PKG, loader version $LDR_VERSION) ==="
 
 echo "--- build amix-dlm $LDR_DLM_COMMIT ---"
-amix_dlm_build "$LDR_DLM_COMMIT" boot1.img boot2.bin
+amix_dlm_build "$LDR_DLM_COMMIT" boot1.img boot2.bin amix-cdboot
 # LOADER_VERSION: a number in b2.h, or (since 124b86c) AX_LOADER_VERSION of
 # loader/common/store.h
 _lv=$(sed -n 's/^#define[ 	]*LOADER_VERSION[ 	]*\([A-Za-z0-9_]*\).*/\1/p' "$AMIX_DLM_TREE/loader/boot2/b2.h")
@@ -33,13 +35,16 @@ _lv=$(sed -n 's/^#define[ 	]*LOADER_VERSION[ 	]*\([A-Za-z0-9_]*\).*/\1/p' "$AMIX
 echo "  LOADER_VERSION $_lv"
 amix_verify "$AMIX_DLM_TREE/build/boot1.img" "$LDR_BOOT1_SHA"
 amix_verify "$AMIX_DLM_TREE/build/boot2.bin" "$LDR_BOOT2_SHA"
+amix_verify "$AMIX_DLM_TREE/build/amix-cdboot" "$LDR_CDBOOT_SHA"
 [ "$(stat -c%s "$AMIX_DLM_TREE/build/boot1.img")" = "$LDR_BOOT1_SIZE" ] \
-	&& [ "$(stat -c%s "$AMIX_DLM_TREE/build/boot2.bin")" = "$LDR_BOOT2_SIZE" ] || {
-	echo "[FAIL] boot1/boot2 sizes are not the pinned ones" >&2; exit 1; }
+	&& [ "$(stat -c%s "$AMIX_DLM_TREE/build/boot2.bin")" = "$LDR_BOOT2_SIZE" ] \
+	&& [ "$(stat -c%s "$AMIX_DLM_TREE/build/amix-cdboot")" = "$LDR_CDBOOT_SIZE" ] || {
+	echo "[FAIL] boot1/boot2/amix-cdboot sizes are not the pinned ones" >&2; exit 1; }
 
 rm -rf "${BUILD:?}"; mkdir -p "$DEST/stand/loader" "$WORK"
 cp "$AMIX_DLM_TREE/build/boot1.img" "$DEST/stand/loader/boot1"
 cp "$AMIX_DLM_TREE/build/boot2.bin" "$DEST/stand/loader/boot2"
+cp "$AMIX_DLM_TREE/build/amix-cdboot" "$BUILD/amix-cdboot"
 # ldrinfo: one key=value per line, the C2-3 v2 sec 3 keys in its order
 cat > "$DEST/stand/loader/ldrinfo" <<EOF
 version=$LDR_VERSION
