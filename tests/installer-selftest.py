@@ -4562,15 +4562,19 @@ def audit_framing_tools():
         fail("build-install-iso.sh missing -- cannot check the staging")
     else:
         bsrc = open(ISO_BUILDER, encoding="utf-8").read()
-        if re.search(r'\$STAGE/(stand|syslog)\b|payload/21c|extract-21c-payload', bsrc):
-            fail("build-install-iso.sh stages the 1.0 path's /install/stand or /install/syslog, or still reads payload/21c")
+        if re.search(r'\$STAGE/stand\b|\$STAGE/syslog/syslog\.|payload/21c|extract-21c-payload', bsrc):
+            fail("build-install-iso.sh stages the 1.0 path's /install/stand or syslog unit, or still reads payload/21c")
         else:
-            ok("the medium stages no /install/stand or /install/syslog, and needs no 2.1c extraction")
+            ok("the medium stages no /install/stand or 1.0 syslog unit, and needs no 2.1c extraction")
+        if 'cp "$SYSLOGD_21C" "$STAGE/syslog/syslogd"' in bsrc and 'install-reads-check.py" "$STAGE"' in bsrc:
+            ok("the medium stages the 2.1c daemon the 1.1 path lays down, and the build checks every path the installer reads")
+        else:
+            fail("build-install-iso.sh doesn't stage the 1.1 path's syslogd, or doesn't run install-reads-check")
     l11src = open(os.path.join(os.path.dirname(DRIVER), "l11.sh"), encoding="utf-8").read()
-    if re.search(r'\$INST/(stand|syslog)\b', l11src):
-        fail("l11.sh reads /install/stand or /install/syslog, which a medium no longer stages")
+    if re.search(r'\$INST/stand\b|\$INST/syslog/syslog\.', l11src):
+        fail("l11.sh reads /install/stand or the 1.0 syslog unit, which a medium no longer stages")
     else:
-        ok("l11.sh reads neither /install/stand nor /install/syslog")
+        ok("l11.sh reads neither /install/stand nor the 1.0 syslog unit")
 
     # NEGATIVE FIXTURE -- a driver stripped of the laydown is flagged.
     neg = re.sub(r'\n[^\n]*cp\s+"\$INST/stand/boot1\.boot"[^\n]*', "", code)

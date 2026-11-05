@@ -1786,11 +1786,10 @@ staging; unconditional — bench profiles need logging as much as metal):
 | `/var/log/{alert,bus-errors,console,critical,kernel,news-urgent,notice,security}` | 0644 | eight zero-length stubs (syslogd appends to existing files; the vendor patch ships exactly these) |
 | `/dev/conslog` | 0222 | `c 25 0` — the vendor patch's own "device node added to support syslogd" (`/dev/log` is already a core member) |
 
-The vendor pieces come from the **user-supplied Amix 2.1c patch archive**
-(`archive.lha` → `var/patch/archive.cpio`), extracted host-side by
-`tools/extract-21c-payload.sh` into the gitignored `payload/21c/` and verified
-against pinned fingerprints — a wrong or damaged archive is a hard STOP, and
-`build-install-iso.sh` re-runs the (idempotent) extractor on every staging. Nothing
+On a 1.0 disk the vendor pieces came from the **user-supplied Amix 2.1c patch archive**,
+extracted and verified against pinned fingerprints. A 1.1 disk gets the unit from the
+syslog package; only the 2.1c daemon stays the installer's, staged from the system tree
+(`usr/sbin/syslogd`) and pinned by sha256. Nothing
 proprietary is tracked; everything is referenced by checksum (the repository's
 licensing rule).
 

@@ -490,6 +490,16 @@ else
   echo "STOP: profile ${PROFILES[0]} doesn't say FB_ROOT_SHADOW=none, and no root hash was given (MEDIA_ROOT_SHADOW)" >&2; exit 1
 fi
 
+# --- /install/syslog/syslogd: the 2.1c daemon -------------------------------
+# install.sh's 1.1 path lays it over core's 2.1 copy; no package carries it. It comes from the system tree.
+SYSLOGD_21C="${MEDIA_SYSTEM:-$repo/../../amix-system}/usr/sbin/syslogd"
+SYSLOGD_SHA=cca917299e395098e3ece13d06005074e3461904f0b71d9c84b62cf529d8b17b
+[ "$(sha256sum < "$SYSLOGD_21C" 2>/dev/null | cut -d' ' -f1)" = "$SYSLOGD_SHA" ] \
+  || { echo "STOP: $SYSLOGD_21C is missing or isn't the 2.1c daemon (sha256 $SYSLOGD_SHA)" >&2; exit 1; }
+mkdir -p "$STAGE/syslog"
+cp "$SYSLOGD_21C" "$STAGE/syslog/syslogd"
+chmod 0644 "$STAGE/syslog/syslogd"
+
 # --- /install/fpfix (BLIZZARD; installed-tree ufs FP patch) -------------
 # The 040/060 line runs a UFS root, and on an FPU-less 68060 (the LC060) the
 # target's OWN /usr/lib/fs/ufs/{mkfs,fsck} die at a display-only FP expression
@@ -1169,6 +1179,11 @@ if [ "$STAGE_ONLY" -eq 1 ]; then
 fi
 
 echo
+# everything the 1.1 installer reads from its medium is on this one
+if grep -q '^INSTALL_LAYOUT=1\.1$' "$_base_profile_file"; then
+  python3 "$here/install-reads-check.py" "$STAGE" || { echo "STOP: the installer reads what this medium doesn't have" >&2; exit 1; }
+fi
+
 echo "=== mastering install CD (build-iso.sh --install-src) ==="
 BIARGS=(--set "$SET" --install-src "$STAGE")
 [ -n "$OUT" ] && BIARGS+=(--out "$OUT")

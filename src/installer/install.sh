@@ -3194,7 +3194,7 @@ fi	# INSTALL_LAYOUT 1.0: updbootpart + /stand framing
 if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	# the syslog package ships the unit (init.d/syslogd and its links, syslog.conf as a
 	# conffile, /var/log, /dev/conslog; it makes the log files at each start and reads
-	# syslogd= from /etc/rc.conf). No package carries the 2.1c daemon (amix-system has none),
+	# syslogd= from /etc/rc.conf). No package carries the 2.1c daemon (the system tree does),
 	# so its overwrite of core's 2.1 copy stays the installer's.
 	run cp "$INST/syslog/syslogd" "$TARGET/usr/sbin/syslogd"
 	run chmod 0100 "$TARGET/usr/sbin/syslogd"
