@@ -22,8 +22,8 @@
 #   (amix's tools/release-check on every ISO: no ROM, no private address, name or secret; needs
 #   $PRIVACY_PATTERNS, the bench's local names, and the ROM register roms/MANIFEST.sha256), and
 #   tools/known-bad-scan.py on every medium (no module of tools/known-bad-modules.txt).
-# build-netinstall.sh --raw also writes raw images of both lines: k46's goes on the Z3660 cards, k30's is
-# not a release medium.
+# The raw netinstall image (build-netinstall.sh --raw) goes on the Z3660 cards. A k30 one is not a release
+# medium: only --raw-k30 writes it, for the bench, and release-files.sh refuses it.
 # The master stage is kept at --out/stage (netinstall's --install takes it). Publication of any of
 # these files is a separate, per-artefact decision. Exit 0 all built and clean, 1 not, 2 usage.
 set -uo pipefail

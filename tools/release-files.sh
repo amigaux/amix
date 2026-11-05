@@ -19,6 +19,30 @@ here="$(cd "$(dirname "$0")" && pwd)"
 ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
 # the pinned content check (amix tools/ at the set's revision, tools/build-l11-inputs.sh), not the checkout's tip
 RC="${L11_IN:-$(dirname "$here")/work/l11}/amix-tools/release-check"
+# not_release_files FILE...: names a file of the release set must not have (a raw k30 netinstall image is a
+# bench medium, build-netinstall.sh --raw-k30), by its name and by the rows of a SHA256SUMS. 0 when none.
+not_release_files() {
+	local f hit=0
+	for f in "$@"; do
+		case "$(basename "$f")" in
+		*netinstall-k30*) echo "$f"; hit=1 ;;
+		SHA256SUMS) grep -a 'netinstall-k30' "$f" 2>/dev/null && hit=1 ;;
+		esac
+	done
+	return $((hit == 0 ? 0 : 1))
+}
+if [ "${1:-}" = --selftest ]; then
+	d=$(mktemp -d) || exit 1; rc=0
+	: > "$d/amix-1.1-netinstall.iso"; : > "$d/amix-1.1-k30-4g.img"; echo "00  amix-1.1-install.iso" > "$d/SHA256SUMS"
+	not_release_files "$d"/* > /dev/null || { echo "  FAIL the release set flagged"; rc=1; }
+	: > "$d/amix-1.1-netinstall-k30.img"
+	not_release_files "$d"/* > /dev/null && { echo "  FAIL a raw k30 image passed"; rc=1; }
+	rm -f "${d:?}/amix-1.1-netinstall-k30.img"; echo "00  amix-1.1-netinstall-k30.img" > "$d/SHA256SUMS"
+	not_release_files "$d"/* > /dev/null && { echo "  FAIL a SHA256SUMS row for it passed"; rc=1; }
+	rm -rf "${d:?}"
+	[ "$rc" = 0 ] && echo "release-files --selftest: PASS" || echo "release-files --selftest: FAIL"
+	exit $rc
+fi
 IMG= MEDIA=()
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -38,6 +62,11 @@ bad=0
 say() { echo "$*" | tee -a "$R"; }
 : > "$R"
 say "# release files, $(date -u +%Y-%m-%dT%H:%M:%SZ), tools/release-files.sh"
+declare -a _mdirs=()
+for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do _mdirs+=("$(dirname "$m")"/*); done
+if _h=$(not_release_files "$IMG"/* "${_mdirs[@]+"${_mdirs[@]}"}" "${MEDIA[@]+"${MEDIA[@]}"}"); then :; else
+	say "FAIL not release files, a raw k30 image is a bench medium: $_h"; bad=1
+fi
 for img in "$IMG"/amix-1.1-*-4g.img; do
 	[ -f "$img" ] || continue
 	b="$(basename "$img" .img)" z="$IMG/$b.zip"

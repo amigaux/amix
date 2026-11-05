@@ -34,7 +34,8 @@
 # tools/ramdisk-image-check.py --zen0 (every boot record's path= holds its sha256=; /dev/zen0 is
 # c 51,0). The disc is mastered as tools/build-iso.sh masters a CD-boot disc (System ID
 # AMIGA BOOT, Rock Ridge, the loader 0755) and read back: the boot tree must pass lsstore -C.
-# --raw PREFIX: form B's second half (50 section 5), PREFIX-k46.img and PREFIX-k30.img, each
+# --raw PREFIX: form B's second half (50 section 5), PREFIX-k46.img for the Z3660 cards (--raw-k30:
+# PREFIX-k30.img as well, for the bench's l11-nr-k30 cell; it is not a release medium), each
 # the line's generation (the disc's, byte for byte) in a read-only disk store, for a box without
 # a CD drive, written whole to a disk, a CF card, a ZuluSCSI or a Z3660 SD image: an RDB (RDSK
 # at block 0, 64-block cylinders, attach-safe flags) with one partition, UNIX_Boot (UNI\0,
@@ -55,10 +56,11 @@ here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-netinstall: STOP: $*" >&2; exit 1; }
 
-I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA=
+I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA= RAWK30=
 while [ $# -gt 0 ]; do case "$1" in
   --boot-mods) BMODS="$2"; shift 2;;
   --raw) RAW="$2"; shift 2;;
+  --raw-k30) RAWK30=k30; shift;;
   --raw-hba) RAWHBA="$2"; shift 2;;
   --k46) I46="$2"; shift 2;;
   --k30) I30="$2"; shift 2;;
@@ -179,7 +181,7 @@ if [ -n "$RAW" ]; then
   [ -f "$LD/boot1" ] && [ -f "$LD/boot2" ] && [ -n "$LV" ] || die "the staged loader-amix has no boot1/boot2/ldrinfo"
   [ "$(sha256sum < "$LD/boot2" | cut -d' ' -f1)" = "$(sed -n 's/^boot2-sha256=//p' "$LD/ldrinfo")" ] \
     || die "the staged boot2 is not the one its ldrinfo records"
-  for l in k46 k30; do
+  for l in k46 $RAWK30; do
     out="$RAW-$l.img"
     grep -q '^generation 1$' "$W/cd/gen-$l.spec" || die "gen-$l.spec is not generation 1 (the image's /stand/gen/1/mod)"
     # the store: every member raw, plus 1 MiB of headers and slack, in whole MiB
