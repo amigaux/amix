@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-05 — amix-benchmark 1.3-3 and x11r63 6.3-8 (bda8d29, 9ae3885)
+
+amix-benchmark 1.3-3: built here from src/ with the period toolchain, stripped, no build date, reproducible. Rebuilt binaries differ from the published 1.3 in `_lib_version` and the addresses it shifts. Man page and NOTICE added.
+
+x11r63 6.3-8: fonts.dir and the xkb .dir listings sorted with LC_ALL=C, so the package no longer depends on the build's file system. Scaled requests in misc now always resolve the same way.
+
 ## 2026-11-04 — rdate 1.11-2: a polite SNTP client (deed3a9)
 
 A silent server is asked at 0, 2 and 6 s per try instead of every 0.6 s, so 6 datagrams per silent server per run at ntpsync's defaults (49 before). A reply to any datagram of the try counts, however late, and the first good one ends the try; before, a reply 1 s late or more never set the clock. A kiss-o'-death or unsynchronised reply is not asked again. Exit status 4 under -n is documented to include no route and a closed port.
