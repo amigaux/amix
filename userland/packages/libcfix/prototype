@@ -1,0 +1,22 @@
+#
+# prototype -- libcfix: the stock /usr/lib/libc.so.1 with two malloc fixes.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  The library keeps the stock shape: the same
+# path, type, mode and owner as core's line.  The path stays claimed by core
+# too (pkgadd reports the shared path); pkgrm would leave these bytes there,
+# so the package is essential and never removed.  Every basename <= 14 bytes.
+#
+i pkginfo
+#
+# core's own lines for the two directories, attributes as core has them
+d none /usr 0755 bin bin
+d none /usr/lib 0755 bin bin
+f none /usr/lib/libc.so.1 0755 bin bin
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/libcfix 0755 root sys
+f none /opt/amix/doc/libcfix/README.md 0644 root bin
+f none /opt/amix/doc/libcfix/LICENSE.amix 0644 root bin
