@@ -25,7 +25,7 @@ if [ "${1:-}" = --self-test ]; then
 	printf 'amix-1.1-install.iso  1 bytes  sha256 ab\n# inputs: INPUTS sha256 ab\n  kernel kern46m.pkg\n/opt/amix/doc/rdate/\n' > "$t/good"
 	printf '# inputs: /home/someone/work/l11/INPUTS\n' > "$t/home"
 	printf 'cell: PASS (%s/x)\n' "$ws" > "$t/ws"
-	printf 'a /srv/share/x\n' > "$t/nas"
+	printf 'a /%s/share/x\n' nas > "$t/nas"
 	check "$t/good" > /dev/null && echo "  ok   a clean sidecar, with a path on the installed system -> clean" || { echo "  FAIL a clean sidecar"; ok=0; }
 	for c in home ws nas; do
 		check "$t/$c" > /dev/null; [ $? = 1 ] && echo "  ok   $c path -> refused" || { echo "  FAIL $c path not refused"; ok=0; }

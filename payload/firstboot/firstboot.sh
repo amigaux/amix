@@ -1335,8 +1335,7 @@ echo "$FB_TZNUM" > /etc/tz.index 2>/dev/null || true
 chmod 644 /etc/tz.index 2>/dev/null
 
 # --- 3. root password + console -------------------------------------------
-# Root pw hash comes from the payload root.shadow (bench pw `pass`, the
-# well-documented bench credential; crypt("pass","aB")=ROOT_HASH_PLACEHOLDER). Replace
+# Root pw hash comes from the payload root.shadow, which a bench medium carries. Replace
 # the root line of /etc/shadow, keep every other line. mode 400.
 #
 # W5: when the first-boot DIALOG is in play it runs the stock `passwd root` /

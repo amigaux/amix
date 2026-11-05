@@ -10823,7 +10823,7 @@ def audit_root_lock():
             open(sh, "w").write(start)
             fbdir = os.path.join(d, "fb"); shutil.rmtree(fbdir, ignore_errors=True); os.makedirs(fbdir)
             if payload:
-                open(os.path.join(fbdir, "root.shadow"), "w").write("root:ROOT_HASH_PLACEHOLDER:::::::\n")
+                open(os.path.join(fbdir, "root.shadow"), "w").write("root:abFIXTUREhash:::::::\n")
             subprocess.run(["/usr/bin/dash", "-c", "FBDIR=%s FB_DIALOG=%s DIALOG_PENDING=%s\n%s" % (fbdir, dialog, pending, blk)],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20, cwd=d)
             return open(sh).read().splitlines()[0]
@@ -10833,7 +10833,7 @@ def audit_root_lock():
             ("the dialog then sets a password and completes: left as it set it (unlocked)", "root:Zq9newhashxx:::::::\n", False, "y", "", "root:Zq9newhashxx:::::::"),
             ("an interrupted dialog (still pending, no payload): root stays LOCKED", "root:*LK*:::::::\n", False, "y", "y", "root:*LK*:::::::"),
             ("no dialog armed and no payload hash: LOCKED, never empty", stock, False, "n", "", "root:*LK*:::::::"),
-            ("a bench medium's payload hash (never published): applied", stock, True, "y", "y", "root:ROOT_HASH_PLACEHOLDER:::::::"),
+            ("a bench medium's payload hash (never published): applied", stock, True, "y", "y", "root:abFIXTUREhash:::::::"),
         )
         for what, start, payload, dialog, pending, want in steps:
             got = run(start, payload, dialog, pending)

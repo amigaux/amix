@@ -3222,7 +3222,7 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
    "token at end of line" — and audit Z forbids `\|` in any on-box `sed`.
 5. **`passwd root` accepts the 4-character bench credential.** SVR4's
    length/complexity rules ("Password is too short — must be at least 6
-   characters") are skipped for the superuser; `passwd root` with `pass` returned
+   characters") are skipped for the superuser; `passwd root` with the short bench password returned
    0 and wrote a fresh salt. This is what makes the canned dialog answerable at
    all, and it is why the matrix can still log in afterwards. It also writes a
    `lastchg` of the box's own day, exactly as stock's `passwdall` always did.
@@ -3535,7 +3535,7 @@ Three decisions inside it are worth stating in full, because each one looks like
 a gap until you see the mechanism behind it:
 
 **The root password is documented, not secret.** Every disc mastered from this
-tree carries the same hash in `payload/firstboot/root.shadow` (`pass`), so
+tree carries the same hash in `payload/firstboot/root.shadow` (a public bench value), so
 secrecy was never on the table and pretending otherwise would be the actual
 hazard. What makes it safe is the first-boot dialog's **re-arm**: the
 `system.setup` slot is disarmed (`chmod -x`) only at the clean exit of the
@@ -4483,7 +4483,7 @@ boot (`work/golden-candidate/netready-check.out`, one held telnet session):
 | interface | `aen0: flags=23<UP,BROADCAST,NOTRAILERS> inet 192.0.2.38 netmask ffffff00` |
 | the law | `/etc/inet/network-config`: `sum -r` **33904**, **685 bytes**, mtime **Nov 22 1991**, mode `-r--r--r-- root sys` — byte-identical to `core-2.1.pkg`'s shipped copy. **Untouched**, and that is now a measurement |
 | hosts | `192.0.2.38 uaeamix uaeamix.example.net` + the repo host `192.0.2.2 files.example.net` |
-| root pw | `root:ROOT_HASH_PLACEHOLDER:::::::` — the bench credential `pass`, and **every aging field empty**: the RTC-1978 `lastchg` trap cannot bite this image |
+| root pw | the bench value of `payload/firstboot/root.shadow` — the bench credential, and **every aging field empty**: the RTC-1978 `lastchg` trap cannot bite this image |
 | root telnet | `#CONSOLE=/dev/console` (commented = permitted) |
 | vfstab | `/dev/dsk/c6d0s1 /dev/rdsk/c6d0s1 / ufs 1 yes -` — left as measured. That `yes` is the mount-at-boot defect fixed on 2026-08-15; this image predates the fix, so it still grumbles `Device busy` at every boot. Media mastered after it write `1 no -` |
 | TZ | `TZ=:US/Eastern` — with the leading colon (the W5 `getpwnam` cascade fix) |
