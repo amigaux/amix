@@ -9,10 +9,6 @@
 #   regex      optional; when given, it must match the flagged text
 # Lines starting with "#" are comments. Give every entry a reason above it.
 
-# The install media ship a root password hash for the documented, public
-# bench password; a fresh install is expected to change it.
-3 media/**/root.shadow
-
 # The documentation's example network: one example host and its gateway on
 # a private network, used throughout the install and networking guides.
 1 * \b192\.168\.0\.(10|1)\b

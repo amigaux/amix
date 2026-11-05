@@ -124,14 +124,14 @@ def build(repo):
     c["example"] = repo.commit(OURS, {"docs/network.txt": j(
         "host ", dotted(192, 168, 0, 10), "\ngateway ", dotted(192, 168, 0, 1), "\n")},
         "Document the example network")
-    c["shadow"] = repo.commit(OURS, {"media/profiles/root.shadow": j(
-        "root:", "ab01FAX.bQRSU", ":19000:0:99999:7:::\n")}, "Add the bench profile")
     apkg_ns = j("nameserver ", dotted(10, 0, 0, 1), "\n",
                 "nameserver ", dotted(10, 0, 0, 2), "\n")
     c["apkg"] = repo.commit(OURS, {"src/apkg/tests/run-tests.sh": apkg_ns,
                                    "vendor/pkgtools/src/apkg/tests/run-tests.sh": apkg_ns},
                             "Add the apkg resolver tests")
     # Plants.
+    c["shadow"] = repo.commit(OURS, {"media/profiles/root.shadow": j(
+        "root:", "ab01FAX.bQRSU", ":19000:0:99999:7:::\n")}, "Add the bench profile")
     c["ipv4"] = repo.commit(OURS, {"cfg/hosts.txt": j("gw ", dotted(10, 0, 0, 1), "\n")},
                             "Add hosts")
     c["apkg_other"] = repo.commit(OURS, {
@@ -452,6 +452,7 @@ def main():
             ("tokens", 3, "app/settings.conf"),
             ("tokens", 3, "etc/shadow"),
             ("images", 4, "images/disk.adf"),
+            ("shadow", 3, "media/profiles/root.shadow"),
             ("images", 4, "images/big.bin"),
             ("sysfile", 4, "vendor/payload.dat"),
             ("early_sys", 4, "vendor/early.dat"),
@@ -461,8 +462,7 @@ def main():
         ]
         tip_plants = [(tip, 2, "CLAUDE.md"), (tip, 2, "sub/.claude/settings.json")]
         controls = ["README.md", "data/blob.bin", "data/fw.bin", "notes/dns.txt",
-                    "AGENTS.md", "docs/network.txt", "media/profiles/root.shadow",
-                    "src/apkg/tests/run-tests.sh",
+                    "AGENTS.md", "docs/network.txt", "src/apkg/tests/run-tests.sh",
                     "system/MANIFEST.sha256", "notes/.keep"]
 
         # --all without local extras.
@@ -475,8 +475,7 @@ def main():
             t.ok(has(hits, sha, cls, path), "local tool file at tip: %s" % path, out)
         for path in controls:
             t.ok(not any(h[2] == path for h in hits), "control passes: %s" % path, out)
-        for key in ("readme", "binary", "public", "contrib", "example", "shadow",
-                    "apkg", "empty"):
+        for key in ("readme", "binary", "public", "contrib", "example", "apkg", "empty"):
             t.ok(not any(c[key].startswith(h[0]) for h in hits),
                  "control commit clean: %s" % key, out)
         expected = [(c[k], cls, p) for k, cls, p in plants] + tip_plants
@@ -507,9 +506,9 @@ def main():
              "local extras never print their contents", out)
 
         # --range.
-        rc, hits, out = repo.check(["--range", "%s..%s" % (c["readme"], c["shadow"])])
+        rc, hits, out = repo.check(["--range", "%s..%s" % (c["readme"], c["apkg"])])
         t.ok(rc == 0 and not hits, "--range over the controls exits 0", out)
-        rc, hits, out = repo.check(["--range", "%s..master" % c["shadow"]])
+        rc, hits, out = repo.check(["--range", "%s..master" % c["apkg"]])
         t.ok(rc == 1 and has(hits, c["ipv4"], 1, "cfg/hosts.txt")
              and not any(h[2] in controls for h in hits),
              "--range over the plants exits 1, controls clean", out)
@@ -531,7 +530,7 @@ def main():
              "--max-size raises the limit; extension still caught", out)
 
         # --tree.
-        rc, hits, out = repo.check(["--tree", c["shadow"]])
+        rc, hits, out = repo.check(["--tree", c["apkg"]])
         t.ok(rc == 0 and not hits, "--tree on a clean commit exits 0", out)
         rc, hits, out = repo.check(["--tree", "master"])
         t.ok(rc == 1 and has(hits, tip, 2, "CLAUDE.md") and has(hits, tip, 1, "cfg/hosts.txt")
@@ -541,11 +540,11 @@ def main():
 
         # --pre-push: a new branch checks only what no remote-tracking ref has.
         repo.git("update-ref", "refs/remotes/origin/master", tip)
-        repo.git("checkout", "-q", "-b", "topic", c["shadow"])
+        repo.git("checkout", "-q", "-b", "topic", c["apkg"])
         topic = repo.commit(OURS, {"net/new.txt": j("peer ", dotted(192, 168, 7, 7), "\n")},
                             "Add a peer")
         stdin = j("refs/heads/topic ", topic, " refs/heads/topic ", ZERO, "\n",
-                  "(delete) ", ZERO, " refs/heads/gone ", c["shadow"], "\n")
+                  "(delete) ", ZERO, " refs/heads/gone ", c["apkg"], "\n")
         rc, hits, out = repo.check(["--pre-push", "origin", "https://example.invalid/r.git"],
                                    stdin=stdin)
         t.ok(rc == 1 and [(h[1], h[2]) for h in hits] == [(1, "net/new.txt")]
