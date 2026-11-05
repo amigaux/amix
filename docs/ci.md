@@ -19,7 +19,7 @@ finding to fix, not a gate.
 | tests | kernel/drivers z3660eth host test (its parameter parser) | `make -C kernel/drivers/z3660eth/module test` |
 | tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
 | tests | pkgtools: the host engine, then its eight suites (apkg, the kbootset consumer, conffile end to end, the no-http variant, conffile, contents-fsck, migrate, the repository tools) | `PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make -C userland/pkgtools test` |
-| tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim, check-image) | `sh toolchain/test-tools` |
+| tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim, check-image, the image manifest) | `sh toolchain/test-tools` |
 | tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
 | kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
@@ -113,8 +113,10 @@ with `CONTAINER=podman`) and network access to GitHub and the GNU mirrors.
 hand (workflow_dispatch). It fetches amix-system at its pin, takes the build
 container from the same cache as the kit job (the same key, so either job's
 image serves both), and runs `build/dist-proof`: make dist twice, from two
-clean clones of the commit at two different paths, and the two locks
-compared. Given a lock of record (`release/amix-<version>.lock`, the
+clean clones of the commit at two different paths and on two filesystems, and
+the two locks compared. The second filesystem is a fresh ext4 in a sparse file,
+mounted for the job: its directory hash seed is its own, so a build that depends
+on the order a directory lists in fails here. Given a lock of record (`release/amix-<version>.lock`, the
 dispatch's `lock` input), each run is also checked against it. The release step
 runs as a public rebuild (`RELEASE_PUBLIC=1`, `docs/BUILDING.md`), with the stock
 packages from their release assets and no published tree, so its tree has no older
@@ -123,6 +125,19 @@ known gap; any other failure fails the run. The summary lists each step and the 
 locks, the step logs and the catalogs are kept as the run's `dist-proof`
 artifact. A cold image build reports its time in the summary. The job's
 limit is 345 minutes (the image build 210, the two make dist runs 180).
+
+The job records the runner's CPU model and CPU count, memory and disk space in
+the summary. Both clones run on that one runner, so the two locks say nothing
+about another machine; a lock from another machine has to be compared by hand,
+and shows only that those two machines agree. The CPU model names one x86-64
+part, and the next run may get another.
+
+The artifact also holds `image/ci.manifest.gz`, every file of the image the job
+used (`toolchain/image-manifest`). The lock's image line covers only the
+toolchains under `/opt`; this is how the rest of two images is compared. The
+dispatch's `cold_image` input builds the image from scratch even when the cache
+has it, leaves the cache as it is, keeps `image/cached-vs-cold.diff`, and runs
+make dist in the new image.
 
 The container runs as the runner's uid, which has no name in the image:
 `build/dist.sh` mounts the image's passwd and group with the caller added,

@@ -621,6 +621,18 @@ clean:
                   DOCKER_ARGS=argf, PRIVACY_PATTERNS=os.path.join(tmp, "nosuch"))
     check("a release input that does not exist: refused before the container",
           rc == 1 and "PRIVACY_PATTERNS=%s does not exist" % os.path.join(tmp, "nosuch") in out, out)
+    # dist-proof refuses a second filesystem that is not one, before it clones
+    proof = os.path.join(top, "build", "dist-proof")
+    shutil.copy2(os.path.join(TOP, "build", "dist-proof"), proof)
+    same = os.path.join(tmp, "same")
+    os.makedirs(same)
+    rc, out = run(os.path.join(tmp, "p1"), where=proof, ELSEWHERE=same)
+    check("dist-proof: ELSEWHERE on the same filesystem refused", rc == 2 and "filesystem" in out, out)
+    rc, out = run(os.path.join(tmp, "p2"), where=proof, ELSEWHERE=os.path.join(tmp, "nosuch"))
+    check("dist-proof: ELSEWHERE that does not exist refused", rc == 2 and "not an empty directory" in out, out)
+    write(os.path.join(same, "x"), "x")
+    rc, out = run(os.path.join(tmp, "p3"), where=proof, ELSEWHERE=same)
+    check("dist-proof: ELSEWHERE that is not empty refused", rc == 2 and "not an empty directory" in out, out)
 finally:
     shutil.rmtree(tmp)
 

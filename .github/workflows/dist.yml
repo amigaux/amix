@@ -1,7 +1,7 @@
 # The proof of make dist: two make dist runs of one commit, from
-# two clean clones at two different paths, in the pinned build container, and
-# their locks compared; with a lock of record, each run is also checked
-# against it. Run by hand for now. See docs/ci.md.
+# two clean clones at two different paths and on two filesystems, in the pinned
+# build container, and their locks compared; with a lock of record, each run is
+# also checked against it. Run by hand for now. See docs/ci.md.
 name: dist
 
 on:
@@ -11,6 +11,10 @@ on:
         description: 'lock of record to check both runs against (release/amix-<version>.lock), or empty'
         required: false
         default: ''
+      cold_image:
+        description: 'build the toolchain image from scratch, compare it with the cached one, and use it'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,6 +32,12 @@ jobs:
       run:
         shell: bash   # -eo pipefail
     steps:
+      - name: the runner
+        run: |
+          { echo '### the runner'; echo '```'
+            sed -n 's/^model name[^:]*: //p' /proc/cpuinfo | head -1
+            echo "$(nproc) CPUs, kernel $(uname -r)"; free -m; df -hT / /mnt "$RUNNER_TEMP" /dev/shm || true
+            echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0   # a package's epoch is its directory's last commit
@@ -48,27 +58,56 @@ jobs:
         with:
           path: ${{ runner.temp }}/toolchain-image
           key: ${{ steps.image.outputs.cache-primary-key }}
+      - name: load the toolchain image
+        if: steps.image.outputs.cache-hit == 'true' || steps.image2.outputs.cache-hit == 'true'
+        run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
       - name: build the toolchain image
-        if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
+        if: inputs.cold_image || (steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true')
         timeout-minutes: 210
+        env:
+          HIT: ${{ steps.image.outputs.cache-hit == 'true' || steps.image2.outputs.cache-hit == 'true' }}
+          NO_CACHE: ${{ inputs.cold_image && '1' || '' }}
         run: |
+          if [ "$HIT" = true ]; then docker tag amix-toolchain:ci amix-toolchain:cached; fi
           start=$(date +%s)
           toolchain/container-build.sh "$RUNNER_TEMP/amix-system" amix-toolchain:ci
           echo "cold image build: $(( $(date +%s) - start )) s" | tee -a "$GITHUB_STEP_SUMMARY"
-          mkdir -p "$RUNNER_TEMP/toolchain-image"
-          docker save amix-toolchain:ci | zstd -q -T0 -o "$RUNNER_TEMP/toolchain-image/image.tar.zst"
-          ls -l "$RUNNER_TEMP/toolchain-image"
+          if [ "$HIT" != true ]; then
+            mkdir -p "$RUNNER_TEMP/toolchain-image"
+            docker save amix-toolchain:ci | zstd -q -T0 -o "$RUNNER_TEMP/toolchain-image/image.tar.zst"
+            ls -l "$RUNNER_TEMP/toolchain-image"
+          fi
       - name: save the toolchain image
         if: steps.image.outputs.cache-hit != 'true' && steps.image2.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ${{ runner.temp }}/toolchain-image
           key: ${{ steps.image.outputs.cache-primary-key }}
-      - name: load the toolchain image
-        if: steps.image.outputs.cache-hit == 'true' || steps.image2.outputs.cache-hit == 'true'
-        run: zstd -dc "$RUNNER_TEMP/toolchain-image/image.tar.zst" | docker load
       - name: the image's gcc14 is the pinned build
         run: toolchain/extract-g14.sh --check amix-toolchain:ci
+      # The lock's image line covers the toolchains; this is every file in the image.
+      - name: every file in the image
+        run: |
+          mkdir -p "$RUNNER_TEMP/image"
+          cd "$RUNNER_TEMP/image"
+          python3 -I "$GITHUB_WORKSPACE/toolchain/image-manifest" amix-toolchain:ci | gzip -n > ci.manifest.gz
+          if docker image inspect amix-toolchain:cached > /dev/null 2>&1; then
+            python3 -I "$GITHUB_WORKSPACE/toolchain/image-manifest" amix-toolchain:cached | gzip -n > cached.manifest.gz
+            rc=0; diff <(zcat cached.manifest.gz) <(zcat ci.manifest.gz) > cached-vs-cold.diff || rc=$?
+            [ "$rc" -le 1 ]
+            echo "the cold image against the cached one: $(grep -c '^[<>]' cached-vs-cold.diff || true) lines differ" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      # A fresh ext4 has its own directory hash seed, wherever its file sits. The
+      # file is sparse: only what the second clone writes takes space.
+      - name: another filesystem for the second clone
+        run: |
+          where=/; if mountpoint -q /mnt; then where=/mnt; fi
+          sudo truncate -s 16G "${where%/}/elsewhere.img"
+          sudo mkfs.ext4 -q -m 0 "${where%/}/elsewhere.img"
+          mkdir "$RUNNER_TEMP/elsewhere"
+          sudo mount -o loop "${where%/}/elsewhere.img" "$RUNNER_TEMP/elsewhere"
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$RUNNER_TEMP/elsewhere/proof"
+          df -hT "$RUNNER_TEMP/elsewhere"
       - name: make dist twice, the locks compared
         timeout-minutes: 180
         env:
@@ -76,6 +115,7 @@ jobs:
           SYSTEM: ${{ runner.temp }}/amix-system
           # the stock packages come from release assets; the private lists stay private
           RELEASE_PUBLIC: 1
+          ELSEWHERE: ${{ runner.temp }}/elsewhere/proof
           LOCK_OF_RECORD: ${{ inputs.lock }}
         run: |
           if [ -n "$LOCK_OF_RECORD" ]; then
@@ -86,7 +126,7 @@ jobs:
           sh build/dist-proof "$RUNNER_TEMP/proof" || rc=$?
           { echo '### make dist twice'; echo '```'; cat "$RUNNER_TEMP/proof/summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $rc
-      - name: the locks, the step logs and the catalogs
+      - name: the locks, the step logs, the catalogs and the image's files
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -99,3 +139,9 @@ jobs:
             ${{ runner.temp }}/proof/**/amix/out/build/*.log
             ${{ runner.temp }}/proof/**/amix/out/*/catalog
             ${{ runner.temp }}/proof/**/amix/out/*/catalog.md5
+            ${{ runner.temp }}/elsewhere/proof/**/step-*.log
+            ${{ runner.temp }}/elsewhere/proof/**/amix/out/lock
+            ${{ runner.temp }}/elsewhere/proof/**/amix/out/build/*.log
+            ${{ runner.temp }}/elsewhere/proof/**/amix/out/*/catalog
+            ${{ runner.temp }}/elsewhere/proof/**/amix/out/*/catalog.md5
+            ${{ runner.temp }}/image/*

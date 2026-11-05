@@ -16,6 +16,12 @@
 # failure stops the proof. Each step's log is WORKDIR/<run>/step-<step>.log,
 # and WORKDIR/summary says what each step did. Exit 0 when both runs end
 # with the same lock, 1 when a step failed or the locks differ, 2 usage.
+#
+# Two paths on one filesystem list a directory in one order, so a build that
+# depends on that order passes unseen. ELSEWHERE=<empty directory on another
+# filesystem> puts the second clone there. Without it the summary says the
+# order was not compared. Either way both runs are on one machine, which the
+# summary names; the proof says nothing about any other.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -29,12 +35,21 @@ sys=$(cd "$sys" && pwd)
 [ ! -e "$work" ] || [ -z "$(ls -A "$work")" ] || { echo "dist-proof: $work is not empty" >&2; exit 2; }
 mkdir -p "$work"
 work=$(cd "$work" && pwd)
+b=$work/elsewhere/a/much/longer/path/b
+order="both clones on one filesystem: directory order not compared"
+if [ -n "${ELSEWHERE:-}" ]; then
+	[ -d "$ELSEWHERE" ] && [ -z "$(ls -A "$ELSEWHERE")" ] || { echo "dist-proof: ELSEWHERE=$ELSEWHERE is not an empty directory" >&2; exit 2; }
+	ELSEWHERE=$(cd "$ELSEWHERE" && pwd)
+	[ "$(stat -c %d "$ELSEWHERE")" != "$(stat -c %d "$work")" ] || { echo "dist-proof: ELSEWHERE=$ELSEWHERE is on $work's filesystem" >&2; exit 2; }
+	b=$ELSEWHERE/a/much/longer/path/b
+	order="the clones on two filesystems: directory order compared"
+fi
 STEPS="kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock"
 
 run() {	# run <name> <dir>: one make dist in <dir>/amix, its logs in <dir>
 	git clone -q --no-local "$top" "$2/amix" &&
 		git -C "$2/amix" -c advice.detachedHead=false checkout -q "$commit" || return 1
-	echo "$1: amix $commit at $2/amix" >> "$work/summary"
+	echo "$1: amix $commit at $2/amix, on $(stat -f -c %T "$2")" >> "$work/summary"
 	start=$(date +%s)
 	for s in $STEPS; do
 		rc=0
@@ -50,16 +65,18 @@ run() {	# run <name> <dir>: one make dist in <dir>/amix, its logs in <dir>
 	[ -s "$2/amix/out/lock" ] || { echo "$1: no out/lock" >> "$work/summary"; return 1; }
 }
 
-: > "$work/summary"
-a=$work/a b=$work/elsewhere/a/much/longer/path/b
+cpu=$(sed -n 's/^model name[^:]*: //p' /proc/cpuinfo 2>/dev/null | head -1)
+echo "machine: ${cpu:-CPU model unknown}, $(nproc) CPUs" > "$work/summary"
+a=$work/a
 mkdir -p "$a" "$b"
 run a "$a" && run b "$b" || { cat "$work/summary"; echo "dist-proof: a run failed" >&2; exit 1; }
 if cmp -s "$a/amix/out/lock" "$b/amix/out/lock"; then
 	echo "the two locks are identical: $(wc -l < "$a/amix/out/lock" | tr -d ' ') lines, sha256 $(sha256sum < "$a/amix/out/lock" | cut -c1-64)" >> "$work/summary"
+	echo "$order" >> "$work/summary"
 	cat "$work/summary"
 	exit 0
 fi
-echo "the two locks differ:" >> "$work/summary"
+echo "the two locks differ ($order):" >> "$work/summary"
 diff "$a/amix/out/lock" "$b/amix/out/lock" >> "$work/summary"
 cat "$work/summary"
 exit 1

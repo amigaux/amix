@@ -108,7 +108,10 @@ the commit twice, at two different paths under WORKDIR, runs every step in
 each, and compares the two locks; with `LOCK=` each run is also checked
 against the lock of record. A step that exits 3 is a gap and the run
 goes on; any other failure stops it. `WORKDIR/summary` says what each step
-did. CI runs it by hand as the dist workflow (`docs/ci.md`).
+did, and on which machine. `ELSEWHERE=<empty directory on another filesystem>`
+puts the second clone there, which also compares the order directories list in;
+without it the summary says that order was not compared. CI runs it by hand as
+the dist workflow (`docs/ci.md`).
 
 ## out/
 
