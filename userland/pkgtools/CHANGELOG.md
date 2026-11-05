@@ -1,3 +1,7 @@
+## 2026-11-05 — apkg 0.3.11; repo tools stop rather than pass without having looked (59d6733, 69f3526, 3e12190, 618b651, a25ae9d)
+
+apkg 0.3.11: the cache empties after a good install; `apkg clean` and `apkg licence`; `keepcache` keeps files; the package carries its MIT notice. Repo tools stop rather than pass without having looked: `assemble-release` and `scan060` refuse a tree they could not inspect, `gen-catalog` refuses a short or empty catalog and gains `--check-tree`, `publish.sh` checks the tree before pruning and what is served after. The `#isize` note no longer fires on republished rows.
+
 ## 2026-11-04 — APKGENG 1.12.8 (7f4b5d4, 58ab0cb, 9aea5e4, fe78970, bfe65f6)
 
 The package says where its source is and carries the port's MIT text (/usr/apkg/doc/SOURCE, i copyright), as CDDL asks, and every changed CDDL file names who changed it. Text only. Minted, md5 678a7808, staged, not published.
