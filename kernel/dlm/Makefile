@@ -89,6 +89,7 @@ test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/b2memcap
 	B=$(B) sh tests/host/kinq.sh
 	B=$(B) sh tests/host/kitkern.sh
 	B=$(B) sh tests/host/kitdigest.sh
+	sh tests/host/kitrev.sh
 	B=$(B) sh tests/host/rcscripts.sh
 	B=$(B) sh tests/host/namelist.sh
 	B=$(B) sh tests/host/knamelist.sh
