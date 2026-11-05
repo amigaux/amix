@@ -7,7 +7,7 @@
 # Outputs ($KSPACE, common.sh):
 #     $KSPACE/loader-amix/dest/stand/loader/{boot1,boot2,ldrinfo}
 #     $KSPACE/pkg/ldramix-<version>.pkg
-#     $KSPACE/loader-amix/amix-cdboot: the CD's loader, boot2's core at the same
+#     $KSPACE/beside/amix-cdboot: the CD's loader, boot2's core at the same
 #     commit, for the install media; beside the package, as no box runs it
 
 set -e
@@ -44,7 +44,8 @@ amix_verify "$AMIX_DLM_TREE/build/amix-cdboot" "$LDR_CDBOOT_SHA"
 rm -rf "${BUILD:?}"; mkdir -p "$DEST/stand/loader" "$WORK"
 cp "$AMIX_DLM_TREE/build/boot1.img" "$DEST/stand/loader/boot1"
 cp "$AMIX_DLM_TREE/build/boot2.bin" "$DEST/stand/loader/boot2"
-cp "$AMIX_DLM_TREE/build/amix-cdboot" "$BUILD/amix-cdboot"
+mkdir -p "$KSPACE/beside"
+cp "$AMIX_DLM_TREE/build/amix-cdboot" "$KSPACE/beside/amix-cdboot"
 # ldrinfo: one key=value per line, the C2-3 v2 sec 3 keys in its order
 cat > "$DEST/stand/loader/ldrinfo" <<EOF
 version=$LDR_VERSION
