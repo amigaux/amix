@@ -431,6 +431,12 @@ prints it after
 .IR "  unit u: " .
 Exit status 0 whatever the units answer.
 .TP
+.BI "flush " "card unit"
+Sends one unit one SCSI SYNCHRONIZE CACHE through
+.BR /dev/scsi ,
+as kbootset does after each store write, and says whether the unit took it.
+That tells whether it takes the command, not whether it has a cache.
+.TP
 .BI "inquiry " "card unit"
 Asks one unit its type with one SCSI INQUIRY through
 .B /dev/scsi

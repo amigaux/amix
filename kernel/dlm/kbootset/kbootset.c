@@ -125,7 +125,11 @@ static ax_u8 *slurp(const char *path, ax_u32 *len);
 struct file {
 	FILE *f;
 	unsigned long base;
+	long ctl;		/* a raw disk's cN (8 x card + unit), or -1 */
 };
+
+static int store_sync(struct file *d);
+static long store_ctl(const char *path);
 
 /* raw devices take whole sectors: every access is widened to sectors
  * through a bounce buffer (the core's offsets are all sector-aligned) */
@@ -148,7 +152,7 @@ fio(struct file *d, int wr, ax_u32 off, ax_u8 *buf, ax_u32 len)
 				memcpy(b + len, t + (len - (n - SECTOR)), n - len);
 		}
 		rc = fseek(d->f, (long)(d->base + off), SEEK_SET) != 0 ||
-		     fwrite(b, 1, n, d->f) != n || fflush(d->f) != 0 ? -1 : 0;
+		     fwrite(b, 1, n, d->f) != n || fflush(d->f) != 0 || store_sync(d) != 0 ? -1 : 0;
 	} else {
 		rc = fseek(d->f, (long)(d->base + off), SEEK_SET) != 0 ||
 		     fread(b, 1, n, d->f) != n ? -1 : 0;
@@ -317,6 +321,7 @@ media(const char *root, char **cmd, int argc)
 		if (l1 != AX_BOOT1_MAX)
 			return fprintf(stderr, "kbootset: boot1 must be 1024 bytes\n"), 2;
 		d.base = off;
+		d.ctl = store_ctl(disk);
 		if (!(d.f = fopen(disk, "r+b")) && !(d.f = fopen(disk, "w+b"))) {
 			perror(disk);
 			return 1;
@@ -439,7 +444,7 @@ usage(void)
 		"        [--root REC] [--swap REC]\n"
 		"  commit [--again | --spec SPEC]\n"
 		"  mark-good [--booted ID] [--secondary] | retry [--booted ID] | namelist | nodes\n"
-		"  major NAME | major -l | cards [DEV | --probe] | inquiry CARD UNIT\n"
+		"  major NAME | major -l | cards [DEV | --probe] | inquiry CARD UNIT | flush CARD UNIT\n"
 		"  next previous|safe|devload|none|ID\n"
 		"  loader-install BOOT2 [--version N] [--boot1 FILE]\n");
 	exit(2);
@@ -630,6 +635,70 @@ inquire(int card, int unit, ax_u8 *r, char *why)
 #endif
 }
 
+/* ask a unit to put what it holds in a write cache on the medium: one
+ * SYNCHRONIZE CACHE (10), no data; 0 when it took it, or a code with why */
+static int
+scsi_flush(int card, int unit, char *why)
+{
+#ifdef KS_SYNC
+	ax_u8 sd[SD_SIZE];
+	int fd, e;
+
+	if ((fd = open("/dev/scsi", O_RDONLY)) < 0) {
+		sprintf(why, "/dev/scsi: %s (mknod /dev/scsi c 11 0)", strerror(errno));
+		return 1;
+	}
+	memset(sd, 0, sizeof sd);
+	sd[7] = 0x35;
+	put32(sd + 28, (unsigned long)card);
+	put32(sd + 32, (unsigned long)unit);
+	e = ioctl(fd, (int)GSIO, sd) < 0 ? errno : 0;
+	close(fd);
+	if (e) {
+		sprintf(why, "/dev/scsi: %s", strerror(e));
+		return 1;
+	}
+	if (!sd[5]) {
+		sprintf(why, "not taken (status 0x%02x)", sd[6]);
+		return 1;
+	}
+	return 0;
+#else
+	(void)card, (void)unit;
+	sprintf(why, "flush needs the box's /dev/scsi");
+	return 1;
+#endif
+}
+
+/*
+ * After each store write, before the next: what keeps a box bootable is the
+ * order of its writes (C2-4 section 20).  fsync for a file or a block node; a
+ * raw node's write has already reached the disk.  The unit's own cache is
+ * asked to empty; a unit or controller with nothing to flush does not take the
+ * command, and that is no failure.
+ */
+static int
+store_sync(struct file *d)
+{
+	char why[200];
+
+#ifdef KS_SYNC
+	if (fsync(fileno(d->f)) != 0 && errno != EINVAL)
+		return -1;
+#else
+	const char *log = getenv("KBOOTSET_SYNCLOG");	/* the host test */
+	FILE *f;
+
+	if (log && *log && (f = fopen(log, "a")) != 0) {
+		fprintf(f, "flush %ld\n", d->ctl);
+		fclose(f);
+	}
+#endif
+	if (d->ctl >= 0)
+		(void)scsi_flush((int)(d->ctl >> 3), (int)(d->ctl & 7), why);
+	return 0;
+}
+
 /* bytes [a, b) of the answer as one word: blanks and NULs trimmed at the
  * end, inner blanks '_', anything not printable '?', all blank "-" */
 static void
@@ -695,6 +764,38 @@ inquiry(int n, char **a)
 	}
 	printf("%s\n", line);
 	return 0;
+}
+
+/* kbootset flush CARD UNIT: does this unit take the store's cache flush */
+static int
+flushcmd(int n, char **a)
+{
+	char why[200], *e1, *e2;
+	long c, u;
+
+	if (n != 2)
+		usage();
+	c = strtol(a[0], &e1, 10);
+	u = strtol(a[1], &e2, 10);
+	if (!*a[0] || *e1 || !*a[1] || *e2 || c < 0 || c > 3 || u < 0 || u > 7) {
+		fprintf(stderr, "kbootset: flush takes a card 0-3 and a unit 0-7\n");
+		return 2;
+	}
+	if (scsi_flush((int)c, (int)u, why)) {
+		fprintf(stderr, "kbootset: card %ld unit %ld: %s\n", c, u, why);
+		return 1;
+	}
+	printf("card %ld unit %ld: flushed\n", c, u);
+	return 0;
+}
+
+/* a store on a raw disk node, cN of its name; a file or anything else, -1 */
+static long
+store_ctl(const char *path)
+{
+	const char *b = strrchr(path, '/');
+
+	return !strncmp(path, "/dev/", 5) && b ? disknode(b + 1) : -1;
 }
 
 static ax_u8 *
@@ -943,6 +1044,8 @@ main(int argc, char **argv)
 		return cards(kpath && *kpath ? kpath : "/dev/kinfo", argc - i - 1, argv + i + 1, &ki);
 	if (!strcmp(argv[i], "inquiry"))	/* /dev/scsi only, no store (C2-4 §18) */
 		return inquiry(argc - i - 1, argv + i + 1);
+	if (!strcmp(argv[i], "flush"))		/* /dev/scsi only, no store (C2-4 section 20) */
+		return flushcmd(argc - i - 1, argv + i + 1);
 	cmd = argv + i;
 	argc -= i;
 	create = !strcmp(cmd[0], "create");
@@ -969,6 +1072,7 @@ main(int argc, char **argv)
 		}
 	}
 	d.base = off;
+	d.ctl = store_ctl(image);
 	if (!(d.f = fopen(image, "r+b")) && !(create && (d.f = fopen(image, "w+b")))) {
 		perror(image);
 		return 1;

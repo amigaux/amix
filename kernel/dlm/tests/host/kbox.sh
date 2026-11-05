@@ -154,6 +154,22 @@ for c in 0:primary 0x101:secondary 0x201:secondary 0x300:primary; do
 done
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 
+# 4.2. a flush after each write of the store, before the next: an install
+# makes four writes, each with a read-back, on the store's own unit
+python3 -I - $T/b2new <<'EOF2'
+import sys
+open(sys.argv[1], 'wb').write(b'NEW!' * 1000)
+EOF2
+rm -f $T/synclog
+KBOOTSET_SYNCLOG=$T/synclog $B/kbootset --image $T/flushimg create 4194304 $T/b2new > /dev/null
+rm -f $T/synclog
+KBOOTSET_SYNCLOG=$T/synclog $B/kbootset --image $T/flushimg loader-install $T/b2new > /dev/null
+[ "$(wc -l < $T/synclog)" -eq 4 ] && [ "$(sort -u $T/synclog)" = "flush -1" ] ||
+	{ echo "kbox: an install did not flush after each of its writes" >&2; cat $T/synclog >&2; exit 1; }
+rc=0; $B/kbootset flush 4 0 2>/dev/null || rc=$?; [ $rc -eq 2 ]
+rc=0; $B/kbootset flush 0 0 2> $T/out || rc=$?; [ $rc -eq 1 ]
+grep -q "flush needs the box" $T/out
+
 # 4a. the loader fell back from the default (AXL1 flag 0x04) to the
 # pristine generation: mark-good verifies the default, generation 2, and
 # its intact members keep it; a fallback the menu chose is not judged
