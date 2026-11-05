@@ -130,6 +130,15 @@ What this has shown so far, all on 2026-11-05, as public rebuilds:
   build and the ldconfig cache. The local image's file contents differ from the cold
   image's in the same five only; some of its file modes and empty directories differ
   too, and no lock line shows them.
+- Commits b62624a and 7bce020 changed what freezes the image. Before them a host's
+  umask and a working copy's empty directories reached it, and its CA certificates
+  came from the live archive, so a cold build depended on its day: one built hours
+  after that run held a newer package, 12 files apart from it, and no lock line shows
+  that either. Since them the system tree comes at its pin and the CA certificates from
+  the snapshot, by sha256. A local cold image at 7bce020 differs from that run's cold
+  image in the same five files and nothing else, modes and directories included. A
+  rebuild at 82e1740 on it gives that commit's lock byte for byte. No CI runner has
+  built the image from these commits yet.
 
 Each run is one runner, so this is two CI CPU models each agreeing with one local
 machine, each at its own commit, and says nothing about any other machine. `media` is not in it, nor a tree with older
