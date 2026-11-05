@@ -1,5 +1,27 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-05 — APKGENG 1.12.9: an ignored SIGHUP stays ignored, and what a hangup leaves
+
+`pkgadd` and `pkginstall` hooked SIGHUP whatever it was, and every child was reset to default, so
+`nohup` protected nothing: `(nohup pkgadd ... &)` from a login that closed at once ended rc 3 in 9 of
+40 runs, 0 of 40 with the login held (emulated 68060, 64 MiB). Twice, 40 and 40 each. Now
+`pkg_sighup_ignored()` and `pkg_sig_default()` keep an ignored SIGHUP ignored in the commands and what
+they start. One that is not ignored still interrupts. T36 hangs up a real install and removal.
+
+What an interrupted install leaves, on the old engine, the hangup at points through a run:
+- **Early, or the package not yet touched:** "No changes were made to the system." On an installed
+  package all 9 rc 3 runs of the loop above left it completely installed, `pkgchk` clean.
+- **During the install:** `pkginfo` says partially installed, `!I-Lock!` in its pkg directory, `pkgchk`
+  rc 1 naming what is missing (0 if the files were all down). The next `pkgadd` gives rc 0, completely
+  installed; `pkgrm` gives rc 0, gone.
+- **One wart:** in 1 of 2 recoveries where `pkgchk` had listed files, it then said rc 1 with a single
+  modtime line for the file the hangup cut: the install found its content right and left its time.
+  Not fixed; `pkgchk -f` sets it.
+- **`apkg install`, a plain logout:** during the download a `.pkg.part`, no journal, and the next
+  `apkg install` works; `apkg clean` takes the part. Once journaled, the next `apkg` refuses and names
+  `apkg recover`, which finishes the install: rc 0, complete, `pkgchk` clean. So apkg needed no change.
+- **A leak:** a killed run can leave a `/var/tmp/dstream*` directory; nothing removes it.
+
 ## 2026-11-05 — assemble-release.py: a published row gains the #fstype it lacks
 
 A published catalog older than the mark has no `#fstype` lines, and keeping its row dropped the mark:
