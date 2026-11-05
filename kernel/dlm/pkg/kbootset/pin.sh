@@ -12,6 +12,12 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -40 (2026-11-05): amix cf069bd -- the refusal of a misplaced safe mark calls
+# it the administrator's.  The binary also links bootinfo.c's new ax_memcap,
+# which kbootset does not call.  Built in amix-toolchain:dist: the box binary
+# 7ec94141 (179080 bytes, text + data + bss 24 less than -39); kbootset(1M),
+# whatis and rc scripts as -39.
+#
 # -39 (2026-11-04): amix e6dd2ac -- kbootset default ID makes a good or
 # pristine generation the default again, and rollback and build name it;
 # check names the generation that holds the installed kernel; commit's last
@@ -260,8 +266,8 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=e6dd2ac
-KB_SHA=c3c59269be86e71dbdc067a55d1578e64d787074aaa00c44bda432538b0eb84d
+KB_DLM_COMMIT=cf069bd
+KB_SHA=7ec94141f1a11ba697b413ba2b8301462f7f068d2cbd1b52e1a6310a699d6599
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
 KB_MAN_SHA=794c34f828302d45d37d3911ae942ccdb529b7bb1c11352bca268f4da6a3fd41
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
@@ -270,5 +276,5 @@ KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261104-39
-KB_SOURCE_EPOCH=1793750400
+KB_VERSION=1.1.0.261105-40
+KB_SOURCE_EPOCH=1793836800
