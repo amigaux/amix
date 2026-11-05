@@ -9,9 +9,14 @@
 
 ARG BASE=amix-toolchain:dist
 FROM ${BASE}
-RUN apt-get update -o Acquire::Check-Valid-Until=false --error-on=any \
- && apt-get install -y --no-install-recommends xorriso \
- && rm -rf /var/lib/apt/lists/*
+# The snapshot service answers 5xx at times, for minutes: as in Containerfile,
+# each update or install is tried 4 times, 2 minutes apart.
+RUN try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
+ && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
+      cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
+ && try upd -o Acquire::Check-Valid-Until=false \
+ && try apt-get install -y --no-install-recommends xorriso \
+ && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log
 # amitools from its source archive, by toolchain/amitools.distfile: pure Python,
 # run from where it is unpacked, with no pip and no build
 COPY amitools-*.tar.gz /tmp/
