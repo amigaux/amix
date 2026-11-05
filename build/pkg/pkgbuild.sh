@@ -44,6 +44,13 @@
 #                      failure: a cross build's config/missing leaves a
 #                      regenerated man page or info file empty, exit 0)
 #
+# STOCK_PATCHED (package.sh, TOOLCHAIN=period): `<path>=<sha256>' words, each
+# a stock object of amix-system that the stage hook copies from $AMIX_SYSTEM
+# and patches in $DEST. The stock file is checked against
+# system/MANIFEST.sha256 before the stage, the payload's against the listed
+# sha256 after it; nothing may be compiled, every ELF of the payload must be
+# listed, and the listed ones are gated but never stripped.
+#
 # Outputs: $AMIX_BUILD_ROOT/<NAME>/{src,work,dest,pkgwork,*.log,BUILD.txt}
 # and $AMIX_BUILD_ROOT/pkg/<PKG>-<VERSION>-<PKGREV>.pkg.
 
@@ -77,11 +84,13 @@ fi
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
 URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT= FORKPIN=
-MAN_REPLACES=
+MAN_REPLACES= STOCK_PATCHED=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
 	SRCTREE=$(cd "$HERE/../$SRCPKG/src" && pwd)
+elif [ -n "$STOCK_PATCHED" ] && [ ! -d "$HERE/src" ]; then
+	SRCTREE=	# the source is amix-system's file, checked at the stage
 elif [ -z "$URL" ] && [ -z "$FORKPIN" ]; then
 	SRCTREE=$HERE/src
 else
@@ -173,6 +182,9 @@ if [ -n "$SRCTREE" ]; then
 	cp -R "$SRCTREE/." "$TREE"
 	SRCDIGEST=$(cd "$TREE" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0r sha256sum | sha256sum | cut -c1-64)
 	echo "  in-tree source ${SRCTREE#$TOP/}: $(cd "$TREE" && find . -type f | wc -l) files, digest $SRCDIGEST"
+elif [ -n "$STOCK_PATCHED" ]; then
+	mkdir -p "$TREE"
+	echo "  no source of its own: STOCK_PATCHED's files come from amix-system"
 elif [ -n "$FORKPIN" ]; then
 	# a fork pinned in the checkout: its commit, by full hash, from a cache
 	# repository (fetched once; a commit the cache has is not fetched again)
@@ -257,12 +269,16 @@ if [ "$AMIX_TOOLCHAIN" = gcc14 ]; then
 	fi
 	amix_gate_g14_compat "$BUILD/make.log"
 fi
-# TOOLCHAIN=none: nothing compiled.  common/nocc refuses $CC and the rest;
-# a compiler called by its own name (the build container has them on PATH)
-# leaves its command line, first word the compiler, in make.log
-if [ "$AMIX_TOOLCHAIN" = none ] &&
+# TOOLCHAIN=none and STOCK_PATCHED: nothing compiled.  Under none,
+# common/nocc refuses $CC and the rest; a compiler called by its own name (the
+# build container has them on PATH) leaves its command line, first word the
+# compiler, in make.log
+_pb_nocc=
+[ "$AMIX_TOOLCHAIN" != none ] || _pb_nocc="TOOLCHAIN=none"
+[ -z "$STOCK_PATCHED" ] || { _pb_nocc=STOCK_PATCHED; compiled=no; }
+if [ -n "$_pb_nocc" ] &&
    grep -E '^[[:space:]]*([^[:space:]]*/)?([A-Za-z0-9_.+]+-)*(gcc|g\+\+|cc|c\+\+|clang|as|ld|ar)([[:space:]]|$)' "$BUILD/make.log" > "$BUILD/none.compile"; then
-	echo "[FAIL] TOOLCHAIN=none, but the build compiled or linked:" >&2
+	echo "[FAIL] $_pb_nocc, but the build compiled or linked:" >&2
 	cat "$BUILD/none.compile" >&2
 	exit 1
 fi
@@ -271,23 +287,52 @@ echo
 
 # --- 5. stage, then the prototype and the binaries ----------------------------------------
 echo "--- stage ---"
-rm -rf "${DEST:?}"; mkdir -p "${DEST:?}"
-stage
-# STOCK_ETC: stock defaults from amix-system's etc/, by path, each checked
-# against system/MANIFEST.sha256 (they never enter this repository)
-for p in $STOCK_ETC; do
-	want=$(awk -v f="${p#/}" 'substr($0, 67) == f { print substr($0, 1, 64) }' "$TOP/system/MANIFEST.sha256")
-	src="${AMIX_SYSTEM:-}/${p#/}"
+# stock_src <field> <path>: the amix-system file at <path>, which must be a
+# regular file with the sha256 system/MANIFEST.sha256 gives it (stock files
+# never enter this repository); sets src and want
+stock_src() {
+	want=$(awk -v f="${2#/}" 'substr($0, 67) == f { print substr($0, 1, 64) }' "$TOP/system/MANIFEST.sha256")
+	src="${AMIX_SYSTEM:-}/${2#/}"
 	[ -n "${AMIX_SYSTEM:-}" ] && [ -f "$src" ] && [ ! -L "$src" ] || {
-		echo "[FAIL] STOCK_ETC $p: no file $src; AMIX_SYSTEM names an amix-system" >&2
+		echo "[FAIL] $1 $2: no file $src; AMIX_SYSTEM names an amix-system" >&2
 		echo "       checkout (system/fetch-amix-system)" >&2
 		exit 1
 	}
 	got=$(sha256sum < "$src" | cut -c1-64)
 	[ "$got" = "$want" ] || {
-		echo "[FAIL] STOCK_ETC $p: $src is $got, system/MANIFEST.sha256 ${want:-<none>}" >&2
+		echo "[FAIL] $1 $2: $src is $got, system/MANIFEST.sha256 ${want:-<none>}" >&2
 		exit 1
 	}
+}
+# STOCK_PATCHED: the stock file the stage hook patches, checked first
+: > "$BUILD/stock.list"
+for e in $STOCK_PATCHED; do
+	stock_src STOCK_PATCHED "${e%=*}"
+	echo "${e%=*} $want patched ${e##*=}" >> "$BUILD/stock.list"
+	echo "  STOCK src ok ${e%=*} (amix-system, sha256 $want)"
+done
+rm -rf "${DEST:?}"; mkdir -p "${DEST:?}"
+stage
+# and the payload's, the listed sha256 of an ELF object
+for e in $STOCK_PATCHED; do
+	p=${e%=*}
+	[ -f "$DEST$p" ] && [ ! -L "$DEST$p" ] || {
+		echo "[FAIL] STOCK_PATCHED $p: the stage hook staged no file there" >&2; exit 1; }
+	case "$(od -An -c -N4 "$DEST$p" | tr -d ' ')" in
+	177ELF) ;;
+	*) echo "[FAIL] STOCK_PATCHED $p: not an ELF object" >&2; exit 1 ;;
+	esac
+	got=$(sha256sum < "$DEST$p" | cut -c1-64)
+	[ "$got" = "${e##*=}" ] || {
+		echo "[FAIL] STOCK_PATCHED $p: the payload's is $got, package.sh says ${e##*=}" >&2
+		exit 1
+	}
+	echo "  STOCK patched ok $p: sha256 $got"
+done
+# STOCK_ETC: stock defaults from amix-system's etc/, by path
+for p in $STOCK_ETC; do
+	stock_src STOCK_ETC "$p"
+	echo "$p $want" >> "$BUILD/stock.list"
 	[ ! -e "$DEST$p" ] && [ ! -L "$DEST$p" ] || {
 		echo "[FAIL] STOCK_ETC $p: the stage hook staged it too" >&2; exit 1; }
 	mkdir -p "$(dirname "$DEST$p")"
@@ -336,16 +381,19 @@ for b in $BINS; do
 	0002|0003) ;;
 	*) echo "  ARCHIVE/OBJ $(basename "$b"): no undef gate, not stripped"; continue ;;
 	esac
-	prebuilt=no
+	prebuilt=no stockp=no
 	case " $PREBUILT " in *" ${b#"$DEST"} "*) prebuilt=yes ;; esac
-	if [ $prebuilt = yes ]; then
+	case " $STOCK_PATCHED " in *" ${b#"$DEST"}="*) stockp=yes ;; esac
+	if [ $stockp = yes ]; then
+		:	# its sha256 is checked above
+	elif [ $prebuilt = yes ]; then
 		s=$(sha256sum < "$b" | cut -c1-64)
 		echo "${AMIX_GCC14_PINS:-}" | awk '{print $2}' | grep -qx "$s" || {
 			echo "[FAIL] ${b#"$DEST"} is in PREBUILT, but no file gcc14-pin.sh pins has its sha256 $s" >&2
 			exit 1; }
 		echo "  PREBUILT ok ${b#"$DEST"}: a pinned gcc14 file, shipped as it is"
 	elif [ $compiled = no ]; then
-		echo "[FAIL] ${b#"$DEST"}: an ELF in a build that compiled nothing, not in PREBUILT" >&2
+		echo "[FAIL] ${b#"$DEST"}: an ELF in a build that compiled nothing, not in PREBUILT or STOCK_PATCHED" >&2
 		exit 1
 	fi
 	amix_gate_elf "$b"
@@ -412,8 +460,8 @@ for b in $BINS; do
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
 	echo "            found:$found"
-	# a prebuilt file keeps the pinned bytes
-	[ $prebuilt = yes ] || $STRIP "$b"
+	# a prebuilt or patched stock file keeps its listed bytes
+	[ $prebuilt = yes ] || [ $stockp = yes ] || $STRIP "$b"
 done
 echo
 
@@ -430,6 +478,7 @@ amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 	echo "$NAME $PKGVERSION ($PKG) toolchain $AMIX_TOOLCHAIN"
 	[ -z "$SRCTREE" ] || echo "source ${SRCTREE#$TOP/} digest $SRCDIGEST"
 	[ -z "$FORKPIN" ] || echo "source $FORKPIN $_fp_url $_fp_c digest $SRCDIGEST"
+	LC_ALL=C sort "$BUILD/stock.list" | sed 's/^/stock /'
 	echo "pkg $PKGOUT/$PKG-$PKGVERSION.pkg md5 $(md5sum "$PKGOUT/$PKG-$PKGVERSION.pkg" | cut -d' ' -f1) size $(stat -c%s "$PKGOUT/$PKG-$PKGVERSION.pkg")"
 	for b in $BINS; do
 		echo "sum-r $(sum -r "$b" | awk '{print $1}') $(stat -c%s "$b") ${b#$DEST}"

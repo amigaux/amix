@@ -373,6 +373,49 @@ stage() {
 }
 """)
         write(os.path.join(sysroot, "usr", "X", "lib", "libX.so"), "stub libX\n")
+        # STOCK_PATCHED: a stock object of amix-system the stage hook patches;
+        # a stock text file for the not-an-ELF refusal
+        stock_elf = b"\x7fELF\x01\x02\x01" + b"\0" * 10 + b"\x03" + b"stock\n"
+        patched_elf = stock_elf[:18] + b"patch\n"
+        stock_txt = b"stock text\n"
+        for rel, data in (("usr/lib/libstock.elf", stock_elf), ("usr/lib/stock.txt", stock_txt)):
+            os.makedirs(os.path.dirname(os.path.join(tmp, "amix-system", rel)), exist_ok=True)
+            with open(os.path.join(tmp, "amix-system", rel), "wb") as fp:
+                fp.write(data)
+        with open(os.path.join(amix, "system", "MANIFEST.sha256"), "a") as fp:
+            fp.write("%s  usr/lib/libstock.elf\n%s  usr/lib/stock.txt\n"
+                     % (hashlib.sha256(stock_elf).hexdigest(), hashlib.sha256(stock_txt).hexdigest()))
+        stock_sha = hashlib.sha256(stock_elf).hexdigest()
+        patched_sha = hashlib.sha256(patched_elf).hexdigest()
+        txt_sha = hashlib.sha256(b"stock text\npatched\n").hexdigest()
+        sp_stage = """build() { %s; }
+stage() {
+	mkdir -p "$DEST/usr/lib"
+	cp "$AMIX_SYSTEM/usr/lib/%s" "$DEST/usr/lib/%s"
+	%s
+}
+"""
+        dd = 'printf "patch\\\\n" | dd of="$DEST/usr/lib/libstock.elf" bs=1 seek=18 conv=notrunc 2>/dev/null'
+        for name, want, rel, build_, extra, proto_extra in (
+                ("stp", patched_sha, "libstock.elf", ":", dd, ""),
+                ("stpwrong", "cd" * 32, "libstock.elf", ":", dd, ""),
+                ("stpcc", patched_sha, "libstock.elf",
+                 'echo "cc -c greet.c (the hook\'s compile line)" >> "$BUILD/make.log"', dd, ""),
+                ("stpother", patched_sha, "libstock.elf", ":",
+                 dd + '\n\tcp "$DEST/usr/lib/libstock.elf" "$DEST/usr/lib/other.elf"',
+                 "f none /usr/lib/other.elf 0755 bin bin\n"),
+                ("stptxt", txt_sha, "stock.txt", ":",
+                 'echo patched >> "$DEST/usr/lib/stock.txt"', "")):
+            # stp as libcfix is: no src/; the others with one
+            d = package(pkgs, name, "hooks", 'TOOLCHAIN=period\nSYSTEM_PATHS="/usr/lib/%s%s"\n'
+                        'STOCK_PATCHED="/usr/lib/%s=%s"\n'
+                        % (rel, " /usr/lib/other.elf" if proto_extra else "", rel, want),
+                        src=None if name == "stp" else {"greet.txt": "x\n"})
+            write(os.path.join(d, "prototype"), "i pkginfo\nf none /usr/lib/%s 0755 bin bin\n%s"
+                  % (rel, proto_extra))
+            write(os.path.join(d, "build.sh"), sp_stage % (build_, rel, rel, extra))
+        # a strip that changes the file, to show a patched stock file is not stripped
+        write(os.path.join(tools, "strip"), '#!/bin/sh\necho stripped >> "$1"\n', 0o755)
 
         # gcc-cross-amix checkouts: one at another commit than the pin, and a
         # build/ inside some other repository's tree
@@ -655,6 +698,50 @@ stage() {
         check("UNDEF: without an RPATH, a library in the payload is not found (the box would not find it)",
               rc == 1 and "NEEDED libfoo.so.1 is not in its RPATH (none)" in out, out)
 
+        # --- STOCK_PATCHED --------------------------------------------------------------
+        sp_env = dict(elf_env, STUB_STRIP=os.path.join(tools, "strip"),
+                      STUB_DYN="  SONAME      /usr/lib/libstock.elf")
+        rc, out = build("stp", **sp_env)
+        stp_out = os.path.join(out_pkg, "stp", "dest", "usr", "lib", "libstock.elf")
+        check("STOCK_PATCHED: the stock file, checked against the manifest, then the patched sha256",
+              rc == 0 and "STOCK src ok /usr/lib/libstock.elf (amix-system, sha256 %s)" % stock_sha in out
+              and "STOCK patched ok /usr/lib/libstock.elf: sha256 %s" % patched_sha in out, out)
+        check("STOCK_PATCHED: no src/: the source is amix-system's file",
+              rc == 0 and "no source of its own: STOCK_PATCHED's files come from amix-system" in out, out)
+        check("STOCK_PATCHED: the ELF and undefined-symbol gates run on it",
+              rc == 0 and "UNDEF ok  libstock.elf" in out, out)
+        check("STOCK_PATCHED: shipped as patched, never stripped",
+              rc == 0 and os.path.isfile(stp_out)
+              and hashlib.sha256(open(stp_out, "rb").read()).hexdigest() == patched_sha, out)
+        bt = read(os.path.join(out_pkg, "stp", "BUILD.txt")) if rc == 0 else ""
+        check("STOCK_PATCHED: BUILD.txt names the stock file and the patched one",
+              "\nstock /usr/lib/libstock.elf %s patched %s\n" % (stock_sha, patched_sha) in bt, bt)
+        rc, out = build("stpwrong", **sp_env)
+        check("STOCK_PATCHED: refused: the patched file is not the listed sha256",
+              rc == 1 and "STOCK_PATCHED /usr/lib/libstock.elf: the payload's is %s, package.sh says %s"
+              % (patched_sha, "cd" * 32) in out, out)
+        write(os.path.join(tmp, "other", "usr", "lib", "libstock.elf"), "edited\n")
+        rc, out = build("stp", AMIX_SYSTEM=os.path.join(tmp, "other"), **sp_env)
+        check("STOCK_PATCHED: refused: a stock file that differs from the manifest, before the stage",
+              rc == 1 and "STOCK_PATCHED /usr/lib/libstock.elf: %s/usr/lib/libstock.elf is %s, "
+              "system/MANIFEST.sha256 %s" % (os.path.join(tmp, "other"),
+                                             hashlib.sha256(b"edited\n").hexdigest(), stock_sha) in out
+              and "STOCK patched ok" not in out, out)
+        rc, out = build("stp", AMIX_SYSTEM=os.path.join(tmp, "nowhere"), **sp_env)
+        check("STOCK_PATCHED: refused: no amix-system checkout",
+              rc == 1 and "STOCK_PATCHED /usr/lib/libstock.elf: no file %s/usr/lib/libstock.elf"
+              % os.path.join(tmp, "nowhere") in out, out)
+        rc, out = build("stpcc", **sp_env)
+        check("STOCK_PATCHED: refused: the build compiled",
+              rc == 1 and "STOCK_PATCHED, but the build compiled or linked" in out, out)
+        rc, out = build("stpother", **sp_env)
+        check("STOCK_PATCHED: refused: another ELF in the payload",
+              rc == 1 and "/usr/lib/other.elf: an ELF in a build that compiled nothing, "
+              "not in PREBUILT or STOCK_PATCHED" in out, out)
+        rc, out = build("stptxt", **sp_env)
+        check("STOCK_PATCHED: refused: the patched file is not an ELF",
+              rc == 1 and "STOCK_PATCHED /usr/lib/stock.txt: not an ELF object" in out, out)
+
         # --- STOCK_ETC ---------------------------------------------------------------
         rc, out = build("stock")
         env = seen() if rc == 0 else {}
@@ -664,6 +751,9 @@ stage() {
         check("STOCK_ETC: the stock file is staged, byte for byte",
               rc == 0 and read(staged) == stock_text
               and "STOCK ok  /etc/inet/stock.conf (amix-system, sha256 " in out, out)
+        bt = read(os.path.join(out_pkg, "stock", "BUILD.txt")) if rc == 0 else ""
+        check("STOCK_ETC: BUILD.txt names the stock file",
+              "\nstock /etc/inet/stock.conf %s\n" % hashlib.sha256(stock_text.encode()).hexdigest() in bt, bt)
         rc, out = build("stock2")
         check("refused: STOCK_ETC staged by the stage hook too",
               rc == 1 and "the stage hook staged it too" in out, out)

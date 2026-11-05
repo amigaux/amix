@@ -38,6 +38,10 @@ distfile <path> <URL> <sha256> [<URL>...]
                                       site, the sha256, then our copy
 system <path> <sha256>                system/MANIFEST.sha256, system/SYMLINKS, system/stock-1.1.assets,
                                       release/carried-1.1
+stock userland <name>-<version> <path> <sha256> [patched <sha256>]
+                                      each amix-system file a userland package carries:
+                                      copied (STOCK_ETC), or patched by its stage hook
+                                      (STOCK_PATCHED); from the recipe's BUILD.txt
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)

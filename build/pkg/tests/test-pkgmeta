@@ -351,6 +351,57 @@ try:
         refused("check refuses %s" % name,
                 ("check", conf("sbad", name, proto, **over)), needle)
 
+    # --- STOCK_PATCHED: a stock file from amix-system, patched by the stage hook ------
+    STP = PROTO + "f none /usr/lib/libc.so.1 0755 bin bin\n"
+    NEW = "ab" * 32
+    STOCKLIBC = "09d52bb3ff5a691c9ec4b057f3b3cad484ba98ce8d057a892082ca2010dda46c"
+    PAT = {"TOOLCHAIN": "period", "SYSTEM_PATHS": "/usr/lib/libc.so.1",
+           "STOCK_PATCHED": "/usr/lib/libc.so.1=" + NEW, "URL": '""', "SHA256": '""'}
+    rc, out, err = run("check", conf("stp", "pok", STP, **PAT))
+    check("STOCK_PATCHED: one f line of a manifest file, period, a new sha256, "
+          "no URL and no src/, passes", rc == 0, err)
+    for name, proto, over, needle in (
+            ("pgcc", STP, {"TOOLCHAIN": "gcc14"}, "STOCK_PATCHED needs TOOLCHAIN=period"),
+            ("pnone", STP, {"TOOLCHAIN": "none"}, "STOCK_PATCHED needs TOOLCHAIN=period"),
+            ("pform", STP, {"STOCK_PATCHED": "/usr/lib/libc.so.1"},
+             "/usr/lib/libc.so.1 is not <path>=<sha256>"),
+            ("pshort", STP, {"STOCK_PATCHED": "/usr/lib/libc.so.1=abc"},
+             "/usr/lib/libc.so.1=abc is not <path>=<sha256>"),
+            ("pupper", STP, {"STOCK_PATCHED": "/usr/lib/libc.so.1=" + NEW.upper()},
+             "is not <path>=<sha256>"),
+            ("psame", STP, {"STOCK_PATCHED": "/usr/lib/libc.so.1=" + STOCKLIBC},
+             "/usr/lib/libc.so.1: the sha256 is the stock file's; nothing is patched"),
+            ("prel", STP, {"STOCK_PATCHED": "usr/lib/libc.so.1=" + NEW},
+             "usr/lib/libc.so.1 is not a normalised absolute path"),
+            ("pnoman", STP + "f none /usr/lib/libnosuch.so 0755 bin bin\n",
+             {"SYSTEM_PATHS": '"/usr/lib/libc.so.1 /usr/lib/libnosuch.so"',
+              "STOCK_PATCHED": "/usr/lib/libnosuch.so=" + NEW},
+             "/usr/lib/libnosuch.so is not a regular file of amix-system"),
+            ("pnoproto", PROTO, {"SYSTEM_PATHS": '""'},
+             "/usr/lib/libc.so.1 is not in the prototype"),
+            ("pe", PROTO + "e conffile /etc/inittab 0664 root sys\n",
+             {"SYSTEM_PATHS": '""', "CONFFILES": "/etc/inittab",
+              "STOCK_PATCHED": "/etc/inittab=" + NEW}, "/etc/inittab must be one f line"),
+            ("ptwoline", STP + "f none /usr/lib/libc.so.1 0644 bin bin\n", {},
+             "/usr/lib/libc.so.1 must be one f line"),
+            ("ptwice", STP, {"STOCK_PATCHED": '"/usr/lib/libc.so.1=%s /usr/lib/libc.so.1=%s"'
+                             % (NEW, "cd" * 32)}, "STOCK_PATCHED lists /usr/lib/libc.so.1 twice"),
+            ("ppre", STP, {"PREBUILT": "/usr/lib/libc.so.1"},
+             "/usr/lib/libc.so.1 is in STOCK_PATCHED and PREBUILT"),
+            ("petc", PROTO + "f none /etc/inittab 0664 root sys\n",
+             {"SYSTEM_PATHS": '""', "STOCK_ETC": "/etc/inittab",
+              "STOCK_PATCHED": "/etc/inittab=" + NEW},
+             "/etc/inittab is in STOCK_PATCHED and STOCK_ETC"),
+            ("purl", STP, {"URL": "https://example.invalid/x.tgz"},
+             "URL is set, but the source is amix-system (STOCK_PATCHED)"),
+            ("pfork", STP, {"FORKPIN": "kernel/x/x.pin"},
+             "FORKPIN is set, but the source is amix-system (STOCK_PATCHED)")):
+        o = dict(PAT)
+        o.update(over)
+        refused("check refuses %s" % name,
+                ("check", conf("pbad", name, proto, **o)),
+                needle)
+
     # --- run-level links ---------------------------------------------------------
     for link, ok in (("S20monsw", True), ("S69inet", True), ("S75syslogd", True),
                      ("S95display", True), ("S05kbnamelist", True),

@@ -71,7 +71,8 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
-            ("PREBUILT", ""), ("FORKPIN", ""), ("MAN_REPLACES", ""))
+            ("PREBUILT", ""), ("FORKPIN", ""), ("MAN_REPLACES", ""),
+            ("STOCK_PATCHED", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -304,6 +305,60 @@ def stock_problems(m, objs):
     return out
 
 
+STOCK_PATCHED_RE = re.compile(r"^(.*)=([0-9a-f]{64})$")
+
+
+def stock_patched_problems(m, objs):
+    """STOCK_PATCHED: <path>=<sha256> words, each a stock file of amix-system
+    the stage hook patches in the payload, and the sha256 the result must
+    have. Each is a regular file in system/MANIFEST.sha256, one f line of the
+    prototype, in no other list of stock or ready-made files, and the sha256
+    is not the stock file's. Nothing is compiled, and the period toolchain's
+    tools read stock objects. The source is amix-system: no URL, FORKPIN or
+    SRCPKG, and src/ only for what the hooks use."""
+    entries = words(m["STOCK_PATCHED"])
+    if not entries:
+        return []
+    out = []
+    if m["TOOLCHAIN"] != "period":
+        out.append("STOCK_PATCHED needs TOOLCHAIN=period (TOOLCHAIN=%s)" % m["TOOLCHAIN"])
+    for k in ("FORKPIN", "SRCPKG"):
+        if m[k]:
+            out.append("%s is set, but the source is amix-system (STOCK_PATCHED)" % k)
+    manifest = system_manifest()
+    if manifest is None:
+        return out + ["STOCK_PATCHED is set, but there is no %s to check it against"
+                      % SYSTEM_MANIFEST]
+    types = {}
+    for ftype, _, path, _ in objs:
+        types.setdefault(path, []).append(ftype)
+    paths = []
+    for e in entries:
+        mt = STOCK_PATCHED_RE.match(e)
+        if not mt:
+            out.append("STOCK_PATCHED: %s is not <path>=<sha256> (64 lower-case hex)" % e)
+            continue
+        p, want = mt.groups()
+        paths.append(p)
+        if not p.startswith("/") or os.path.normpath(p) != p:
+            out.append("STOCK_PATCHED: %s is not a normalised absolute path" % p)
+        elif p[1:] not in manifest:
+            out.append("STOCK_PATCHED: %s is not a regular file of amix-system "
+                       "(system/MANIFEST.sha256)" % p)
+        elif manifest[p[1:]] == want:
+            out.append("STOCK_PATCHED: %s: the sha256 is the stock file's; nothing is patched" % p)
+        elif p not in types:
+            out.append("STOCK_PATCHED: %s is not in the prototype" % p)
+        elif types[p] != ["f"]:
+            out.append("STOCK_PATCHED: %s must be one f line of the prototype" % p)
+        for k in ("PREBUILT", "STOCK_ETC"):
+            if p in words(m[k]):
+                out.append("STOCK_PATCHED: %s is in STOCK_PATCHED and %s" % (p, k))
+    for p in sorted(set(p for p in paths if paths.count(p) > 1)):
+        out.append("STOCK_PATCHED lists %s twice" % p)
+    return out
+
+
 # The shared man tree every package's pages go to, whatever its PREFIX
 # (userland/packages/docs/man-pages.md).
 MAN_TREE = "/opt/amix/man"
@@ -415,6 +470,7 @@ def prototype_problems(recipe, m):
     out += replaces_problems(m, objs or ())
     out += layout_problems(m, objs or ())
     out += stock_problems(m, objs or ())
+    out += stock_patched_problems(m, objs or ())
     for ftype, _, path, _ in objs or ():
         if ftype == "e" and path not in conf:
             out.append("prototype: e %s is not in CONFFILES" % path)
@@ -581,6 +637,9 @@ def problems(recipe, m):
         elif tree and m[k]:
             out.append("%s is set, but the source is in the tree (%s)"
                        % (k, tree))
+        elif m["STOCK_PATCHED"]:
+            if m[k]:
+                out.append("%s is set, but the source is amix-system (STOCK_PATCHED)" % k)
         elif not tree and not m[k]:
             out.append("%s is not set (and there is no src/)" % k)
     if m["SHA256"] and not re.match(r"^[0-9a-f]{64}$", m["SHA256"]):

@@ -148,6 +148,24 @@ def lock(top, out):
                      for rel in ("system/MANIFEST.sha256", "system/SYMLINKS", "system/stock-1.1.assets",
                                  "release/carried-1.1")
                      if os.path.isfile(os.path.join(top, rel))])
+    # the stock files of amix-system the userland packages carry, as copied
+    # (STOCK_ETC) or patched (STOCK_PATCHED): each recipe's BUILD.txt says
+    # which, with the package's name and version
+    stock = []
+    built_root = os.path.join(out, "build", "userland")
+    if os.path.isdir(built_root):
+        for name in sorted(os.listdir(built_root)):
+            path = os.path.join(built_root, name, "BUILD.txt")
+            if not os.path.isfile(path):
+                continue
+            with open(path) as fp:
+                text = fp.read().splitlines()
+            f = text[0].split() if text else []
+            if len(f) < 2:
+                raise LockError("%s does not start with the package's name and version" % path)
+            stock += ["stock userland %s-%s %s" % (f[0], f[1], l[6:])
+                      for l in text if l.startswith("stock ")]
+    sections.append(sorted(stock))
     # outputs
     digests = os.path.join(out, "kit", "kit.digests")
     if os.path.isfile(digests):

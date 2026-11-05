@@ -50,6 +50,7 @@ so each fact about a package is written in one place.
 | `SYSTEM_PATHS=""` | the paths outside `PREFIX`, `/opt/amix/man`, `/etc` and `/var` that the package may own, space-separated: each a directory (everything under it) or a file, at least two levels deep (`/usr/sbin`, `/usr/bin/patch`); one level deep only for a mount point, a single `d` line with nothing under it (cdfs's `/cdrom`). For a base package's boot-path tools; a package without it stays in those four trees |
 | `DEPENDS=""`, `BUILD_DEPENDS=""` | catalog names, space-separated |
 | `STOCK_ETC=""` | stock `/etc` files the package carries as shipped, space-separated absolute paths (`/etc/inittab`). Each is one `f` or `e` line of the prototype and a regular file of amix-system's `etc/` in `system/MANIFEST.sha256`. After the stage hook the driver copies each from the amix-system checkout (`AMIX_SYSTEM`) into the payload, refusing one whose sha256 differs from the manifest's. The bytes never enter this repository (`tools/privacy-check` refuses them), only the path |
+| `STOCK_PATCHED=""` | stock files the package ships patched, space-separated `<path>=<sha256>` words (`/usr/lib/libc.so.1=f57f…`, all 64 hex digits). Each path is a regular file in `system/MANIFEST.sha256` and one `f` line of the prototype, in neither `STOCK_ETC` nor `PREBUILT`; the sha256 is what the payload's file must be after the stage hook, never the stock file's. It needs `TOOLCHAIN=period`, whose tools read stock objects. The source is amix-system: no `URL`, `FORKPIN` or `SRCPKG`, and a `src/` only if the hooks use one. Before the stage hook the driver checks the amix-system file (`AMIX_SYSTEM`) against the manifest; the hook copies it into `$DEST` and patches it; after the hook the driver requires an ELF object with exactly the listed sha256. Nothing may be compiled (a compile or link line in `make.log` is refused), every ELF of the payload must be listed, and each listed one goes through the ELF, undefined-symbol and 68060 gates and is never stripped. `BUILD.txt` and the lock name the stock and the patched sha256 |
 | `MAN_REPLACES=""` | the stock binaries the package replaces and the page shown for each, `<binary path> <sect> <page name>` triples (`/usr/sbin/tar 1 heirloom-tar`). Each binary is an object of the prototype, each page `/opt/amix/man/<sect>/<page>` is in it, and so is `/opt/amix/man/replaces.d/<PKG>`, which the stage hook writes with `amix_man_replaces` (`userland/packages/tools/manpages.sh`) for amix-base's `man` (`userland/base/docs/man.md`). `check` counts such a binary as documented by its page |
 | `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `PREBUILT=""` | payload paths of ELFs the package ships ready-made from the pinned GCC 14 prefix (libamixrt.so.1); each must have the sha256 of a file `common/gcc14-pin.sh` pins and is not stripped. A build that then compiles nothing skips the flags gate, and any other ELF in its payload is refused |
@@ -65,7 +66,9 @@ checkout pin names (`FORKPIN`), or the source in the tree. That is the
 package's own `src/`, or, with `SRCPKG`, the `src/` of the package it names.
 The driver copies it to the build tree, so patches and builds never touch the
 checkout. `BUILD.txt` records a digest of the copy, and for a fork its URL
-and commit.
+and commit. `STOCK_PATCHED` is a fourth case: the source is the amix-system
+file, and `BUILD.txt` names it, as it names each `STOCK_ETC` file, in a
+`stock` line, which the lock carries.
 
 ## pkgmeta
 
@@ -87,7 +90,8 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   the prototype's one line there a `d` of it, nothing under it), already
   inside those trees, or holds nothing. It refuses a `STOCK_ETC` path that is not under
   `/etc`, not a regular file in `system/MANIFEST.sha256`, or not exactly one
-  `f` or `e` line of the prototype. It refuses a `CONFFILES` path that the
+  `f` or `e` line of the prototype, and a `STOCK_PATCHED` word that breaks a
+  rule of its row above. It refuses a `CONFFILES` path that the
   prototype does not have, has on more than one line, or has as anything but
   an `f` or `e` object; a path not under `/etc` or `/var`;
   an `e` object that `CONFFILES` does not list; one conffile listed by two
