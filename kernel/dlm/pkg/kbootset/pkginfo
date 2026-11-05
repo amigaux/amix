@@ -1,11 +1,11 @@
 PKG=kbootset
-NAME=kbootset 1.1.0.261105-42 - compose, commit and roll back boot generations
+NAME=kbootset 1.1.0.261105-43 - compose, commit and roll back boot generations
 ARCH=Amiga
-VERSION=1.1.0.261105-42
+VERSION=1.1.0.261105-43
 CATEGORY=system
 CLASSES=none kinfo
 VENDOR=amix-packages
-PSTAMP=amix-packages-kbootset-1.1.0.261105-42
+PSTAMP=amix-packages-kbootset-1.1.0.261105-43
 # USERLAND (amix-dlm C2-3 v2 sec 4): an ordinary catalog entry, no kpkg
 # entry, no apkg kernel-space record.  Part of the base set.
 APKG_DESC=kbootset: compose, commit, mark good and roll back boot generations from the installed kernel packages (/sbin/kbootset, static).
