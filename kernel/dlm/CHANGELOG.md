@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — kbootset 1.1.0.261104-39: a default verb, plainer words after an upgrade, old generations cleaned up (515c516, 3b2e7e7, e6dd2ac, f9929fd)
+
+`kbootset default ID` makes a good or pristine generation the default. rollback's line names the way back and build says when a good generation holds its members; check names the generation holding the installed kernel; commit, status and check name a loader in `/stand/loader` the store does not hold. A brel generation keeps its own `unix.sym` for a boot after a rollback, and status tells a namelist lacking a loaded module from another kernel's. The directories of generations gone from the store are removed, about 181 KB plus modules each on a k30 root; the booted generation keeps its own until the next boot. Box binary c3c59269, 179080 bytes. The floor stays 1.1.0.261103-37.
+
 ## 2026-11-04 — kbootset 1.1.0.261104-38 (b7f6447, 22fab4f)
 
 `namelist`, `status` and `mark-good` no longer walk and free an unset module list when a brel kernel's namelist cannot be made (k30, after a kernel upgrade or rollback). Host test knlinit.sh. Box binary 7de82527; floor unchanged.
