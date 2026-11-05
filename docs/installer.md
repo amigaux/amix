@@ -644,7 +644,7 @@ reach through the RDB, and all of them scan 0..15.
 | piece | path | role |
 |-------|------|------|
 | driver | `src/installer/install.sh` | pre-POSIX SVR4 sh; runs on the miniroot |
-| first-boot | `payload/firstboot/{firstboot.sh,root.shadow}` | armed into the target; bakes identity on first boot |
+| first-boot | `payload/firstboot/firstboot.sh`, a bench medium's `root.shadow` | armed into the target; bakes identity on first boot |
 | profiles | `profiles/*.profile` | per-rig spec (kernel, CD, disk, first-boot identity) |
 | boot slice | `tools/build-bootslice.py` | extracts the gated boot chain + loader + `sum -r` manifest |
 | order | `tools/gen-install-order.py` | core-first topological install order from `deps.conf` (base set: `core bsd net text sysadm cdfs APKGENG APKG`; case preserved) |
@@ -3534,8 +3534,8 @@ still be the canonical `minimal` digest.
 Three decisions inside it are worth stating in full, because each one looks like
 a gap until you see the mechanism behind it:
 
-**The root password is documented, not secret.** Every disc mastered from this
-tree carries the same hash in `payload/firstboot/root.shadow` (a public bench value), so
+**The root password is documented, not secret.** Every 1.0 disc carried the same
+hash (a public bench value; 1.1's release profiles carry none), so
 secrecy was never on the table and pretending otherwise would be the actual
 hazard. What makes it safe is the first-boot dialog's **re-arm**: the
 `system.setup` slot is disarmed (`chmod -x`) only at the clean exit of the
@@ -4483,7 +4483,7 @@ boot (`work/golden-candidate/netready-check.out`, one held telnet session):
 | interface | `aen0: flags=23<UP,BROADCAST,NOTRAILERS> inet 192.0.2.38 netmask ffffff00` |
 | the law | `/etc/inet/network-config`: `sum -r` **33904**, **685 bytes**, mtime **Nov 22 1991**, mode `-r--r--r-- root sys` — byte-identical to `core-2.1.pkg`'s shipped copy. **Untouched**, and that is now a measurement |
 | hosts | `192.0.2.38 uaeamix uaeamix.example.net` + the repo host `192.0.2.2 files.example.net` |
-| root pw | the bench value of `payload/firstboot/root.shadow` — the bench credential, and **every aging field empty**: the RTC-1978 `lastchg` trap cannot bite this image |
+| root pw | the bench value (a rig's `MEDIA_ROOT_SHADOW`) — the bench credential, and **every aging field empty**: the RTC-1978 `lastchg` trap cannot bite this image |
 | root telnet | `#CONSOLE=/dev/console` (commented = permitted) |
 | vfstab | `/dev/dsk/c6d0s1 /dev/rdsk/c6d0s1 / ufs 1 yes -` — left as measured. That `yes` is the mount-at-boot defect fixed on 2026-08-15; this image predates the fix, so it still grumbles `Device busy` at every boot. Media mastered after it write `1 no -` |
 | TZ | `TZ=:US/Eastern` — with the leading colon (the `getpwnam` cascade fix) |

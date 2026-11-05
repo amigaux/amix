@@ -459,13 +459,10 @@ stage_sh() {
 stage_sh "$repo/payload/firstboot/firstboot.sh" "$STAGE/firstboot/firstboot.sh"
 # the netinstall's second stage (install.sh arms it on a network install of a set beyond minimal)
 stage_sh "$repo/payload/firstboot/netset.sh" "$STAGE/firstboot/netset.sh"
-cp -p "$repo"/payload/firstboot/root.shadow  "$STAGE/firstboot/root.shadow"
-
-# FB_ROOT_SEED_PW (optional profile key): override the SEEDED root password hash.
-# Default (key unset) = the shared payload/firstboot/root.shadow ("pass"), byte-
-# unchanged for every existing medium. A DISTRIBUTABLE showcase image sets it to a
-# throwaway so the image never carries the standing bench password; firstboot still
-# FORCES a new root password at first boot, so this is only the pre-firstboot seed.
+# The root hash a medium seeds. A published medium's profile says FB_ROOT_SHADOW=none: no hash at all, the first boot
+# locks root until the dialog sets a password (firstboot.sh). A bench medium's hash is the rig's input, MEDIA_ROOT_SHADOW,
+# never part of this tree; a showcase profile's FB_ROOT_SEED_PW makes a throwaway instead. Firstboot still forces a new
+# password at first boot, so either is only the seed. A profile with none of these stops.
 _seed_pw="$(python3 -c '
 import sys
 d={}
@@ -476,20 +473,21 @@ for ln in open(sys.argv[1]):
     if len(v)>=2 and v[0]=="\"" and v[-1]=="\"": v=v[1:-1]
     d[k.strip()]=v
 print(d.get("FB_ROOT_SEED_PW",""))' "$_base_profile_file" 2>/dev/null)"
-if [ -n "$_seed_pw" ]; then
+rm -f "${STAGE:?}/firstboot/root.shadow"
+if grep -q '^FB_ROOT_SHADOW=none$' "$_base_profile_file" 2>/dev/null; then
+  [ -z "$_seed_pw" ] || { echo "STOP: profile ${PROFILES[0]} sets both FB_ROOT_SHADOW=none and FB_ROOT_SEED_PW" >&2; exit 1; }
+  echo "build-install-iso: FB_ROOT_SHADOW=none (profile ${PROFILES[0]}) -- the medium carries no root password hash"
+elif [ -n "$_seed_pw" ]; then
   command -v perl >/dev/null || { echo "STOP: FB_ROOT_SEED_PW set but perl (for crypt) is unavailable" >&2; exit 1; }
   _seed_hash="$(perl -e 'print crypt($ARGV[0], "aB")' "$_seed_pw")"
   [ -n "$_seed_hash" ] || { echo "STOP: crypt of FB_ROOT_SEED_PW produced no hash" >&2; exit 1; }
   printf 'root:%s:::::::\n' "$_seed_hash" > "$STAGE/firstboot/root.shadow"
   chmod 0600 "$STAGE/firstboot/root.shadow"
   echo "build-install-iso: FB_ROOT_SEED_PW set (profile ${PROFILES[0]}) -- regenerated root.shadow (throwaway seed; firstboot still forces a new password)"
-fi
-# FB_ROOT_SHADOW=none (a published medium's profile): no payload root hash at all -- the first boot
-# locks root until the dialog sets a password (firstboot.sh), so the disc carries no credential
-if grep -q '^FB_ROOT_SHADOW=none$' "$_base_profile_file" 2>/dev/null; then
-  [ -z "$_seed_pw" ] || { echo "STOP: profile ${PROFILES[0]} sets both FB_ROOT_SHADOW=none and FB_ROOT_SEED_PW" >&2; exit 1; }
-  rm -f "${STAGE:?}/firstboot/root.shadow"
-  echo "build-install-iso: FB_ROOT_SHADOW=none (profile ${PROFILES[0]}) -- the medium carries no root password hash"
+elif [ -f "${MEDIA_ROOT_SHADOW:-}" ]; then
+  cp -p "$MEDIA_ROOT_SHADOW" "$STAGE/firstboot/root.shadow"
+else
+  echo "STOP: profile ${PROFILES[0]} doesn't say FB_ROOT_SHADOW=none, and no root hash was given (MEDIA_ROOT_SHADOW)" >&2; exit 1
 fi
 
 # --- /install/fpfix (BLIZZARD; installed-tree ufs FP patch) -------------

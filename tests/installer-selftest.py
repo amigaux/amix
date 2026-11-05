@@ -9493,11 +9493,11 @@ def audit_rtc():
 
     # AR4 (grimoire 20): every root-password path the installer controls leaves root's
     # lastchg/aging fields EMPTY, so a battery clock set back can never expire the password.
-    rs = open(os.path.join(REPO, "payload", "firstboot", "root.shadow"), encoding="utf-8").read().strip()
+    rs = open(os.path.join(REPO, "tools", "bench-root.shadow"), encoding="utf-8").read().strip()
     fb = open(os.path.join(REPO, "payload", "firstboot", "firstboot.sh"), encoding="utf-8").read()
     bad = []
     if not re.match(r'^root:[^:]*:::::::$', rs):
-        bad.append("payload/firstboot/root.shadow is not root:<hash>::::::: (%r)" % rs.split(":")[2:])
+        bad.append("tools/bench-root.shadow is not root:<hash>::::::: (%r)" % rs.split(":")[2:])
     if "printf 'root:%s:::::::\\n'" not in iso_src:
         bad.append("build-install-iso's FB_ROOT_SEED_PW path does not write empty aging fields")
     if 's|^root:[^:]*:.*|root:$newhash:::::::|' not in fb:
@@ -10743,6 +10743,9 @@ def audit_root_lock():
     drv = open(DRIVER, encoding="latin-1").read()
     (ok if "grep -q '^FB_ROOT_SHADOW=none$'" in iso and 'rm -f "${STAGE:?}/firstboot/root.shadow"' in iso else fail)(
         "build-install-iso.sh stages no root.shadow for FB_ROOT_SHADOW=none")
+    (ok if 'no root hash was given (MEDIA_ROOT_SHADOW)' in iso and 'payload/firstboot/root.shadow' not in iso
+        and not os.path.exists(os.path.join(REPO, "payload", "firstboot", "root.shadow")) else fail)(
+        "the bench root hash isn't in the build side: a rig input, and a profile with no answer stops")
     (ok if 'if [ -f "$INST/firstboot/root.shadow" ]; then' in drv else fail)(
         "install.sh lays root.shadow only when the medium carries one")
     for prof in ("universal-k46", "universal-k30", "image-k46-4g", "image-k30-4g"):
