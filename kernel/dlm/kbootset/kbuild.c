@@ -880,7 +880,7 @@ modreg(struct ks *k, const char *root, struct kb_mod *md, int *disabled)
 			if (!strncmp(s, "safe", 4) && !s[4 + strspn(s + 4, " \t")]) {
 				if (d == 0 || strcmp(md->i.cls, "boot")) {
 					fclose(f);
-					sprintf(m, "%s: safe is the owner's mark for a boot-class module, "
+					sprintf(m, "%s: safe is the administrator's mark for a boot-class module, "
 						"in /etc/conf/modreg.local.d only", p);
 					return refuse(k, 2, m);
 				}
