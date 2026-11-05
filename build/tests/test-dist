@@ -375,18 +375,9 @@ clean:
         os.makedirs(os.path.join(top, "out", space, "pkgs"))
     write(os.path.join(top, "userland", "packages", "conf", "cats.conf"), "# none\n")
     rc, out = run("catalogs")
-    cats = {s: open(os.path.join(top, "out", s, "catalog")).read() for s in ("kspace", "userland")
-            if os.path.exists(os.path.join(top, "out", s, "catalog"))}
-    check("catalogs: gen-catalog writes each space's catalog and catalog.md5",
-          rc == 0 and cats.get("kspace", "").startswith("#apkg-catalog 1")
-          and os.path.isfile(os.path.join(top, "out", "userland", "catalog.md5"))
-          and "catalog kspace " in out and "catalog userland " in out, out)
-    rc2, out2 = run("catalogs")
-    check("catalogs: two runs, the same catalogs",
-          rc2 == 0 and all(open(os.path.join(top, "out", s, "catalog")).read() == cats[s] for s in cats), out2)
-    check("catalogs: the staging layer, tools/repo's four confs, is in each pkgs/",
-          all(os.path.isfile(os.path.join(top, "out", s, "pkgs", c + ".conf"))
-              for s in ("kspace", "userland") for c in ("deps", "names", "cats", "descs")))
+    check("catalogs: a space with no packages stops: gen-catalog writes no empty catalog",
+          rc == 1 and "catalog NOT written" in out
+          and not os.path.exists(os.path.join(top, "out", "kspace", "catalog")), out)
     def datastream(pkg, version):
         def newc(name, data):
             name = name.encode() + b"\0"
@@ -401,6 +392,23 @@ clean:
         return head + newc(pkg + "/pkginfo", info) + newc("TRAILER!!!", b"")
     with open(os.path.join(top, "out", "kspace", "pkgs", "zeth46-1.0.0-6.pkg"), "wb") as fp:
         fp.write(datastream("zeth46", "1.0.0-6"))
+    with open(os.path.join(top, "out", "userland", "pkgs", "toy-1.0.pkg"), "wb") as fp:
+        fp.write(datastream("toy", "1.0"))
+    write(os.path.join(top, "kernel", "conf", "names.conf"), "zeth46: z3660eth-k46\n")
+    rc, out = run("catalogs")
+    cats = {s: open(os.path.join(top, "out", s, "catalog")).read() for s in ("kspace", "userland")
+            if os.path.exists(os.path.join(top, "out", s, "catalog"))}
+    check("catalogs: gen-catalog writes each space's catalog and catalog.md5",
+          rc == 0 and cats.get("kspace", "").startswith("#apkg-catalog 1")
+          and os.path.isfile(os.path.join(top, "out", "userland", "catalog.md5"))
+          and "catalog kspace " in out and "catalog userland " in out, out)
+    rc2, out2 = run("catalogs")
+    check("catalogs: two runs, the same catalogs",
+          rc2 == 0 and all(open(os.path.join(top, "out", s, "catalog")).read() == cats[s] for s in cats), out2)
+    check("catalogs: the staging layer, tools/repo's four confs, is in each pkgs/",
+          all(os.path.isfile(os.path.join(top, "out", s, "pkgs", c + ".conf"))
+              for s in ("kspace", "userland") for c in ("deps", "names", "cats", "descs")))
+    os.remove(os.path.join(top, "kernel", "conf", "names.conf"))
     rc, out = run("catalogs")
     check("catalogs: kernel-space packages and no kernel/conf/names.conf: refused",
           rc == 1 and "kernel-space packages but no kernel/conf/names.conf" in out, out)
