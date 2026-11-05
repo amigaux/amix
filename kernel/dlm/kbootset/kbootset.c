@@ -125,11 +125,10 @@ static ax_u8 *slurp(const char *path, ax_u32 *len);
 struct file {
 	FILE *f;
 	unsigned long base;
-	long ctl;		/* a raw disk's cN (8 x card + unit), or -1 */
+	long ctl;		/* a disk whose cache is flushed: its cN, or -1 */
 };
 
 static int store_sync(struct file *d);
-static long store_ctl(const char *path);
 
 /* raw devices take whole sectors: every access is widened to sectors
  * through a bounce buffer (the core's offsets are all sector-aligned) */
@@ -321,7 +320,7 @@ media(const char *root, char **cmd, int argc)
 		if (l1 != AX_BOOT1_MAX)
 			return fprintf(stderr, "kbootset: boot1 must be 1024 bytes\n"), 2;
 		d.base = off;
-		d.ctl = store_ctl(disk);
+		d.ctl = -1;
 		if (!(d.f = fopen(disk, "r+b")) && !(d.f = fopen(disk, "w+b"))) {
 			perror(disk);
 			return 1;
@@ -658,7 +657,7 @@ scsi_flush(int card, int unit, char *why)
 		sprintf(why, "/dev/scsi: %s", strerror(e));
 		return 1;
 	}
-	if (!sd[5]) {
+	if (!sd[5] || sd[6]) {
 		sprintf(why, "not taken (status 0x%02x)", sd[6]);
 		return 1;
 	}
@@ -673,9 +672,8 @@ scsi_flush(int card, int unit, char *why)
 /*
  * After each store write, before the next: what keeps a box bootable is the
  * order of its writes (C2-4 section 20).  fsync for a file or a block node; a
- * raw node's write has already reached the disk.  The unit's own cache is
- * asked to empty; a unit or controller with nothing to flush does not take the
- * command, and that is no failure.
+ * raw node's write has already been completed by the disk.  On gayle the
+ * drive's own cache is flushed too; a drive without it is no failure.
  */
 static int
 store_sync(struct file *d)
@@ -683,7 +681,7 @@ store_sync(struct file *d)
 	char why[200];
 
 #ifdef KS_SYNC
-	if (fsync(fileno(d->f)) != 0 && errno != EINVAL)
+	if (fsync(fileno(d->f)) != 0 && errno == EIO)
 		return -1;
 #else
 	const char *log = getenv("KBOOTSET_SYNCLOG");	/* the host test */
@@ -789,13 +787,23 @@ flushcmd(int n, char **a)
 	return 0;
 }
 
-/* a store on a raw disk node, cN of its name; a file or anything else, -1 */
+/* a store on a disk node of a gayle card, cN of its name; anything else, -1 */
 static long
-store_ctl(const char *path)
+store_ctl(const char *path, const struct kb_kinfo *ki)
 {
 	const char *b = strrchr(path, '/');
+	long c = disknode(b ? b + 1 : path);
+	char key[48];
+	int i;
 
-	return !strncmp(path, "/dev/", 5) && b ? disknode(b + 1) : -1;
+	if (c < 0 || !ki)
+		return -1;
+	for (i = 0; i < ki->ncards; i++)
+		if ((long)ki->card[i].k == c >> 3) {
+			kb_matchkey(ki->card[i].id, key);
+			return !strcmp(key, "mobo:gayle") ? c : -1;
+		}
+	return -1;
 }
 
 static ax_u8 *
@@ -984,7 +992,7 @@ main(int argc, char **argv)
 	static struct kb_kinfo ki;
 	static char dev[1100], bootset[1100], jdefault[1100];
 	const char *kpath = getenv("KBOOTSET_KINFO");
-	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0, force = 0;
+	int have_kinfo = 0, disk = -1, root_given = 0, noroot = 0, force = 0, isfile = 0;
 	unsigned long off = 0, version = AX_LOADER_VERSION;
 	ax_u8 *b1 = 0, *b2;
 	ax_u32 len, l1, id = 0;
@@ -994,8 +1002,10 @@ main(int argc, char **argv)
 	for (i = 1; i < argc && argv[i][0] == '-'; i++) {
 		if (i + 1 >= argc)
 			usage();
-		if (!strcmp(argv[i], "--image") || !strcmp(argv[i], "--dev"))
+		if (!strcmp(argv[i], "--image") || !strcmp(argv[i], "--dev")) {
+			isfile = argv[i][2] == 'i';
 			image = argv[++i];
+		}
 		else if (!strcmp(argv[i], "--offset"))
 			off = strtoul(argv[++i], 0, 0);
 		else if (!strcmp(argv[i], "--journal"))
@@ -1072,7 +1082,7 @@ main(int argc, char **argv)
 		}
 	}
 	d.base = off;
-	d.ctl = store_ctl(image);
+	d.ctl = isfile ? -1 : store_ctl(image, have_kinfo ? &ki : 0);
 	if (!(d.f = fopen(image, "r+b")) && !(create && (d.f = fopen(image, "w+b")))) {
 		perror(image);
 		return 1;

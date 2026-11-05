@@ -166,6 +166,22 @@ rm -f $T/synclog
 KBOOTSET_SYNCLOG=$T/synclog $B/kbootset --image $T/flushimg loader-install $T/b2new > /dev/null
 [ "$(wc -l < $T/synclog)" -eq 4 ] && [ "$(sort -u $T/synclog)" = "flush -1" ] ||
 	{ echo "kbox: an install did not flush after each of its writes" >&2; cat $T/synclog >&2; exit 1; }
+# the store's own unit, on gayle only, and only for a disk node
+cp $T/dev/c6d0s3 $T/s3.flush
+rm -f $T/synclog
+KBOOTSET_SYNCLOG=$T/synclog $B/kbootset -R $R loader-install $T/b2new > /dev/null
+[ "$(sort -u $T/synclog)" = "flush -1" ] || { echo "kbox: an a4091 store was flushed" >&2; exit 1; }
+cp $T/s3.flush $T/dev/c6d0s3
+python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,2,0,0
+rm -f $T/synclog
+KBOOTSET_SYNCLOG=$T/synclog $B/kbootset --dev $T/dev/c6d0s3 loader-install $T/b2new > /dev/null
+[ "$(sort -u $T/synclog)" = "flush 6" ] || { echo "kbox: a gayle store was not flushed" >&2; cat $T/synclog >&2; exit 1; }
+cp $T/s3.flush $T/dev/c6d0s3
+cp $T/dev/c6d0s3 $T/c6d0s3.file
+rm -f $T/synclog
+KBOOTSET_SYNCLOG=$T/synclog $B/kbootset --image $T/c6d0s3.file loader-install $T/b2new > /dev/null
+[ "$(sort -u $T/synclog)" = "flush -1" ] || { echo "kbox: a file was flushed as a disk" >&2; exit 1; }
+python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 rc=0; $B/kbootset flush 4 0 2>/dev/null || rc=$?; [ $rc -eq 2 ]
 rc=0; $B/kbootset flush 0 0 2> $T/out || rc=$?; [ $rc -eq 1 ]
 grep -q "flush needs the box" $T/out

@@ -434,7 +434,8 @@ Exit status 0 whatever the units answer.
 .BI "flush " "card unit"
 Sends one unit one SCSI SYNCHRONIZE CACHE through
 .BR /dev/scsi ,
-as kbootset does after each store write, and says whether the unit took it.
+as kbootset does after each store write on a Gayle disk, and says whether the
+unit took it.
 That tells whether it takes the command, not whether it has a cache.
 .TP
 .BI "inquiry " "card unit"
