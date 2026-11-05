@@ -7,6 +7,10 @@
 # outputs must equal the pins below: 124b86c reproduces amix-dlm's own
 # build/boot1.img and build/boot2.bin byte for byte (2026-10-26).
 #
+# -16 (2026-11-05): a package-only revision: the description no longer names a
+# commit, which went stale; the copyright file names the pinned one.  The same
+# commit and payload as -15.
+#
 # -15 (2026-11-05): amix-dlm 3928135 -- boot2 says when a line's memory
 # limit takes memory ("k30 kernel: using 64 MiB of the 128 MiB here"), and
 # a k46 kernel's bind region is at most 128 MiB; a bank touching it is left
@@ -93,6 +97,6 @@ LDR_BOOT2_SHA=bbcc43764b10601093dfe9db13989058f9952ac7d1240f1a342ed416e1652b5f
 
 LDR_CATALOG_NAME=loader-amix
 LDR_PKG=ldramix
-LDR_PKG_VERSION=1.0.261105-15
+LDR_PKG_VERSION=1.0.261105-16
 
 LDR_SOURCE_EPOCH=1793836800
