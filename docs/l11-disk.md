@@ -2,12 +2,11 @@
 
 amix-dlm `docs/spec/40-generations-and-composer.md` §2 defines it; this repository
 implements it as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`, sourced by `install.sh`).
-Stage-2 work item S2-30.
 
-> **1.1 requires a fresh install (P-36, owner 2026-10-31).** There is no upgrade
+> **1.1 requires a fresh install (2026-10-31).** There is no upgrade
 > install and no update path from 1.0, and no migration code: a disk that holds Amix
 > is erased and installed afresh. The upgrade install this file used to describe
-> (`INSTALL_UPGRADE=yes`; S2-31, S4-54, S4-58) is removed. Its text is
+> (`INSTALL_UPGRADE=yes`) is removed. Its text is
 > `docs/upgrade-install.md` and its code is in `l11.sh`, `install.sh`, `setup.sh` and
 > `firstboot.sh`, all in git up to 3ac92fb.
 
@@ -137,7 +136,7 @@ The message names the way to finish the transaction: boot the medium, choose
 repair, mount the install CD at `/cdrom` and run
 `/cdrom/install/l11/bin/apkg -c /cdrom/install/l11/recover.conf -R /mnt recover`.
 The repair menu reports a pending journal with the same command. Until kbootset
-reads `store=` from `/etc/default/bootset` (S2-06), the trigger that `recover`
+reads `store=` from `/etc/default/bootset`, the trigger that `recover`
 runs cannot find the store, so recover still exits 6 after it reinstalls the
 packages. Then compose the store from the repair shell:
 `/mnt/sbin/kbootset -R /mnt --dev <store=> build`, then `commit`.
@@ -197,7 +196,7 @@ A 1.1 install never keeps anything of the disk it is laid on:
 - an unattended profile is refused over a disk with an RDB unless it sets
   `TARGET_ERASE_OK=yes`;
 - `INSTALL_UPGRADE` set to anything but `no` stops the install: *"1.1 requires a
-  fresh install, P-36"*;
+  fresh install"*;
 - the RDB area is cleared and the layout above is authored. The new root carries
   no `/var/adm/upgrade` and no `/etc/rc2.d/S17upgrade`, and the first boot runs
   the dialog and the first-boot configuration in full. `tools/l11-target-check.py`

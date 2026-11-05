@@ -38,4 +38,4 @@ runs mkfs on the box.
 4. Regression, matrix cells on trial media built from the branch: cd-public-r6 and cd-ufs-pub-r6 (classic, 100 MB),
    fd-a4091-pub-r6 (16 MB, floppy route), cd-full-pub-r6 (512 MB), and cd1-pub-r6 + cd2-emu-r6 (060 line; 30 MB
    swap floor). Pass = 10/10 with the r6d digests unchanged: the change touches no installed file.
-5. Metal only if the owner re-cuts: the A4000D CD rows (M4, M6) as in the r6d METAL-PLAN.
+5. Metal only on a re-cut: the A4000D CD rows (M4, M6) as in the r6d METAL-PLAN.

@@ -23,3 +23,10 @@ word	\b[Tt]he owner\b	the owner
 word	\b[Oo]wner[- ](rule|word|decision|approved|gated|decided|said|asked)	owner rule
 word	\b[Ww]aves?\b	two waves
 word	\bWAVE\b	WAVE
+label	\bKT-[0-9]+	KT-99
+label	\bW-D[0-9]	W-D9
+label	\bOQ-[0-9]	OQ-9
+label	\b[Tt]he [A-Za-z0-9-]+ station\b	the Z3660 station
+label	campaign plan	campaign plan
+allow	tools/chain-line.sh	ping -c1 -W2 
+allow	tools/install-matrix.sh	ping -c1 -W2 

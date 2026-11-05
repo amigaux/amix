@@ -58,6 +58,6 @@ Before repeating a claim about an artifact you have:
 
 ## The companion rule
 
-The port station arrived at the same discipline from the other direction, in its own §10.2:
+The port arrived at the same discipline from the other direction, in its own §10.2:
 **when a log exists, read the log.** Both reduce to one habit — *check the thing itself,
 not the description of a thing like it.*

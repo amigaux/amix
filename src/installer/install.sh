@@ -95,7 +95,7 @@ SMSWAP=18
 MINBOOT=2
 BOOTSIZE=10               # 10 MiB so every kernel cut fits; stock was 2
 BLOCKS_PER_MB=2048
-# E-BIG (KT-32, 2026-10-02): the STOCK kernel cannot write an on-box filesystem
+# E-BIG (2026-10-02): the STOCK kernel cannot write an on-box filesystem
 # past block 1234567 -- sdpart.c sddevsize() answers 1234567 for an unknown
 # partition length and dd.c clamps raw I/O to it, so mkfs dies "wtfs: No such
 # device or address" on any root above ~603 MB (600 MB proven, 640 fails).
@@ -1072,7 +1072,7 @@ esac
 # 030 s5-miniroot line, so MINIROOT_FSTYPE resolves to `s5` and the /etc/mnttab
 # seed line is BYTE-IDENTICAL to what it always was. The 040/060 line is UFS-only:
 # s5 is structurally broken under 4 KiB pages (docs/miniroot.md "The UFS miniroot";
-# the 040/060 campaign plan §1), so the miniroot fs is a STRICT function of the CPU
+# the 040/060 notes §1), so the miniroot fs is a STRICT function of the CPU
 # line. Deriving MINIROOT_FSTYPE from INSTALL_CPU here keeps ONE source of truth --
 # a separate MINIROOT_FSTYPE key could silently contradict the medium that booted.
 [ -n "$INSTALL_CPU" ] || INSTALL_CPU=030

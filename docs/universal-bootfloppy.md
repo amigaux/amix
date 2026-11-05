@@ -16,11 +16,11 @@ guards this so the trap cannot return silently.
 
 1. Copies the install kernel into `payload/unix-universal.brel` (gitignored; `payload/`
    is where the media builders read it). Stops with a clear message if the source is
-   missing — it never builds a kernel itself. **Since P-15 I1 (2026-10-02) the kernel is
+   missing — it never builds a kernel itself. **Since 2026-10-02 the kernel is
    the kerntools family K030-U-FD**, passed as
    `KERNEL_SRC=../amix-kerntools/work/k0-chains/K030-U-FD/K030-U-FD-c0-u6`; the default
    (`work/install-kernel-fd0unix/usr/sys/unix.brel`, `build-install-kernel.sh`'s output)
-   is the pre-T-9 August line and is superseded.
+   is the older August line and is superseded.
 1b. **Guards the brel invariant**: reads the copied kernel's ELF `e_type` (offset 16,
    big-endian u16) and **aborts if it is not `0xff00`**. Framing a raw ET_REL kernel
    boots to a D245 4C41 Guru during relocation (see below), so this refusal makes the
@@ -39,7 +39,7 @@ guards this so the trap cannot return silently.
 
 | Role | Path | Notes |
 |------|------|-------|
-| Kernel (brel) | `../amix-kerntools/work/k0-chains/K030-U-FD/K030-U-FD-c0-u6` (via `KERNEL_SRC`) | **K030-U-FD**: kerntools' floppy form of the K030-U family, post-T-9 sources, CD-06 cdfs — **brel** (`e_type=0xff00`), `fd0unix` config (`rootdev = FD0P = 0x00400008`), a3091 + a2091 (bounce fixes), **a4091**, **Gayle IDE** (registers only as the sole controller), **cdfs**, **`support.c` PATCHED** (the VPOSR-gated probe below). KT-37 cut (the sddevsize fix): sha256 `7fb1ed4f…`. **r6 (KT-55, kerntools a695553):** `../amix-kerntools/work/k0-chains/r6/K030-U-FD/K030-U-FD-c0-u6`, sha256 `a5be8b68…`, sum -r 03306, 1,267,121 B — + the ttcompat init fix and A4-24 (`a4091.o`), no RTH1 (the installer boots from floppy); framed boot floppy `ec6e8449…` (the r5 floppy `a46166c7…` is kept as `floppies/build/r5/`). **No z3660scsi.** E20c uses the slave-enabled twin K030-U-FD-S (`79084f84…`) on a floppy of its own (`floppies/build/amix_21_boot-universal-S.adf`). Never committed. **Not** the raw ET_REL (see D245 note). |
+| Kernel (brel) | `../amix-kerntools/work/k0-chains/K030-U-FD/K030-U-FD-c0-u6` (via `KERNEL_SRC`) | **K030-U-FD**: kerntools' floppy form of the K030-U family, later sources, CD-06 cdfs — **brel** (`e_type=0xff00`), `fd0unix` config (`rootdev = FD0P = 0x00400008`), a3091 + a2091 (bounce fixes), **a4091**, **Gayle IDE** (registers only as the sole controller), **cdfs**, **`support.c` PATCHED** (the VPOSR-gated probe below). cut (the sddevsize fix): sha256 `7fb1ed4f…`. **r6 (kerntools a695553):** `../amix-kerntools/work/k0-chains/r6/K030-U-FD/K030-U-FD-c0-u6`, sha256 `a5be8b68…`, sum -r 03306, 1,267,121 B — + the ttcompat init fix and A4-24 (`a4091.o`), no RTH1 (the installer boots from floppy); framed boot floppy `ec6e8449…` (the r5 floppy `a46166c7…` is kept as `floppies/build/r5/`). **No z3660scsi.** E20c uses the slave-enabled twin K030-U-FD-S (`79084f84…`) on a floppy of its own (`floppies/build/amix_21_boot-universal-S.adf`). Never committed. **Not** the raw ET_REL (see D245 note). |
 | Donor | `floppies/orig/amix_21_boot.adf` | Stock Amix 2.1 boot floppy (901,120 bytes). Bootblock + bootstrap reused verbatim. Proprietary — not committed. |
 | Framer | `../grimoire-amix/tools/build-bootfloppy.sh` | Reverse-engineered layout/compression/IBLK/checksum tool; read/exec sibling. |
 
@@ -58,7 +58,7 @@ Gitignored build artifact — not committed.
 | Available on floppy (880 KB − header) | 890,880 bytes |
 | **Headroom** | **155,527 bytes (~151 KiB)** |
 
-No stripping is needed (2026-10-02, P-15 I1; the August fd0unix kernel was 1,174,960 B /
+No stripping is needed (2026-10-02; the August fd0unix kernel was 1,174,960 B /
 671,233 B compressed). The brel kernel is smaller than its raw ET_REL because `elf2brel`
 drops the symbol table the boot loader does not need.
 

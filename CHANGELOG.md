@@ -29,7 +29,7 @@ measure-image records an image's first-boot use with a pressure step sized to th
 
 ## 2026-10-31 — 1.1 is clean installs only; media rd1x / ni17 / fp-rd1x (dad1b57..dca90ae)
 
-P-36: the upgrade install is removed (setup.sh's offer, install.sh/l11.sh's capture/restore/put-in-place, S17upgrade,
+The upgrade install is removed (setup.sh's offer, install.sh/l11.sh's capture/restore/put-in-place, S17upgrade,
 /var/adm/upgrade, firstboot's FB_UPGRADED branches); INSTALL_UPGRADE other than no is refused; the four upgrade cells
 are retired; docs/upgrade-install.md becomes docs/l11-disk.md. New cell l11-k46-reinstall-ia: a fresh install over a
 seeded 1.0 disk keeps nothing of it. Media rd1x (ISO 09506d18…), ni17 (c3e61f18…) and fp-rd1x on kern30m -63, kern46m
@@ -42,9 +42,9 @@ The media carry kern30m k30.1.3.261030-56 (kzero, ufs tail zeroing, the sendsig 
 c1708530, netinstall ni14 bd4bdec5 with raw images ni14-k46 4003cbb1 / ni14-k30 ca311b43, floppy pairs fp-rd1u.
 install-matrix runs this workspace's amiberry (exe checked) and holds rig-slot 0; build-l11-inputs takes the dlm
 from amix; build-core-tree.sh makes the stock core tree in build/core. Cells l11-rd, l11-rd-fd, l11-ni and l11-nr
-PASS 10/10 on k30 (-56) and k46 (-61); rd1t/ni13 and the earlier P-35 cell evidence are void.
+PASS 10/10 on k30 (-56) and k46 (-61); rd1t/ni13 and the earlier cell evidence are void.
 
-## 2026-10-30 — ufs is the only target filesystem (P-35) (37fbe0e..40a09e7)
+## 2026-10-30 — ufs is the only target filesystem (37fbe0e..40a09e7)
 
 install.sh refuses s5 and INSTALL_TARGET_PREBUILT; the interview no longer asks the root type; the upgrade reads the
 old root as ufs only; the eleven prebuilt matrix cells are retired and the five s5 profiles are ufs. Media re-cut on
@@ -59,25 +59,25 @@ l11-rd, l11-rd-fd, l11-ni and l11-nr PASS 10/10 on k46 and k30. The frozen 1.0 m
 
 ## 2026-10-28 — the media on the kernel-space record b1f564f4 (kern30m -20, kern46m -51, kbootset -23, modtools -7; dlm e089c2a): CD rd1q c8cf4446, netinstall ni9 37b2fc61 with raw images ni9-k46 92ea1578 / ni9-k30 61be81eb, floppy pairs fp-rd1q. The k30 RAM-disk image carries the kernel package's ufs as a boot-class module; the k46 evidence floppy is ufs. Cells l11-rd, l11-rd-fd, l11-ni and l11-nr on k46 and k30 PASS 10/10 with the firstboot gate; every installed root runs on the ufs module (e36699e..9fbd9d2)
 
-## 2026-10-27 — S5-44 R2: the first boot's step 4d is `kbootset nodes`; media re-cut on kbootset -22 (catalog 915e09f3): CD rd1p 6024509a, netinstall ni8 cf25c1ff with raw images ni8-k46 8749938d / ni8-k30 01a2a397, floppy pairs fp-rd1p. Cells l11-rd-k46/k30 (rd1p) and l11-ni-k46/k30 (ni8) PASS 10/10 with the firstboot gate (9d719e8..a862a36)
+## 2026-10-27 — the first boot's step 4d is `kbootset nodes`; media re-cut on kbootset -22 (catalog 915e09f3): CD rd1p 6024509a, netinstall ni8 cf25c1ff with raw images ni8-k46 8749938d / ni8-k30 01a2a397, floppy pairs fp-rd1p. Cells l11-rd-k46/k30 (rd1p) and l11-ni-k46/k30 (ni8) PASS 10/10 with the firstboot gate (9d719e8..a862a36)
 
 Kernels stay kern30m -17 / kern46m -82 and modtools -6 as rows of record (one change at a time). build-ramdisk-miniroot empties the box's /tmp/rd-add before each push (a stale tree could leak one image's /install and modules into the next; ecb4175).
 
 ## 2026-10-27 — rd1o (amix21-install-l11-rd1o.iso, 51 390 464 B, 13:28): the CD regression run on the new scripts that afternoon (cells l11-rd-k46/k30 9/9, first boots E956/E957 PASS), a stage-5 candidate, never promoted
 
-## 2026-10-27 — S5-44 R0 and R1: J4's root predates firstboot step 4d (an S4-55 k46.1.0 disk later upgraded to -82); no current medium reproduces it. The install-matrix `firstboot` gate boots the target once and checks the four-card disk nodes. l11-rd-k46/k30 (rd1n) and l11-ni-k46/k30 (ni7) PASS 10/10 (0407da8, cee9568)
+## 2026-10-27 — the A4000D bench root predates firstboot step 4d (a k46.1.0 disk later upgraded to -82); no current medium reproduces it. The install-matrix `firstboot` gate boots the target once and checks the four-card disk nodes. l11-rd-k46/k30 (rd1n) and l11-ni-k46/k30 (ni7) PASS 10/10 (0407da8, cee9568)
 
-## 2026-10-27 — S5-33, the netinstall extras: zen0 in the miniroot and a raw RDB image per line. ni7 ebf1205d; raw images ni7-k46 b96dd51c / ni7-k30 ebf41c1f. Cells l11-ni-zen-k46/k30, l11-nr-k46/k30 and l11-ni-k46 PASS 9/9 (e669f46..7f65c07)
+## 2026-10-27 — the netinstall extras: zen0 in the miniroot and a raw RDB image per line. ni7 ebf1205d; raw images ni7-k46 b96dd51c / ni7-k30 ebf41c1f. Cells l11-ni-zen-k46/k30, l11-nr-k46/k30 and l11-ni-k46 PASS 9/9 (e669f46..7f65c07)
 
 The miniroot offers zen0 when /dev/zen0 opens (z3660eth as a boot-class module) and aen0 when it answers; with both it asks, zen0 the default. One raw image per line, because the core loads boot modules only from /stand/gen/<booted id>/mod.
 install-matrix: ZENNET and RAWBOOT cells, NETBOOT gates on the mirror log; AMIBERRY_BRANCH defaults to amix-v842; build-ramdisk-floppy.sh is 100755.
 
-## 2026-10-27 — S5-05: the RAM-disk floppy pair in one swap — l11-set on dlm 28fb5a1 (kbootset media puts the image after the root modules); both pairs re-cut, FDBOOT cells 9/9 with one L11 volume request each (ff80490)
+## 2026-10-27 — the RAM-disk floppy pair in one swap — l11-set on dlm 28fb5a1 (kbootset media puts the image after the root modules); both pairs re-cut, FDBOOT cells 9/9 with one L11 volume request each (ff80490)
 
 The catalog is unchanged; kbootset -20, modtools -6 and gayle 1.1.0-2 are kept as rows of record in tools/l11-rows-record.conf.
 New pairs in tmp/2026-10-27-rd1/fp-s505 from the same RAM-disk images; the earlier pairs needed three changes (2, 1, 2).
 
-## 2026-10-27 — the netinstall medium (S4-53, form B): ni6 888ce1cd, cells l11-ni-k46/k30 9/9, first boots PASS — M-NET1g on the bench (e0daf78..92c605f)
+## 2026-10-27 — the netinstall medium (form B): ni6 888ce1cd, cells l11-ni-k46/k30 9/9, first boots PASS — on the bench (e0daf78..92c605f)
 
 - l11 inputs: the HTTP apkg (apkg-http); the medium's kpkg carries catalog.md5; build-install-iso --four-card (e0daf78).
 - installer: the network as the installation source — net_source (static, the catalog gate before any disk write, the link
@@ -85,26 +85,26 @@ New pairs in tmp/2026-10-27-rd1/fp-s505 from the same RAM-disk images; the earli
 - build-ramdisk-miniroot --install: the netinstall image's installer (dd1db7a).
 - tools/build-netinstall.sh: the boot-only two-line ISO, read back; --mirror-from for the cells' repository snapshot (c8ff393).
 - install-matrix: NETBOOT and the cells l11-ni-k46/k30 (92c605f); first boots E964/E965. The installed apkg.conf names the
-  canonical repository. Carried to stage 5: the raw RDB image, zen0 in the miniroot, the public-host netinstall (owner's gate).
+  canonical repository. Carried to stage 5: the raw RDB image, zen0 in the miniroot, the public-host netinstall.
 
 ## 2026-10-27 — install-matrix: FDBOOT and the cells l11-rd-fd-k46/k30 — the RAM-disk floppy pair boots (each L11 volume request followed from the serial port) and installs from the CD; both 9/9 on the loader -9 pairs (39ce8aa)
 
 FDBOOT = a CDBOOT cell whose boot medium is the pair (--fd-pair); rig = the CD-boot config + volume 1 in DF0 at power-on, an
 empty DF1 for the evidence floppy, serial captured from before launch. Run dirs work/install-matrix/20261027-l11-rd-fd-k46/-k30.
 
-## 2026-10-27 — build-ramdisk-floppy: the loader of record from the staged loader-amix; the set on catalog 6e60a128 (loader -9); S4-52 (b): both pairs boot and install from the CD (8ee24ec)
+## 2026-10-27 — build-ramdisk-floppy: the loader of record from the staged loader-amix; the set on catalog 6e60a128 (loader -9); both pairs boot and install from the CD (8ee24ec)
 
 boot1, boot2 and the loader version come from the staged package's /stand/loader and ldrinfo (sha checked). Pairs k46
 97ccee45/9a8dd84a, k30 9b711840/a8341eb1 (same rd1m images). Rows E958 (k46) / E959 (k30): three L11 volume changes (2, 1, 2),
 the -9 re-read refuses the wrong volume by name, install from rd1m completes, fsck clean, halt pass 2 modules.
 
-## 2026-10-27 — build-ramdisk-miniroot: --net, the netinstall image's network userland; M-NET1f PASS on both lines on the CD path (fefe74e)
+## 2026-10-27 — build-ramdisk-miniroot: --net, the netinstall image's network userland; PASS on both lines on the CD path (fefe74e)
 
 aen, slink, ifconfig, route, ping, libnsl/libsocket and the netdir libraries, netconfig, strcf and the inet/TI nodes from the
 golden box; /etc/inet/hosts written fresh (localhost only). 4 MiB images (k46 9546e3d3, k30 9639a556); rows E960/E961: aen0 up,
-ping by address and by hosts name through libnsl's netdir path. Side result M-NET1e: image at 0x9C00000 (k46, 32 MB) / 0x7C00000 (k30, 64 MB).
+ping by address and by hosts name through libnsl's netdir path. Side result: image at 0x9C00000 (k46, 32 MB) / 0x7C00000 (k30, 64 MB).
 
-## 2026-10-27 — S4-52 (a): the RAM-disk floppy pair per line (4a95d3e, d72d173); (b) blocked on boot2's L11
+## 2026-10-27 — the RAM-disk floppy pair per line (4a95d3e, d72d173); booting them blocked on boot2's L11
 
 tools/lib/ramdisk-media.sh: the RAM-disk media's shared staging (rd1m's tree rebuilds byte-identical). tools/build-ramdisk-floppy.sh
 --line k46|k30: the pair via kbootset media --floppy (volume 2 free: k46 583 680 B, k30 782 336 B). Booting the pair (E958/E959):
@@ -115,7 +115,7 @@ boot2 v3 prints `L11 insert boot volume 2 of 2` and never takes volume 2 (13 min
 
 kbootset -20 (dlm 1da3474, the build= gate ran on both generations), kern46m -82, z3660scsi 1.0.0-2 on the rd1k set; same images.
 The CD-boot cells 9/9 and the first boots PASS on both lines (E956 k46 on -82 with z3660scsi 1.0.0-2 as the root module; E957
-k30 on -17). S4-52 budget measured on real floppy pairs: the RAM-disk profile fits both lines with ~570 KiB (k46) / ~764 KiB
+k30 on -17). The budget measured on real floppy pairs: the RAM-disk profile fits both lines with ~570 KiB (k46) / ~764 KiB
 (k30) free on volume 2; each extra MiB of image costs ~200 KB deflated.
 
 ## 2026-10-27 — the 1.1 install path end to end: CDBOOT cells l11-rd-k46 / l11-rd-k30 PASS 9/9, first boots PASS (18693e2…ae1437c); rd1k 88d5212a
@@ -153,14 +153,14 @@ store member (crc32/sha256, lsstore, kbootset check). Floppy-booted disk-rooted 
 (k46: z3660scsi root loaded) and E953 (k30: rooted on the WD) PASS; C4-1's §4d d1→c1x swap ran live (sdcards=4). Next: the
 2 MiB s5 miniroot per line, then the CD-booted RAM-disk-rooted cell.
 
-## 2026-10-27 — S4-58: the interview offers the upgrade install (37422a4)
+## 2026-10-27 — the interview offers the upgrade install (37422a4)
 
 On a 1.1 medium a chosen disk that holds Amix (slice 1 UNIX_Root + slice 2 UNIX_Swap; 1.1 by the store magic, s4 by UNIX_Data)
 gets 1) upgrade 2) erase and install afresh 3) stop (default 1), with what is kept and not kept and /home's size measured on the
 old root (LOST when it exceeds the swap slice less 1 MiB); an upgrade asks no sizes and keeps the old configuration (no dialog).
 Cell l11-k46-upg-ia PASS 9/9 through the interview; selftests cover the offer's four shapes.
 
-## 2026-10-27 — S4-54, the upgrade install's survivors (74abe1f)
+## 2026-10-27 — the upgrade install's survivors (74abe1f)
 
 The installer puts the saved configuration in place at the end of the install (from the archive's own cpio entries) and checks
 every file's sum on the new root; FB_UPGRADED=y makes the first boot leave them alone (S17upgrade is a guard; no dialog on an
@@ -176,7 +176,7 @@ and the RTG X11 kit for a ZZ9000 in Zorro II mode; the first-boot dialog armed, 
 sets one. Mastered with the HEAD installer on the r7 pins (carries cfcdb6a and d384553). Install cell PASS 9/9; a copy
 booted on an emulated A3000/ECS + 68060 + ZZ9000_Z2 through firstboot to login and OpenLook on the RTG. Image
 amix-1.0.1-a3000-060-wd.img 1,048,576,000 B sha256 74a1a00f, README and evidence in tmp/2026-10-26-a3000-060-image/.
-Finding: the 060 kernels' W-D7 registers the WD only on ECS, never under AGA. Not run on real hardware.
+Finding: the 060 kernels' the card-order change registers the WD only on ECS, never under AGA. Not run on real hardware.
 
 ## 2026-10-26 — C4-1, the installer's half of the four-card sd contract (f526af4, d384553, e989926)
 
@@ -186,12 +186,12 @@ swap core's 256 d1 nodes for the c10–c1f nodes (removef per id / installf, pkg
 the first boot names the root as the running kernel does (`/etc/devnm /`), so vfstab, swap and the atdevs gate follow the
 kernel; ROOT_RECORD_DISK stays card 0 and says why; a CD-boot 1.1 disc under a four-card install kernel gets the class-order
 names appended to its staged profiles (tools/sdnames.py reads sdcards from a datastream, a sidecar or a chain MANIFEST.json;
-SD_BOARDS/CD_HBA in the six 1.1 profiles). Regression on the S4-55 set PASS both lines.
+SD_BOARDS/CD_HBA in the six 1.1 profiles). Regression on that set PASS both lines.
 
-## 2026-10-26 — S4-55, the first stage-4 media of record (0c3cc9f) — not published before 1.1
+## 2026-10-26 — the first stage-4 media of record (0c3cc9f) — not published before 1.1
 
 tools/l11-set.conf moves to the current set, every row the live catalog's (9e143d53): amix-dlm 4b7eb3d, kernel-k30-m -04 /
-kernel-k46-m -61 (S4-20), loader-amix -6, kbootset -15, modtools -6, z3660eth -5, monsw -2, dlmkit -5, z3660rtg 1.1.0-1,
+kernel-k46-m -61, loader-amix -6, kbootset -15, modtools -6, z3660eth -5, monsw -2, dlmkit -5, z3660rtg 1.1.0-1,
 the m4 package, APKG 0.3.2, the syslog unit fixes. Media (tmp/2026-10-26-s4-55): install ISOs k30 992e6811, k46 6eeccf55;
 CD-boot discs k30 8c9c5003, k46 8062eba5 (part 3's recipe, no --bootdev). Four cells PASS 9/9 (syslog unit 4/4); first boots
 on all four disks: syslogd up, conslogging 1, the namelist bound, a kernel line after S70 filed in /var/log/bus-errors.
@@ -201,7 +201,7 @@ on all four disks: syslogd up, conslogging 1, the namelist bound, a kernel line 
 The base carries the stock-derived m4 package (amix-packagemanager b70500c) instead of the whole of Cdev for
 /usr/ccs/bin/m4 (ISO −10.3 MB, root −10.2 MB against the Cdev form; +28 KB against no m4); install.sh takes m4 or Cdev in a
 1.1 order and dies with neither; l11-set.conf gains a `stock-pkg` item (copied into staging, recorded with its sha256 in
-INPUTS); the S3-45 set's superseded kbootset -14, z3660eth -2 and monsw -1 kept as rows of record. One cell per line PASS
+INPUTS); the RTG set's superseded kbootset -14, z3660eth -2 and monsw -1 kept as rows of record. One cell per line PASS
 9/9; first boots file kernel lines in /var/log/bus-errors on both lines (E937/E938).
 
 ## 2026-10-26 — 1.1 media: syslogd now files kernel and system messages (55d8e15)
@@ -212,7 +212,7 @@ gate checks m4 and the conf rows ("the syslog unit"). Proven on both lines: afte
 /var/log/bus-errors and on the console in syslogd's format. 1.0: standard/full/developer/x11 carry Cdev; minimal and
 060-minimal do not (unchanged). Proposed for the packagemanager: m4 as a package of its own (23 KB, no compiler forced).
 
-## 2026-10-26 — S3-45's medium: RTG-kit 1.1 profiles and cells; booting the install CD (0f73c0b..02fe6c4)
+## 2026-10-26 — the RTG medium: RTG-kit 1.1 profiles and cells; booting the install CD (0f73c0b..02fe6c4)
 
 RTG-kit 1.1 profiles (bench-a4000-z3660-060-cd-l11-rtg, bench-a3000-a4091-l11-rtg) and matrix cells l11-k46-rtg / l11-k30-rtg:
 z3660eth, monsw and z3660rtg 1.1.0-1 composed into the pristine generation with the X stack (Xcore, Xbasic, olcore) and the
@@ -221,7 +221,7 @@ for superseded packages (tools/l11-rows-record.conf). Test disks tmp/2026-10-26-
 86ae863a), both cells PASS 9/9; first boots: syslogd up, conslogging 1, `modadmin -l z3660rtg` loads with monsw as its
 dependency on k46, -L captures the driver's lines. Docs: booting the 1.1 install CD — the installed disk boots first.
 
-## 2026-10-26 — S3-31 media of record; the syslog unit trusts its pid file only for a running syslogd (513b9c4, cfcdb6a)
+## 2026-10-26 — the module-kernel media of record; the syslog unit trusts its pid file only for a running syslogd (513b9c4, cfcdb6a)
 
 Media of record (tmp/2026-10-26-s3-31, SHA256SUMS fff4fd0d): amix21-install-l11-k30-s3-31.iso 98a88d43, -k46- 5ed3bbea;
 set = dlm c6ad5bd, packagemanager 124c329, kbootset -14, modtools -5, loader-amix -5, kern30m/kern46m, z3660eth -2,
@@ -237,7 +237,7 @@ draft with credits. 1.1 (S2/S3 of the module campaign): the 1.1 disk layout with
 upgrade install of an installed disk (incl. the k46 line), kbootset retry and create --force (C2-4 v5/v6), updbootpart shim
 and kbootset in the repair menu, mark-good from the last rc2 script, kernel-space records by pkginst (C2-2 v4), kbootset and
 loader-amix as apkg packages, APKG 0.3.0 → 0.3.2 installed and gated; build-iso --cd-boot masters the A4091/A4092 bootable
-CD; build-l11-inputs reads the media set from tools/l11-set.conf and says whether a CD boot tree exists. S3-31: the 1.1 media
+CD; build-l11-inputs reads the media set from tools/l11-set.conf and says whether a CD boot tree exists. The 1.1 media
 carry kernel modules — the module kernel, modtools -5 and the module packages (z3660eth, monsw) in one apkg transaction, the
 dlm inittab line checked, modules composed into the pristine generation, the stale /stand/unix removed and S01kbnamelist laid
 (C2-4 v9 §12), S99zen for the z3660eth module; the bootstore gate checks modules, inittab, S99zen (bench address mapped) and

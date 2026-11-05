@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 #
 # installer-selftest.py -- structural proof of the installer driver + payload,
-# host-side, no box, no media, no proprietary inputs. This is the W5.3 evidence
+# host-side, no box, no media, no proprietary inputs. This is the evidence
 # that the artifacts are "complete, gated, and structurally proven"; the
-# end-to-end on-box run is W5.4.
+# end-to-end on-box run comes after it.
 #
-# It proves TWENTY things, each fail-closed (M added in W6-RAW.1, N in W6-RAW.2b,
-# O in W6-I, P in METAL-FIX.4, Q + R in P5.4-FT, S in W1, T with the W1 bench
+# It proves TWENTY things, each fail-closed (added over time: M, N,
+# O, P, Q + R, S, and T with the bench
 # root-cause of the null-command-redirection defect):
 #
 #   A. PRE-POSIX PORTABILITY. The driver (src/installer/install.sh) and the
@@ -32,7 +32,7 @@
 #      and firstboot.sh NEVER writes /etc/inet/network-config and NEVER sets the
 #      clock forward.
 #   G. MINIROOT-TOOL ALLOWLIST. Pre-POSIX syntax (A) is not enough: install.sh
-#      runs on a THIN miniroot that lacks basename/sed/touch/date (W5.4c proved
+#      runs on a THIN miniroot that lacks basename/sed/touch/date (a bench run proved
 #      it on the box, and a `sed`-absent verify silently printed vacuous OKs).
 #      So every command's first word in install.sh must resolve to a /bin/sh
 #      builtin, a binary the tracked miniroot.proto ACTUALLY carries (the
@@ -43,19 +43,19 @@
 #      fires (a driver that reaches for `sed`/`touch`/`basename`/`date` is caught).
 #   H. SUBSHELL-SAFE LOOPS. The miniroot /bin/sh runs a `while ... done < FILE`
 #      loop in a SUBSHELL, so a variable mutated in the body is LOST at `done`
-#      (W5.4d: the pkgadd loop's `npkgs` and the verify loop's `vok`/`vfails`
+#      (the pkgadd loop's `npkgs` and the verify loop's `vok`/`vfails`
 #      reverted to zero -> "installed 0 package(s)" and a false-firing arm guard).
 #      This audit flags any redirect-fed loop whose body assigns a variable that is
 #      referenced after the loop, and passes the temp-file idiom that survives it.
-#      Negative fixtures (the exact W5.4d pattern) prove it fires; positive controls
+#      Negative fixtures (the exact pattern a bench run hit) prove it fires; positive controls
 #      (the temp-file idiom, a non-redirected loop) prove it does not over-fire.
 #   I. PRE-POSIX `set --` COUNTING GUARD. The subshell-safe count (H) tallies a temp
 #      file after the loop, but `set -- `cat FILE`; $#` is itself a trap: on the
 #      miniroot sh an EMPTY `set --` is a no-op on $@ (confirmed on-box), so an empty
-#      file returns a STALE count (W5.4e-run-1: the empty vfails "counted" the vok 3
+#      file returns a STALE count (a bench run: the empty vfails "counted" the vok 3
 #      and the verify false-failed). This flags any `set -- `cmd`` count not
 #      `[ -s ]`-guarded; a negative fixture fires, the guarded idiom passes.
-#   J. FIRST-BOOT INIT WIRING (W5.4f). The armed payload only runs if the target
+#   J. FIRST-BOOT INIT WIRING. The armed payload only runs if the target
 #      init invokes it; the STOCK init does not (cold boot #1 fell into the stock
 #      sysinit dialog). This audits that install.sh's arm step (a) WRITES
 #      /etc/rc2.d/S16firstboot -- a NEW, driver-written, non-package file that runs
@@ -65,17 +65,17 @@
 #      proving it reproduces the tracked payload/firstboot/S16firstboot template
 #      byte-for-byte; the hook is pre-POSIX + parses + references only
 #      target-present tools; and firstboot.sh removes PENDING (once-only).
-#   K. W6.4b INSTALLER COMPLETENESS. The driver (a) runs the CD-resident static
+#   K. INSTALLER COMPLETENESS. The driver (a) runs the CD-resident static
 #      contents-fsck over the freshly built <root>/var/sadm/install/contents AFTER
 #      the pkgadd loop and BEFORE arming first-boot, FAIL CLOSED (any non-zero ->
 #      `die`, no `|| true`-style softening, CHECK-ONLY / never `-r`); and (b) WRITES
 #      /etc/apkg.conf on the target with the live-repo line, on the miniroot
 #      (identity-independent -> not first-boot), via echo + redirection only. A
 #      negative fixture proves the fail-open (`contents-fsck ... || true`) is caught.
-#   L. W6.4c REPO-HOST BAKING (zero-touch apkg). A fresh install cannot resolve the
+#   L. REPO-HOST BAKING (zero-touch apkg). A fresh install cannot resolve the
 #      apkg repo's hostname (no DNS on the bench LAN; firstboot section 5 baked only
-#      the box's OWN nodename), so W6.4b's `apkg update` worked only after a MANUAL
-#      /etc/inet/hosts edit. W6.4c bakes the repo host too: the profile carries
+#      the box's OWN nodename), so `apkg update` worked only after a MANUAL
+#      /etc/inet/hosts edit. The driver bakes the repo host too: the profile carries
 #      FB_REPO_HOST + FB_REPO_IP (paired); install.sh passes them through
 #      firstboot.conf; firstboot.sh appends "<ip> <host>" to /etc/inet/hosts at
 #      identity-bake time -- guarded (skip-but-log when either is empty: a repo-less
@@ -84,9 +84,9 @@
 #      firstboot append whenever a profile carries the vars; a negative fixture
 #      proves the append check fires and the bench profile's canonical values are
 #      pinned.
-#   Q. P5.4-FT /stand FRAMING TOOLS. updbootpart's reframe pipeline (gate 5a)
+#   Q. /stand FRAMING TOOLS. updbootpart's reframe pipeline (gate 5a)
 #      fails closed without /stand/boot1.boot + an executable local
-#      /stand/makeiblk; on M-RUN4b the KERN handoff on a fresh metal base-8
+#      /stand/makeiblk; on a metal run the KERN handoff on a fresh metal base-8
 #      install died "framed image is empty" until the pair was ferried by hand.
 #      This audits that the driver LAYS BOTH DOWN (cp from /install/stand,
 #      chmod 0644/0755) after the base transplant, that the media staging
@@ -96,7 +96,7 @@
 #      updbootpart gates on is driver-guaranteed, and (when a staged tree is
 #      present) that the staged bytes match the pins. A negative fixture proves
 #      the laydown check fires.
-#   R. P5.4 SYSLOG UNIT. A base-8 install has core's syslogd BINARY but no unit
+#   R. SYSLOG UNIT. A base-8 install has core's syslogd BINARY but no unit
 #      (no /etc/init.d/syslogd, no rc links, no /etc/syslog.conf, no /var/log)
 #      -- it cannot log at all. This audits that the driver lays down the
 #      complete 2.1c unit: conf 0444, the ENABLED init script (vendor `exit`
@@ -109,8 +109,8 @@
 #      a staged tree is present) that the staged unit matches the pins with NO
 #      live `exit`. Negative fixtures prove the link-topology and live-exit
 #      checks fire.
-#   S. W1 DRIVER PLUMBING. The interview (W2) needs somewhere to land its
-#      answers, so W1 turns the driver's remaining hardcodes into profile KEYS
+#   S. DRIVER PLUMBING. The interview needs somewhere to land its
+#      answers, so this turns the driver's remaining hardcodes into profile KEYS
 #      and restores two stock steps the NG driver had dropped -- all
 #      non-interactive, all behaviour-preserving when the keys carry today's
 #      values. Audited: install.sh accepts a profile BY PATH as well as by name
@@ -127,7 +127,7 @@
 #      map); plan_partitions is fed by a real /etc/ddsize probe when
 #      TARGET_DISK_MB is not pinned (and ddsize is genuinely on the proto); the
 #      stock lost+found 100-slot preseed is back, in the stock position;
-#      FB_DNS1/FB_DNS2 are RECORDED and applied NOWHERE (W5 owns application);
+#      FB_DNS1/FB_DNS2 are RECORDED and applied NOWHERE (the dialog owns application);
 #      and every tracked profile carries every new key. Audits E, F, K and P were
 #      extended in lockstep -- the size-override arithmetic with all four stock
 #      floors/ceilings, the parametrized TZ colon form, the parametrized repo
@@ -139,8 +139,8 @@
 #      driver (matrix 20260811-103107-cd): stub 1 present, stubs 2-8 ABSENT, the
 #      same seven names then created 7/7 by `cp /dev/null` in the same directory
 #      seconds later; three straight-line `: >` controls all fine. It had shipped
-#      TWO defects -- the P5.4-FT syslog unit laid down one of eight /var/log
-#      stubs and then hard-stopped every install, and W1's lost+found preseed was
+#      TWO defects -- the syslog unit laid down one of eight /var/log
+#      stubs and then hard-stopped every install, and the lost+found preseed was
 #      a silent no-op. This audit forbids the idiom structurally in the driver,
 #      firstboot and updbootpart; its negative fixtures are the two real defects
 #      (and it is verified to FIRE on the historical 05e100b/15a2b21 drivers).
@@ -180,7 +180,7 @@ DRIVER = os.path.join(REPO, "src", "installer", "install.sh")
 SETUP = os.path.join(REPO, "src", "installer", "setup.sh")
 # the 1.1 layout's half of the driver, sourced by install.sh (INSTALL_LAYOUT=1.1)
 L11 = os.path.join(REPO, "src", "installer", "l11.sh")
-# W4: the miniroot's own /etc/profile -- the install script the console login
+# the miniroot's own /etc/profile -- the install script the console login
 # shell sources. It is the STRICTEST of the three on-box scripts (it runs with
 # nothing mounted), so it takes the same audits under the same allowlist.
 MINIROOT_PROFILE = os.path.join(REPO, "src", "miniroot", "profile")
@@ -378,7 +378,7 @@ PATTERNS = [
     # at the beginning of a line or right after a `;`/`&&`/`||`/`{`. Anchoring it
     # there is not a softening -- every real `local x` / `local x=1` declaration
     # still fires (the negative fixture in audit A proves it) -- but it stops the
-    # audit misreading the WORD inside a quoted stock string. W5 made that
+    # audit misreading the WORD inside a quoted stock string. The dialog made that
     # concrete: the first-boot dialog carries stock's own question "Do you wish to
     # configure Netnews for either local or networked operation? [n] ", which must
     # stay byte-for-byte stock, and a bare \blocal\b in it is not a shell keyword.
@@ -436,19 +436,19 @@ def audit_order():
     if not os.path.isfile(DEPS):
         skip("deps.conf not found (%s) -- order checks need it" % DEPS)
         return
-    # the W6.2 six-package selection -- NOT the shipped base set (that grew to
-    # EIGHT at W6.4b and is checked immediately below). Kept because it isolates
-    # the cdfs edge: cdfs joined at W6.2 so an installed box can mount CDs, and
+    # the six-package selection -- NOT the shipped base set (that grew to
+    # EIGHT later and is checked immediately below). Kept because it isolates
+    # the cdfs edge: cdfs joined so an installed box can mount CDs, and
     # cdfs->core must keep it anywhere after core with no APKG/APKGENG present.
     r = run_order(["core", "bsd", "net", "text", "sysadm", "cdfs"])
     seq = [l for l in r.stdout.splitlines() if l and not l.startswith("#")]
     if r.returncode == 0 and seq and seq[0] == "core" and \
             seq == ["core", "bsd", "net", "text", "sysadm", "cdfs"]:
-        ok("W6.2 six-package selection -> core first (cdfs after core): %s"
+        ok("six-package selection -> core first (cdfs after core): %s"
            % " ".join(seq))
     else:
-        fail("W6.2 six-package order wrong (rc=%d): %r" % (r.returncode, seq))
-    # W6.4b GROWN base set: EIGHT packages -- the package client (APKGENG engine +
+        fail("six-package order wrong (rc=%d): %r" % (r.returncode, seq))
+    # GROWN base set: EIGHT packages -- the package client (APKGENG engine +
     # APKG client) joins so an installed box has apkg out of the box. Case is
     # PRESERVED: our base packages are uppercase (APKG/APKGENG), stock + cdfs are
     # lowercase, and the driver passes each order line verbatim to a case-SENSITIVE
@@ -558,10 +558,10 @@ def audit_manifest():
 def extract_plan_harness():
     """Build a runnable sh harness from install.sh's constants + plan_partitions,
     so the ACTUAL driver arithmetic is exercised (not a reimplementation). is_num
-    is extracted too (the W1 size-override validation calls it), so the harness
+    is extracted too (the size-override validation calls it), so the harness
     stays a transcription of the driver rather than a stand-in for it. The
     override keys come in from the ENVIRONMENT, exactly as sourcing a profile
-    would set them -- unset means "stock default", the pre-W1 behaviour."""
+    would set them -- unset means "stock default", the earlier behaviour."""
     src = open(DRIVER, encoding="utf-8").read()
     lines = src.splitlines()
     # constants: from OFFSET_BLOCKS= down to the SECS=64 line
@@ -761,10 +761,10 @@ def audit_arith():
         ok("driver plan_partitions ran clean for %d sizes (mkroot cross-check skipped)"
            % len(sizes))
 
-    # --- W1: TARGET_ROOT_MB / TARGET_SWAP_MB overrides ----------------------
+    # --- TARGET_ROOT_MB / TARGET_SWAP_MB overrides --------------------------
     # The two sizes the stock installer ASKED for become optional profile keys.
     # Three properties, all fail-closed:
-    #   1. UNSET == the pre-W1 arithmetic, byte for byte (proven by re-running the
+    #   1. UNSET == the earlier arithmetic, byte for byte (proven by re-running the
     #      same harness with the vars explicitly empty and diffing the output);
     #   2. a valid override actually MOVES the layout, stays cylinder-aligned, and
     #      keeps root+swap+boot inside the disk;
@@ -884,7 +884,7 @@ def audit_arith():
             fail("override NOT refused: %s (rc=%d, out=%r err=%r)"
                  % (name, r.returncode, r.stdout.strip(), r.stderr.strip()))
 
-    # r6 (owner 2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile, so on
+    # r6 (2026-10-06): the 040/060 kernels link a 61440-sector (30 MB) swapfile, so on
     # INSTALL_CPU 040/060 30 MB is the swap DEFAULT and the FLOOR -- even below the 120 MB
     # BREAKPT, where the 030 line keeps the stock 18 MB.
     r30, r18 = plan(100, {"INSTALL_CPU": "060"}), plan(100, {"INSTALL_CPU": "030"})
@@ -913,7 +913,7 @@ def _mnttab_write(text):
     """Classify the seed's /etc/mnttab root-line write as 'overwrite' | 'append' |
     None. Operates on comment-stripped driver text (real commands only). `>>` is
     tested first because the `>` pattern would otherwise match the second `>` of an
-    append. METAL-FIX.2: the write MUST be an OVERWRITE of the "/" root entry. The
+    append. The write MUST be an OVERWRITE of the "/" root entry. The
     fs field is the RUNNING MINIROOT's own ($MINIROOT_FSTYPE -- s5 on the 030 line,
     ufs on the 040/060 line, derived from INSTALL_CPU), NOT the target's; a
     hardcoded literal or a $TARGET_ROOT_FSTYPE there is a defect (audit AA6)."""
@@ -924,13 +924,13 @@ def _mnttab_write(text):
     return None
 
 
-# --- F/TZ: the colon form, now that the ZONE is a profile key (W1) -----------
-# W6.3 REGRESSION GUARD, extended to the parametrized emission. The TIMEZONE line
+# --- F/TZ: the colon form, now that the ZONE is a profile key ----------------
+# REGRESSION GUARD, extended to the parametrized emission. The TIMEZONE line
 # MUST use the SVR4 tzfile-pathname form `TZ=:<pathname>` (LEADING COLON): only
 # the colon makes ctime(3)/tzset(3) read the tzfile; the colon-less
 # `TZ=US/Eastern` is parsed as a POSIX rule string and BUS-ERRORs date/who -r/
 # ls -l/cron/sac at 474D5400 on cold boot (cascading into rc2 `test: unknown
-# operator S`). W1 makes the ZONE a key (FB_TZ) but deliberately NOT the colon --
+# operator S`). The ZONE is a key (FB_TZ) but deliberately NOT the colon --
 # the colon is emitted by CODE so no profile, answers file or stripped quote can
 # ever produce the broken form. So the audit demands exactly that shape:
 #   * firstboot.sh emits `TZ=:$FB_TZ` (literal colon, then the variable);
@@ -942,12 +942,12 @@ def _mnttab_write(text):
 
 def _fb_tz_emission(fb_code):
     """Classify firstboot.sh's TZ= emission on comment-stripped code:
-    'param'  -- TZ=:$FB_TZ / TZ=:${FB_TZ}   (the required W1 shape)
-    'literal'-- TZ=:<something/else>        (a hardcoded zone, pre-W1)
+    'param'  -- TZ=:$FB_TZ / TZ=:${FB_TZ}   (the required shape)
+    'literal'-- TZ=:<something/else>        (a hardcoded zone, as it once was)
     'nocolon'-- TZ=<anything> with no colon  (the bus-error form)
     None     -- no TZ= assignment at all."""
     # Only an EMISSION counts, so the pattern is anchored on the `echo "TZ=` that
-    # writes /etc/TIMEZONE. W5 made that precision necessary: this file now also
+    # writes /etc/TIMEZONE. The dialog made that precision necessary: this file now also
     # SEEDS `TZ=":$FB_TZ"` into the environment for the stock zone menu and READS
     # the zone back with `sed -n 's/^TZ=//p'`, and a looser pattern classified the
     # reader as a colon-less emission -- an audit that fires on the wrong line is
@@ -964,14 +964,14 @@ def audit_tz_colon(fb, drv):
     kind = _fb_tz_emission(fb)
     if kind == "param":
         ok("firstboot.sh emits the tzfile form `TZ=:$FB_TZ` -- zone parametrized, "
-           "COLON emitted by code (W6.3 + W1)")
+           "COLON emitted by code")
     elif kind == "literal":
-        fail("firstboot.sh still HARDCODES the timezone zone -- W1 parametrizes it "
+        fail("firstboot.sh still HARDCODES the timezone zone -- it must be parametrized "
              "as FB_TZ (the literal made every profile's zone a no-op)")
     else:
         fail("firstboot.sh TIMEZONE must be `TZ=:$FB_TZ` (leading colon emitted by "
              "code) -- got %r; the colon-less form BUS-ERRORs date/who -r/ls -l at "
-             "cold boot (W6.3)" % kind)
+             "cold boot" % kind)
     if re.search(r'\[\s+-n\s+"\$FB_TZ"\s+\]\s+\|\|\s+FB_TZ=\S+', fb):
         ok("firstboot.sh defaults FB_TZ (an old firstboot.conf can never yield `TZ=:`)")
     else:
@@ -990,7 +990,7 @@ def audit_tz_colon(fb, drv):
         fail("install.sh must default FB_TZ and strip a leading colon from it (the "
              "colon belongs to the emitter, never to data)")
     # Every profile carries a zone-shaped FB_TZ -- with ONE exemption, and it is
-    # the whole point of the W6 public flavor: a profile that ARMS THE DIALOG
+    # the whole point of the public flavor: a profile that ARMS THE DIALOG
     # (FIRSTBOOT_DIALOG=y) hands the timezone to the genuine stock zone menu, so
     # an empty FB_TZ there is a deliberate blank and not a missing key. A
     # NON-empty value is still held to the same shape everywhere, because the
@@ -1077,24 +1077,24 @@ def audit_seed_firstboot():
         else:
             fail("driver missing: %s" % desc)
 
-    # --- /etc/mnttab root line (METAL-FIX.2) ---------------------------------
+    # --- /etc/mnttab root line -----------------------------------------------
     # The RUNNING miniroot ships no /etc/mnttab on FRESH media; pkgadd/apkg open()
     # it before installing and abort with "unable to open mount table (/etc/mnttab)"
-    # (M-RUN froze exactly here). The seed must WRITE the "/" root line -- and
+    # (a metal run froze exactly here). The seed must WRITE the "/" root line -- and
     # OVERWRITE (`>`), never append, so a stale/contaminated table (the reused-bench-
-    # floppy trap that masked this for two waves) is REPLACED. get_mntinfo keys off
+    # floppy trap that masked this for a while) is REPLACED. get_mntinfo keys off
     # the SHORTEST mount point being exactly "/".
     mode = _mnttab_write(code)
     if mode == "overwrite":
         ok('seed writes /etc/mnttab root line `echo "/dev/root / $MINIROOT_FSTYPE rw 0" > /etc/mnttab` '
-           "(OVERWRITE, replaces a stale/contaminated table; METAL-FIX.2)")
+           "(OVERWRITE, replaces a stale/contaminated table)")
     elif mode == "append":
         fail("seed writes /etc/mnttab with `>>` (append) -- must be `>` (OVERWRITE) so a "
-             "stale/contaminated table is replaced, not appended to (METAL-FIX.2)")
+             "stale/contaminated table is replaced, not appended to")
     else:
         fail('seed does not write the /etc/mnttab root line `/dev/root / $MINIROOT_FSTYPE '
              'rw 0` -- pkgadd/apkg abort with "unable to open mount table (/etc/mnttab)" '
-             "on FRESH media (METAL-FIX.2); the fs field is the miniroot's own, not a literal")
+             "on FRESH media; the fs field is the miniroot's own, not a literal")
     # it must be the "/" root mount point (a "/mnt" line does NOT satisfy get_mntinfo)
     if re.search(r'echo\s+"/dev/root / \$MINIROOT_FSTYPE rw 0"\s*>+\s*/etc/mnttab', code):
         ok('mnttab line is the "/" root entry get_mntinfo requires (mount point "/")')
@@ -1110,7 +1110,7 @@ def audit_seed_firstboot():
         fail("mnttab write is mis-ordered (seed@%d mnttab@%d order-loop@%d)"
              % (i_seed, i_mnttab, i_order))
     # NEGATIVE FIXTURE -- with the seed's mnttab line removed the audit MUST report
-    # absence, or this check is worthless (the exact METAL-FIX.2 regression).
+    # absence, or this check is worthless (the exact fresh-media regression).
     neg = re.sub(r'\n[^\n]*echo\s+"/dev/root / \$MINIROOT_FSTYPE rw 0"\s*>+\s*/etc/mnttab[^\n]*', "", code)
     if _mnttab_write(neg) is None:
         ok("negative fixture fires: a seed with no /etc/mnttab write is flagged absent")
@@ -1119,7 +1119,7 @@ def audit_seed_firstboot():
 
     fb = strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())
     # NEVER write network-config: no redirection into it, and no tool naming it as
-    # an ARGUMENT. W5 forced the distinction between a write and a MENTION: the
+    # an ARGUMENT. The dialog forced the distinction between a write and a MENTION: the
     # first-boot dialog's DNS branch has to TELL the operator, in prose, that DNS
     # is refused on aen0 *because* the bring-up line lives in that file. A rule
     # that cannot tell `cp x /etc/inet/network-config` from `echo "... in
@@ -1199,7 +1199,7 @@ SH_BUILTINS = {
     "exec", "trap", "umask", "wait", "times", "ulimit", "getopts", "hash", "type",
 }
 # `run CMD ...` / `runq CMD ...` -- the real command is CMD (the install.sh
-# idiom). runq is the W1 output-routing twin of run (it returns the rc instead of
+# idiom). runq is the output-routing twin of run (it returns the rc instead of
 # dying); both must be unwrapped or the tool audit would stop seeing the actual
 # commands behind them.
 WRAPPERS = {"run", "runq"}
@@ -1215,9 +1215,9 @@ PROFILE_EXTRA = {"modadmin", "aen", "date", "ifconfig", "route", "slink", "sleep
 # complete SVR4 userland is present. These are the tools it deliberately uses that
 # the miniroot itself lacks -- documented, and NOT granted to install.sh.
 FIRSTBOOT_EXTRA = {
-    # the APPLY half (W1/W6.4c/W5): target tools the miniroot lacks
+    # the APPLY half: target tools the miniroot lacks
     "sed", "uname", "true", "grep", "ed", "domainname",
-    # the DIALOG half (W5, `firstboot.sh --dialog`). Every one of these is here
+    # the DIALOG half (`firstboot.sh --dialog`). Every one of these is here
     # because a QUESTION needs it, and each stock helper is a `core` member, so it
     # is on every installed target, minimal tier included (verified against an
     # installed base-8 tree, 2026-08-12).
@@ -1233,16 +1233,16 @@ FIRSTBOOT_EXTRA = {
     # IN-rtc-2: the ONE gated battery-clock re-read after the zone question
     # (see _strip_setclk_rerun) -- our plausibility-gated setclk, never a time
     "setclk",
-    # Q-4.15 trap ii: re-register the installer-laid /stand/unix (040/060) in the core
+    # trap ii of pick-at-install: re-register the installer-laid /stand/unix (040/060) in the core
     # package -- the stock pkgtools installf, a core member on every installed target
     "installf",
-    # S3-31: a 1.1 disk's /stand/unix out of the core package -- APKGENG's heirloom
+    # a 1.1 disk's /stand/unix out of the core package -- APKGENG's heirloom
     # removef and pkgchk (/usr/apkg/bin), from the APKG set every target carries
     "removef", "pkgchk",
     # C4-1: the root's name as the running kernel numbers it (stat only, a core member;
     # updbootpart and bcheckrc use it the same way)
     "devnm",
-    # S5-44 R2: step 4d's `kbootset nodes` (C2-4 §14), the kbootset package every 1.1 disk
+    # step 4d's `kbootset nodes` (C2-4 §14), the kbootset package every 1.1 disk
     # installs, behind `[ -x /sbin/kbootset ]`
     "kbootset",
     # 1.1: amix-base's ifup (the dialog's /etc/inet/interfaces checked with
@@ -1373,7 +1373,7 @@ def command_words(text):
     text = re.sub(r'\\\n', ' ', text)      # join `\`-continued lines
     # recurse into backtick command subs, then remove them. Quote-aware: a backtick
     # inside '...' is literal text, not a command substitution -- the driver's
-    # emit_* functions echo whole target scripts in single quotes (P-3's S99zen
+    # emit_* functions echo whole target scripts in single quotes (the S99zen
     # carries `sed ...`/`uname -n` substitutions that run on the TARGET, never on
     # the miniroot), and those must not be charged to the miniroot allowlist.
     inners = []
@@ -1516,7 +1516,7 @@ def audit_tool_allowlist():
     else:
         ok("parser exercises setup.sh (%d cmds incl dd/expr/cat/rdb/read/echo)"
            % len(swords))
-    # W4: the miniroot install script. Its known-present commands are the two
+    # the miniroot install script. Its known-present commands are the two
     # mount front-ends it probes with, the keymap applier and the disk probe --
     # i.e. exactly the four things that would make a clean result vacuous.
     need_m = {"/usr/lib/fs/cdfs/mount", "/etc/mount", "/etc/sioc", "dd"}
@@ -1627,13 +1627,13 @@ def audit_tool_allowlist():
 # ---------------------------------------------------------------------------
 # The miniroot's 1991 SVR4 /bin/sh runs a `while ... done < FILE` loop in a
 # SUBSHELL, so a variable MUTATED inside the loop body reverts to its pre-loop
-# value at `done` (W5.4d: `npkgs` -> "installed 0 package(s)" while all 5 packages
+# value at `done` (`npkgs` -> "installed 0 package(s)" while all 5 packages
 # were installed; `vok` -> the aggregate guard `[ $vok -gt 0 ]` false-fired and the
 # driver refused to arm first-boot). This audit FLAGS the exact defect class: a
 # redirect-fed loop (`done < ...`) whose BODY assigns a variable that is then
 # REFERENCED AFTER the loop. The subshell-safe idiom -- record to a temp file
 # inside the loop, count/test it in the PARENT after `done` -- has no such
-# assign-inside/use-after and passes. Negative fixtures (the W5.4d pattern) prove
+# assign-inside/use-after and passes. Negative fixtures (the bench-run pattern) prove
 # the audit fires; positive controls (the temp-file idiom; a non-redirected loop)
 # prove it does not over-fire.
 
@@ -1752,7 +1752,7 @@ def subshell_exit_offenders(text):
 def _redirected_read_offenders(text):
     """`read VAR... < FILE` and `{ ...; } < FILE` -- BOTH forbidden outright.
 
-    ★ BENCH-MEASURED 2026-08-11 (matrix run w3b2-cdi). W3b read the medium's set
+    ★ BENCH-MEASURED 2026-08-11 (matrix run w3b2-cdi). The code read the medium's set
     table with the obvious idiom
 
         { read R1N R1SET R1ORD R1ATT R1LBL
@@ -1863,15 +1863,15 @@ def audit_subshell_loops():
             ok("H4: install.sh 5b EXECUTED: a good pair installs; a sum mismatch, an "
                "unknown member and a missing target file each STOP after the loop")
 
-    # NEGATIVE FIXTURES -- the audit MUST fire on the exact W5.4d defect, both the
+    # NEGATIVE FIXTURES -- the audit MUST fire on the exact bench-run defect, both the
     # pkgadd shape (`npkgs`) and the verify shape (`vok`), inside single AND double
     # quotes for the post-loop reference.
     neg = [
-        ("W5.4d pkgadd (npkgs, dq ref)",
+        ("bench-run pkgadd (npkgs, dq ref)",
          '#!/bin/sh\nnpkgs=0\nwhile read pkg; do\n'
          '  npkgs=`expr "$npkgs" + 1`\ndone < /cd/order\n'
          'echo "installed $npkgs package(s)"\n', "npkgs"),
-        ("W5.4d verify (vok, guard ref)",
+        ("bench-run verify (vok, guard ref)",
          '#!/bin/sh\nvok=0\nwhile read r a b c; do\n'
          '  vok=`expr "$vok" + 1`\ndone < /cd/manifest\n'
          '[ "$vok" -gt 0 ] || echo refuse\n', "vok"),
@@ -1942,7 +1942,7 @@ def audit_subshell_loops():
         else:
             ok("H3 positive control passes clean: %s" % name)
 
-    # --- H2 (W3b): no redirected `read`, and no redirected brace group -------
+    # --- H2: no redirected `read`, and no redirected brace group -------------
     # Bench-measured: a redirected COMPOUND command forks on the miniroot sh, so
     # `{ read A; read B; } < FILE` silently assigns nothing in the parent. Both
     # forms are banned; the surviving idiom is a temp file plus `cat`.
@@ -1995,7 +1995,7 @@ def audit_subshell_loops():
 # `set --` with an EMPTY argument list is a NO-OP on $@ there (it does NOT clear the
 # positional parameters -- confirmed on-box: `set -- a b c; set -- `cat /dev/null``
 # leaves $#=3), so counting an EMPTY file returns a STALE count from a previous
-# `set --`. (W5.4e-run-1: vok counted 3, then the empty vfails file "counted" 3 too
+# `set --`. (A bench run: vok counted 3, then the empty vfails file "counted" 3 too
 # and the boot-chain verify false-failed.) The safe idiom guards with `[ -s FILE ]`
 # so `set --` is only ever fed a non-empty list. This audit flags any
 # `set -- `cmd`` in the driver that is NOT `[ -s ]`-guarded on its own or a nearby
@@ -2050,10 +2050,10 @@ def audit_setcount_guard():
 
 
 # ---------------------------------------------------------------------------
-# J. first-boot init wiring (W5.4f) -- rc2 hook + stock-dialog disarm
+# J. first-boot init wiring -- rc2 hook + stock-dialog disarm
 # ---------------------------------------------------------------------------
-# The payload was ARMED by earlier waves but nothing in the STOCK target init
-# invoked it, so cold boot #1 fell into the stock sysinit dialog. W5.4f closes
+# The payload was ARMED by earlier work but nothing in the STOCK target init
+# invoked it, so cold boot #1 fell into the stock sysinit dialog. This closes
 # the gap two ways, both proven against an s5 read of the installed target:
 #   * install.sh WRITES /etc/rc2.d/S16firstboot (a NEW, non-package file -- it is
 #     driver-written, not copied from the CD, so it never reaches the pkgadd
@@ -2076,7 +2076,7 @@ def _extract_func(src, name):
 
 
 def audit_firstboot_wiring():
-    head("J. first-boot init wiring (W5.4f): rc2 hook + stock-dialog disarm")
+    head("J. first-boot init wiring: rc2 hook + stock-dialog disarm")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -2150,7 +2150,7 @@ def audit_firstboot_wiring():
             else:
                 ok("hook: every command is a builtin or /sbin/sh (target-present)")
 
-    # J4: the arm step DISARMS the stock sysinit dialog (chmod -x system.setup).
+    # The arm step DISARMS the stock sysinit dialog (chmod -x system.setup).
     if re.search(r'SETUP="\$TARGET/usr/amiga/bin/system\.setup"', code) and \
             re.search(r'chmod\s+0?644\s+"\$SETUP"', code):
         ok("arm step disarms the stock sysinit dialog "
@@ -2287,7 +2287,7 @@ def audit_erase_guard():
                      # K1 card master (card 0): the same install-preset semantics
                      "metal-a4000-z3660-060-k1.profile",
                      "metal-a4000-z3660-060-k1-unattended.profile",
-                     # r6 (D-2): the master K1 twins inherit the bench re-install line.
+                     # r6: the master K1 twins inherit the bench re-install line.
                      "metal-a4000-z3660-060-k1-r6.profile",
                      "metal-a4000-z3660-060-k1-unattended-r6.profile")
     for prof in DEMO_ERASE_OK:
@@ -2317,7 +2317,7 @@ def audit_erase_guard():
 # c0..c7 node anywhere would defeat that, so it is also refused here.
 # ---------------------------------------------------------------------------
 # RB. RDSK at block 0 -- the author path's RDB must be findable by STOCK Z3660
-#     firmware (2026-09-26, P-2).
+#     firmware (2026-09-26).
 # ---------------------------------------------------------------------------
 # Stock firmware reads the image in 64 KB strides and tests 4 bytes per read: it
 # finds an RDB at byte 0 and never at block 2. The stock Amix line is
@@ -2457,9 +2457,9 @@ def audit_interactive_card1_scan():
 
 
 # ---------------------------------------------------------------------------
-# K. W6.4b installer completeness -- contents-fsck fail-closed step + apkg.conf
+# K. installer completeness -- contents-fsck fail-closed step + apkg.conf
 # ---------------------------------------------------------------------------
-# Two W6.4b additions to the driver, both audited fail-closed:
+# Two additions to the driver, both audited fail-closed:
 #   * The driver runs the CD-resident STATIC contents-fsck over the freshly built
 #     <root>/var/sadm/install/contents AFTER the pkgadd loop and BEFORE arming
 #     first-boot. It must be FAIL CLOSED: any non-zero exit -> `die`, with NO
@@ -2472,14 +2472,14 @@ def audit_interactive_card1_scan():
 
 
 def audit_x11_easystart():
-    """W6: firstboot makes the installed system X-READY before the X packages
+    """firstboot makes the installed system X-READY before the X packages
     exist. The X set (xcore/xbasic/olcore) is an apkg step the operator runs
     LATER; the stock login PATH carries no /usr/bin/X11 and no LD_LIBRARY_PATH,
     and olwm's libXol.so is in /usr/lib (not the X binaries' own /usr/X/lib). The
     fix lives in OUR firstboot (the stock X bytes are proprietary) and must be
     SVR4-Bourne-safe + idempotent (firstboot can re-run if the dialog spans boots)."""
     print()
-    print("== W6. X11 easy-start (firstboot: PATH/lib env + one-command startx) ==")
+    print("== X11 easy-start (firstboot: PATH/lib env + one-command startx) ==")
     fb = strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())
 
     path_x = bool(re.search(r'PATH=\$PATH:/usr/bin/X11', fb))
@@ -2503,7 +2503,7 @@ def audit_x11_easystart():
         fail("the X11 /etc/profile append is not SVR4-safe/idempotent "
              "(grep-guard=%s forbidden-`! grep`=%s)" % (guarded, bad_neg))
 
-    # apkg PATH: /opt/amix/bin appended LAST on /etc/profile PATH (owner rule: last,
+    # apkg PATH: /opt/amix/bin appended LAST on /etc/profile PATH (the rule: last,
     # never first -- stock tools keep precedence). Same /etc/profile-only append as
     # the X11 block, its OWN grep guard, and it must come AFTER the /usr/bin/X11
     # append so /opt/amix/bin lands last (metal-verified fresh-login PATH ends
@@ -2516,12 +2516,12 @@ def audit_x11_easystart():
     if amix_path and amix_guard and amix_last:
         ok("apkg PATH: firstboot appends /opt/amix/bin LAST on /etc/profile PATH "
            "(after the /usr/bin/X11 append), grep-guarded -- stock tools keep "
-           "precedence (owner rule: last, never first); fixes `less: command not found`")
+           "precedence (last, never first); fixes `less: command not found`")
     else:
         fail("the /opt/amix/bin PATH append is wrong (present=%s grep-guard=%s "
              "after-X11=%s)" % (amix_path, amix_guard, amix_last))
 
-    # The owner-approved OPEN LOOK desktop: olwm (window frames) + olwsm (the
+    # The OPEN LOOK desktop: olwm (window frames) + olwsm (the
     # SEPARATE Workspace-menu daemon -- without it there is no root menu, the
     # "no window manager" look) + a session-controlling `exec xterm` (its exit
     # ends the X session). The old single `exec olwm` is intentionally gone.
@@ -2566,12 +2566,12 @@ def audit_x11_easystart():
 
 
 def audit_apkg_timeouts():
-    """W6-d: the install-time apkg (raw.conf, LOCAL raw slice) fails FAST -- a short
+    """the install-time apkg (raw.conf, LOCAL raw slice) fails FAST -- a short
     SRC_APKG_TIMEOUT (APKG 0.2 has no 'retries' key) -- so an unattended re-power
     cannot hang for minutes on a dead device; the INSTALLED /etc/apkg.conf keeps the
     package DEFAULTS so the live post-install network fetch (Xcore) is not cut short."""
     print()
-    print("== W6-d. apkg timeouts: install-time fails fast, installed keeps defaults ==")
+    print("== apkg timeouts: install-time fails fast, installed keeps defaults ==")
     drv = read_sh(DRIVER)
 
     if re.search(r'echo\s+"timeout=', drv):
@@ -2684,7 +2684,7 @@ def _contents_fsck_softened(text):
 
 
 def audit_w64b_completeness():
-    head("K. W6.4b installer completeness: contents-fsck fail-closed + /etc/apkg.conf")
+    head("K. installer completeness: contents-fsck fail-closed + /etc/apkg.conf")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -2698,7 +2698,7 @@ def audit_w64b_completeness():
         fail("driver does not invoke the CD-resident contents-fsck over the contents DB")
 
     # K2: FAIL CLOSED -- an if/else whose failure branch `die`s, and NO softening.
-    # (W1 routes the call through `runq`, the output-routing wrapper that RETURNS
+    # (The driver routes the call through `runq`, the output-routing wrapper that RETURNS
     # the rc -- the guard shape is unchanged, the rc still decides.)
     if re.search(r'if\s+(runq\s+)?"\$CFSCK"\s+"\$CONTENTS";\s*then', code) and \
             re.search(r'die[^\n]*contents-DB integrity check FAILED', code):
@@ -2726,7 +2726,7 @@ def audit_w64b_completeness():
         fail("contents-fsck is mis-ordered (loop@%d fsck@%d arm@%d)"
              % (i_loop, i_cfsck, i_arm))
 
-    # K4: the driver writes /etc/apkg.conf with the repo line. W1 de-hardcodes the
+    # K4: the driver writes /etc/apkg.conf with the repo line. It de-hardcodes the
     # URL into the profile key FB_REPO_URL whose DEFAULT is the literal that used
     # to be here -- so the installed conf is byte-identical for a profile that
     # omits the key, and a public-flavor profile can point elsewhere without a
@@ -2756,8 +2756,8 @@ def audit_w64b_completeness():
         ok("no literal repo= URL survives in the driver's code (only the default)")
 
     # K5: the conf is DRIVER-WRITTEN on the miniroot, and first-boot may only
-    # RE-POINT it. Until W5 the repository was purely a profile fact, so
-    # firstboot.sh touching apkg.conf at all was the finding. W5 makes the repo
+    # RE-POINT it. Before the dialog the repository was purely a profile fact, so
+    # firstboot.sh touching apkg.conf at all was the finding. The dialog makes the repo
     # HOST an answerable question, so the file has to be able to follow that
     # answer -- but only in that one shape: never created at first boot, only the
     # `repo=` line rewritten, and only when the conf's URL and the file's line
@@ -2782,7 +2782,7 @@ def audit_w64b_completeness():
             for d in bad:
                 fail("first-boot apkg.conf re-point MISSING: %s" % d)
         else:
-            ok("first-boot re-points apkg.conf only in the W5 shape: %s"
+            ok("first-boot re-points apkg.conf only in the expected shape: %s"
                % "; ".join(d for _, d in checks))
         if re.search(r'>\s*/etc/apkg\.conf\b', fb) and not re.search(
                 r'>\s*/etc/apkg\.conf\.fb', fb):
@@ -2812,11 +2812,11 @@ def audit_w64b_completeness():
 
 
 # ---------------------------------------------------------------------------
-# L. W6.4c repo-host baking -- zero-touch apkg out of the box
+# L. repo-host baking -- zero-touch apkg out of the box
 # ---------------------------------------------------------------------------
-# W6.4b PROVED apkg-over-network works, but only after a MANUAL /etc/inet/hosts
+# A bench run PROVED apkg-over-network works, but only after a MANUAL /etc/inet/hosts
 # edit: the fresh box has no DNS and firstboot baked only its own nodename, so it
-# could not resolve the repo host (files.example.net). W6.4c makes it zero-touch:
+# could not resolve the repo host (files.example.net). This makes it zero-touch:
 #   * the profile carries FB_REPO_HOST + FB_REPO_IP (paired);
 #   * install.sh passes them through firstboot.conf;
 #   * firstboot.sh appends "<FB_REPO_IP> <FB_REPO_HOST>" to /etc/inet/hosts at
@@ -2864,7 +2864,7 @@ def _fb_appends_repo_host(fb_code):
 
 
 def audit_repo_host():
-    head("L. W6.4c repo-host baking: profile vars + firstboot /etc/inet/hosts append (zero-touch apkg)")
+    head("L. repo-host baking: profile vars + firstboot /etc/inet/hosts append (zero-touch apkg)")
     fb = strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())
     drv = strip_full_comments(open(DRIVER, encoding="utf-8").read())
 
@@ -2969,7 +2969,7 @@ def audit_repo_host():
 
 
 # ---------------------------------------------------------------------------
-# M. W6-RAW.1 RAW source arm -- SOURCE_KIND dimension + apkg SRC_RAW branch
+# M. RAW source arm -- SOURCE_KIND dimension + apkg SRC_RAW branch
 # ---------------------------------------------------------------------------
 # The RAW arm gives the installer a raw-distribution-slice source (the metal path
 # under the no-burn rule): a SECOND disk carries an s5 PAYLOAD slice (mounted AT
@@ -3005,7 +3005,7 @@ def _apkg_softened(text):
 
 
 def audit_raw_arm():
-    head("M. W6-RAW.1 RAW source arm: SOURCE_KIND dimension + apkg SRC_RAW branch")
+    head("M. RAW source arm: SOURCE_KIND dimension + apkg SRC_RAW branch")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -3109,7 +3109,7 @@ def audit_raw_arm():
                "gen-catalog --raw, SRC_RAW layout)")
         else:
             fail("build-raw-source.sh does not reuse --stage-only staging + gen-catalog --raw")
-        # M9b: the s5 14-char filename adaptation (bench finding, W6-RAW.1). The
+        # M9b: the s5 14-char filename adaptation (bench finding). The
         # payload slice is s5 (DIRSIZ=14), so the builder must s5-safe the tree --
         # rename bootslice.manifest -> bootslice.man and fail closed on any staged
         # filename >14 chars -- or the driver cannot read the profile/manifest.
@@ -3137,7 +3137,7 @@ def audit_raw_arm():
 
 
 def audit_bootable_source():
-    head("N. W6-RAW.2b bootable METAL source disk: profile + --bootable builder mode")
+    head("N. bootable METAL source disk: profile + --bootable builder mode")
 
     # N1: the metal RAW profile exists and carries the bootable-source keys.
     if not os.path.isfile(METAL_RAW_PROFILE):
@@ -3155,7 +3155,7 @@ def audit_bootable_source():
                 d.get("SRC_PAYLOAD_SLICE"), d.get("SRC_RAW_SLICE")))
 
     # N2: the source boot chain kernel identity (c0s1unix, rootdev id-0 slice-1,
-    # brel sum -r 28387 -- the P5.4 r4 rebuild of 2026-08-16: probed support.c
+    # brel sum -r 28387 -- the r4 rebuild of 2026-08-16: probed support.c
     # (the cross path's glob-vs-conf kpatch gap, closed by kerntools'
     # work/patch-carrier-r4), both z3660 direct maps, the advanced cdfs pin
     # 673cd9f4, a3091/a2091 at be2f5e3; superseded line: 51865 r3, 24949 r2,
@@ -3163,7 +3163,7 @@ def audit_bootable_source():
     if d.get("SRC_MINIROOT_KERNEL") == "c0s1unix" \
             and d.get("SRC_MINIROOT_ROOTDEV") == "0x00480010" \
             and d.get("SRC_KERNEL_BREL_SUMR") == "28387":
-        ok("source boot kernel = c0s1unix, rootdev 0x00480010 (id 0 slice 1), brel sum -r 28387 (P5.4 r4)")
+        ok("source boot kernel = c0s1unix, rootdev 0x00480010 (id 0 slice 1), brel sum -r 28387")
     else:
         fail("metal RAW profile source-kernel keys wrong (SRC_MINIROOT_KERNEL=%r "
              "SRC_MINIROOT_ROOTDEV=%r SRC_KERNEL_BREL_SUMR=%r)"
@@ -3177,7 +3177,7 @@ def audit_bootable_source():
              "(ROOTDEV=%r TARGET_SCSI_ID=%r MINIROOT_KERNEL=%r)"
              % (d.get("ROOTDEV"), d.get("TARGET_SCSI_ID"), d.get("MINIROOT_KERNEL")))
 
-    # N2b (Wave C2, re-pinned after plan B2): the 040 line's SOURCE profile --
+    # N2b (re-pinned after plan B2): the 040 line's SOURCE profile --
     # INSTALL_CPU=040, a ufs target, the 040 miniroot kernel rooted at id 0 slice 1
     # (0x00480010), and boot2-040 SELECTED BY CONTRACT IDENTITY (`good_040`, which
     # amix-kerntools promoted into contracts/bootchain-v1.json on 2026-08-19 after
@@ -3221,7 +3221,7 @@ def audit_bootable_source():
             ok("metal-a4000-z3660-040 pins its loader exactly once (contract "
                "identity, no leftover literal SRC_BOOT2_SHA256)")
         # ★ THE LOADER SELECTION IS A PROPERTY OF THE CPU LINE, NOT OF ONE FILE.
-        # Wave C3 added a SECOND 040 profile (bench-a3000-040), so this can no
+        # A SECOND 040 profile (bench-a3000-040) exists, so this can no
         # longer be "everything except metal-a4000-z3660-040": the rule it was
         # written to protect is that a profile's INSTALL_CPU and its loader
         # selection are the same fact stated twice, and any disagreement is a
@@ -3241,7 +3241,7 @@ def audit_bootable_source():
                          if f.endswith(".profile")):
             dp = _parse_profile(os.path.join(PROFILES_DIR, pf))
             sel = (dp.get("SRC_BOOT2_IDENTITY"), dp.get("BOOTSLICE_BOOT2_IDENTITY"))
-            # r6 (D-2): a `*-r6*.profile` rides the RTH1 root-hint loader instead --
+            # r6: a `*-r6*.profile` rides the RTH1 root-hint loader instead --
             # good_040_rth (040/060) or good_rth (030), contract CANDIDATES -- on the
             # same keys, by the same one-fact rule. The Gayle bench row R7 (-R7row) rides it too.
             if dp.get("INSTALL_LAYOUT") == "1.1":
@@ -3275,7 +3275,7 @@ def audit_bootable_source():
                "nothing (=> contract default `good`), every 040/060 profile selects "
                "good_040 on both the source chain and the payload boot slice")
 
-    # N2c (Wave C3): the BENCH 040 profile -- the one that closes the C4 INTERIM on
+    # N2c: the BENCH 040 profile -- the one that closes the C4 INTERIM on
     # this one rig. metal-a4000-z3660-040 carries the donor's 030 target chain by
     # declared intent (its ★C4 note): on metal that is a deferral, because an 030
     # z3660scsi chain at least exists there. On the BENCH it is a WALL -- that chain
@@ -3300,7 +3300,7 @@ def audit_bootable_source():
     #   TARGET_HBA a3000 / FB_ETHER_IF aen0  the bench rig, not the Z3660 metal one.
     pb40 = os.path.join(PROFILES_DIR, "bench-a3000-040.profile")
     if not os.path.isfile(pb40):
-        fail("bench 040 profile missing: bench-a3000-040.profile (Wave C3)")
+        fail("bench 040 profile missing: bench-a3000-040.profile")
     else:
         db = _parse_profile(pb40)
         want = {"INSTALL_CPU": "040", "SOURCE_KIND": "raw", "SRC_SCSI_ID": "0",
@@ -3429,7 +3429,7 @@ def audit_bootable_source():
     else:
         fail("builder does not gate the framed kernel identity (sum -r vs profile)")
 
-    # N8b (Wave C2, re-pinned after plan B2): a medium SELECTS its slice-3 loader,
+    # N8b (re-pinned after plan B2): a medium SELECTS its slice-3 loader,
     # and the selection is threaded all the way to the sibling gate.
     #
     # Two profile keys, and the builder must read BOTH and refuse the pair:
@@ -3510,7 +3510,7 @@ def audit_bootable_source():
         fail("tools/lib/boot2id.py missing -- the shared boot2 identity resolver "
              "both writers gate against")
 
-    # N8c (Wave C2): the slice-1 miniroot read-back accepts a UFS miniroot (the
+    # N8c: the slice-1 miniroot read-back accepts a UFS miniroot (the
     # 040/060 line). It dispatches on the image's OWN superblock
     # (rootfs-type.identify), never a flag, so a ufs miniroot is never walked as s5
     # and the s5 arm is byte-behaviourally unchanged. This lives inside the author
@@ -3527,7 +3527,7 @@ def audit_bootable_source():
     # N9: the on-box + host-side SMOKE exists (miniroot read-only member spot-check
     # and boot-slice host re-attestation) and there is NO bench boot attempt.
     #
-    # ★ Wave C3: the smoke's `mount -F` is DERIVED, not literal. It read `-F s5`
+    # ★ The smoke's `mount -F` is DERIVED, not literal. It read `-F s5`
     # until 2026-08-19, which on the 040/060 line fails at the MOUNT
     # (MRMOUNT_FAILED) -- an error that reads as "the image is broken" when the
     # truth is "the reader was told the wrong filesystem". MR_FSTYPE now comes off
@@ -3580,13 +3580,13 @@ def audit_bootable_source():
 
 
 # ---------------------------------------------------------------------------
-# O. W6-I updbootpart -- the on-box boot-slice reframe tool (kernel upgrade)
+# O. updbootpart -- the on-box boot-slice reframe tool (kernel upgrade)
 # ---------------------------------------------------------------------------
 # payload/updbootpart is the on-box finisher for "kernel upgrade via a package":
 # `updbootpart --backup` -> `pkgadd KERNBENCH` -> `updbootpart` reframes the UNI\0
 # boot slice from the freshly-landed /stand/unix so the next cold boot runs the new
 # kernel. install.sh lays it onto every fresh target at /usr/sbin/updbootpart --
-# additive, NOT a package member. ★ W5.5: it is STAGED ON THE MEDIUM at
+# additive, NOT a package member. ★ It is STAGED ON THE MEDIUM at
 # /install/updbootpart and COPIED, where it used to be a quoted here-doc inside the
 # driver; the 1991 sh materialized that body as a real file on the 880-block install
 # floppy at PARSE time, 15,427 B = 16 of its 46 free 1 KB blocks, on every install.
@@ -3608,7 +3608,7 @@ def audit_bootable_source():
 #     at /install/updbootpart and STOPS unless the staged copy is byte-identical (the
 #     lock the here-doc used to give for free, in the one place that still sees both);
 #   * the driver INSTALLS it (cp $INST/updbootpart -> /usr/sbin/updbootpart, chmod
-#     0755), fails closed on pre-W5.5 media, and carries no here-doc at all;
+#     0755), fails closed on older media, and carries no here-doc at all;
 #   * strip_heredocs still works, proven with fixtures (audit Z's here-doc law, now
 #     ZERO bytes for every miniroot script, is what keeps the helper needed).
 
@@ -3772,7 +3772,7 @@ def _heredoc_body(driver_src, delim="UPDBOOTPART_EOF"):
 
 
 def audit_updbootpart():
-    head("O. W6-I updbootpart -- on-box boot-slice reframe tool (kernel upgrade via package)")
+    head("O. updbootpart -- on-box boot-slice reframe tool (kernel upgrade via package)")
     if not os.path.isfile(UPDBOOTPART):
         fail("payload/updbootpart missing: %s" % os.path.relpath(UPDBOOTPART, REPO))
         return
@@ -3935,7 +3935,7 @@ def audit_updbootpart():
         else:
             fail("updbootpart ACCEPTED a bad root device %s (rc=%s CN=%r)"
                  % (spec, got[0] if got else "?", got[1] if got else "?"))
-    # D-2 (RTH1, 2026-10-05): the root is the MOUNTED one (`/etc/devnm /`), not vfstab's
+    # RTH1 (2026-10-05): the root is the MOUNTED one (`/etc/devnm /`), not vfstab's
     # install-time "/" row. A moved disk (vfstab c6d0s1, mounted c2d0s1) frames onto c2d0s3
     # and says so; no devnm answer refuses.
     got = _run_devderive("/dev/dsk/c2d0s1", vfroot="/dev/dsk/c6d0s1")
@@ -3968,7 +3968,7 @@ def audit_updbootpart():
     # fingerprint 14193, frame-to-temp-then-readback-cmp, exact pipeline shape.
     checks = [
         (r'/etc/vfstab', "reads /etc/vfstab (a cross-check only)"),
-        (r'ROOTSPEC=`/etc/devnm /', "derives the root from the MOUNTED root (`/etc/devnm /`, D-2)"),
+        (r'ROOTSPEC=`/etc/devnm /', "derives the root from the MOUNTED root (`/etc/devnm /`)"),
         (r'done\s*<\s*"\$VFSTAB"', "parses the vfstab `/` line in a read loop"),
         (r"expr\s+\"\$ROOTSPEC\"\s+:\s+'/dev/dsk/c\\\(", "extracts controller N from the root device (never hardcoded)"),
         (r'BOOT_BLK="/dev/dsk/c\$\{CN\}d0s3"', "boot slice = cNd0s3 built from the derived N"),
@@ -3998,7 +3998,7 @@ def audit_updbootpart():
         ok("updbootpart hardcodes no /dev/*dsk/c<digit> device (slice built from $CN)")
 
     # O5: DRIFT-LOCK -- the BUILDER stages the tracked master onto the medium, byte
-    # for byte, and STOPS if the staged copy differs (W5.5). Until this wave the
+    # for byte, and STOPS if the staged copy differs. It used to be that the
     # drift lock was free: the body lived inside install.sh as a quoted here-doc and
     # this audit diffed the two. Moving it onto the medium bought back 16 of the
     # install floppy's 46 free blocks (measured: the 1991 sh materialized it as
@@ -4024,7 +4024,7 @@ def audit_updbootpart():
 
     # O6: the driver INSTALLS it from the MEDIUM -- cp $INST/updbootpart ->
     # /usr/sbin/updbootpart, chmod 0755, and it fails closed on media mastered
-    # before W5.5 (no silent no-updbootpart install). Still additive: NOT a package
+    # from older media (no silent no-updbootpart install). Still additive: NOT a package
     # member, so attestation (a function of what pkgadd RECORDED) is unmoved.
     dcode = strip_full_comments(driver_src)
     if re.search(r'cp\s+"\$INST/updbootpart"\s+"\$TARGET/usr/sbin/updbootpart"', dcode) and \
@@ -4034,12 +4034,12 @@ def audit_updbootpart():
         fail("install.sh does not cp + chmod /usr/sbin/updbootpart in the arm step")
     if re.search(r'\[\s+-f\s+"\$INST/updbootpart"\s+\]\s+\|\|\s+die', dcode):
         ok("install.sh FAILS CLOSED when the medium carries no updbootpart "
-           "(pre-W5.5 media cannot silently install without it)")
+           "(older media cannot silently install without it)")
     else:
         fail("install.sh does not die when $INST/updbootpart is missing")
     if re.search(r"<<'UPDBOOTPART_EOF'", driver_src):
         fail("the updbootpart here-doc is BACK in install.sh -- that is 16 of the "
-             "install floppy's 46 free blocks, on every install (W5.5)")
+             "install floppy's 46 free blocks, on every install")
     else:
         ok("updbootpart is no longer a driver here-doc: it rides the medium, so the "
            "880-block install floppy pays nothing for it")
@@ -4063,13 +4063,13 @@ def audit_updbootpart():
 
 
 # ---------------------------------------------------------------------------
-# P. METAL-FIX.4 zen0 bring-up laydown -- driver lays /etc/rc2.d/S99zen for metal
+# P. zen0 bring-up laydown -- driver lays /etc/rc2.d/S99zen for metal
 #    (zen0) profiles, IP-parameterized; the profiles carry the right IP + interface
 # ---------------------------------------------------------------------------
 # A base install ships only the STOCK a2065/aen0 inet userland, inert on metal (no
 # A2065 board) -- so a fresh metal install has NO working ethernet. Metal ethernet is
 # z3660eth, interface zen0 (cdevsw major 51 -- renumbered from 48 on 2026-07-30; media
-# mastered from this tree REQUIRE kernels that register z3660eth at 51, the P5.4 set).
+# mastered from this tree REQUIRE kernels that register z3660eth at 51, that kernel set).
 # install.sh lays down the proven z3660net
 # bring-up as /etc/rc2.d/S99zen -- driver-written + additive, NOT a package member
 # (invisible to the contents DB, exactly like S16firstboot / updbootpart), and it
@@ -4093,7 +4093,7 @@ def audit_updbootpart():
 # S99zen runs on the FULL installed target (rc2.d at boot), so it uses net tools the
 # thin miniroot lacks -- documented here, NOT granted to install.sh (mknod + expr are
 # already in miniroot.proto).
-# P-3 (address by card, 2026-09-26) adds the text tools of the lookup/hosts step
+# Address by card (2026-09-26) adds the text tools of the lookup/hosts step
 # (sed/grep/awk/cmp -- all on the installed target) and `uname` for the nodename.
 ZEN_EXTRA = {"slink", "ifconfig", "route", "sleep", "sed", "grep", "awk", "cmp", "uname"}
 _ZEN_TESTIP = "203.0.113.7"          # deliberately NOT .38/.39 -- a hardcoded IP mismatches
@@ -4129,7 +4129,7 @@ def _emit_zen(func, ip, mask, gw=_ZEN_TESTGW, dom=_ZEN_TESTDOM):
 
 
 def audit_zen_bringup():
-    head("P. METAL-FIX.4 zen0 bring-up laydown: driver lays /etc/rc2.d/S99zen (IP-parameterized) + metal profiles")
+    head("P. zen0 bring-up laydown: driver lays /etc/rc2.d/S99zen (IP-parameterized) + metal profiles")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -4151,7 +4151,7 @@ def audit_zen_bringup():
            "needs a literal IP)")
     else:
         fail("driver does not fail closed on a zen0 profile with an empty FB_IP")
-    # W1: the default route's gateway is FB_GATEWAY (it was the literal 192.0.2.1
+    # the default route's gateway is FB_GATEWAY (it was the literal 192.0.2.1
     # inside emit_zen_hook). Same fail-closed shape as FB_IP -- an empty value would
     # write `route add default  1`.
     if re.search(r'\[\s+-n\s+"\$FB_GATEWAY"\s+\]\s+\|\|\s+die', code):
@@ -4160,7 +4160,7 @@ def audit_zen_bringup():
     else:
         fail("driver does not fail closed on a zen0 profile with an empty FB_GATEWAY")
     if re.search(r'route add default 192\.168\.2\.1', code):
-        fail("emit_zen_hook still HARDCODES the 192.0.2.1 default route -- W1 makes it "
+        fail("emit_zen_hook still HARDCODES the 192.0.2.1 default route -- it must be "
              "the profile key FB_GATEWAY")
     else:
         ok("emit_zen_hook carries no hardcoded 192.0.2.1 default route (FB_GATEWAY)")
@@ -4203,7 +4203,7 @@ def audit_zen_bringup():
                 fail("emit_zen_hook does not track $FB_IP/$FB_GATEWAY (hardcoded?) -- the "
                      "second pair did not flow through")
 
-        # P2b (P-15 I2): the ADDRESS-LESS form (FB_IP + FB_GATEWAY empty) is the master
+        # P2b: the ADDRESS-LESS form (FB_IP + FB_GATEWAY empty) is the master
         # plus exactly the leave-down guard after the zen.conf block and a gateway-guarded
         # route line -- nothing else moves, so the LAN form above stays byte-identical.
         if func:
@@ -4265,16 +4265,16 @@ def audit_zen_bringup():
             ok("S99zen brings zen0 up the SVR4.0 way (slink addaen + ifconfig ... up -trailers, no plumb)")
         else:
             fail("S99zen missing the slink addaen + ifconfig zen0 ... up -trailers bring-up")
-        # W1: the master's default route is a PLACEHOLDER, resolved at laydown --
+        # the master's default route is a PLACEHOLDER, resolved at laydown --
         # a literal here would silently re-hardcode the bench/metal LAN gateway.
-        # P-3 moved the four laydown values into parameter LINES at the top
+        # Address by card moved the four laydown values into parameter LINES at the top
         # (FALLBACK=/NETMASK=/GATEWAY=/DOMAIN=), which the route line reads.
         if re.search(r'(?m)^GATEWAY=@FB_GATEWAY@$', raw) and \
                 re.search(r'route\s+add\s+default\s+\$GATEWAY\s+1', raw):
             ok("S99zen master parameterizes the default route (@FB_GATEWAY@)")
         else:
             fail("S99zen master does not carry the @FB_GATEWAY@ default-route "
-                 "placeholder (W1 de-hardcodes 192.0.2.1)")
+                 "placeholder (192.0.2.1 is not hardcoded)")
         if re.search(r'route\s+add\s+default\s+192\.168\.2\.1', raw):
             fail("S99zen master still hardcodes the 192.0.2.1 default route")
         else:
@@ -4285,7 +4285,7 @@ def audit_zen_bringup():
         else:
             fail("S99zen's resolved form has no concrete `route add default <gw> 1`")
         # the ifconfig/route CODE (comments stripped) must not reach for a NAME --
-        # `ifconfig zen0 \`uname -n\`` stalls boot on SVR4.0 via a DNS lookup. P-3
+        # `ifconfig zen0 \`uname -n\`` stalls boot on SVR4.0 via a DNS lookup. The script
         # legitimately READS the nodename (uname -n) and SETS it (uname -S) for the
         # address-by-card step; neither feeds ifconfig, which takes $ADDR -- a
         # dotted quad the lookup validated, or the laydown's literal FALLBACK.
@@ -4346,7 +4346,7 @@ def audit_zen_bringup():
         d = _parse_profile(os.path.join(PROFILES_DIR, pf))
         if d.get("FB_ETHER_IF") == "zen0":
             zen_profiles.append(pf)
-            # P-15 I2: the public flavor (dialog armed) lays down an ADDRESS-LESS
+            # the public flavor (dialog armed) lays down an ADDRESS-LESS
             # S99zen -- both keys empty, the dialog's 8a re-point fills them.
             if d.get("FIRSTBOOT_DIALOG") == "y" and not d.get("FB_IP"):
                 if d.get("FB_GATEWAY"):
@@ -4360,13 +4360,13 @@ def audit_zen_bringup():
                 ok("%s: FB_ETHER_IF=zen0 with non-empty FB_IP=%s" % (pf, d["FB_IP"]))
             else:
                 fail("%s: FB_ETHER_IF=zen0 but FB_IP is EMPTY -- firstboot bakes no hosts line "
-                     "and the zen0 bring-up has no IP (METAL-FIX.4)" % pf)
+                     "and the zen0 bring-up has no IP" % pf)
             if d.get("FB_GATEWAY"):
                 ok("%s: FB_ETHER_IF=zen0 with non-empty FB_GATEWAY=%s"
                    % (pf, d["FB_GATEWAY"]))
             else:
                 fail("%s: FB_ETHER_IF=zen0 but FB_GATEWAY is EMPTY -- the laydown would "
-                     "write a broken `route add default  1` (W1)" % pf)
+                     "write a broken `route add default  1`" % pf)
     for name in ("metal-a4000-z3660.profile", "metal-a4000-z3660-raw.profile"):
         p = os.path.join(PROFILES_DIR, name)
         if not os.path.isfile(p):
@@ -4391,7 +4391,7 @@ def audit_zen_bringup():
                 fail("%s: FB_ETHER_IF=%r -- the bench profile must stay aen0 (no zen0 laydown "
                      "on the a2065 bench)" % (name, d.get("FB_ETHER_IF")))
 
-    # P5 (P-3 address by card): the lookup/hosts/mkconf/start logic of the master is
+    # P5 (address by card): the lookup/hosts/mkconf/start logic of the master is
     # exercised end to end by tools/zen-conf-selftest.sh (fake MACs, a sandboxed
     # boot path, dash when present); FB_ZEN_CARDS reaches firstboot.conf and
     # firstboot.sh renders it through S99zen's own mkconf; zenmac is laid down.
@@ -4454,11 +4454,11 @@ def audit_zen_bringup():
 
 
 # ---------------------------------------------------------------------------
-# Q. P5.4-FT /stand framing tools -- driver-guaranteed updbootpart framing sources
+# Q. /stand framing tools -- driver-guaranteed updbootpart framing sources
 # ---------------------------------------------------------------------------
 # updbootpart's reframe pipeline needs /stand/boot1.boot, /stand/boot2.boot and an
 # executable local /stand/makeiblk (its gate 5a fails closed without them). On
-# M-RUN4b (M-RUN-P5.4, 2026-08) the KERN-package handoff on a fresh metal base-8
+# On a metal run (2026-08) the KERN-package handoff on a fresh metal base-8
 # install died exactly there ("framed image is empty") until boot1.boot + makeiblk
 # were ferried by hand from the bench golden (1 KB chunk split-pull, reassembled
 # byte-perfect sum -r 58483). The driver now LAYS BOTH DOWN from the media, making
@@ -4500,7 +4500,7 @@ def _staged_pin_check(relpath, want_sum, want_size):
 
 
 def audit_framing_tools():
-    head("Q. P5.4-FT /stand framing tools: driver lays boot1.boot + makeiblk (updbootpart gate 5a)")
+    head("Q. /stand framing tools: driver lays boot1.boot + makeiblk (updbootpart gate 5a)")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -4608,7 +4608,7 @@ def audit_framing_tools():
 
 
 # ---------------------------------------------------------------------------
-# R. P5.4 syslog unit -- base-8 ships no unit; the driver lays down the 2.1c one
+# R. syslog unit -- base-8 ships no unit; the driver lays down the 2.1c one
 # ---------------------------------------------------------------------------
 # A base-8 install has core's /usr/sbin/syslogd BINARY (2.1, 22,368 B) and core's
 # /dev/log, but NO unit: no /etc/init.d/syslogd, no rc links, no /etc/syslog.conf,
@@ -4642,7 +4642,7 @@ def _live_exit_check(text):
 
 
 def audit_syslog_unit():
-    head("R. P5.4 syslog unit: driver lays the ENABLED 2.1c unit (base-8 ships none)")
+    head("R. syslog unit: driver lays the ENABLED 2.1c unit (base-8 ships none)")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
 
@@ -4778,14 +4778,14 @@ def audit_syslog_unit():
 
 
 # ---------------------------------------------------------------------------
-# S. W1 driver plumbing -- the input keys the interview will land in
+# S. driver plumbing -- the input keys the interview will land in
 # ---------------------------------------------------------------------------
-# W1 turns the driver's remaining hardcodes into profile KEYS and restores two
+# This turns the driver's remaining hardcodes into profile KEYS and restores two
 # stock steps it had dropped, all non-interactively and all behaviour-preserving
 # when the keys carry today's values. This audits each seam fail-closed:
 #
 #   S1 PROFILE BY PATH   -- install.sh accepts a profile by PATH as well as by
-#      name, so the W2 interview can hand it /tmp/answers.profile (the medium is
+#      name, so the interview can hand it /tmp/answers.profile (the medium is
 #      read-only). Proven by RUNNING the extracted resolution block.
 #   S2 INSTALL LOG       -- <target>/var/adm/install.log is written on every
 #      install, opened right after the mount (the pre-mount window is
@@ -4803,14 +4803,14 @@ def audit_syslog_unit():
 #   S6 LOST+FOUND        -- the stock 100-slot preseed, restored (an s5 directory
 #      never shrinks, which is what gives fsck room to reconnect orphans).
 #   S7 DNS PLUMB-ONLY    -- FB_DNS1/FB_DNS2 reach firstboot.conf and NOTHING
-#      applies them (that is W5); a firstboot that started applying DNS would be
+#      applies them (that is the dialog's job); a firstboot that started applying DNS would be
 #      caught here.
 #   S8 KEY COVERAGE      -- every tracked profile carries every new key.
 
 W1_KEYS = ["INSTALL_VERBOSE", "TARGET_ROOT_MB", "TARGET_SWAP_MB", "FB_TZ",
            "FB_GATEWAY", "FB_DNS1", "FB_DNS2", "FB_KMAP", "FB_REPO_URL"]
 
-# The stage strings W1 takes VERBATIM from the original installer. The first two
+# The stage strings it takes VERBATIM from the original installer. The first two
 # are echo lines in the stock /etc/profile (the stock install script itself); the
 # third is amixpkg's per-package printf. All three live on the stock root floppy,
 # so when that image is available they are checked against its actual bytes.
@@ -4951,7 +4951,7 @@ def _audit_w1_log(code, driver_src):
            "the 1991 mkdir -p would fail on the existing leaf)")
     else:
         fail("the seed still mkdir's <target>/tmp after the log step created it -- "
-             "the miniroot's mkdir -p returns 2 on an existing leaf (W5.4f)")
+             "the miniroot's mkdir -p returns 2 on an existing leaf")
     # the opening marker must NAME the console-only pre-mount window
     if re.search(r'logline\s+"NOTE: the PRE-MOUNT window', code):
         ok("install log opens with the marker line declaring the pre-mount window")
@@ -5194,7 +5194,7 @@ def _audit_w1_dns(code, fb, profiles):
         ok("DNS: install.sh records FB_DNS1 + FB_DNS2 in firstboot.conf")
     else:
         fail("DNS: install.sh does not record FB_DNS1/FB_DNS2 in firstboot.conf")
-    # W1 was PLUMBING ONLY. W5 APPLIES the keys -- and the shape of that
+    # The driver is PLUMBING ONLY. The dialog APPLIES the keys -- and the shape of that
     # application is the whole finding, because a HALF-applied DNS is the
     # 3-minutes-per-boot failure the grimoire measured. Required: all five parts
     # present, in ONE branch, gated on the dialog having configured the network
@@ -5246,7 +5246,7 @@ def _audit_w1_dns(code, fb, profiles):
 
 
 def audit_w1_plumbing():
-    head("S. W1 driver plumbing: profile-by-path, install log, stock stages, keymap, "
+    head("S. driver plumbing: profile-by-path, install log, stock stages, keymap, "
          "real disk size, lost+found, DNS keys")
     driver_src = open(DRIVER, encoding="utf-8").read()
     code = strip_full_comments(driver_src)
@@ -5266,14 +5266,14 @@ def audit_w1_plumbing():
     _audit_w1_lostfound(code)
     _audit_w1_dns(code, fb, profiles)
 
-    # S8: every tracked profile defines every W1 key (a missing key silently falls
-    # back to a driver default, which is exactly the drift W1 exists to end).
+    # S8: every tracked profile defines every driver key (a missing key silently falls
+    # back to a driver default, which is exactly the drift these keys exist to end).
     for pf, d in profiles:
         miss = [k for k in W1_KEYS if k not in d]
         if miss:
-            fail("%s is missing W1 key(s): %s" % (pf, ", ".join(miss)))
+            fail("%s is missing driver key(s): %s" % (pf, ", ".join(miss)))
         else:
-            ok("%s carries all %d W1 keys" % (pf, len(W1_KEYS)))
+            ok("%s carries all %d driver keys" % (pf, len(W1_KEYS)))
 
 
 # ---------------------------------------------------------------------------
@@ -5303,8 +5303,8 @@ def audit_w1_plumbing():
 # (51k free blocks, 15k free inodes), not a lost write (a whole-ilist scan of
 # the target found ZERO orphaned inodes -- nothing was ever allocated).
 #
-# It cost two shipped defects: the P5.4-FT syslog unit shipped ONE of its eight
-# /var/log stubs and then hard-stopped the install, and W1's lost+found preseed
+# It cost two shipped defects: the syslog unit shipped ONE of its eight
+# /var/log stubs and then hard-stopped the install, and the lost+found preseed
 # was a silent no-op (the directory stayed at its mkfs 38 slots). Both are fixed
 # by creating with `cp /dev/null` -- an EXTERNAL command, which forks and so
 # really runs every iteration.
@@ -5363,11 +5363,11 @@ def audit_null_redirect_loops():
 
     # NEGATIVE FIXTURES -- the two defects this audit exists to prevent.
     neg = [
-        ("P5.4-FT /var/log stubs",
+        ("syslog-unit /var/log stubs",
          '#!/bin/sh\nfor lf in alert bus-errors console; do\n'
          '\t: > "$TARGET/var/log/$lf" || die "cannot create"\n'
          '\trun chmod 0644 "$TARGET/var/log/$lf"\ndone\n'),
-        ("W1 lost+found preseed (nested)",
+        ("lost+found preseed (nested)",
          '#!/bin/sh\nfor i in 0 1 2; do\n\tfor j in 0 1 2; do\n'
          '\t\t: > "$LF/$i$j" || die "cannot preseed"\n\tdone\ndone\n'),
         ("while-read loop",
@@ -5398,14 +5398,14 @@ def audit_null_redirect_loops():
 
 
 # ---------------------------------------------------------------------------
-# U. W2 INTERVIEW -- structure (src/installer/setup.sh)
+# U. INTERVIEW -- structure (src/installer/setup.sh)
 # ---------------------------------------------------------------------------
 # setup.sh is the interactive veneer: it asks, it composes an answers profile,
 # it execs the proven driver. Audits A/B/G/H/I/T already cover it as miniroot
 # sh; THIS audit covers the properties that are specific to being an interview
 # on a blind console in front of a five-minute transplant.
 #
-#   U1  THE SCAN NEVER CALLS ddsize. W1 proved one unconditional
+#   U1  THE SCAN NEVER CALLS ddsize. A first measurement proved one unconditional
 #       `/etc/ddsize /dev/rdsk/c6d0s0` WEDGES the install on the bench a3091
 #       path (matrix 20260811-094255-cd), and the miniroot has no timeout tool,
 #       so a hang there cannot be bounded. A SCAN would run it once per id. The
@@ -5416,8 +5416,8 @@ def audit_null_redirect_loops():
 #       id 4 must be absent from both (that is what makes stock's "SCSI device 4
 #       must be used for the tape drive" refusal structural rather than a case).
 #   U3  THE TRANSPLANT NEVER INHERITS THE CONSOLE. The exec of install.sh must
-#       redirect stdin from /dev/null -- METAL-FIX.3: an inherited stdin is what
-#       hung M-RUN1 on the 1991 pkgadd's prompt, and the interview is the first
+#       redirect stdin from /dev/null: an inherited stdin is what
+#       hung a metal run on the 1991 pkgadd's prompt, and the interview is the first
 #       thing in this tree that legitimately holds a console stdin to pass on.
 #   U4  THE ANSWERS PROFILE IS BASE-THEN-APPEND, by PATH, with the beacon
 #       markers the blind-console harness greps for.
@@ -5435,7 +5435,7 @@ def audit_null_redirect_loops():
 # AND in the floppy image.
 # (what setup.sh must contain, what the stock root floppy must contain). The two
 # differ ONLY where stock parameterised something we resolve: stock asked about
-# "the disk you want to $MODE" because it also did repairs (repair mode is W4,
+# "the disk you want to $MODE" because it also did repairs (repair mode is elsewhere,
 # on the miniroot), and its size prompts interpolate its own default variables.
 # Spelling out both halves keeps every deviation VISIBLE instead of hidden
 # behind a fuzzy match.
@@ -5463,7 +5463,7 @@ STOCK_INTERVIEW_STRINGS = [
 # amixpkg's own menu line (md5 d63408968f87027313dc9115a6756d55) and
 # system.setup's summary question -- the other two stock artifacts we quote.
 #
-# W3b activates the rest of amixpkg's package screens, so the rest of its
+# The set menus activate the rest of amixpkg's package screens, so the rest of its
 # .rodata is quoted here too. Where stock parameterised what we resolve, or where
 # the ONE changed word ("tape" -> "disc", plan §2.7) applies, the deviation is
 # DECLARED as the second element rather than hidden behind a fuzzy match --
@@ -5495,10 +5495,10 @@ SCAN_PATH_FUNCS = ("scan_disks", "disk_size_hint", "rdb_present", "rdb_extent_mb
 
 
 def audit_w2_structure():
-    head("U. W2 interview structure (setup.sh: no ddsize in the scan, stdin "
+    head("U. interview structure (setup.sh: no ddsize in the scan, stdin "
          "discipline, stock wording)")
     if not os.path.isfile(SETUP):
-        fail("src/installer/setup.sh is missing -- the W2 interview is the wave's "
+        fail("src/installer/setup.sh is missing -- the interview is this audit's "
              "whole deliverable")
         return
     src = open(SETUP, encoding="utf-8").read()
@@ -5516,7 +5516,7 @@ def audit_w2_structure():
             if "ddsize" in body:
                 dirty.append(f)
         if dirty:
-            fail("setup.sh's SCAN path calls /etc/ddsize in %s -- W1 proved an "
+            fail("setup.sh's SCAN path calls /etc/ddsize in %s -- a first measurement proved an "
                  "unconditional ddsize WEDGES the install on the bench a3091 path "
                  "and the miniroot has no timeout tool; a per-id scan multiplies "
                  "the exposure" % ", ".join(dirty))
@@ -5576,12 +5576,12 @@ def audit_w2_structure():
     m = re.search(r'(?m)^\s*sh\s+"\$INST/bin/install\.sh"\s+"\$ANSWERS"\s*<\s*/dev/null\s*$',
                   code)
     if m:
-        ok("setup.sh runs the driver with stdin from /dev/null (METAL-FIX.3 "
+        ok("setup.sh runs the driver with stdin from /dev/null ("
            "preserved: the transplant never inherits the interview's console)")
     else:
         fail("setup.sh must run `sh \"$INST/bin/install.sh\" \"$ANSWERS\" "
-             "< /dev/null` -- an inherited stdin is what hung M-RUN1 on the 1991 "
-             "pkgadd prompt (METAL-FIX.3)")
+             "< /dev/null` -- an inherited stdin is what hung a metal run on the 1991 "
+             "pkgadd prompt")
     # --- U3b (D15): the interactive install ENDS in a halt, never a respawn ---
     tail = code[m.end():] if m else ""
     d15 = (re.search(r'rc=\$\?', tail) and
@@ -5599,7 +5599,7 @@ def audit_w2_structure():
 
     # --- U4: the answers profile --------------------------------------------
     checks = [
-        # ★ W5 (bench-measured): the answers profile is the base profile's
+        # ★ Bench-measured: the answers profile is the base profile's
         # ASSIGNMENTS, not a byte copy. A profile is 90% comment -- 13,556 bytes
         # of which ~1,000 are keys -- and copying it whole spent 26 of the
         # floppy's 46 free blocks on prose, on the filesystem the static pkgadd
@@ -5617,25 +5617,25 @@ def audit_w2_structure():
          "the answers are APPENDED (a later assignment wins when sh sources it)"),
         (r'TARGET_DISK_MB=\$DISK_MB',
          "TARGET_DISK_MB is always pinned, so install.sh never probes ddsize itself"),
-        (r'TARGET_ROOT_MB=\$ANS_ROOT', "the root answer lands in W1's driver key"),
-        (r'TARGET_SWAP_MB=\$ANS_SWAP', "the swap answer lands in W1's driver key"),
-        (r'INSTALL_VERBOSE=\$ANS_VERBOSE', "the verbose answer lands in W1's driver key"),
-        (r'INSTALL_SET=\$SET_NAME', "the chosen set's NAME lands in W3b's driver key"),
-        (r'INSTALL_ORDER=\$SET_ORDER', "the chosen set's ORDER FILE lands in W3b's driver key"),
+        (r'TARGET_ROOT_MB=\$ANS_ROOT', "the root answer lands in the driver key"),
+        (r'TARGET_SWAP_MB=\$ANS_SWAP', "the swap answer lands in the driver key"),
+        (r'INSTALL_VERBOSE=\$ANS_VERBOSE', "the verbose answer lands in the driver key"),
+        (r'INSTALL_SET=\$SET_NAME', "the chosen set's NAME lands in the driver key"),
+        (r'INSTALL_ORDER=\$SET_ORDER', "the chosen set's ORDER FILE lands in the driver key"),
         (r'INSTALL_ATTESTED=\$SET_ATT',
          "the set's attestation posture is recorded, so a waived digest gate is "
          "never silent (plan 5.7)"),
         (r'SETUP-ANSWERS-BEGIN', "the beacon's BEGIN marker (the blind-console harness greps it)"),
         (r'SETUP-ANSWERS-END', "the beacon's END marker"),
-        # ★ THE FLOPPY BUDGET (W4, bench-measured). The root filesystem here is
+        # ★ THE FLOPPY BUDGET (bench-measured). The root filesystem here is
         # an 880-block floppy with ~46 blocks free; $ANSWERS alone is 12 of them
         # (the base profile is copied whole -- the medium is read-only), and the
         # static pkgadd needs room on this same filesystem for
         # /usr/apkg/sadm/install/scripts. Echoing the WHOLE composed profile as
-        # the beacon spent another 12 and killed W4's first interactive run:
+        # the beacon spent another 12 and killed the first interactive run:
         # `Floppy fd0: no space` -> `pkgadd: ERROR: unable to make packaging
         # directory` -> `STOP: base-OS install FAILED for package(s): core`.
-        # (W3b survived the same shape with SIX blocks to spare -- luck.) The
+        # (An earlier run survived the same shape with SIX blocks to spare -- luck.) The
         # beacon carries the ANSWERS BLOCK only, and the interview's scratch is
         # handed back before the transplant.
         (r'cat "\$ANSWERS_BLOCK" > "\$ANSWERS_ECHO_PATH"',
@@ -5673,10 +5673,10 @@ def audit_w2_structure():
     if re.search(r'cat "\$ANSWERS" > "\$ANSWERS_ECHO_PATH"', code):
         fail("setup.sh echoes the WHOLE composed profile as the beacon -- that is "
              "12 blocks of an 880-block floppy that the static pkgadd needs for "
-             "its packaging directory (W4 bench: `Floppy fd0: no space` then "
+             "its packaging directory (bench: `Floppy fd0: no space` then "
              "`pkgadd: ERROR: unable to make packaging directory`)")
     else:
-        ok("the beacon is never the whole profile (the floppy-space defect W4 "
+        ok("the beacon is never the whole profile (the floppy-space defect once "
            "measured cannot come back)")
 
     # --- U5: no stty --------------------------------------------------------
@@ -5715,8 +5715,8 @@ def audit_w2_structure():
         skip("%s absent -- the stock-wording cross-check is skipped (not a pass)"
              % os.path.relpath(STOCK_ROOT_ADF, REPO))
 
-    # --- U7: every tracked profile declares the two W2 keys ------------------
-    # Same discipline W1 applied to its own keys: a key whose default is silent
+    # --- U7: every tracked profile declares the two interview keys -----------
+    # Same discipline as the driver keys: a key whose default is silent
     # is a key nobody notices is wrong. DDSIZE_SAFE especially -- its default is
     # the SAFE answer (n), so a metal profile that forgets it silently loses the
     # probe stock itself used, and a bench profile that forgets it is fine; only
@@ -5728,7 +5728,7 @@ def audit_w2_structure():
         keys = _parse_profile(os.path.join(PROFILES_DIR, f))
         miss = [k for k in ("DDSIZE_SAFE", "ANSWERS_ECHO") if k not in keys]
         if miss:
-            fail("profile %s does not declare %s (the W2 interview keys)" % (f, miss))
+            fail("profile %s does not declare %s (the interview keys)" % (f, miss))
         elif keys.get("DDSIZE_SAFE") not in ("y", "n"):
             fail("profile %s has DDSIZE_SAFE=%r -- it must be y or n"
                  % (f, keys.get("DDSIZE_SAFE")))
@@ -5842,7 +5842,7 @@ def audit_w2_sizing():
         fail("non-vacuity: the 108 MB harness produced %r, expected the documented "
              "bench layout 79 root / 18 swap" % a)
 
-    # E-BIG (KT-32): the stock-kernel root ceiling is REAL in both halves -- a 1000 MB
+    # E-BIG: the stock-kernel root ceiling is REAL in both halves -- a 1000 MB
     # disk offers and plans a 602 MB root (1234567 blocks / 2048) with ROOTMAX 602,
     # and KERNEL_SDDEVSIZE=fixed (a kernel carrying the sddevsize fix) lifts it.
     for label, env_extra, want in (("stock kernel", {}, ("602", "602")),
@@ -6029,7 +6029,7 @@ sed -n 2p "$data"
 '''
 
 
-# W6: the two stock machine-class probes the miniroot carries, as sandbox stubs.
+# the two stock machine-class probes the miniroot carries, as sandbox stubs.
 # The DEFAULT values are the ones MEASURED on the canonical bench rig
 # 2026-08-12 (work/install-matrix/w6-oldboot): /etc/romsize prints 524288 --
 # exactly the stock threshold, so a KS 2.04 box clears `-lt 524288` by zero
@@ -6049,8 +6049,8 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
     kbootset:     the text `kbootset cards --probe` prints (a universal medium's card table),
                   served by a stub at the medium's l11/bin/kbootset; None = no kbootset
 
-    sets:         text of the medium's /install/sets table (W3b), or None for a
-                  pre-W3b medium that has none (the interview must still show
+    sets:         text of the medium's /install/sets table, or None for a
+                  older medium that has none (the interview must still show
                   three rows -- the numbering is a UI constant).
     extra_orders: {"order.standard": [pkg, ...]} -- the per-set order files
                   tools/build-install-iso.sh stages beside /install/order."""
@@ -6072,7 +6072,7 @@ def _w_build(root, disks, profile_text, order, catalog=None, base_marker=None,
         fp = os.path.join(root, "bin", name)
         open(fp, "w").write(body % root)
         os.chmod(fp, 0o755)
-    # W6 machine-class probes. `machine=None` means NEITHER PROBE EXISTS, which
+    # Machine-class probes. `machine=None` means NEITHER PROBE EXISTS, which
     # is the fail-open path and therefore the right default for every case that
     # is not about machine class: `[ -x ... ]` is false and check_old_boot
     # returns without a word.
@@ -6162,7 +6162,7 @@ def _w_run(script, answers, arg="w2test", env=None):
 
 
 def audit_w2_interview():
-    head("W. the W2 interview, ACTUALLY RUN (sandboxed conversations)")
+    head("W. the interview, ACTUALLY RUN (sandboxed conversations)")
     if not os.path.isfile(SETUP):
         fail("src/installer/setup.sh missing -- nothing to run")
         return
@@ -6180,7 +6180,7 @@ def audit_w2_interview():
     # r6e: 108 MB with the 10 MiB boot slice leaves exactly what 100 MB left with the stock 2 MiB one,
     # so every 79/18 case below keeps its stock numbers.
     bench = {6: (108, True, W_BENCH_PARTS)}
-    # --- W3b fixtures: a medium that carries a set table + a per-set order ----
+    # --- fixtures: a medium that carries a set table + a per-set order --------
     # Row 1 is a set the medium fully carries (order.standard, five packages);
     # row 2 is everything on the disc (the full base-8 /install/order). That is
     # exactly the shape tools/build-install-iso.sh authors for a disc mastered
@@ -6346,8 +6346,8 @@ def audit_w2_interview():
          {"profile": W_PROFILE + "ANSWERS_ECHO=y\n", "matrix_marker": False},
          ["answers echoed to"], [], []),
 
-        # ---- W3b: the three-tier menu -------------------------------------
-        ("W3b tiers: the medium's /install/sets drives amixpkg's THREE rows, "
+        # ---- the three-tier menu ------------------------------------------
+        ("set tiers: the medium's /install/sets drives amixpkg's THREE rows, "
          "each sized from the catalog",
          bench, ["y", "", "", "1", "", ""], dict(w3),
          ["(1)  Standard Amiga UNIX installation      33.5 MB",
@@ -6355,19 +6355,19 @@ def audit_w2_interview():
           "(3)  Custom selection"], [],
          ["INSTALL_SET=standard", "INSTALL_ATTESTED=y",
           "install/order.standard"]),
-        ("W3b tiers: row 1 points the driver at that set's OWN order file, "
+        ("set tiers: row 1 points the driver at that set's OWN order file, "
          "row 2 at the medium's",
          bench, ["y", "", "", "2", "", ""], dict(w3), [], [],
          ["INSTALL_SET=minimal", "INSTALL_ATTESTED=y"]),
-        ("W3b attestation: an ATTESTED row says nothing about attestation",
+        ("set attestation: an ATTESTED row says nothing about attestation",
          bench, ["y", "", "", "1", "", ""], dict(w3),
          ["Package set:\t\tstandard"], ["unattested selection"], []),
-        ("W3b attestation: a row the medium marks n is called an UNATTESTED "
+        ("set attestation: a row the medium marks n is called an UNATTESTED "
          "SELECTION on the confirmation screen and in the profile",
          bench, ["y", "", "", "2", "", ""], dict(w3u),
          ["Package set:\t\tmedia -- unattested selection"], [],
          ["INSTALL_SET=media", "INSTALL_ATTESTED=n"]),
-        ("W3b tiers: a pre-W3b medium (no /install/sets) still shows three "
+        ("set tiers: an older medium (no /install/sets) still shows three "
          "rows with the same numbering",
          bench, ["y", "", "", "1", "", ""], {"catalog": W_CATALOG},
          ["(1)  Standard Amiga UNIX installation      37.9 MB",
@@ -6375,8 +6375,8 @@ def audit_w2_interview():
           "(3)  Custom selection"], [],
          ["INSTALL_SET=default", "INSTALL_ATTESTED=y"]),
 
-        # ---- W3b: the custom table ----------------------------------------
-        ("W3b custom: the frozen amixpkg table renders, opens on the standard "
+        # ---- the custom table ---------------------------------------------
+        ("set custom: the frozen amixpkg table renders, opens on the standard "
          "set, and GO composes a Custom selection",
          bench, ["y", "", "", "3", "GO", "", ""], dict(w3),
          ["Inst     Name       Description",
@@ -6387,54 +6387,54 @@ def audit_w2_interview():
           "Software:\t\tCustom selection (5 packages)",
           "Package set:\t\tcustom -- unattested selection"], [],
          ["INSTALL_SET=custom", "INSTALL_ATTESTED=n", "tmp/setup.order"]),
-        ("W3b custom: `all` selects everything on the disc",
+        ("set custom: `all` selects everything on the disc",
          bench, ["y", "", "", "3", "all", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (8 packages)"], [], []),
-        ("W3b custom: `none` leaves the mandatory core and nothing else",
+        ("set custom: `none` leaves the mandatory core and nothing else",
          bench, ["y", "", "", "3", "none", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (1 packages)"], [], []),
-        ("W3b custom: `standard` restores the medium's row-1 set",
+        ("set custom: `standard` restores the medium's row-1 set",
          bench, ["y", "", "", "3", "all", "standard", "GO", "", ""], dict(w3),
          ["Software:\t\tCustom selection (5 packages)"], [], []),
-        ("W3b custom: DESELECTING a package takes its DEPENDENTS with it "
+        ("set custom: DESELECTING a package takes its DEPENDENTS with it "
          "(APKGENG off -> APKG off; the catalog's apkg->apkgeng edge)",
          bench, ["y", "", "", "3", "all", "APKGENG", "GO", "", ""], dict(w3),
          ["no       APKG       Remote client",
           "Software:\t\tCustom selection (6 packages)"], [], []),
-        ("W3b custom: SELECTING a package brings its DEPENDENCIES in "
+        ("set custom: SELECTING a package brings its DEPENDENCIES in "
          "(APKG on -> APKGENG on)",
          bench, ["y", "", "", "3", "none", "APKG", "GO", "", ""], dict(w3),
          ["yes      APKGENG",
           "Software:\t\tCustom selection (3 packages)"], [], []),
-        ("W3b custom: core is mandatory and refuses to be deselected",
+        ("set custom: core is mandatory and refuses to be deselected",
          bench, ["y", "", "", "3", "core", "GO", "", ""], dict(w3),
          ["core is required and cannot be deselected."], [], []),
-        ("W3b custom: an unknown name gets amixpkg's own message, not a crash",
+        ("set custom: an unknown name gets amixpkg's own message, not a crash",
          bench, ["y", "", "", "3", "zzz", "GO", "", ""], dict(w3),
          ["Unknown package:  zzz"], [], []),
-        ("W3b custom: no #isize block -> every size is `?` and NO total is "
+        ("set custom: no #isize block -> every size is `?` and NO total is "
          "printed (a partial total is worse than none)",
          bench, ["y", "", "", "3", "GO", "", ""],
          {"sets": w3_sets, "extra_orders": w3_orders,
           "catalog": "\n".join(W_CATALOG.splitlines()[:9]) + "\n"},
          ["Inst     Name       Description"], [" Total: "], []),
 
-        # ---- W3b: the free-space check ------------------------------------
-        ("W3b space: an overcommitted selection gets stock's WARNING and its "
+        # ---- the free-space check -----------------------------------------
+        ("set space: an overcommitted selection gets stock's WARNING and its "
          "override, and declining goes back to the menu",
          bench, ["y", "30", "", "2", "n", "1", "y", "", ""], dict(w3),
          ["WARNING:  Your allocated space for installation is 30 MB,",
           "but you have selected to install 37 MB.",
           "Go ahead with the installation anyway? [n] "], [],
          ["INSTALL_SET=standard", "TARGET_ROOT_MB=30"]),
-        ("W3b space: the stock override is honoured -- `y` installs anyway",
+        ("set space: the stock override is honoured -- `y` installs anyway",
          bench, ["y", "30", "", "2", "y", "", ""], dict(w3), [], [],
          ["INSTALL_SET=minimal", "TARGET_ROOT_MB=30"]),
-        ("W3b space: a selection that FITS is never questioned",
+        ("set space: a selection that FITS is never questioned",
          bench, ["y", "", "", "2", "", ""], dict(w3), [],
          ["Go ahead with the installation anyway?"], []),
 
-        # ---- W6: the two COVERAGE HOLES, surfaced in-product (plan sec. 6) --
+        # ---- the two COVERAGE HOLES, surfaced in-product (plan sec. 6) --
         # Neither of these can be triggered on hardware we own -- there is no
         # IDE-only Amiga and no A2090 on this bench, and Amiberry cannot present
         # one -- so the decision LOGIC is driven here instead, against the
@@ -6449,44 +6449,44 @@ def audit_w2_interview():
           "An IDE disk on the A4000's own port is used as the MASTER only:",
           "The IDE port of an A1200 or A600 is not supported.",
           "UNIX needs a SCSI host adapter"], ["There is no Amiga UNIX IDE driver"], []),
-        ("W6 coverage: a KICKSTART 1.3 machine (romsize 262144) is refused by "
+        ("coverage: a KICKSTART 1.3 machine (romsize 262144) is refused by "
          "name, before any size is asked for",
          bench, ["y", "", ""], {"machine": {"rom": "echo 262144"}},
          ["This machine is not supported by this installation disc.",
           "Its Kickstart ROM is 262144 bytes.",
           "original Amiga UNIX 2.1 distribution"],
          ["How many megabytes for the root file system"], []),
-        ("W6 coverage: an A2090 controller is refused by name",
+        ("coverage: an A2090 controller is refused by name",
          bench, ["y", "", ""],
          {"machine": {"controller": 'echo "A2090 Controller"'}},
          ["This machine is not supported by this installation disc.",
           "Its disk controller is an A2090.",
           "old 2620/2630 ROM"],
          ["How many megabytes for the root file system"], []),
-        ("W6 coverage: the MEASURED bench answers (524288 / `A3000 Internal "
+        ("coverage: the MEASURED bench answers (524288 / `A3000 Internal "
          "SCSI`) are NOT refused -- the threshold is cleared by zero margin",
          bench, ["y", "", "", "1", "", ""],
          {"machine": {}}, ["Software:"],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
-        ("W6 coverage: FAILS OPEN when romsize cannot answer (its own "
+        ("coverage: FAILS OPEN when romsize cannot answer (its own "
          "`Can't get ROM size` error is not a number)",
          bench, ["y", "", "", "1", "", ""],
          {"machine": {"rom": 'echo "Can\'t get ROM size"'}}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
-        ("W6 coverage: FAILS OPEN when dioc says nothing at all (the shape a "
+        ("coverage: FAILS OPEN when dioc says nothing at all (the shape a "
          "node with no disk behind it produced on the bench)",
          bench, ["y", "", "", "1", "", ""],
          {"machine": {"controller": ":"}}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
-        ("W6 coverage: FAILS OPEN when neither probe is installed at all",
+        ("coverage: FAILS OPEN when neither probe is installed at all",
          bench, ["y", "", "", "1", "", ""], {}, [],
          ["This machine is not supported by this installation disc."],
          ["TARGET_SCSI_ID=6"]),
 
-        # ---- UFS: the root filesystem is not asked (P-35) -------------------
+        # ---- UFS: the root filesystem is not asked -------------------
         ("UFS: the root filesystem is NOT asked -- the summary and the beacon "
          "say ufs, and no s5/ufs menu is shown",
          bench, ["y", "79", "18", "1", "n", "n"], {},
@@ -6569,9 +6569,9 @@ def audit_w2_interview():
 
 
 # ---------------------------------------------------------------------------
-# X. W3b -- PACKAGE METADATA: the catalog parser, the media builders, the driver
+# X. -- PACKAGE METADATA: the catalog parser, the media builders, the driver
 # ---------------------------------------------------------------------------
-# W3b's on-box half (the three-tier menu, the custom table, the free-space
+# The on-box half (the three-tier menu, the custom table, the free-space
 # check) is proven by audits U and W, which RUN it. This audit covers the other
 # half -- the host-side machinery that puts the metadata on the medium, and the
 # driver key that consumes it:
@@ -6590,7 +6590,7 @@ def audit_w2_interview():
 #   X3  the set membership has ONE definition. Neither builder may carry a
 #       hardcoded package list any more -- both resolve sets.conf through that
 #       repo's own sets.py. Where the sibling is present this is checked
-#       BEHAVIOURALLY, including the bug W3b exists to fix: `--set full` used to
+#       BEHAVIOURALLY, including the bug this exists to fix: `--set full` used to
 #       select only stock/*.pkg, so a Full install shipped no cdfs and no package
 #       manager.
 #   X4  a set advertised on the medium as ATTESTED must have a real reference
@@ -6598,7 +6598,7 @@ def audit_w2_interview():
 #       set the matrix cannot gate is a promise with nothing behind it.
 #   X5  the driver's INSTALL_ORDER / INSTALL_SET / INSTALL_ATTESTED keys, incl.
 #       the property that makes them safe: an empty INSTALL_ORDER must resolve to
-#       exactly the pre-W3b $INST/order, and core-first must still be checked in
+#       exactly the earlier $INST/order, and core-first must still be checked in
 #       the DRIVER, because INSTALL_ORDER now lets a file the driver did not
 #       generate name the packages.
 #   X6  every tracked profile declares all three keys, with the defaults that
@@ -6650,7 +6650,7 @@ def _attestation_checks(code):
 
 
 def audit_w3b_metadata():
-    head("X. W3b package metadata (catalog parser, media builders, driver keys)")
+    head("X. package metadata (catalog parser, media builders, driver keys)")
 
     # --- X1: the catalog parser conforms ------------------------------------
     sys.path.insert(0, os.path.join(HERE, "lib"))
@@ -6781,13 +6781,13 @@ def audit_w3b_metadata():
                 bad = 1
             elif name == "full" and not ({"cdfs", "apkgeng", "apkg"} <= set(got)):
                 fail("sets.conf `full` omits the base/ packages %s -- this is "
-                     "exactly the W3b bug: a Full install with no CD filesystem "
+                     "exactly the set-selection bug: a Full install with no CD filesystem "
                      "and no package manager"
                      % sorted({"cdfs", "apkgeng", "apkg"} - set(got)))
                 bad = 1
         if not bad:
             ok("sets.conf resolves to the locked memberships %s, and `full` "
-               "carries cdfs/apkgeng/apkg (the --set full bug W3b fixes)"
+               "carries cdfs/apkgeng/apkg (the --set full bug)"
                % ", ".join("%s=%d" % (k, v) for k, v in sorted(W3B_SET_SIZES.items())))
         # ★ THE AUTHORED ORDER IS THE INSTALL ORDER. gen-install-order.py breaks
         # topological ties by input order, so whatever order the builder feeds it
@@ -6859,7 +6859,7 @@ def audit_w3b_metadata():
             ok("every advertised attested set %s has a real reference digest in "
                "the matrix's SET_REFS" % adv)
         # ★ A CPU-LINE VARIANT IS THE SAME MEDIUM SET, MEASURED ON ANOTHER KERNEL
-        # LINE (Wave C3). `minimal-040` installs the eight packages `minimal`
+        # LINE. `minimal-040` installs the eight packages `minimal`
         # installs, off a medium that still calls the set `minimal` in its own
         # /install/sets -- the suffix records WHICH KERNEL LINE laid the tree down,
         # because the 040 line's first attestation has to be measured rather than
@@ -6924,7 +6924,7 @@ def audit_w3b_metadata():
          "the table probe records to a FILE inside the redirect-fed loop and "
          "decides in the parent (a variable set inside `done < FILE` is lost)"),
         ("absence_unknown",
-         "a medium with NO sets table (pre-W3b, or a raw slice) is left alone "
+         "a medium with NO sets table (older, or a raw slice) is left alone "
          "-- absence is UNKNOWN, never `n`"),
         ("absent_row_untouched",
          "a set the table does not mention is left alone too -- the empty probe "
@@ -6943,7 +6943,7 @@ def audit_w3b_metadata():
                        "\t\tINSTALL_ATTESTED=$satt\n"),
          "downgrade_only"),
         ("the probe file replaced by a plain variable inside the loop -- the "
-         "W5.4e subshell trap, which would silently never downgrade anything",
+         "bench-run subshell trap, which would silently never downgrade anything",
          acode.replace('\t\t[ -f "$SETATT" ] || echo "$satt" > "$SETATT"\n',
                        '\t\tSETATTV="$satt"\n'),
          "subshell_safe"),
@@ -6976,7 +6976,7 @@ def audit_w3b_metadata():
     dcode = strip_full_comments(drv)
     for pat, why in (
             (r'ORDER="\$INST/order"',
-             "an unset INSTALL_ORDER resolves to exactly the pre-W3b order file"),
+             "an unset INSTALL_ORDER resolves to exactly the earlier order file"),
             (r'\*/\*\)\s*ORDER="\$INSTALL_ORDER"',
              "a value with a '/' is a PATH (the read-only medium cannot hold a "
              "custom selection)"),
@@ -6992,7 +6992,7 @@ def audit_w3b_metadata():
         else:
             fail("driver: MISSING -- %s (no /%s/)" % (why, pat))
     # the core-first check must be SUBSHELL-SAFE: an in-loop decision would be
-    # made in a subshell and lost (the W5.4e lesson, still the sharpest edge here)
+    # made in a subshell and lost (the bench-run lesson, still the sharpest edge here)
     if re.search(r'\[ -f "\$ORDERFIRST" \] \|\| echo "\$pkg" > "\$ORDERFIRST"', dcode):
         ok("driver: the first-package probe records to a FILE inside the "
            "redirect-fed loop and decides in the parent")
@@ -7000,7 +7000,7 @@ def audit_w3b_metadata():
         fail("driver: the core-first probe must record to a file and decide "
              "after the loop -- a variable set inside `done < FILE` is lost")
 
-    # --- X6: every profile declares the W3b keys ----------------------------
+    # --- X6: every profile declares the set keys ----------------------------
     prof = sorted(f for f in os.listdir(PROFILES_DIR) if f.endswith(".profile"))
     if not prof:
         fail("no profiles found in %s -- X6 would be vacuous" % PROFILES_DIR)
@@ -7009,7 +7009,7 @@ def audit_w3b_metadata():
         miss = [k for k in ("INSTALL_ORDER", "INSTALL_SET", "INSTALL_ATTESTED")
                 if k not in keys]
         if miss:
-            fail("profile %s does not declare %s (the W3b set keys)" % (f, miss))
+            fail("profile %s does not declare %s (the set keys)" % (f, miss))
         elif (keys.get("INSTALL_ORDER") or keys.get("INSTALL_SET")) and keys.get("IMAGE_KIT") != "y":
             fail("profile %s pins INSTALL_ORDER=%r / INSTALL_SET=%r -- the tracked "
                  "profiles must keep the medium's own default, or a re-mastered "
@@ -7060,7 +7060,7 @@ def audit_w3b_metadata():
 
 
 # ---------------------------------------------------------------------------
-# Y. W4 MINIROOT INSTALL SCRIPT (src/miniroot/profile -> /etc/profile)
+# Y. MINIROOT INSTALL SCRIPT (src/miniroot/profile -> /etc/profile)
 # ---------------------------------------------------------------------------
 # The miniroot's /etc/profile is the one file in this tree that runs with NOTHING
 # mounted, and it is the first thing a user of this installer ever sees. Audits
@@ -7076,7 +7076,7 @@ def audit_w3b_metadata():
 #       would hang at a prompt no one can answer.
 #   Y2  HAND-OFF. `exec sh /cdrom/install/bin/setup.sh` and nothing else: the
 #       profile must never exec the DRIVER directly, because it is setup.sh that
-#       redirects the transplant's stdin from /dev/null (METAL-FIX.3).
+#       redirects the transplant's stdin from /dev/null.
 #   Y3  THE KEYMAP MENU is stock's, byte-for-byte, with exactly ONE relabelled
 #       row. Every other row is checked against the stock root floppy's own
 #       bytes; row 11 must be ours and stock's row 11 must be absent.
@@ -7130,10 +7130,10 @@ def _kmap_rows(text):
 
 
 def audit_w4_miniroot_profile():
-    head("Y. W4 miniroot install script (src/miniroot/profile: order, keymap, "
+    head("Y. miniroot install script (src/miniroot/profile: order, keymap, "
          "probe, hand-off)")
     if not os.path.isfile(MINIROOT_PROFILE):
-        fail("src/miniroot/profile is missing -- the W4 miniroot has no install "
+        fail("src/miniroot/profile is missing -- the miniroot has no install "
              "script and the box would boot to a bare shell")
         return
     raw = open(MINIROOT_PROFILE, "rb").read()
@@ -7192,10 +7192,10 @@ def audit_w4_miniroot_profile():
     else:
         fail("src/miniroot/profile must define SETUP=$CDROM/install/bin/setup.sh")
     # install.sh may be reached from the miniroot ONLY on the unattended demo-card
-    # path, and the METAL-FIX.3 invariant is what actually matters: the transplant
+    # path, and the null-stdin invariant is what actually matters: the transplant
     # must never inherit the console stdin. So assert the invariant directly (every
     # install.sh call carries `< /dev/null`) rather than banning the reference --
-    # the interactive path still reaches the driver through setup.sh (audit W2).
+    # the interactive path still reaches the driver through setup.sh (the interview audit).
     inst_calls = [ln for ln in code.splitlines() if "install.sh" in ln]
     if not inst_calls:
         ok("the driver is never exec'd directly (the interview owns the console "
@@ -7204,11 +7204,11 @@ def audit_w4_miniroot_profile():
         bad = [ln for ln in inst_calls if "< /dev/null" not in ln]
         if bad:
             fail("src/miniroot/profile invokes install.sh WITHOUT `< /dev/null` "
-                 "(METAL-FIX.3: the transplant must never inherit the console "
+                 "(the transplant must never inherit the console "
                  "stdin): %s" % "; ".join(x.strip() for x in bad))
         else:
             ok("install.sh is reached only on the unattended path, and every call "
-               "hands it a /dev/null stdin (METAL-FIX.3 held without setup.sh)")
+               "hands it a /dev/null stdin (held without setup.sh)")
 
     # --- Y3: the keymap menu ------------------------------------------------
     rows = _kmap_rows(src)
@@ -7454,9 +7454,9 @@ def audit_w4_miniroot_profile():
 
 
 # ---------------------------------------------------------------------------
-# Z. W5 -- the first-boot configuration dialog
+# Z. the first-boot configuration dialog
 # ---------------------------------------------------------------------------
-# W5: the dialog TRAVELS IN firstboot.sh (the `--dialog` entry point) and the
+# the dialog TRAVELS IN firstboot.sh (the `--dialog` entry point) and the
 # stock sysinit slot gets a three-line STUB that execs it. payload/firstboot/
 # system.setup is that stub -- the master the driver's emitter is drift-locked
 # against -- NOT the dialog. See the here-doc law (Z0) for why.
@@ -7496,7 +7496,7 @@ def _sed_alternations(text):
     GNU extension -- and the failure mode is silent: the expression simply matches
     nothing. MEASURED on the bench 2026-08-12: both of firstboot.sh's
     duplicate-guards were written with `\\([ \\t]\\|$\\)` and had been inert since
-    W6.4c, so the repo-host line was appended a second time on the first re-run.
+    the driver, so the repo-host line was appended a second time on the first re-run.
     A guard that cannot fire is worse than no guard, because it is BELIEVED."""
     return [l.strip() for l in strip_full_comments(text).splitlines()
             if re.search(r'\bsed\b', l) and r'\|' in l]
@@ -7507,7 +7507,7 @@ def _s5_truncation_collisions(text):
     them to 14 characters. `$$` expands to a pid, so it is modelled at its longest
     (5 digits) -- the worst case is the one that has to be safe.
 
-    This is the W5 bench finding, and it cost a file: `firstboot.conf` is exactly
+    This is a bench finding, and it cost a file: `firstboot.conf` is exactly
     14 characters, so `firstboot.conf.new` IS `firstboot.conf`. The consequence
     was not a failed rename but total loss -- `sed ... "$CONF" > "$NEWCONF"`
     truncated its own input before sed read a byte, and `mv` then found source and
@@ -7574,13 +7574,13 @@ def _heredoc_bodies(text):
     REAL FILE on the 880-block install floppy for the whole life of the shell --
     see the here-doc law in audit Z.
 
-    ★ FULL-LINE COMMENTS ARE SKIPPED (W5.5). They were not, and the scanner
+    ★ FULL-LINE COMMENTS ARE SKIPPED. They were not, and the scanner
     therefore counted the PROSE that described a here-doc as a here-doc: the
     comment above emit_updbootpart said "a QUOTED here-doc (<<'UPDBOOTPART_EOF')"
     and the scan started THERE, swallowing 391 bytes of comment and code before
-    the real body. That is where W5's "15,818 B" figure came from -- the real
+    the real body. That is where an early "15,818 B" figure came from -- the real
     body was 15,427, as `ls -l /tmp/sh<pid>` on the box says. A budget check that
-    measures the wrong thing is worse than none, and after W5.5 the failure mode
+    measures the wrong thing is worse than none, and with zero here-docs the failure mode
     inverts: a comment MENTIONING a here-doc would have no closing delimiter and
     the scan would swallow the rest of the file. Only whole-line comments are
     dropped, so a real opener with a trailing comment is still caught."""
@@ -7602,7 +7602,7 @@ def _heredoc_bodies(text):
 
 
 def audit_w5_dialog():
-    head("Z. W5 first-boot configuration dialog (payload/firstboot/system.setup): "
+    head("Z. first-boot configuration dialog (payload/firstboot/system.setup): "
          "drift lock, resilience contract, stock wording, the two tiers")
     if not os.path.isfile(DIALOG_STUB):
         fail("payload/firstboot/system.setup is missing -- the sysinit slot has no "
@@ -7616,23 +7616,23 @@ def audit_w5_dialog():
     src = _dialog_section(fb_src)
     code = strip_full_comments(src)
     if not src:
-        fail("firstboot.sh has no `--dialog` section -- the W5 dialog is not there")
+        fail("firstboot.sh has no `--dialog` section -- the dialog is not there")
         return
 
-    # --- Z0: THE HERE-DOC LAW (bench-measured 2026-08-12; TIGHTENED TO ZERO in W5.5)
+    # --- Z0: THE HERE-DOC LAW (bench-measured 2026-08-12; TIGHTENED TO ZERO later)
     # The 1991 SVR4 sh MATERIALIZES EVERY HERE-DOC BODY INTO A FILE UNDER /tmp WHEN
     # IT PARSES THE SCRIPT -- proven on the box: a here-doc inside a function that
     # is never called still leaves /tmp/sh<pid> behind for the life of the shell.
     # On the miniroot /tmp IS the 880-block install floppy, which has 46 free
     # blocks (superblock tfree, 1 KB logical blocks), and the static pkgadd needs
-    # some of them for its packaging directory. W5's first attempt put the ~29 KB
+    # some of them for its packaging directory. The first attempt put the ~29 KB
     # dialog in a second here-doc in the driver; the shell ran the floppy out of
     # space before the driver printed its first line, and BOTH the interactive and
     # the unattended cell died with `Floppy fd0: no space` -> `pkgadd: ERROR:
     # unable to make packaging directory`.
     #
-    # W5 could only afford to cap this at "one here-doc, <= 16 KB", because the
-    # driver still carried updbootpart's body. W5.5 moved that body onto the
+    # The dialog could only afford to cap this at "one here-doc, <= 16 KB", because the
+    # driver still carried updbootpart's body. A later step moved that body onto the
     # medium, so the honest budget is now ZERO -- and zero is also the discipline
     # every other on-target file in this driver already follows: emit_firstboot_
     # hook, emit_zen_hook and emit_system_setup are plain `echo` lines, and
@@ -7643,7 +7643,7 @@ def audit_w5_dialog():
     # WHAT IT COST, measured (run w55-m1, 2026-08-12): with the driver parsed, the
     # miniroot's /tmp held `sh250`, 15,427 bytes -- 16 of the floppy's 46 free
     # 1 KB blocks (34 x 512-byte units as `ls -l` totals them), on every install
-    # since W6-I.
+    # since the tool arrived.
     FLOPPY_HEREDOC_BUDGET = 0
     for label, path in (("install.sh", DRIVER), ("setup.sh", SETUP),
                         ("miniroot profile", MINIROOT_PROFILE)):
@@ -7652,7 +7652,7 @@ def audit_w5_dialog():
         if total > FLOPPY_HEREDOC_BUDGET:
             fail("%s carries %d here-doc(s), %d bytes = %d of the install floppy's "
                  "46 free 1 KB blocks -- each one is a REAL FILE on that floppy from "
-                 "the moment the shell PARSES this script, and since W5.5 the budget "
+                 "the moment the shell PARSES this script, and now the budget "
                  "is ZERO: write the file with `echo` lines, or stage it on the medium "
                  "and cp it (see /install/updbootpart)"
                  % (label, len(bodies), total, (total + 1023) // 1024))
@@ -7660,7 +7660,7 @@ def audit_w5_dialog():
             ok("%s: no here-doc at all -- nothing of it is materialized on the "
                "880-block install floppy at PARSE time" % label)
     # Non-vacuity: the scanner must still SEE a here-doc when there is one, and must
-    # NOT see one in a comment that merely mentions the syntax (the W5 mismeasure).
+    # NOT see one in a comment that merely mentions the syntax (the early mismeasure).
     if len(_heredoc_bodies("cat > /t <<'EOF'\nbody\nEOF\n")) == 1:
         ok("here-doc law: the scanner does detect a real here-doc (non-vacuity)")
     else:
@@ -7668,7 +7668,7 @@ def audit_w5_dialog():
              "budget check above is vacuous")
     if _heredoc_bodies("# the body is a QUOTED here-doc (<<'EOF'), emitted literally\nx=1\n") == []:
         ok("here-doc law: a COMMENT mentioning <<'EOF' is not counted as one "
-           "(what inflated W5's 15,818-byte figure)")
+           "(what inflated the early 15,818-byte figure)")
     else:
         fail("here-doc law: a comment mentioning a here-doc opener is still counted")
     if "SYSTEM_SETUP_EOF" in driver_src:
@@ -7901,7 +7901,7 @@ def audit_w5_dialog():
     else:
         fail("setup.sh does not write FIRSTBOOT_DIALOG=y into the answers profile")
 
-    # --- Z7b: the repository-address question must have an EXIT (W6) ---------
+    # --- Z7b: the repository-address question must have an EXIT --------------
     # The distro-neutral public flavor ships FB_REPO_HOST with an EMPTY
     # FB_REPO_IP -- we know where the packages live, we cannot know that name's
     # address on somebody else's LAN. The address loop re-asks until valid_ip
@@ -7982,7 +7982,7 @@ def audit_w5_dialog():
     _audit_public_flavor(profiles)
 
 
-    # --- Z8b: the two ON-BOX PORTABILITY RULES this wave measured ------------
+    # --- Z8b: the two ON-BOX PORTABILITY RULES measured here -----------------
     # Both were found by RUNNING the dialog and the apply half on the bench, and
     # neither is visible to `sh -n` or to any allowlist: they are properties of
     # SVR4 sed and of the s5 filesystem, not of the shell.
@@ -8068,7 +8068,7 @@ def audit_w5_dialog():
     else:
         ok("rc.inet default-route writer follows the ed half-patch discipline: %s"
            % "; ".join(d for _, d in checks))
-# --- Z7c: THE DISTRO-NEUTRAL PUBLIC FLAVOR (P8.3, W6) -----------------------
+# --- Z7c: THE DISTRO-NEUTRAL PUBLIC FLAVOR ----------------------------------
 # A public disc's guarantee is negative -- it is about what is NOT on it -- and a
 # negative guarantee is exactly the kind that rots silently. Nothing goes wrong
 # when somebody adds `FB_IP=192.0.2.38` back to the public profile: every gate
@@ -8096,7 +8096,7 @@ PUBLIC_FORBIDDEN_NODENAMES = ("uaeamix", "amixmetal", "z3660amix")
 
 
 def _public_flavor_problems(name, d):
-    """The P8.3 rules, as a pure function so the negative fixtures can drive it."""
+    """The public-flavor rules, as a pure function so the negative fixtures can drive it."""
     probs = []
     for key, what in PUBLIC_MUST_BE_EMPTY:
         v = d.get(key)
@@ -8138,7 +8138,7 @@ def _public_flavor_problems(name, d):
 def _audit_public_flavor(profiles):
     pub = [(pf, d) for pf, d in profiles if d.get("FIRSTBOOT_DIALOG") == "y"]
     if not pub:
-        fail("NO distro-neutral public profile exists (P8.3): no tracked profile "
+        fail("NO distro-neutral public profile exists: no tracked profile "
              "arms the first-boot dialog, so every disc this tree can master "
              "bakes somebody's LAN")
         return
@@ -8153,7 +8153,7 @@ def _audit_public_flavor(profiles):
            "nodename; root-telnet enabled; repo URL names the repo host"
            % (", ".join(pf for pf, _ in pub),
               "/".join(k for k, _ in PUBLIC_MUST_BE_EMPTY)))
-    # P-15 I1: a public CD/ISO medium carries ONLY its own profile (build-install-iso
+    # a public CD/ISO medium carries ONLY its own profile (build-install-iso
     # MEDIUM_PROFILES=requested) -- the LAN profiles beside it would ship the bench's
     # addresses. RAW (self-booting hdf) media keep only the target profile anyway.
     leak = [pf for pf, d in pub
@@ -8295,7 +8295,7 @@ def audit_ufs_target():
 
     for key, msg in (
         ("default_ufs",
-         "TARGET_ROOT_FSTYPE defaults to ufs -- s5 is not a target (P-35)"),
+         "TARGET_ROOT_FSTYPE defaults to ufs -- s5 is not a target"),
         ("validated",
          "TARGET_ROOT_FSTYPE=s5 is refused with its reason and anything else but "
          "ufs fails CLOSED -- never a silent fallback"),
@@ -8420,7 +8420,7 @@ def audit_ufs_target():
             ok("%s declares TARGET_ROOT_FSTYPE=%s" % (pf, v))
         else:
             fail("%s declares TARGET_ROOT_FSTYPE=%r -- must be ufs (s5 is not a "
-                 "target, P-35; an absent key falls back to a driver default, "
+                 "target; an absent key falls back to a driver default, "
                  "which is exactly the drift the key exists to end)" % (pf, v))
         # INSTALL_CPU is OPTIONAL (absent => 030, the compatibility floor). When
         # present it must be legal, and the 040/060 line is UFS-only -- s5 is
@@ -8526,7 +8526,7 @@ def _fp_checks(code):
 
 
 def audit_installed_fp_patch():
-    head("AB. Installed-tree ufs FP patch (BLIZZARD F2-M1): install.sh §5b + medium "
+    head("AB. Installed-tree ufs FP patch (the Blizzard FP fix): install.sh §5b + medium "
          "staging + the 040/060 profile default")
     code = strip_full_comments(open(DRIVER, encoding="utf-8").read())
     got = _fp_checks(code)
@@ -8703,7 +8703,7 @@ def audit_x11kit_k1():
         else:
             ok("install.sh X11KIT validation EXECUTED: ''/none/rtg accepted, anything else refused")
 
-    # AX2: the laydown, as the Z3660 station's MG5 install.sh did it.
+    # AX2: the laydown, as the Z3660 bench's install.sh did it.
     want = [
         (r'if\s+\[\s+"\$X11KIT"\s+=\s+rtg\s+\];\s*then', "gate on X11KIT=rtg"),
         (r'run\s+cp\s+"\$INST/x11kit/Xzz9000"\s+"\$TARGET/opt/amix/bin/Xzz9000"', "Xzz9000"),
@@ -8729,7 +8729,7 @@ def audit_x11kit_k1():
     if miss:
         fail("install.sh RTG kit laydown incomplete/wrong: %s" % miss)
     else:
-        ok("install.sh lays down the RTG kit as MG5 did (4x755 in /opt/amix/bin incl. rtg-kbdback, "
+        ok("install.sh lays down the RTG kit as the Z3660 bench did (4x755 in /opt/amix/bin incl. rtg-kbdback, "
            "each copy sum -r-verified against the medium, /.xinitrc-rtg 644, "
            "/dev/zz9000 c 49 0, /usr/X/bin on PATH, /etc/rtg-monswitch never written)")
 
@@ -8773,7 +8773,7 @@ def audit_x11kit_k1():
     for pf in sorted(os.listdir(PROFILES_DIR)):
         if pf.endswith(".profile") and _parse_profile(os.path.join(PROFILES_DIR, pf)).get("X11KIT", "") not in ("", "none"):
             carriers.append(pf)
-    # P-15 I2: the public K1 twins carry the same kit (they are the K1 media, made public).
+    # the public K1 twins carry the same kit (they are the K1 media, made public).
     k1pub = {"public-a4000-z3660-060-k1.profile": "metal-a4000-z3660-060-k1.profile",
              "public-a4000-z3660-060-k1-unattended.profile": "metal-a4000-z3660-060-k1-unattended.profile"}
     # MD-1 (bench): the K1 unattended install retargeted at the A4092 Zulu (card 1).
@@ -8783,7 +8783,7 @@ def audit_x11kit_k1():
     k1cd = {"metal-a4000-z3660-060-a4092cd.profile": "metal-a4000-z3660-060-k1.profile"}
     # CD-2 (bench): CD-1 with the target on the A4092 Zulu (card 1 id 1).
     k1cd2 = {"metal-a4000-z3660-060-a4092cd2.profile": "metal-a4000-z3660-060-a4092cd.profile"}
-    # S3-45 (stage 3's exit row): the 1.1 module-kernel bench profiles with the RTG desktop,
+    # The RTG medium (exit row): the 1.1 module-kernel bench profiles with the RTG desktop,
     # each its l11 base plus z3660rtg and the kit, nothing else (drift-locked here).
     s345 = {"bench-a4000-z3660-060-cd-l11-rtg.profile": "bench-a4000-z3660-060-cd-l11.profile",
             "bench-a3000-a4091-l11-rtg.profile": "bench-a3000-a4091-l11.profile"}
@@ -8798,13 +8798,13 @@ def audit_x11kit_k1():
         else:
             ok("%s = %s plus z3660rtg (%s) and X11KIT=rtg, nothing else" % (rp, bp, " ".join(mods)))
     carriers = [c for c in carriers if c not in s345]
-    # r6 (D-2): a `<base>-r6[-tag].profile` re-cut carries the kit exactly when its r5 base does.
+    # r6: a `<base>-r6[-tag].profile` re-cut carries the kit exactly when its r5 base does.
     _base = sorted(list(k1) + list(k1pub) + list(k1md1) + list(k1cd) + list(k1cd2))
     r6c = [c for c in carriers if "-r6" in c]
-    # The PUBLIC CD flavours (owner 2026-10-07) carry the kit exactly when their metal r6 twin does.
+    # The PUBLIC CD flavours (2026-10-07) carry the kit exactly when their metal r6 twin does.
     pubcd = {"public-a4000-z3660-060-a4092cd-r6.profile": "metal-a4000-z3660-060-a4092cd-r6.profile",
              "public-a4000-z3660-060-a4092cd2-r6.profile": "metal-a4000-z3660-060-a4092cd2-r6.profile"}
-    # The A3000 + 68060 disk image (owner 2026-10-26): an r7 profile of its own, no r5 base;
+    # The A3000 + 68060 disk image (2026-10-26): an r7 profile of its own, no r5 base;
     # the RTG kit is for its ZZ9000 (Zorro II), so it carries X11KIT by itself.
     pubimg = {"public-a3000-060-wd-r6.profile"}
     r6bad = [c for c in r6c if not (c in pubcd and pubcd[c] in r6c) and c not in pubimg
@@ -8825,12 +8825,12 @@ def audit_x11kit_k1():
                "TARGET_SCSI_ID": "0", "TARGET_VFSTAB_SCSI_ID": "6", "ROOTDEV": "0x00480016",
                "KERNEL_BREL_SUMR": "55291", "MINIROOT_KERNEL": "KD060-Z-r5-c0-u6",
                "BOOTSLICE_SOURCE_HDF": "work/bootslice-donor/k1-KD060-Z-r5-c0-u6.hdf",
-               # O5 r5 (KT-46): the re-pinned KD060-Z carries the sddevsize fix
+               # O5 r5: the re-pinned KD060-Z carries the sddevsize fix
                "KERNEL_SDDEVSIZE": "fixed",
                "X11KIT": "rtg", "FB_TZ": "EET", "FB_TZNUM": "27",
                # REL-2: a K1 installer beats a stock pri-0 AmigaOS DH0, loses to the installed disk (2)
                "SRC_BOOT_BOOTPRI": "1",
-               # Q-4.15: the bench K1 media keep the fixed unit-6 root
+               # the bench K1 media keep the fixed unit-6 root
                "RUN_UNIT": "6"}
     for twin, base in sorted(k1.items()):
         tp, bp = os.path.join(PROFILES_DIR, twin), os.path.join(PROFILES_DIR, base)
@@ -8847,14 +8847,14 @@ def audit_x11kit_k1():
             ok("%s = %s + exactly the card-0 K1 keys (source 6 / target 0 / rootdev 0x00480016 / "
                "KD060-Z r5 c0-u6 sum -r 55291, sddevsize fixed) + X11KIT=rtg + FB_TZ=EET (menu index 27)" % (twin, base))
 
-    # AX5 (P-15 I2): each public K1 twin is its bench K1 twin with ONLY the public FB_*
+    # AX5: each public K1 twin is its bench K1 twin with ONLY the public FB_*
     # seam changed -- the install rig (kernel, chain, ids, kit, MONSW) is identical, so
     # the bench proof of the K1 media carries over and only the seam needs its own cells.
     pub_seam = {"FB_NODENAME": "amix", "FB_DOMAIN": "", "FB_TZNUM": "", "FB_TZ": "",
                 "FB_IP": "", "FB_NETMASK": "", "FB_GATEWAY": "", "FB_ZEN_CARDS": "",
                 "FB_REPO_IP": "", "FIRSTBOOT_DIALOG": "y", "TARGET_DISK_MB": "",
                 "TARGET_ERASE_OK": None,
-                # Q-4.15 pick-at-install: the public media root the unit they install to
+                # pick-at-install: the public media root the unit they install to
                 "RUN_UNIT": "install", "INSTALLABLE_IDS": "0 1 2 3 4 5",
                 "UNIT_TABLE": "profiles/units/KD060-Z-r5.units", "TARGET_VFSTAB_SCSI_ID": ""}
     for pub, bench in sorted(k1pub.items()):
@@ -8880,7 +8880,7 @@ def audit_x11kit_k1():
     md1_keys = {"ROOTDEV": "0x0048001E", "TARGET_VFSTAB_SCSI_ID": "e", "KERNEL_BREL_SUMR": "61397",
                 "BOOTSLICE_SOURCE_HDF": "work/bootslice-donor/md1-KD060-ZA-dl4-c1-u6.hdf",
                 "KERNEL_SDDEVSIZE": "fixed", "TARGET_ERASE_OK": None, "TARGET_DISK_MB": "512",
-                # the MD-1 image (2026-10-03, fa74c511) was built on the KT-12g SOURCE kernel; the
+                # the MD-1 image (2026-10-03, fa74c511) was built on the KT12g SOURCE kernel; the
                 # K1 twin moved to O5 r5 after it, MD-1 stays bench-only and is not re-cut
                 "SRC_MINIROOT_KERNEL": "KD060-Z-KT12g-c0-u6", "SRC_KERNEL_BREL_SUMR": "08512",
                 "MINIROOT_KERNEL": "KD060-Z-KT12g-c0-u6"}
@@ -9117,11 +9117,11 @@ def audit_cd2_card1_target():
     ic = '{ [ -n "$CD_SPEC_EXACT" ] || [ -n "$IDE_CARD" ]; } && echo "CD_SPEC=$CD_SPEC"' in setup
     (ok if ia and ic else fail)("setup.sh: the answers carry IDE_CARD and ROOTDEV when the IDE card came from the kernel, "
                                 "and CD_SPEC when the miniroot recorded it or the IDE card gave it")
-    # D-2 (r6): every installable id is added to the scan (then filtered), so the
+    # r6: every installable id is added to the scan (then filtered), so the
     # picker can offer unit 4 and card-1 ids the miniroot ships no node for.
     m = re.search(r'(?ms)^for _id in \$INSTALLABLE_IDS\ndo\n\tcase " \$SCAN_IDS ".*?^SCAN_IDS=`scan_safe_ids \$SCAN_IDS`$', setup)
     if not m:
-        fail("setup.sh: the D-2 installable-id union block is missing")
+        fail("setup.sh: the installable-id union block is missing")
     else:
         for env, want, what in (
                 ('SCAN_IDS="0 1 2 3 5 6"; INSTALLABLE_IDS="0 1 2 3 4 5"; CD_SPEC=', "0 1 2 3 5 6 4",
@@ -9134,9 +9134,9 @@ def audit_cd2_card1_target():
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
             got = r.stdout.decode().strip()
             if got == want:
-                ok("D-2 scan union: %s -> %s" % (what, got))
+                ok("scan union: %s -> %s" % (what, got))
             else:
-                fail("D-2 scan union: %s -- got %r, want %r" % (what, got, want))
+                fail("scan union: %s -- got %r, want %r" % (what, got, want))
     # install.sh refuses the CD's unit and the host ids as a target
     seg = drv[drv.index('[ -n "`hexval "$ID"`" ]'):drv.index('if [ ! -b "/dev/dsk/c${ID}d0s0" ]')]
     pre = "\n".join(fn(drv, f) for f in ("hexval", "hexname", "cd_unit_id")) + '\ndie() { echo "DIE $*"; exit 1; }\n'
@@ -9210,7 +9210,7 @@ def audit_apkg_conf_order():
 
 
 def audit_rth1_byte_writer():
-    head("RTH1W. D-2 byte writer: install.sh's oct_file/put_bytes/byte_is EXECUTED (stamp u6->u2, an RTO1 record)")
+    head("RTH1W. byte writer: install.sh's oct_file/put_bytes/byte_is EXECUTED (stamp u6->u2, an RTO1 record)")
     drv = read_sh(DRIVER)
 
     def fn(name):
@@ -9383,7 +9383,7 @@ def audit_dmamask_stamp():
 
 
 def audit_fd060_omit():
-    head("AT. P-15 I5: the 040/060 root floppy's omit list (miniroot/fd060.omit)")
+    head("AT. the 040/060 root floppy's omit list (miniroot/fd060.omit)")
     path = os.path.join(REPO, "miniroot", "fd060.omit")
     if not os.path.isfile(path):
         fail("miniroot/fd060.omit missing")
@@ -9427,13 +9427,13 @@ def audit_fd060_omit():
     setup = strip_full_comments(open(SETUP, encoding="latin-1").read())
     if re.search(r'^\s*ANS_FSYS=ufs\b', setup, re.M) and "ANS_FSYS=s5" not in setup \
             and "What file system type" not in setup:
-        ok("fd060.omit: the interview composes ufs and never asks (P-35) -- the s5 tools are unreachable")
+        ok("fd060.omit: the interview composes ufs and never asks -- the s5 tools are unreachable")
     else:
         fail("fd060.omit: setup.sh can compose a non-ufs root again -- the s5 tools would be reachable")
 
 
 def audit_firstboot_perms():
-    head("AU. the first-boot state dir is root's alone (P-15, 2026-10-03)")
+    head("AU. the first-boot state dir is root's alone (2026-10-03)")
     drv = strip_full_comments(open(DRIVER, encoding="latin-1").read())
     fb = strip_full_comments(open(os.path.join(REPO, "payload", "firstboot", "firstboot.sh"),
                                   encoding="latin-1").read())
@@ -9729,7 +9729,7 @@ def audit_ide_kit():
 
 
 def audit_pick_at_install():
-    """Q-4.15 (owner, 2026-10-03): the root unit is chosen AT INSTALL on the public K1 media.
+    """2026-10-03: the root unit is chosen AT INSTALL on the public K1 media.
     (1) install.sh's unit resolver, EXECUTED under dash on a fake medium: the chosen id's
     chain / manifest (.manifest or the s5 .man) / boot2 / rootdev / sum -r / vfstab unit and
     /stand/unix; an id without a row, and an unknown RUN_UNIT, die; RUN_UNIT=6 keeps the single
@@ -9755,7 +9755,7 @@ def audit_pick_at_install():
             "".join("%d 0x0048001%d %05d\n" % (n, n, 11111 * (n + 1) % 65536) for n in range(6)))
         open(os.path.join(inst, "boot", "metal", "u3", "bootslice.man"), "w").write("x\n")
         open(os.path.join(inst, "boot", "metal", "u2", "bootslice.manifest"), "w").write("x\n")
-        # D-2 (r6): the stamp table of RUN_UNIT=stamp
+        # r6: the stamp table of RUN_UNIT=stamp
         os.makedirs(os.path.join(inst, "boot", "metal", "stamp"), exist_ok=True)
         open(os.path.join(inst, "boot", "metal", "stamp", "units"), "w").write(
             "".join("%d 0x0048001%d %05d 1979586\n" % (n, n, 22222 * (n + 1) % 65536) for n in range(6)))
@@ -9786,10 +9786,10 @@ def audit_pick_at_install():
                                   "0x00480016|08512|6|")),
         ]
         cases += [
-            # D-2 (r6): hint -- the family chain to any id unchanged; vfstab follows the id
+            # r6: hint -- the family chain to any id unchanged; vfstab follows the id
             (("hint", 3, "060"), (0, "R|boot/metal/bootslice.img|boot/metal/bootslice.man|boot/metal/boot2.boot|"
                                      "0x00480016|08512|3|boot/metal/unix")),
-            # D-2 (r6): stamp -- the family chain + the unit's patch; its own manifest, rootdev,
+            # r6: stamp -- the family chain + the unit's patch; its own manifest, rootdev,
             # sum -r; /stand/unix comes out of the stamped slice (no file named)
             (("stamp", 2, "060"), (0, "R|boot/metal/bootslice.img|boot/metal/stamp/u2.manifest|boot/metal/boot2.boot|"
                                       "0x00480012|01130|2|")),
@@ -9880,7 +9880,7 @@ def audit_unattended():
         ("double_gate", "double-gated: the /install/UNATTENDED marker AND an on-slice "
                         "INSTALL_UNATTENDED=yes are both required"),
         ("stdin_and_halt", "the driver gets a /dev/null stdin and a clean `/etc/uadmin "
-                           "2 0` ends the run (METAL-FIX.3 held; known end state)"),
+                           "2 0` ends the run (null stdin held; known end state)"),
     ):
         if got[key]:
             ok("AC: %s" % msg)
@@ -9947,14 +9947,14 @@ def audit_unattended():
                      % (pn, key, v, card, v))
 
 
-# P-36: the upgrade install's names; none may come back into the driver or l11.sh
+# the upgrade install's names; none may come back into the driver or l11.sh
 _P36_GONE = ("l11_upgrade_capture", "l11_upgrade_restore", "l11_upgrade_apply", "l11_keep_layout",
              "S17upgrade", "SWAP_HOLD", "UPGRADE_KIND", "L11_KEEP", "DATA_KEEP", "FB_UPGRADED",
              "/var/adm/upgrade", "UPGRADE_DROP_HOME")
 
 
 def _p36_problems(install_src, l11_src):
-    """What keeps install.sh + l11.sh from being clean-install only (P-36)."""
+    """What keeps install.sh + l11.sh from being clean-install only."""
     probs = []
     if not re.search(r'\ncase "\$\{INSTALL_UPGRADE:-no\}" in\n\tno\)\t: ;;\n\t\*\)\tdie "[^"\n]*'
                      r'1\.1 requires a fresh install', install_src):
@@ -11063,7 +11063,7 @@ def audit_ufs_rootcap():
 
 
 def audit_l11():
-    """L11. The 1.1 disk layout (amix-dlm spec 40, stage 2 S2-30/S2-31), EXECUTED
+    """L11. The 1.1 disk layout (amix-dlm spec 40), EXECUTED
     under dash from the scripts' own text: (1) plan_partitions with INSTALL_LAYOUT=1.1
     lays root, swap, the 64 MiB store and the data slice end to end, and 1.0 stays the
     10 MiB boot slice; (2) the repair path's kbootset menu drives status, rollback and
@@ -11180,7 +11180,7 @@ def audit_l11():
         else:
             fail("apkg: %s -- got %r" % (what, out.strip()))
 
-    # (5) P-36: 1.1 supports clean installs only -- install.sh refuses INSTALL_UPGRADE,
+    # (5) 1.1 supports clean installs only -- install.sh refuses INSTALL_UPGRADE,
     # and neither script carries the upgrade path; the audit is shown to catch a fixture
     # with the refusal dropped and the capture brought back
     probs = _p36_problems(src, l11)
@@ -11191,7 +11191,7 @@ def audit_l11():
                               '\t\tRDB_CLEAR="$OFFSET_BLOCKS"\n\t\t[ "${INSTALL_UPGRADE:-no}" = yes ] && l11_upgrade_capture\n')
     fp = _p36_problems(fixture, l11)
     (ok if fixture != src and len(fp) == 2 else fail)(
-        "the P-36 audit catches the negative fixture (refusal dropped, capture back): %s" % ("; ".join(fp) or "nothing"))
+        "the clean-install audit catches the negative fixture (refusal dropped, capture back): %s" % ("; ".join(fp) or "nothing"))
     fbl = [w for w in _P36_GONE if w in strip_full_comments(open(FIRSTBOOT, encoding="utf-8").read())]
     (ok if not fbl else fail)("firstboot.sh: no upgrade branch (FB_UPGRADED)%s"
                               % ((" -- still: " + " ".join(fbl)) if fbl else ""))
@@ -11496,7 +11496,7 @@ def audit_l11():
             (ok if okc else fail)("l11_inittab, %s: %s" % (what, "passes" if want == "MSG inittab" else
                                   "stops naming amix-base's default" if okc else repr(r.stdout.strip())))
 
-    # (10) S3-31 l11_keys' module half: a module kernel brings modtools; KERNEL_MODPKGS
+    # (10) l11_keys' module half: a module kernel brings modtools; KERNEL_MODPKGS
     # must be role=module rows of the kernel's line named <module>-k<line>, and only with
     # a module kernel
     kc = os.path.join(d, "kc")
@@ -11551,7 +11551,7 @@ def audit_l11():
         (ok if want in got else fail)("l11_keys, TARGET_HBA=%s: %s" % (hba, got if want not in got else
                                       ("refused" if "DIE" in got else want)))
 
-    # (11) S3-31 l11_kpkg_record for a module: name, role and the file lines of its
+    # (11) l11_kpkg_record for a module: name, role and the file lines of its
     # object and modreg.d file, both on the target
     rt = os.path.join(d, "rec")
     for sub in ("var/apkg/kpkg", "etc/conf/mod.d", "etc/conf/modreg.d"):
@@ -11574,7 +11574,7 @@ def audit_l11():
         (ok if want in got else fail)("l11_kpkg_record, %s: %s" % (what, "accepted" if want == "RECORD-OK" and
                                       want in got else "refused" if want in got else got))
 
-    # (12) S3-31 l11_namelist (C2-4 v9 §12): /stand/unix (core's link to 2.1_unix) and /unix
+    # (12) l11_namelist (C2-4 v9 §12): /stand/unix (core's link to 2.1_unix) and /unix
     # go, 2.1_unix stays and is checked, S01kbnamelist is the one call
     nt = os.path.join(d, "nl")
     for case in ("core", "changed"):
@@ -11614,7 +11614,7 @@ def audit_l11():
                 "l11_namelist: a 2.1_unix that is not core's stops the install" if "is not core's" in out
                 else "l11_namelist with a changed 2.1_unix: %r" % out.strip())
 
-    # (13) S3-31 S99zen beside another interface: install.sh lays it for a z3660eth module
+    # (13) S99zen beside another interface: install.sh lays it for a z3660eth module
     # profile at FB_ZEN_IP (never FB_IP), through emit_zen_hook; a zen0 with an address
     # and no gateway gets a guarded route line
     code = strip_full_comments(src)
@@ -11632,7 +11632,7 @@ def audit_l11():
     else:
         fail("emit_zen_hook with an address and no gateway: rc %d" % rc)
 
-    # (14) S3-31 first boot on a 1.1 disk: /stand/unix out of core (APKG's tools from /tmp,
+    # (14) first boot on a 1.1 disk: /stand/unix out of core (APKG's tools from /tmp,
     # 2.1_unix its own file), /etc/inittab back to root sys 0664
     fb = read_sh(FIRSTBOOT)
     for what, good in (
@@ -11649,7 +11649,7 @@ def audit_l11():
                 r'FB_INITTAB_SYS" = y \].*?chgrp sys /etc/inittab.*?chmod 664 /etc/inittab.*?ls -l /etc/inittab', fb, re.S))):
         (ok if good else fail)(what)
 
-    # (19) P-36: 1.1 supports clean installs only -- a disk that holds Amix is asked the
+    # (19) 1.1 supports clean installs only -- a disk that holds Amix is asked the
     # erase question (choose_disk's stock state 5) and is never offered an upgrade
     setup_src = open(SETUP).read()
     m = re.search(r'\n\tif rdb_present "\$SCSI"; then\n.*?\n\tfi\n}', setup_src, re.S)
@@ -11765,7 +11765,7 @@ def audit_l11():
             last = out.strip().splitlines()[-1] if out.strip() else ""
             (ok if last == "%s FB=%s" % (want, want[3:]) else fail)("firstboot's root name from devnm, %s: %s" % (what, last))
 
-    # (17) S5-44 R2 (C2-4 v12 §14): firstboot's step 4d is `kbootset nodes`, ungated by
+    # (17) (C2-4 v12 §14): firstboot's step 4d is `kbootset nodes`, ungated by
     # FB_SDCARDS (kbootset reads the sidecar itself); its line logged, a failure a WARNING
     m = re.search(r'\n# --- 4d\..*?\n(if \[ -x /sbin/kbootset \]; then\n.*?\nfi\n)', fb, re.S)
     if not m:

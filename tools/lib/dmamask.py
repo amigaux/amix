@@ -6,7 +6,7 @@
 # beyond de_Mask; boot2 reads straight into any destination the Mask allows. So
 # the Mask must say what the boot controller's DMA can really reach. The rule
 # (2026-10-28, matching the kernel's DMA reach contract,
-# amix-dlm core/plat/k30/line.c DMA_REACH 0x08000000 and C4-5; C4-2 / OQ-80.5:
+# amix-dlm core/plat/k30/line.c DMA_REACH 0x08000000 and C4-5; C4-2 / an open question:
 # Zorro III DMA cannot reach the Z3660's DDR at $08000000+):
 #
 #   Zorro III DMA (A4091, A4092)            0x07FFFFFE  chip + motherboard fast

@@ -35,7 +35,7 @@ refuses a disc that carries one. The one exception is the bootable CD below.
 ## The bootable install CD — `--cd-boot TREE`
 
 The disc that boots by itself from an A4091/A4092 (amix-dlm `docs/spec/10-boot-loader.md`
-§4.4, D-3 §10): the ROM mounts it with its CD filesystem, Kickstart runs
+§4.4): the ROM mounts it with its CD filesystem, Kickstart runs
 `S/Startup-Sequence`, which runs `SYS:BOOT/amix-cdboot`; that loads the kernel and the
 RAM-disk root of `/BOOT/K30` or `/BOOT/K46` and hands off like boot2. The disc stays an
 ordinary data CD with the packages and `/install/`.
@@ -58,7 +58,7 @@ names compared case-insensitively (`backends/iso9660/iso9660.c`). The two long n
 here already carries; their plain ISO names are `AMIX_CDBOOT` and `STARTUP_SEQUENCE`. The
 line directories are 8.3 and read the same either way.
 
-Execute bit. ODFileSystem turns a Rock Ridge mode without the owner execute bit into
+Execute bit. ODFileSystem turns a Rock Ridge mode with no owner execute bit into
 FIBF_EXECUTE (`platform/amiga/handler_main.c:1488-1495`), and AmigaDOS then will not run
 the loader. `mkstore -x` writes it 0664 and `-rational-rock` would make that 0444, so the
 builder stages it 0755 (mode 0555 on the disc).
@@ -69,8 +69,8 @@ disc that carries both lines, put a 060 profile first, or the LC060's patched
 
 The ISO is a build artifact and is **never committed**: `work/` (the default
 output dir) is gitignored, and build-iso.sh's own Gate 1 refuses to write the
-image to any path git would track. Publishing a built disc is a per-artefact
-owner decision, recorded on the disc (see Gate 17). (A blanket `*.iso` ignore was deliberately NOT added:
+image to any path git would track. Publishing a built disc is decided per
+artefact, recorded on the disc (see Gate 17). (A blanket `*.iso` ignore was deliberately NOT added:
 it would make every `.iso` path gitignored and thereby defeat that Gate 1
 refusal — the disc must be corralled to a gitignored location, not scattered.)
 
@@ -112,8 +112,8 @@ retired stamp is refused with a "rebuild" message.
     tools/licensing-gate.sh --self-test    # 4 mis-stamped discs refused, 3 controls pass
 
 build-iso.sh writes the stamps at BUILD time. By default a disc is stamped
-`publication: unpublished`: **publishing any medium is a per-artefact owner
-decision**, and the tools never publish or copy anything. When the owner decides to
+`publication: unpublished`: **publishing any medium is decided per
+artefact**, and the tools never publish or copy anything. To
 publish a specific medium, rebuild it with `--published YYYY-MM-DD` so the
 disc records that decision; the date must be well-formed. `--redistributable` is
 retired (it now exits 2 pointing at the new flag). Gate 1 — never write the image to
@@ -134,8 +134,8 @@ confirm it matches the shipped catalog byte-for-byte:
 ## E1 — CD read throughput (EMULATED)
 
 Measured 2026-07-22 on the bench: Amiberry (repo build), 16 MB Amix 2.1c guest,
-idle. **This is the EMULATED figure; the metal number waits for a real burn
-(Wave 6).** Method: `timex cat <path> > /dev/null` on the box (cold read; the 16 MB
+idle. **This is the EMULATED figure; the metal number waits for a real burn.**
+Method: `timex cat <path> > /dev/null` on the box (cold read; the 16 MB
 guest cannot cache a 60 MB file), MB = decimal (÷10^6), MiB = binary (÷2^20).
 
 | read                                | bytes       | real (s) | throughput            |

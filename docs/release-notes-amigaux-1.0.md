@@ -4,7 +4,7 @@
 
 This part covers what amix-installng ships; the full release notes combine it with the notes of the other
 amigaux repositories. Values marked _(r5)_ were filled when the K1 r5 card was cut. Items marked _(r6)_ describe the r6
-card set (one kernel per driver family, D-2) and are confirmed when its emulator and metal rows pass.
+card set (one kernel per driver family) and are confirmed when its emulator and metal rows pass.
 
 ## The K1 card: Z3660 with a real 68060, in an A3000, A4000 or A4000T
 

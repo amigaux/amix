@@ -1,12 +1,12 @@
-# The install miniroot (Installer-NG Wave 5.2, install script W4)
+# The install miniroot (Installer-NG)
 
 The **miniroot** is the tiny root filesystem the install kernel mounts to bring
 the installer up single-user, mount the install CD, author the target
 filesystems, and hand off to the CD-resident package engine. It is built from
 the stock Amix 2.1 miniroot plus a handful of additions, and produces the two
-packagings the two W5.1 kernels expect.
+packagings the two install kernels expect.
 
-Since **wave W4** it also carries **our own `/etc/profile`** — the install
+It also carries **our own `/etc/profile`** — the install
 script the console login shell sources, and the first thing anybody using this
 installer ever sees. See *The install script* below.
 
@@ -27,7 +27,7 @@ provenance of every entry:
 | source | what | how placed |
 |--------|------|-----------|
 | `stock-miniroot` | 198 objects verbatim from `floppies/orig/amix_21_root.adf` (sh, libc.so.1, the miniroot mount/umount, `mkfs_s5`/`fsck_s5`, mknod/dd/ls/cat/cpio, /dev nodes, …) | the build starts from a **byte copy** of that image, so these are preserved untouched |
-| `installng` | `/etc/profile` — **our install script** (`src/miniroot/profile`, W4) | copied in at the stock file's own 0777 root:root, **replacing** the stock 19,351-byte install script. The only stock-sourced object the build overwrites |
+| `installng` | `/etc/profile` — **our install script** (`src/miniroot/profile`) | copied in at the stock file's own 0777 root:root, **replacing** the stock 19,351-byte install script. The only stock-sourced object the build overwrites |
 | `core-2.1.pkg` | `/etc/passwd`, `/etc/group`, `/usr/lib/fs/s5/labelit` | extracted **byte-identical** from the repackaged `core-2.1.pkg` |
 | `amix-cdfs` | `/usr/lib/fs/cdfs/mount` | the amix-cdfs `platform/amix` userland helper |
 | `generated` | mount points + tool dirs (`/cdrom`, `/usr/lib/fs`, `/usr/apkg/...`) | `mkdir` during the build |
@@ -35,16 +35,16 @@ provenance of every entry:
 
 **One `stock-miniroot` exception, opt-in.** With `MINIROOT_FP_PATCH=yes` the
 build additionally rewrites `/bin/mkfs_ufs` and `/bin/fsck_ufs` in place inside
-that byte copy — BLIZZARD F2-M1, see *The BLIZZARD F2-M1 FP patch* below. The
+that byte copy — the Blizzard FP fix, see *The Blizzard FP patch* below. The
 rewrite is length-preserving, so both files stay `source=stock-miniroot` in
 this manifest either way; only their content differs from a genuinely
 untouched copy.
 
-## The install script — `/etc/profile` (W4)
+## The install script — `/etc/profile`
 
 On the stock media the interactive installer **is** `/etc/profile` on the root
 floppy: init runs a console shell single-user, the shell sources `/etc/profile`,
-and that script asks the questions. W4 keeps that shape exactly and replaces the
+and that script asks the questions. Ours keeps that shape exactly and replaces the
 content. `src/miniroot/profile` (15,998 B, vs the stock script's 19,351 B):
 
 1. **`echo "Amiga UNIX install script"`** — stock's banner, then stock's Ctrl-C
@@ -100,10 +100,10 @@ content. `src/miniroot/profile` (15,998 B, vs the stock script's 19,351 B):
 5. **`exec sh /cdrom/install/bin/setup.sh`** — no argument: the medium declares
    its own base profile in `/install/profiles/BASE`. From there the interview
    composes `/tmp/answers.profile` and execs the driver with `stdin` from
-   `/dev/null` (METAL-FIX.3). The profile never execs the driver itself.
+   `/dev/null`. The profile never execs the driver itself.
 
 **The space budget.** The floppy is 880 blocks and there is no second one. The
-smaller script *frees* space: **42 → 46 free blocks** against the W5.2-era NG
+smaller script *frees* space: **42 → 46 free blocks** against the first NG
 miniroot (stock, with its own bigger script and none of our additions, has 72);
 free inodes are unchanged. `build-miniroot.sh` prints the stock→built delta on
 every run, so a change that eats the headroom shows up in the build log instead
@@ -146,7 +146,7 @@ The miniroot's own `mkfs_s5` / `fsck_s5` / `labelit` are the standalone s5 tools
 (the installer calls `/usr/lib/fs/s5/labelit` directly — the miniroot has no
 generic `labelit` front-end).
 
-## CD convention W5.3 must match
+## CD convention the ISO must match
 
 Static `pkgadd` exec's a compiled-in `/usr/apkg/sadm/install/bin/pkginstall`. The
 399 KB static `pkginstall` cannot fit the floppy, so that path is a shim:
@@ -156,7 +156,7 @@ Static `pkgadd` exec's a compiled-in `/usr/apkg/sadm/install/bin/pkginstall`. Th
 exec /cdrom/install/bin/pkginstall ${1+"$@"}
 ```
 
-**W5.3's ISO re-master must place the static `pkginstall` at `/install/bin/pkginstall`
+**The ISO re-master must place the static `pkginstall` at `/install/bin/pkginstall`
 on the disc** (mounted at `/cdrom` → `/cdrom/install/bin/pkginstall`).
 
 ## The two packagings (one build, two media)
@@ -166,8 +166,8 @@ The miniroot filesystem is **medium-agnostic** — its `/dev` already carries th
 
 | packaging | image | paired kernel (`../amix-kerntools/docs/miniroot-kernels.md`) | rootdev | gates |
 |-----------|-------|-----------|---------|-------|
-| **fd0** (bench) | `floppies/build/amix_21_root-ng.adf` (the 880-block s5 = the root ADF) + the boot floppy from `build-universal-bootfloppy.sh` | `fd0unix` (a4091 + cdfs + fixed a3091/a2091 + **probed `support.c`**), `unix.brel` sum-r **09433** (P5.4 r4, 2026-08-16 — note the LEADING ZERO, five digits; superseded: 11879 08-13, 46541 earlier) | `0x00400008` (floppy) | `rootdev-assert --config fd0unix --media floppy --miniroot`; **bench boot-proof** |
-| **slice1** (metal) | `work/miniroot/miniroot-slice1-<date>.s5img`, written to an RDB `UNIX_Root` slice (DosType `UNI\1` = 0x554e4901) | `c6s1unix` (z3660scsi + z3660eth + cdfs), sum-r **50544** (P5.4 r4; superseded: 49227 r3, 00961 48-era) | `0x00480016` (C6D0S1) | `rootdev-assert --config c6s1unix --media scsi-slice --miniroot`; fsck-clean (metal boot-proof = Wave 6) |
+| **fd0** (bench) | `floppies/build/amix_21_root-ng.adf` (the 880-block s5 = the root ADF) + the boot floppy from `build-universal-bootfloppy.sh` | `fd0unix` (a4091 + cdfs + fixed a3091/a2091 + **probed `support.c`**), `unix.brel` sum-r **09433** (2026-08-16 — note the LEADING ZERO, five digits; superseded: 11879 08-13, 46541 earlier) | `0x00400008` (floppy) | `rootdev-assert --config fd0unix --media floppy --miniroot`; **bench boot-proof** |
+| **slice1** (metal) | `work/miniroot/miniroot-slice1-<date>.s5img`, written to an RDB `UNIX_Root` slice (DosType `UNI\1` = 0x554e4901) | `c6s1unix` (z3660scsi + z3660eth + cdfs), sum-r **50544** (r4; superseded: 49227 r3, 00961 48-era) | `0x00480016` (C6D0S1) | `rootdev-assert --config c6s1unix --media scsi-slice --miniroot`; fsck-clean (metal boot-proof pending) |
 
 ## Building it — `tools/build-miniroot.sh`
 
@@ -182,7 +182,7 @@ FTP-GET large images, they tail-drop) and run the conformance self-test.
 
 The scratch disk is provisioned with `mkroot.sh --no-mkfs` and attached to the
 emulator at a spare SCSI unit; see the script header for the exact invocation and
-the `SCRATCH_HDF` / `SCRATCH_DEV` knobs. A worked W4 invocation:
+the `SCRATCH_HDF` / `SCRATCH_DEV` knobs. A worked invocation:
 
 ```sh
 tools/mkroot.sh --out work/miniroot/scratch.hdf --size-mb 64 --no-mkfs --scsi-id 5
@@ -203,10 +203,10 @@ Two gates worth knowing about:
 * **only the FINAL fsck's verdict counts.** The *pre-mount* fsck legitimately
   prints `*** FILE SYSTEM WAS MODIFIED ***` — that is it setting the dirty stock
   filesystem to `OKAY`, the entire reason it runs — so the old grep over the whole
-  overlay log made the build refuse its own step 2 (fixed in W4: the log is cut at
+  overlay log made the build refuse its own step 2 (fixed: the log is cut at
   the final-fsck banner first).
 
-### The BLIZZARD F2-M1 FP patch (`MINIROOT_FP_PATCH`, opt-in)
+### The Blizzard FP patch (`MINIROOT_FP_PATCH`, opt-in)
 
 `build-miniroot.sh` reads one more build-time knob — an environment variable,
 **not** a profile key (it is set on the invocation, like `SCRATCH_HDF` above,
@@ -216,7 +216,7 @@ values, anything else is refused). When set, the stock ADF is work-copied
 *before* it is pushed to the box, and
 `tools/patch-ufs-fp.py --s5 <copy> /bin/mkfs_ufs /bin/fsck_ufs` rewrites both
 binaries' floating-point display expressions as integer arithmetic —
-**BLIZZARD F2-M1**, `docs/blizzard-f2m1.md` — because both are otherwise fatal
+**the Blizzard FP fix**, `docs/blizzard-fp.md` — because both are otherwise fatal
 on an FPU-less 68060: `mkfs_ufs` dies at its geometry banner before writing a
 single block, and `fsck_ufs` dies at its summary line, upstream of everything
 that marks a repaired filesystem clean.
@@ -225,7 +225,7 @@ The patch is length-preserving — `build-miniroot.sh` asserts the patched copy
 is still exactly the stock ADF's length before pushing it, and refuses
 otherwise — so type/mode/owner/group and `miniroot.proto`'s object census are
 unchanged either way; only those two files' *content* differs from a
-genuinely untouched stock copy (87 + 211 bytes, `docs/blizzard-f2m1.md` §7's
+genuinely untouched stock copy (87 + 211 bytes, `docs/blizzard-fp.md` §7's
 measured figure).
 
 **Off by default, and not yet wired into any tracked profile or the ISO
@@ -242,7 +242,7 @@ structurally broken, so **that line's install miniroot must be UFS** (Berkeley
 FFS). `tools/lib/ufs_size.py` settled the media shape: a UFS miniroot carrying the
 same install toolchain does **not** fit an 880-block floppy with stock geometry
 (~56 KiB over at today's content). So the ufs miniroot normally **rides a raw `UNI\1`
-slice** (exactly the source-`.hdf` shape the metal rigs already use). Since P-15 I5
+slice** (exactly the source-`.hdf` shape the metal rigs already use). Since then
 (2026-10-03) there is also a **root floppy** for this line; see *The 040/060 root floppy*
 below. There is deliberately **no host-side UFS writer**
 (`docs/ufs-target-scoping.md` §3.3); the ufs miniroot is authored on the golden box
@@ -291,7 +291,7 @@ MINIROOT_FSTYPE=ufs SCRATCH_HDF=$PWD/work/miniroot/scratch-ufs.hdf bash tools/bu
 # -> work/miniroot/miniroot-slice1-ufs-<date>.ufsimg   (feed to build-raw-source.sh --miniroot)
 ```
 
-**The `/etc/mnttab` seed (Wave C2, done).** A ufs miniroot means the running
+**The `/etc/mnttab` seed (done).** A ufs miniroot means the running
 miniroot's own root is ufs, so `install.sh`'s `/etc/mnttab` seed line — which
 describes the **running miniroot's** root, not the target's
 (`docs/ufs-target-scoping.md` §2.3 trap 1) — must read `ufs` when this miniroot is
@@ -300,11 +300,11 @@ the one running. It now does: `install.sh` derives `MINIROOT_FSTYPE` from the ne
 profile byte-identical) and the seed writes `echo "/dev/root / $MINIROOT_FSTYPE rw
 0" > /etc/mnttab`. It is **never** `$TARGET_ROOT_FSTYPE` (the target's fs and the
 miniroot's are independent). Nothing is baked into the image — a fresh miniroot
-ships no `/etc/mnttab` at all (METAL-FIX.2) and `install.sh` seeds it at install
+ships no `/etc/mnttab` at all and `install.sh` seeds it at install
 time. `installer-selftest.py` audit AA6 pins this and fires on both the
 target-fs-type and the reverted-to-literal-`s5` wrong "fixes".
 
-### Assembling the 040 source disk (Wave C2)
+### Assembling the 040 source disk
 
 The 040/060 line's self-booting install disk is authored exactly like the 030 metal
 source disk (`tools/build-raw-source.sh --author --bootable`), with the UFS miniroot
@@ -313,7 +313,7 @@ payload/raw slices as today.
 
 **The loader is SELECTED BY NAME, and there is no override anywhere.** boot2-040 was
 promoted into kerntools `contracts/bootchain-v1.json` as the proven identity
-`good_040` on **2026-08-19** (campaign plan **B2**, after the **B1** metal proof), so
+`good_040` on **2026-08-19** (plan **B2**, after the **B1** metal proof), so
 the profile names the *key* and the contract holds the hash:
 
 | where | key | value |
@@ -349,7 +349,7 @@ tracked files):
 The command sequence (paths relative to this repo unless noted):
 
 ```sh
-# 1. Frame the 040 ET_REL kernel to brel. elf2brel.py (Wave A2) statically applies
+# 1. Frame the 040 ET_REL kernel to brel. elf2brel.py statically applies
 #    the 040 line's 330 intra-.text PC-relative relocs, so it frames cleanly.
 python3 ../amix-kerntools/tools/elf2brel.py \
    ../amix-kerntools/work/040-kernel/260818-02/out/unix-040-miniroot-c0s1 \
@@ -380,8 +380,8 @@ tools/build-raw-source.sh --author --bootable \
 
 # 4. Populate the payload + raw on the box, then bench-BOOT the SOURCE disk to run
 #    the 040 installer to a ufs target. (The installed TARGET disk's OWN
-#    bootability needs a 68040 TARGET kernel = a KERN040 package -- campaign plan
-#    C4, NOT this wave.)
+#    bootability needs a 68040 TARGET kernel = a KERN040 package -- plan
+#    C4, NOT here.)
 tools/build-raw-source.sh --populate --bootable --out <disk> \
    --src-dev /dev/dsk/cXd0s4 --src-rdev /dev/rdsk/cXd0s4
 ```
@@ -394,7 +394,7 @@ key is a **gate**, not a to-be-filled-in placeholder: it is compared against the
 kernel actually extracted, so a `00000` there does not defer the question, it stops
 the build. The consequence is stated rather than hidden — a full 040 install
 currently produces an installed disk whose `/stand` kernel is 030. Re-pinning it to
-the 040 target brel is campaign plan **C4** (the KERN040 package). This wave's
+the 040 target brel is plan **C4** (the KERN040 package). This step's
 deliverable is the SOURCE disk that boots the 040 **installer**.
 
 Three consumer gaps this line closed on the author side: the slice-1 read-back
@@ -404,7 +404,7 @@ identity** to the kerntools round-trip gate (`--identity`, else it would reject 
 very loader the framing was told to expect); and the selection itself lives in one
 shared resolver, `tools/lib/boot2id.py`.
 
-**The `--populate` smoke's `-F ufs` arm (Wave C3, done).** The on-box miniroot
+**The `--populate` smoke's `-F ufs` arm (done).** The on-box miniroot
 spot-check hardcoded `mount -F s5 -r`, which on this line fails at the *mount*
 (`MRMOUNT_FAILED`) — an error that reads as "the image is broken" when the truth is
 "the reader was told the wrong filesystem". `build-raw-source.sh` now derives
@@ -433,7 +433,7 @@ the conformance half. The UFS reader itself is self-tested separately as **check
 (`tools/lib/ufs.py`), hermetically and — when the golden ufs root is reachable
 read-only — against its genuine 1991 file checksums.
 
-The self-test also owns the W4 promise that **exactly one** object changed:
+The self-test also owns the promise that **exactly one** object changed:
 `/etc/profile` must be `source=installng` at the stock file's own `0777 root:root`,
 `/etc/id_kmap` must still be `source=stock-miniroot`, the `source` column is a
 **closed vocabulary**, and every `installng` entry must have a source file in this
@@ -441,7 +441,7 @@ repo. Five crafted violations prove each fires.
 
 ## Bench boot-proof
 
-**W5.2 (2026-07-22, the stock install script).** Proven twice (two cold boots) on
+**2026-07-22, the stock install script.** Proven twice (two cold boots) on
 the **A3000 + A4091** profile (KS 2.04/ECS, 16 MB, A3000 SCSI = card 0, A4091 =
 card 1, install CD at `scsi3_a4091`): the `fd0unix` boot floppy boots and prompts
 for the root floppy; the miniroot mounts and the kernel comes up; the stock install
@@ -450,7 +450,7 @@ shell; `/usr/lib/fs/cdfs/mount 1,3 /cdrom` returns **errno 5** first and succeed
 the retry; `/cdrom` lists the disc and the stock package set counts **27**; `umount
 /cdrom` returns 0.
 
-**W4 (2026-08-11, our install script).** The respun miniroot (`sum -r` **62398**)
+**2026-08-11, our install script.** The respun miniroot (`sum -r` **62398**)
 is boot-proven by the regression matrix itself, which is a stronger claim than the
 2026-07-22 hand-run: four full from-scratch installs on fresh media, each **9/9**
 (`cd`, `cd-interactive`, `cd-suomi`, `cd-standard`). `cd` and `cd-standard`
@@ -462,9 +462,9 @@ harness deliberately unmounts it. See `docs/installer.md` *The miniroot respin*.
 
 The **metal** packaging (the RDB `UNIX_Root` slice-1 image) is byte-identical to the
 fd0 one, and the metal source disk still assembles around it — but a metal **boot**
-of the W4 miniroot has not happened yet. It is next-metal-session material.
+of this miniroot has not happened yet. It is next-metal-session material.
 
-### The 040/060 root floppy (`MINIROOT_MEDIUM=fd0`, P-15 I5)
+### The 040/060 root floppy (`MINIROOT_MEDIUM=fd0`)
 
 `MINIROOT_FSTYPE=ufs MINIROOT_MEDIUM=fd0 MINIROOT_FP_PATCH=yes tools/build-miniroot.sh`
 builds the UFS miniroot as ONE 880-block floppy, `floppies/build/amix_21_root-ufs060.adf`. It

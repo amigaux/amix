@@ -153,6 +153,6 @@ either). It sends fake MACs through the real `payload/S99zen`: known MACs in eit
 letter case, an unknown MAC, an unreadable MAC, the `default` row, a missing table,
 and malformed rows. It checks the `hosts` rewrite and that a second run changes
 nothing. It runs the whole boot path in a sandbox, with every path and tool replaced
-by a stub, and it converts a sandboxed pre-P-3 root with `apply-zen-conf.sh`. It is
+by a stub, and it converts a sandboxed root from before this scheme with `apply-zen-conf.sh`. It is
 check 10e of `tools/run-checks.sh`, and `installer-selftest.py` audit P runs it too.
 The `zen0` link itself can only be tested on real hardware.

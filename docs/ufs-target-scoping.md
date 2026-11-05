@@ -51,7 +51,7 @@ both carry a **UFS1 big-endian root produced by the stock installer's ufs branch
 ### 1.1 Both binaries are in OUR miniroot, byte-identical to stock
 
 `miniroot/miniroot.proto` already carries them as `stock-miniroot` entries — they
-have been there since the W5.2 proto was written, because the build starts from a
+have been there since the proto was first written, because the build starts from a
 byte copy of `floppies/orig/amix_21_root.adf` and the proto preserves them:
 
 ```
@@ -91,7 +91,7 @@ Two consequences worth recording:
 - `fsck_ufs` calls **`getpwuid`**, so it touches the name service. `/etc/passwd`
   is a proto member (placed from `core-2.1.pkg`, not the stock 0666 stub), so
   this resolves. It also calls **`ctime`**, which means `tzset` — the known
-  `TZ=:US/Eastern` colon trap (the "getpwnam cascade" of W5) is in the blast
+  `TZ=:US/Eastern` colon trap (the "getpwnam cascade") is in the blast
   radius of any `fsck_ufs` output line, though only cosmetically.
 - `mkfs_ufs` needs no name service at all.
 
@@ -129,7 +129,7 @@ fi
 ```
 
 ★ **This is the whole basis of the "stock forces s5" story, and it is an
-`OLD_BOOT`-only force.** We have refused the OLD_BOOT class outright since W6
+`OLD_BOOT`-only force.** We have refused the OLD_BOOT class outright for a long time
 (`install.sh` warns "this machine is the OLD_BOOT class … the disk will NOT
 BOOT. Use the original Amiga UNIX 2.1 distribution media for this machine"), so
 the branch that forces s5 is one we never take. The dispatch's framing is
@@ -301,8 +301,8 @@ something downstream is found to read the ufs volume label.
 
 1. **`echo "/dev/root / s5 rw 0" > /etc/mnttab`** (install.sh §4 seed). This
    describes the **running miniroot's own root**, which stays s5 — it exists so
-   the static `pkgadd`'s `get_mntinfo()` can `open()` a table at all (METAL-FIX.2;
-   a fresh miniroot ships no `/etc/mnttab` and M-RUN froze exactly there).
+   the static `pkgadd`'s `get_mntinfo()` can `open()` a table at all
+   (a fresh miniroot ships no `/etc/mnttab` and a metal run froze exactly there).
    Parameterising it by the *target* fs type would be wrong. It must stay `s5`.
 2. **The swap and boot slices are raw and stay raw.** Verified on both sides:
    - swap: `/bin/swap -a "$SWAP_BLK" 0 "$SWAPBLKS"` — a block device handed to
@@ -358,7 +358,7 @@ Un-suppressing is a stock-verbatim menu (§1.3b) placed after the size questions
 writing `TARGET_ROOT_FSTYPE` into `/tmp/answers.profile`. Three constraints:
 
 - **Pre-POSIX sh rules apply**: backticks not `$(…)`, `expr` not `$((…))`, case
-  globs for y/n, and — the W3b law — **never `: > file` inside a loop**, which
+  globs for y/n, and **never `: > file` inside a loop**, which
   this menu is (it lives inside the `Do you wish to change any of these?`
   re-ask loop). `tools/installer-selftest.py` audits A/B/G/H/I/T cover it.
 - **The tool allowlist is derived from `miniroot.proto`**
@@ -367,7 +367,7 @@ writing `TARGET_ROOT_FSTYPE` into `/tmp/answers.profile`. Three constraints:
 - **Default flip**: stock's default is `[s5]`. The user decision is ufs-by-default,
   so the prompt becomes `… ? [ufs] ` with `s5` still typeable. This is the one
   deliberate divergence from stock verbatim and should be recorded as such (the
-  same class as the W4 "Suomi / Svenska" relabel).
+  same class as the "Suomi / Svenska" relabel).
 
 ---
 
@@ -583,7 +583,7 @@ cells. **So the ufs lane is `cd-author` with two words changed.**
   be slower than `mkfs_s5`; stock's own script printed *"Making filesystems.
   This will take a few minutes."* immediately before it (a string our driver
   already emits verbatim). **Check the cell's go-marker budget** — the 300 s
-  budget is what failed the W1 ddsize wedge, and a slow-but-healthy `mkfs_ufs` on
+  budget is what failed the ddsize wedge, and a slow-but-healthy `mkfs_ufs` on
   the big target must not be mistaken for a hang.
 
 ---
@@ -602,7 +602,7 @@ cells. **So the ufs lane is `cd-author` with two words changed.**
 | **S7 — optional** | `tools/lib/ufs.py` reader (~102-line spike exists, §3.2) as an author-mode read-back gate. | **~½ day** | new self-test vs the golden |
 | **~S8** | Host-side ufs **writer** for prebuilt mode. | 600–900 lines | **not recommended** |
 
-Steps S1–S4 are host-side and can all land in one wave before any bench time is
+Steps S1–S4 are host-side and can all land together before any bench time is
 spent. The critical path to "UFS proven end-to-end" is **S2+S3+S4 (~1.5 days) plus
 one bench cycle**.
 
@@ -648,7 +648,7 @@ stock script's call site, and a superblock read off a disk *someone else's*
 - Its `"%s is mounted, can't mkfs"` check — the mechanism is not evident from its
   strings or its (syscall-only) symbol set. Our `/etc/mnttab` write happens in
   the seed phase, *after* mkfs, so the ordering is already safe — **do not
-  reorder it** (the same class of ordering trap as W5.5's `swap -a`).
+  reorder it** (the same class of ordering trap as the `swap -a` step).
 - Default geometry on a slice size we have never fed it. §1.4 shows what the
   defaults produced on a 567 MB slice; a 100 MB bench slice is untested.
 
@@ -728,7 +728,7 @@ proprietary bytes committed.
    `^1 ([a-z]) \S+ (/\S+) (\d+) (\S+) (\S+) (\d+) (\d+) (\d+)$` per line, and
    **`s`/`l` records encode `path=target`** so the path must be split on `=`
    before any basename analysis (getting this wrong undercounts collision groups
-   4 and 5 — it is exactly the trap that made installng's W6 scan report 3
+   4 and 5 — it is exactly the trap that made an earlier installng scan report 3
    groups instead of 5).
 7. **pkgmap checksum** — 32-bit byte sum folded end-around to 16 bits. Pin it
    against `miniroot.proto`'s three cited values before trusting it.

@@ -16,14 +16,14 @@ This rewrites both expressions in exact integer arithmetic that renders the same
 columns to the same precision.  Nothing else changes: no byte outside the sites
 listed below moves, no section moves, no file grows.  The full design, the
 measurement it rests on and the pre-registered acceptance are in
-docs/blizzard-f2m1.md.
+docs/blizzard-fp.md.
 
 The same patch applies to the miniroot members (/bin/mkfs_ufs, /bin/fsck_ufs on the
 stock root floppy) and to the installed ones (/etc/fs/ufs/{mkfs,fsck}): their mapped
 images are byte-identical, only the ELF header's e_shoff/e_shnum differ.
 
 The patched binaries are derived Commodore bytes -- never commit them.  What is
-committed is this tool, the assembly in tools/blizzard-f2m1/, and the old-byte
+committed is this tool, the assembly in tools/blizzard-fp/, and the old-byte
 signatures it asserts.
 
 usage:
@@ -59,7 +59,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
 
 # --------------------------------------------------------------------------- #
-# The two replacement code blocks.  Source: tools/blizzard-f2m1/{fsck,mkfs}.s,
+# The two replacement code blocks.  Source: tools/blizzard-fp/{fsck,mkfs}.s,
 # assembled with m68k-linux-gnu-as -m68020 and linked at the block's own address
 # (the mkfs block contains PC-relative operands, so it is position-DEPENDENT).
 # Only 32-bit MULU.L/DIVU.L/DIVUL.L are used: the 68060 leaves the 64-bit forms to
@@ -70,7 +70,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib
 # fsck_ufs @ 0x800018c2 (file 0x018c2), 50 bytes -- the FP window, 48 B of code
 # plus a 2-byte pad.  32-bit MULU.L/DIVU.L/DIVUL.L ONLY: the 68060 does not
 # implement the 64-bit forms and their vector-61 trap is an un-tabled SIGKILL on
-# this AMIX kernel (measured on the bench, docs/blizzard-f2m1.md 5.1).
+# this AMIX kernel (measured on the bench, docs/blizzard-fp.md 5.1).
 #   moveq   #125,%d0
 #   mulu.l  -4(%a6),%d0            d0 = 125 * n_ffree
 #   lsl.l   #4,%d0                 d0 = 2000 * n_ffree
@@ -517,8 +517,8 @@ def do_ufs(image, slice_no, paths, check):
 # self-test -- hermetic. Proves the ufs extent mapping and the write-back on a
 # SYNTHETIC filesystem, and proves each refusal fires. No proprietary bytes: the
 # fixture is ufs.py's own reader-test image, and the payload is bytes this test
-# makes up. The FP recipes themselves are covered by tools/blizzard-f2m1/oracle.py
-# and seq.S (host pre-gates) plus the two-rig metal gates in docs/blizzard-f2m1.md;
+# makes up. The FP recipes themselves are covered by tools/blizzard-fp/oracle.py
+# and seq.S (host pre-gates) plus the two-rig metal gates in docs/blizzard-fp.md;
 # what has never had a gate is THIS code -- the locator and the scatter-write.
 # --------------------------------------------------------------------------- #
 

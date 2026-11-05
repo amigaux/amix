@@ -1,7 +1,7 @@
-# BLIZZARD F2-M1 — the 13-instruction FP-elimination patch for the two ufs binaries
+# The Blizzard FP fix — the 13-instruction FP-elimination patch for the two ufs binaries
 
 **Status: DONE — all three pre-registered gates passed, 2026-08-25 (see §7).** Binding:
-`../docs/BLIZZARD.md` §5, the F2-M0 census verdict and the **F2-M1 ruling** —
+`../docs/BLIZZARD.md` §5, the census verdict and the **ruling** —
 *"the 13-instruction integer-math patch to mkfs_ufs+fsck_ufs (installed + miniroot
 copies)"*. Census evidence: the maintainer's notes (`CENSUS.txt`,
 `dis-fsck.txt`, `dis-mkfs-ufs.txt`, `mkfs/mkfs-real.txt`, `lc/fsck-deepdive.txt`).
@@ -9,7 +9,7 @@ Every number below was **re-verified in this repo against the binaries themselve
 before being built on; where re-verification corrected the brief it is marked
 **`BRIEF CORRECTION`**.
 
-The standing rule *check the 030 installer history first* (W1–W6 catalogue) applies to
+The standing rule *check the 030 installer history first* applies to
 anything touching `install.sh`/media. It does not fire here: this round changes no
 script, no install order and no media layout — it changes 180 bytes inside two 1991
 SVR4 executables and wires those two members into the miniroot build.
@@ -411,7 +411,7 @@ signatures and the SHA-256 of both inputs and outputs.
 
 Rigs: two `.uae` configs differing in **one key**, `fpu_model`, over one work copy of
 the census seed `f2m0-seed.hdf` (sha256 `604a2b6f…`), repo amiberry build, tap anchor
-.17. Evidence: `work/blizzard-f2m1/` (gitignored) — `fpu-ab.out`, `lc-gate.out`,
+.17. Evidence (gitignored, under `work/`) — `fpu-ab.out`, `lc-gate.out`,
 `lc-miniroot.out`, `lc-prep.out`, and the two configs.
 
 **Gate 1 — byte-diff. PASS.** For all four binaries the file length is unchanged and

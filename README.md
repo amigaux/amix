@@ -134,8 +134,8 @@ Every change is proven on the bench before it is trusted: a repo-pinned
 Amiberry build boots the media under construction and drives it over
 telnet/FTP, with `tools/install-matrix.sh` running full unattended installs
 and gating the result against attested, byte-exact installed-tree digests.
-The 68040/68060 metal-port line (BLIZZARD F2-M1's FPU-less UFS fix among its
-recent milestones — see `docs/blizzard-f2m1.md`) takes the same profiles onto
+The 68040/68060 metal-port line (the Blizzard FP fix for FPU-less UFS among its
+recent milestones — see `docs/blizzard-fp.md`) takes the same profiles onto
 real A4000+Z3660 hardware once a step is bench-proven. The operator runbook
 for the maintainer's own machines is kept locally and is not published.
 
@@ -166,11 +166,11 @@ The builder operates on **user-supplied** Amix 2.1 media.
 - `docs/releases/1.0.md` — the 1.0 release record: every shipped hash and the
   evidence it was accepted on; `docs/release-notes-amigaux-1.0.md` — what
   users see.
-- `docs/installer.md` — the installer driver, wave by wave, plus the current
+- `docs/installer.md` — the installer driver, step by step, plus the current
   canonical installed-tree digests.
 - `docs/miniroot.md`, `docs/install-iso.md`, `docs/universal-bootfloppy.md`
   — the three media builders, in detail.
-- `docs/blizzard-f2m1.md` — the FP-elimination patch that makes UFS installs
+- `docs/blizzard-fp.md` — the FP-elimination patch that makes UFS installs
   work on FPU-less 68060 hardware.
 - `docs/ufs-target-scoping.md` — s5 vs. UFS as the target root filesystem.
 - `docs/address-by-card.md` — one image for several Z3660 machines: `zen0`'s

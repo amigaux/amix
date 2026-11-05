@@ -7,14 +7,14 @@ the driver, the first-boot payload, the profile specs, and the ISO re-master
 that populates `/install/`; the first end-to-end on-box run followed. Every
 stage since is a further section below.
 
-> **This document is wave-chronological.** Every `W…` section records what was true
-> **when that wave landed** and is deliberately left standing. The five sections
+> **This document is chronological.** Every historical section records what was true
+> **when that work landed** and is deliberately left standing. The five sections
 > immediately below are *current state* and **win over any figure or s5 statement
-> quoted inside a wave section**.
+> quoted inside a historical section**.
 
 ## The target filesystem — current (2026-10-30)
 
-**ufs is the only target filesystem**, on every line (decided 2026-10-30, Option C;
+**ufs is the only target filesystem**, on every line (since 2026-10-30;
 there is no install base on s5).
 
 - `install.sh`: `TARGET_ROOT_FSTYPE` defaults to `ufs`; `s5` is refused with that
@@ -41,8 +41,8 @@ stands (proven for `minimal` by `cd-ufs`, `full`/`developer`/`x11` on the ufs ri
 
 ## Clean installs only — current (2026-10-31)
 
-**1.1 supports clean installs only** (owner: "no update path from 1.0, no migration
-code"). A disk that holds Amix is erased and installed afresh.
+**1.1 supports clean installs only** (no update path from 1.0, no migration
+code). A disk that holds Amix is erased and installed afresh.
 
 - `setup.sh` offers no upgrade. A disk that carries an RDB, an installed 1.0 or 1.1
   disk included, is asked stock's erase question and nothing else; the answers block
@@ -140,8 +140,8 @@ a byte-identical tree.
 | digest | objects | what it is |
 |--------|--------:|------------|
 | **`a650dd79b71de25bfd023335c1bfbded`** | **4859** | **THE canonical installed-tree digest**, re-attested **2026-10-02**: the same eight packages with **APKG 0.2.2** on the release CDs (release media must not carry the retired host string). Only APKG's files moved; the count and the base-5 digest did not. Matrix `cd` 10/10, `work/install-matrix/20261002-120849-cd`. |
-| ~~`e483b0cb25dfaf4087b1f783335d520d`~~ | 4859 | superseded 2026-10-02 (APKG 0.1). Was **THE canonical installed-tree digest**, re-attested **2026-08-11** — the **eight**-package base set `core bsd net text sysadm cdfs APKGENG APKG` as the **P5.4 r3 packages** actually ship it. Reproduced identically by two independent bench runs on freshly mastered media (`work/install-matrix/20260811-103107-cd` and `…-104927-cd`), with two *different* drivers, then gated green by the matrix's **`cd` cell 9/9** (`work/install-matrix/20260811-110806-cd`, 2026-08-11). See *Re-attestation 2026-08-11* below for why it moved. |
-| `86e1ceb144f1328bf441c5df38fc2798` | 4793 | the **base-5 continuity** digest — what `altroot-attest --only core,bsd,net,text,sysadm` still reproduces out of the *current* eight-package install. **UNCHANGED by the 2026-08-11 re-attestation** (and unchanged since Wave 2): it is the continuity check across waves, **not** the shipped set. |
+| ~~`e483b0cb25dfaf4087b1f783335d520d`~~ | 4859 | superseded 2026-10-02 (APKG 0.1). Was **THE canonical installed-tree digest**, re-attested **2026-08-11** — the **eight**-package base set `core bsd net text sysadm cdfs APKGENG APKG` as the **r3 packages** actually ship it. Reproduced identically by two independent bench runs on freshly mastered media (`work/install-matrix/20260811-103107-cd` and `…-104927-cd`), with two *different* drivers, then gated green by the matrix's **`cd` cell 9/9** (`work/install-matrix/20260811-110806-cd`, 2026-08-11). See *Re-attestation 2026-08-11* below for why it moved. |
+| `86e1ceb144f1328bf441c5df38fc2798` | 4793 | the **base-5 continuity** digest — what `altroot-attest --only core,bsd,net,text,sysadm` still reproduces out of the *current* eight-package install. **UNCHANGED by the 2026-08-11 re-attestation** (and unchanged since early on): it is the continuity check over time, **not** the shipped set. |
 | **`bd91105e493297cdf40c94efd0a5741a`** | **11012** | the **`standard` set** (17 packages), **re-attested 2026-10-02/03** with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-standard` 10/10, `work/install-matrix/20261002-192444-cd-standard`. |
 | ~~`4ad8e17b69b32208c9fffa600596a428`~~ | **11012** | the **`standard` set** (17 packages), attested **2026-08-11** by the matrix's new **`cd-standard` cell 9/9** (`work/install-matrix/w3b3-std`). The SECOND attested set (plan §5.7). Its base-5 and base-8 subsets are **contained by object count** (4793 / 4859 exactly) but **not** by digest — see *Bench finding 2*: five shared paths are legitimately re-declared by `uucp`, `man` and `public`. | *(superseded 2026-10-02)*
 
@@ -182,7 +182,7 @@ working around it — is set against the packagemanager's Option A.
 
 **What moved.** Exactly two package files, both re-minted in
 `../amix-packagemanager/build/repo-staging/base/` on **2026-08-06** as part of the
-reviewed **P5.4 r3** arc:
+reviewed **r3** arc:
 
 | package | pre-r3 (minted `ec31a72…`) | r3 (mints `e483b0cb…`) |
 |---------|---------------------------|------------------------|
@@ -215,7 +215,7 @@ green as the acceptance target: `tools/install-matrix.sh cd` **9/9**, run
 e483b0cb25dfaf4087b1f783335d520d (4859 obj) + base-5
 86e1ceb144f1328bf441c5df38fc2798 (4793 obj)`.
 
-**Metal is not yet re-validated against this value.** M-RUN2/M-RUN3 attested
+**Metal is not yet re-validated against this value.** Two metal runs attested
 `ec31a72…`. Re-confirming `e483b0cb…` on real hardware rides the next metal session
 (`docs/metal-install-runbook.md`).
 
@@ -322,7 +322,7 @@ qualifications:
   would build a c6s1unix against **a4091** rather than z3660scsi — a wrong-composition
   metal kernel. Nothing uses it; it is a latent foot-gun, not a live defect.
 
-### P5.4 r4 — the media re-master (2026-08-16)
+### r4 — the media re-master (2026-08-16)
 
 The fresh-install kernel line moved to the r4 cross set. `fd0unix` was rebuilt **here**
 (`tools/build-install-kernel.sh`) and came out **byte-identical** to kerntools'
@@ -337,7 +337,7 @@ kernel we build). Bench proof on the new media: `install-matrix cd` **10/10**
 digest **unmoved** at `e483b0cb25dfaf4087b1f783335d520d` / 4859 with base-5
 `86e1ceb144f1328bf441c5df38fc2798` / 4793 exact. Artifact identity: runbook §0.
 
-## The regression matrix — `tools/install-matrix.sh` (P6.1)
+## The regression matrix — `tools/install-matrix.sh`
 
 The rig above is *what to boot*; the matrix is *the run itself, unattended, gated*.
 One command performs a full from-scratch install for one **cell** and produces a
@@ -480,8 +480,8 @@ a minute, and the host byte-scans for it.
   `echo <NONCE>rc$? > /matrix.rc`;
 - a missing marker yields *no* rc, never `rc=0`: a dropped keystroke is a FAIL, not
   a false pass;
-- the driver's stdin is `/dev/null` (**METAL-FIX.3**: an inherited stdin is what hung
-  M-RUN1 on the 1991 `pkgadd`'s prompt).
+- the driver's stdin is `/dev/null` (an inherited stdin is what hung
+  a metal run on the 1991 `pkgadd`'s prompt).
 
 Screenshots are taken throughout and are **artifacts for a human, never a gate**.
 The one thing the harness reads off the screen is `amicon.py ink` — a count of lit
@@ -494,7 +494,7 @@ barely above an empty one.)
 `digest` pulls `/var/sadm/install/contents` + `/etc/passwd` + `/etc/group` off the
 booted box and runs `../amix-packagemanager/tools/repo/altroot_attest.py` over them
 — the same three inputs, from the box's own contents DB and its own name service,
-that the M-RUN2 metal install was attested from, so bench and metal answers are
+that the first full metal install was attested from, so bench and metal answers are
 comparable by construction. Both the **full base-8** digest and the **base-5
 continuity** subset must match, *and* so must the object counts; a matching digest
 with a wrong count is a harness fault to investigate, not a pass.
@@ -829,8 +829,8 @@ tools/build-install-iso.sh --profile bench-a3000-a4091 --profile metal-a4000-z36
 
 assembles `work/install-tree/` (engine + sum + admin + order + profiles + boot
 slices + first-boot + driver) and masters the disc via `build-iso.sh
---install-src`. The disc stays **gitignored** (never committed; publishing it is a
-per-artefact owner decision); the release gate refuses a tracked path. All Wave-4 gates (8 catalog / 9 name / 17 licensing) re-fire on
+--install-src`. The disc stays **gitignored** (never committed; publishing it is
+decided per artefact); the release gate refuses a tracked path. All ISO gates (8 catalog / 9 name / 17 licensing) re-fire on
 the re-mastered disc.
 
 ## The re-master that folds the driver hardening + the engine-side pkgadd fix together
@@ -843,18 +843,18 @@ miniroot carries none of them), the **fail-closed** boot-chain verify (an earlie
 re-master folds those in together with the resolution of the old miniroot
 `pkgadd -R` blocker, which is now fixed **engine-side**, not in the driver:
 
-- **pkgadd -R blocker (RESOLVED engine-side; hardened driver-side in METAL-FIX.2).**
+- **pkgadd -R blocker (RESOLVED engine-side; hardened driver-side later).**
   amix-packagemanager `0d3a21c` makes `get_mntinfo()` **synthesize** the `/` root
   entry when `/etc/mnttab` lacks one, so `pkgadd -R /mnt … core` resolves the target
-  root with only the cdfs line present; `3b9b7a1` (METAL-FIX.1) extends that to a
+  root with only the cdfs line present; `3b9b7a1` extends that to a
   wholly **absent** file (ENOENT → synthesize). The driver's `/etc/mount` writes no
-  mnttab entry. **Reversed by METAL-FIX.2:** engine tolerance alone is *not* enough
+  mnttab entry. **Reversed later:** engine tolerance alone is *not* enough
   on fresh media — a freshly built miniroot ships **no `/etc/mnttab` at all**, and
   pkgadd/apkg `open()` it before installing, so the transplant aborts with `ERROR:
-  unable to open mount table (/etc/mnttab)` (M-RUN froze exactly here). The seed step
+  unable to open mount table (/etc/mnttab)` (a metal run froze exactly here). The seed step
   now writes the `/` root line **unconditionally** (`echo "/dev/root / s5 rw 0" >
   /etc/mnttab`, OVERWRITE). A `/mnt` line does NOT satisfy `get_mntinfo` (shortest
-  mount point must be `/`). See **“## METAL-FIX.2”** at the end of this doc.
+  mount point must be `/`). See **“The seed writes `/etc/mnttab`”** near the end of this doc.
 - **Stale-CD guard.** The boot-time cdfs `/cdrom` mount can come up rc=0
   but EMPTY, with no errno-5 unit-attention to retry on. The driver now verifies
   `/cdrom/catalog` after the mount step and, if unreadable, does a best-effort
@@ -1000,7 +1000,7 @@ references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
   retry) → `sh /cdrom/install/bin/install.sh bench-a3000-a4091` → halt →
   boot the target (`c6d0`).
 - **Expected:** 5 `pkgadd -R` all rc=0; installed tree digest
-  **`86e1ceb144f1328bf441c5df38fc2798`** (the Wave-2/3 reference); boot chain
+  **`86e1ceb144f1328bf441c5df38fc2798`** (the earlier reference); boot chain
   verified on-target; first boot bakes `uaeamix` identity and reaches multiuser.
   *(These figures are of that era and left standing — the
   shipped set is no longer five packages; for what a run must reproduce today see*
@@ -1013,7 +1013,7 @@ references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
 - **Confirm on-box (author mode only, still open):** the exact `/etc/rdb`
   create/geometry primitive — that run validated the install via the recommended
   `INSTALL_TARGET_PREBUILT=1` prebuilt path, which does not exercise author mode.
-  *(Wave text left standing per the document convention. **Answered 2026-07-30** by
+  *(Text left standing per the document convention. **Answered 2026-07-30** by
   the `cd-author` matrix cell: the miniroot's `rdb` needs `-d size` and refuses the
   driver's `-c -s 64` line — and **CLOSED 2026-07-31**: `-d` is the disk length in
   512-byte blocks, the driver is fixed, and `cd-author` is green end-to-end. See*
@@ -1021,7 +1021,7 @@ references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
 
 ## `cdfs` joins the base set + the first-boot TZ fix
 
-Two Wave-6 outcomes integrated and proven end-to-end from a pristine target.
+Two outcomes integrated and proven end-to-end from a pristine target.
 
 > **Historical.** The `BASE_SET` arrays this section and the installer-completeness one below
 > describe were **deleted by multi-set selection** — set membership now comes from
@@ -1191,9 +1191,9 @@ The base-5 continuity digest stays `86e1ceb144f1328bf441c5df38fc2798` (via
 eight-package installed-tree digest shifts by exactly that one object versus the previous section:
 **`ec31a72291e01382ab4b97403f6dad13`** (4859 objects, `a2467c69…`+1). That was the
 canonical from here onward, and every arm and medium of that era (cdfs, RAW, metal
-M-RUN2/M-RUN3, the P1.1e parity run) reproduced it exactly. Also recorded in
+runs, a parity run) reproduced it exactly. Also recorded in
 `CHANGELOG.md`. **It was superseded on 2026-08-11** by
-`e483b0cb25dfaf4087b1f783335d520d` (same 4859 objects) when the P5.4 r3 `APKG`/
+`e483b0cb25dfaf4087b1f783335d520d` (same 4859 objects) when the r3 `APKG`/
 `APKGENG` re-mints reached freshly mastered media — see *Re-attestation 2026-08-11*.
 The object arithmetic in this section is unaffected: the r3 change is recorded sizes,
 not membership.
@@ -1228,14 +1228,14 @@ and in the RAW arm `/cdrom` is the payload slice, so those paths still resolve.
 ### The two-slice source disk (resolved layout)
 
 `bench-a3000-a4091-raw` sources from a **second disk at A3000 SCSI id 5** (`c5d0`,
-the Wave-3-proven raw device), authored by `tools/build-raw-source.sh`:
+the raw device proven earlier), authored by `tools/build-raw-source.sh`:
 
 | slice | dostype | contents | how the driver uses it |
 |-------|---------|----------|------------------------|
 | **1** | `UNI\1` (s5) | the **`/install` payload tree** — the *same* tree `build-install-iso.sh` stages | mounted **at `/cdrom`** (`/etc/mount /dev/dsk/c5d0s1 /cdrom 0 s5`) so every `/cdrom/install/...` path is byte-unchanged and the miniroot pkginstall shim's hard-coded `/cdrom/install/bin/pkginstall` still resolves — **no proto churn, no re-boot-proof** |
 | **2** | `DATA` | the **raw distribution** `raw.img` (apkg self-describing layout) | apkg's `raw.conf` names it `repo=raw:/dev/rdsk/c5d0s2` |
 
-> **Wave-3 archaeology note.** The retired `amix-packagemanager/build/wave3/deploy/`
+> **History note.** The retired deploy directory of `amix-packagemanager`
 > holds a `raw.conf` that says `c5d0s1` **and** `ddraw*.sh` scripts that wrote
 > `c5d0s0` — an unresolved conflict. Neither is copied. `build-raw-source.sh`
 > **defines** the fresh layout (payload = slice 1, raw = slice 2) and the profile,
@@ -1390,7 +1390,7 @@ SD upload (`deploy-image-kvm.sh`, on-device CRC-verify), `z3660cfg.txt` mapping
 bootpri handoff, `validate-metal.sh --cycles 5`, the canonical digest
 `e483b0cb25dfaf4087b1f783335d520d` (re-attested 2026-08-11; the metal runs cited
 below attested the superseded `ec31a72…`), rollback, and the **metal unknowns** list — the
-pre-metal unknowns annotated with what the metal runs settled. **Closed by M-RUN2/M-RUN3**
+pre-metal unknowns annotated with what the metal runs settled. **Closed by two metal runs**
 (2026-07-24): the c0s1unix id-0 boot, the c6s1unix post-install id-6 boot, and the
 `scsiN→cXd0` naming seam at id 0. The `/etc/rdb -c` create primitive is **closed on the
 bench** (2026-07-31, `cd-author` green; *What the author cell found* above) — the metal
@@ -1525,7 +1525,7 @@ The `KERNBENCH` kernel package (`../amix-packagemanager`) is the counterpart: it
 `pkginfo` carries `ROOTDEV`/`CONFIG`/`KSUM_R`/`BOOT2_SHA`, readable on-box via
 `pkgparam` for exactly these gates.
 
-**The current handoff pair — P5.4 r4, pinned here 2026-08-16.** `updbootpart` never
+**The current handoff pair — r4, pinned here 2026-08-16.** `updbootpart` never
 hardcodes a sum (it reads `KSUM_R` off the installed package), so this is documentation,
 not a gate value — but it is what an operator types after `--ksum`, and what
 `validate-metal.sh --expect-sum` expects on a handed-off box:
@@ -1559,9 +1559,9 @@ not: at r4 the framed brels moved (`49227` → **`50544`** target, `51865` → *
 source) while `55482` stayed exactly where it was. It moves only if `core` is re-minted.
 Any statement that `55482` "is the rN kernel" is a mis-attribution, not a version pin.
 
-## METAL-FIX.2: the seed writes `/etc/mnttab` (fresh-media mnttab bug)
+## the seed writes `/etc/mnttab` (fresh-media mnttab bug)
 
-**Symptom (M-RUN, metal).** On the first true metal run from **freshly built**
+**Symptom (metal).** On the first true metal run from **freshly built**
 install media, the base-OS transplant froze the instant the first `pkgadd`/`apkg`
 tried to install:
 
@@ -1573,11 +1573,11 @@ pkgadd: ERROR: unable to open mount table (/etc/mnttab)
 `get_mntinfo()`) before installing. A freshly built miniroot's `/etc/mount` is a
 direct `mount(2)` that records **no** mnttab entry — and the fresh miniroot ships
 **no `/etc/mnttab` file at all**. The engine tolerance added earlier
-(`0d3a21c` synthesize-when-line-missing, `3b9b7a1`/METAL-FIX.1 synthesize-on-ENOENT)
+(`0d3a21c` synthesize-when-line-missing, `3b9b7a1` synthesize-on-ENOENT)
 handles a *readable* table that merely lacks the `/` line; it cannot help when the
 `open()` itself fails first. So the transplant never starts.
 
-**Why it hid for two waves.** Every prior acceptance run reused the same **bench
+**Why it hid for a while.** Every prior acceptance run reused the same **bench
 floppy**, whose `/etc/mnttab` had been left behind (stale/contaminated) by an
 earlier run. Its mere presence let `open()` succeed, and the engine's synthesize
 path then papered over the missing/`wrong` line — so the class was invisible until
@@ -1604,7 +1604,7 @@ and a **negative fixture** proves the check fires when the line is removed.
 
 ### Media hygiene — acceptance runs MUST use FRESH media
 
-The two-wave masking above is the lesson: **a reused install medium can carry a
+The masking above is the lesson: **a reused install medium can carry a
 stale `/etc/mnttab` (or any other leftover state) that hides a real defect.** Every
 acceptance / attestation run must therefore start from **freshly built source media
 and a freshly `mkroot`'d target** — never a floppy/`.hdf` recycled from a previous
@@ -1612,9 +1612,9 @@ run. (The driver's OVERWRITE now neutralizes *this* specific leftover, but the
 general rule stands: fresh media is the only way to reproduce the true first-boot
 conditions a real installer meets.)
 
-## METAL-FIX.4: the metal install comes up network-live (`zen0`, not `aen0`)
+## the metal install comes up network-live (`zen0`, not `aen0`)
 
-**Symptom (M-RUN2, metal).** The first full metal install (attested byte-canonical)
+**Symptom (metal).** The first full metal install (attested byte-canonical)
 came up multiuser but with **no working ethernet**: `firstboot`'s `/dev` regen logged
 `atdevs returned nonzero`, and `aen0` refused to plumb (`SIOCGIFFLAGS: Invalid
 argument`). It also baked **no `amixmetal → IP` line** into `/etc/inet/hosts`.
@@ -1650,7 +1650,7 @@ argument`). It also baked **no `amixmetal → IP` line** into `/etc/inet/hosts`.
   bare `slink` first, then `slink addaen` in a retry loop, `ifconfig zen0 <ip> up
   -trailers`, all **backgrounded** so a datapath fault can never hang the boot.
 - **Metal IP = `192.0.2.39`.** Both metal profiles now set `FB_IP=192.0.2.39`
-  (**METAL-FIX.4b**: `.39` *is* the established metal-box address — every golden's
+  (`.39` *is* the established metal-box address — every golden's
   `zen0` comes up there and all z3660net userland hardcodes it; `.38` is the
   **bench/Amiberry** emulator, a different box. There is only one physical
   A4000+Z3660, booted one disk at a time, so a from-scratch install *is* the metal
@@ -1658,7 +1658,7 @@ argument`). It also baked **no `amixmetal → IP` line** into `/etc/inet/hosts`.
   `FB_ETHER_IF` from the misleading `aen0` to **`zen0`**. The non-empty `FB_IP` also
   makes `firstboot` bake the `<FB_NODENAME> → 192.0.2.39` hosts line — since the
   2026-08-06 nodename decision the metal RAW profile bakes **`z3660amix`** (the
-  established metal-box name; the M-RUN2/M-RUN3-era media baked `amixmetal`).
+  established metal-box name; the earlier metal-run media baked `amixmetal`).
 
 **The `zen` binary — deliberately NOT laid down (not a blocker).** `/usr/amiga/bin/zen`
 is a *diagnostic/status* tool (compiled from `../amix-z3660net/userland/zen.c`); it is
@@ -1696,12 +1696,12 @@ lives in `../amix-z3660net/driver.conf` + `BUILD.md`.
 *cdevsw row*. They must agree or `zen0` opens an empty row and the interface is dead:
 
 - media re-mastered from **this tree** emit **`c 51 0`** and therefore **require a kernel that
-  registers `z3660eth` at 51** — the **P5.4** kernel set;
+  registers `z3660eth` at 51** — the **2026-08-06** kernel set;
 - **do not re-master this tree against a 48-registering kernel.** Shipped kernels (and every
-  `/dev/zen0` node on an already-installed root) carry **48** until that P5.4 rebuild;
+  `/dev/zen0` node on an already-installed root) carry **48** until that rebuild;
 - `S99zen` only `mknod`s when the node is **absent**, so an existing root upgraded to a
   51-registering kernel keeps its stale `c 48 0` node — it must be **removed or re-`mknod`'d**
-  at P5.4. That is a z3660net/P5.4 concern, not something a fresh install hits (a fresh install
+  at that rebuild. That is a z3660net concern, not something a fresh install hits (a fresh install
   has no node until `S99zen` makes one).
 
 `installer-selftest.py` audit P asserts the `c 51 0` literal *and* fails on any residual
@@ -1712,18 +1712,18 @@ lives in `../amix-z3660net/driver.conf` + `BUILD.md`.
 There is **no `z3660eth` under emulation**, so Amiberry cannot bring `zen0` up. The
 **laydown** (that `S99zen` is written, IP-correct, allowlist-clean, drift-locked) is
 fully host/bench-provable and is what `audit P` covers. The **actual link** — `zen0`
-up + bidirectional traffic — is **metal-only-testable**, and **M-RUN3 (2026-07-24)
+up + bidirectional traffic — is **metal-only-testable**, and **a metal run (2026-07-24)
 proved it from a fresh install**: `zen0` UP, host ping 3/3, bidirectional telnet,
-surviving 4 cold boots. That run predates METAL-FIX.4b, so it proved the (address-agnostic)
+surviving 4 cold boots. That run predates the `.39` fix, so it proved the (address-agnostic)
 bring-up at `.38`; the runbook's zen0 link-validation step now re-confirms the shipped
 `.39` rather than proving the link for the first time. Re-master note: to bake
 a driver/profile change into the media the next metal session boots, the RAW source media must be
 **re-mastered** (the profiles + `install.sh` changes ride the staged driver + profiles)
 — that is a separate operations step, not run here.
 
-## P5.4-FT: /stand framing tools + the syslog unit (two M-RUN-P5.4 field findings)
+## /stand framing tools + the syslog unit (two metal-run field findings)
 
-Both were ferried to the metal box by hand during M-RUN-P5.4 (2026-08); both are now
+Both were ferried to the metal box by hand during a metal run (2026-08); both are now
 laid down by the installer, fingerprint-gated end to end. `installer-selftest.py`
 audits **Q** (framing tools) and **R** (syslog unit) cover them; both pieces are
 staged by `build-install-iso.sh` and ride the RAW payload slice unchanged
@@ -1734,7 +1734,7 @@ the NEXT re-master** — the r3 media (`8842B572`) predate them.
 
 `updbootpart`'s reframe pipeline needs `/stand/boot1.boot`, `/stand/boot2.boot` and
 an executable local `/stand/makeiblk`, and its gate 5a fails closed without them. On
-**M-RUN4b** the KERN-package handoff on the fresh metal base-8 install died exactly
+**a metal run** the KERN-package handoff on the fresh metal base-8 install died exactly
 there ("framed image is empty") until `boot1.boot` + `makeiblk` were ferried from the
 bench golden (1 KB-chunk split-pull; `amixsync` GET deterministically truncates
 `makeiblk` at 10912/14924 — reassembled byte-perfect, `sum -r` 58483).
@@ -1756,7 +1756,7 @@ full-content `pkgchk` exactly as the boot2 overwrite already is.
 **A divergence worth recording:** the tracked `core-2.1.pkg` DOES ship
 `/stand/boot1.boot` + `makeiblk` (2.1 vintage), and a bench CD-cell install from the
 08-07 matrix run has them on the target — yet the metal fresh base-8 install did
-not (the M-RUN-P5.4 ledger record is unambiguous). The root cause of that absence
+not (that run's record is unambiguous). The root cause of that absence
 was never isolated; the laydown makes the question moot by making presence AND
 provenance deterministic on every fresh install, whatever the transplant delivered.
 
@@ -1821,7 +1821,7 @@ every new key's default is the literal it replaced, and all four tracked profile
 carry today's effective values, so existing flows are byte-for-byte unchanged.
 The acceptance run (`tools/install-matrix.sh cd`, fresh media) reproduces the
 canonical `e483b0cb25dfaf4087b1f783335d520d` / 4859 objects (re-attested 2026-08-11 —
-the fresh media this wave mastered is what surfaced the r3 package drift).
+the fresh media mastered here is what surfaced the r3 package drift).
 
 ### 1. A profile by **path**, not just by name
 
@@ -2058,7 +2058,7 @@ beats a fuzzy match that would quietly accept a drifted string.
 
 ### ★ The scan never calls `/etc/ddsize`
 
-This is the wave's load-bearing constraint, and it exists because of a
+This is the interview's load-bearing constraint, and it exists because of a
 measurement, not a worry. The driver work added **one** unconditional
 `/etc/ddsize /dev/rdsk/c6d0s0` to the driver and it **wedged the install** on the
 bench A3000 onboard-SCSI (a3091) path: the console printed `a3091: 0x1 0 0x0` and
@@ -2111,8 +2111,8 @@ plausible size.
 An id is offered only when the medium carries a **matching-`ROOTDEV` TARGET
 kernel** for it. `INSTALLABLE_IDS` defaults to the base profile's own
 `TARGET_SCSI_ID` — today a medium is mastered for exactly one root device, and
-offering any other id would install a kernel that cannot find its root. When P6.3
-(root-by-identity) lands, that constraint dies and the key opens up.
+offering any other id would install a kernel that cannot find its root. When
+root-by-identity lands, that constraint dies and the key opens up.
 
 * The **mounted source disk** (`SRC_SCSI_ID`) is always listed as
   `source -- not installable`. Without it the metal RAW medium would happily
@@ -2154,8 +2154,8 @@ metal runbook uses. (A cleaner fix is for `build-raw-source.sh` to rewrite `BASE
 itself when it renames the profile; queued.)
 
 **stdin discipline.** The interview owns the console; the transplant must not.
-`setup.sh` execs `install.sh` with `< /dev/null`, preserving METAL-FIX.3 — an
-inherited stdin is what hung M-RUN1 on the 1991 `pkgadd`'s prompt. Anything still
+`setup.sh` execs `install.sh` with `< /dev/null`, preserving the null stdin — an
+inherited stdin is what hung a metal run on the 1991 `pkgadd`'s prompt. Anything still
 queued in the tty when the interview ends is therefore discarded rather than fed
 to the transplant. Audit U3 pins the redirection.
 
@@ -2402,7 +2402,7 @@ order the builder feeds it becomes the order packages are laid down in. `sets.py
 `resolve()` returns a **sorted** membership — right for "is this package in the
 set", wrong here: feeding it straight into the order generator silently re-ordered
 the base-8 install to `core APKGENG APKG bsd cdfs net sysadm text`, on the one
-wave whose acceptance is that the base-8 tree does **not** move.
+step whose acceptance is that the base-8 tree does **not** move.
 
 `build-install-iso.sh` therefore expands sets in **sets.conf's own file order**
 (`core bsd net text sysadm cdfs apkgeng apkg` — which is exactly the historical
@@ -2662,7 +2662,7 @@ INSTALL_ORDER=/cdrom/install/order
 INSTALL_ATTESTED=y
 ```
 
-**The base-8 tree did not move** — which is the acceptance for this wave: a whole
+**The base-8 tree did not move** — which is the acceptance here: a whole
 new metadata pipeline, a new menu, a new custom screen and three new driver keys,
 and the canonical digest is the same on both base cells.
 
@@ -2744,9 +2744,9 @@ which is what was measured.
 
 ## The miniroot respin — the install script becomes ours
 
-Until this wave the NG miniroot booted the **stock** install script (`/etc/profile`
+At first the NG miniroot booted the **stock** install script (`/etc/profile`
 on the stock root floppy, 19,351 B) and the operator escaped it: `Ctrl-C` at the
-first prompt, mount the CD by hand, run the driver. Everything the last three waves
+first prompt, mount the CD by hand, run the driver. Everything earlier
 built — the interview, the sets menu, the driver's input keys — sat behind that
 manual dance. The respin replaces the one file, and the dance is gone.
 
@@ -2950,7 +2950,7 @@ The slice is **s5**, s5 truncates every name at 14 characters, and
 `setup.sh` now falls back to `raw.profile` when `BASE`'s own name does not
 resolve; the cleaner fix (have `build-raw-source.sh` rewrite `BASE` when it
 renames the profile) is queued rather than done, because that tool was outside
-this wave's blast radius.
+this step's blast radius.
 
 ### ★ The other thing the respin measured: the interactive path was six blocks from death
 
@@ -2989,7 +2989,7 @@ Two changes, both in `setup.sh`, and neither of them a workaround:
 
 Audit **U** now pins both, including a direct refusal of
 `cat "$ANSWERS" > "$ANSWERS_ECHO_PATH"`, so the oversized beacon cannot come back.
-The lesson generalizes past this wave: **on the miniroot, the root filesystem is a
+The lesson generalizes: **on the miniroot, the root filesystem is a
 floppy with tens of blocks free, and anything an interactive path leaves in `/tmp`
 is taken directly out of the installer's own working room.**
 
@@ -3007,7 +3007,7 @@ re-mastered from this tree (the tree's `setup.sh` is byte-identical to the disc'
 | `cd-suomi` | **9/9** | interview → rc=0, 371 s | `e483b0cb…` / **4859** + base-5 exact | **`default.kmap` and `kmap/s` are inode 2073**, `FB_KMAP=s` |
 | `cd-standard` | **9/9** | `install.sh` rc=0, 537 s | `4ad8e17b…` / **11012**, base-5 4793 + base-8 4859 contained | none |
 
-The two claims the wave exists for, both green:
+The two claims this exists for, both green:
 
 * **the Ctrl-C compatibility path is untouched** — `cd` and `cd-standard` reached
   the miniroot shell through the preserved trap exactly as before;
@@ -3064,7 +3064,7 @@ clean, so the offer did not appear (stock only asks when the mount fails).
 
 ## The first-boot configuration dialog — two stages, one application path
 
-Until this wave a freshly-installed box never asked its owner anything. The
+At first a freshly-installed box never asked its user anything. The
 installer disarmed the stock sysinit dialog (`chmod -x
 /usr/amiga/bin/system.setup`, the stock's own once-only lever) and
 `/etc/rc2.d/S16firstboot` baked whatever the **profile** said — nodename,
@@ -3151,7 +3151,7 @@ set all still attest **`e483b0cb25dfaf4087b1f783335d520d` / 4859**.
 | a re-run cannot accumulate keys | `write_conf` strips its own block first | Z: every key written is stripped first |
 | a half-finished dialog still boots | S16 applies the mechanical keys, keeps `PENDING` | Z + the `cd-interrupt` cell |
 
-### Five bench findings this wave paid for
+### Five bench findings this work paid for
 
 Each was found by **running** the thing — the dialog on a real installed box, and
 the installer on the real miniroot (2026-08-12). None of them is visible to
@@ -3176,7 +3176,7 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
    and on the miniroot that `/tmp` **is** the 880-block install floppy, which has
    46 free blocks. The updbootpart body cost **16 of those 46 blocks on every
    install since updbootpart joined the driver** — which is the real reason this floppy has been "six
-   blocks from death" for three waves. Adding 29 KB of dialog on top asked for
+   blocks from death" for a long while. Adding 29 KB of dialog on top asked for
    more than the floppy had. So the dialog moved into `firstboot.sh` behind a
    `--dialog` entry point, the slot gets a three-line stub the driver emits with
    plain `echo` lines, and `installer-selftest` enforces the law.
@@ -3203,7 +3203,7 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
    core`. The interview now copies the **assignments only** (a `case` glob in a
    redirect-fed loop — there is no `grep` or `sed` on the miniroot), which is the
    identical merge mechanism, since `sh` ignores comments when it sources a file.
-   ~24 blocks back, and the margin the last three waves were living on is gone.
+   ~24 blocks back, and the margin earlier work was living on is gone.
 
 3. **s5 truncates every name at 14 characters, and `firstboot.conf` is exactly
    14.** The obvious temp name `firstboot.conf.new` therefore *is*
@@ -3285,7 +3285,7 @@ lo0 localhost`) is edited **in place**: that file is a hard link to
 
 ### The aen0 default route — the ed half-patch, and the file it patches
 
-`/etc/inet/rc.inet` was uncaptured until this wave; it is 1,290 B, mode 0444, a
+`/etc/inet/rc.inet` was uncaptured until now; it is 1,290 B, mode 0444, a
 `net` member, and it *ends* with the invitation:
 
 ```
@@ -3369,7 +3369,7 @@ Installing public
 PANIC: swapinub: segu_fault() failed to swap in the u area
 ```
 
-Package 12 of 17, every time. The wave began by refusing to guess.
+Package 12 of 17, every time. The work began by refusing to guess.
 
 ### What `/dev/fakeswap` actually is (measured, not reasoned)
 
@@ -3462,7 +3462,7 @@ function of what `pkgadd` **recorded**.
 
 The dialog's finding 1 — *a here-doc is a file on the install floppy from the moment the
 shell parses the script* — left one here-doc standing: `emit_updbootpart`'s. This
-is the wave that removes it, and the cost it was charging was measured first, on
+is the step that removes it, and the cost it was charging was measured first, on
 a real run, by starting the driver in the background and listing `/tmp`:
 
 ```
@@ -3509,7 +3509,7 @@ This is the closing stage of the installer-UX rework, and it is mostly about
 package sets nobody had ever installed, and two in-product messages for the two
 classes of machine this installer cannot serve.
 
-### The distro-neutral public flavor (P8.3) — `profiles/public-a3000-a4091.profile`
+### The distro-neutral public flavor — `profiles/public-a3000-a4091.profile`
 
 Every profile in this tree described a machine on one particular LAN. That is
 right for the unattended tier — the matrix has to reproduce a byte-identical tree
@@ -3542,7 +3542,7 @@ hazard. What makes it safe is the first-boot dialog's **re-arm**: the
 summary loop, and that loop cannot be reached without passing the root-password
 step. An interruption, a power cut or an EOF leaves the slot executable and the
 whole dialog runs again from the top. So a box that ever *finished* its first
-boot has an owner-chosen root password, and one that did not is still asking for
+boot has a user-chosen root password, and one that did not is still asking for
 one. That is a mechanism, and the `cd-interrupt` cell is what proves it.
 
 **Root-telnet defaults to ENABLED and is never silently disabled** (decision
@@ -3771,7 +3771,7 @@ corrupts anything — which is why 152 over-long names produce exactly 5 problem
 
 **Only `full` can hit this.** All five groups live in `gnusrc2` and `X11r5src`,
 which are source packages present in no other set — and `minimal`, `standard`,
-`developer` and `x11` all attested clean this wave, which is the same statement
+`developer` and `x11` all attested clean here, which is the same statement
 from the other side. (Those three *do* each write 7–12 files under silently
 truncated names; the digest is blind to it, because it attests the declared path,
 not the realised one.)
@@ -4012,7 +4012,7 @@ two sets we have already attested:
 |---|--:|--:|--:|
 | `minimal` | 4,937 | 4,859 | 1.6 % |
 | `standard` | 11,204 | 11,012 | 1.7 % |
-| `full` | **28,965** | *(this wave)* | ~2 % expected |
+| `full` | **28,965** | *(this run)* | ~2 % expected |
 
 So a full install lands inside **half** the ceiling. A workload that genuinely
 needed more inodes would need a different filesystem, not a different constant.
@@ -4379,13 +4379,13 @@ also 10/10, on media whose menu text was one string away from stock's; the disc
 was re-mastered once the stock bytes were extracted, and the acceptance run above
 is the one whose media matches the committed tree.)
 
-## ★ P5.4-R2: the bench runtime golden, minted by the installer (2026-08-14)
+## ★ The bench runtime golden, minted by the installer (2026-08-14)
 
 **The bench golden is no longer an inherited disk.** Every golden this project has
 run on the bench descends from `amix-images/masters/amix-uaebase-golden-2026-07-11.hdf`,
 which is itself a copy of a user-prepared `Amix_UAE.hdf` whose own provenance is
 "someone installed Amix onto it, once, years ago". That was fine while we had no
-installer. We have one, it is attested, and P5.4-R2 replaces the inherited lineage
+installer. We have one, it is attested, and this replaces the inherited lineage
 with an image whose every object is accounted for by a package digest.
 
 The deliverable is a **candidate** — blessing it into `amix-images/masters/` happens
@@ -4534,11 +4534,11 @@ byte-identical (`cmp`) to `work/install-matrix/r2-golden/target.hdf`. The
 verification boot above ran on a **copy**, so the delivered bytes are exactly what
 the harness produced and nothing outside the gate ledger ever wrote to them.
 
-## ★ Wave C3: the 68040 line installs — the `bench-040` cell (2026-08-19)
+## ★ The 68040 line installs — the `bench-040` cell (2026-08-19)
 
 The 040/060 campaign's **C1** produced a medium that *boots* the 68040 installer
 (`work/metal-040-source/metal-040-source-20260819.hdf`, bench-booted the same day to
-the keyboard prompt). C3 is the wave that turns that into a completed install: a
+the keyboard prompt). C3 is the step that turns that into a completed install: a
 matrix cell, on the bench, driven by the same harness that ran the r2 batch, with a
 digest attestation taken off the installed box's own contents DB.
 
@@ -4774,7 +4774,7 @@ ECHO_ANSWERS=
 
 That is `setup.sh` **lines 383-385** — the last two traced commands are the pair of
 harness-marker tests in the `ECHO_ANSWERS` block — and then nothing. The profile loaded
-completely and correctly (every key is right there in the trace, including this wave's own
+completely and correctly (every key is right there in the trace, including this step's own
 `52867` and `good_040`); the interview never asked its first question.
 
 **So it dies at PARSE time, not at command execution.** What immediately follows line 385
@@ -4852,7 +4852,7 @@ reading alone.
 
 The wall is **not in this repo's lane**. Everything media-side is proven correct by the
 run itself: the medium boots, the loader is `good_040`, the UFS miniroot roots, the s5
-payload mounts and reads byte-exact, and the profile this wave wrote loads completely and
+payload mounts and reads byte-exact, and the profile written here loads completely and
 correctly. What fails is the 1991 Bourne shell growing its arena on a 68040 kernel.
 
 Handed on, with the evidence path beside each:
@@ -4943,7 +4943,7 @@ different answer from 2026 on (every European, US, Canadian, Australian DST zone
 A zone database package for later tzdata releases belongs to amix-packages.
 
 
-## 1.1: the Gayle-IDE two-device follow-up (PARKED, owner 2026-09-29)
+## 1.1: the Gayle-IDE two-device follow-up (PARKED, 2026-09-29)
 
 The IDE lane is 1.1 in full; the CF kit is not in the initial release download set. When un-parked:
 first the **slave-enabled CF kit** (K030-IDE-S, chain 98b12f76, kerntools 4da32c4: the slave appears as
@@ -4953,13 +4953,13 @@ which device boots the installer, since K030-IDE-S roots on the master (a slave-
 kerntools, or the roles flipped). Amiberry models the slave (`hardfile2=…,ide1`; gayle.cpp: two drives
 per channel), so both are bench-testable.
 
-**Owner note:** a CF card as IDE slave is often unstable on Amigas, so the **master-only CF kit is the
+**Note:** a CF card as IDE slave is often unstable on Amigas, so the **master-only CF kit is the
 product** and the slave-enabled kit is low value. K030-IDE-S stays a bench knob, not a shipped kit.
 
 ## E-BIG: the on-box root ceiling (2026-10-02)
 
 D12's "at least 900 MB should work" is revised to **600 MB proven; larger roots after the kernel
-fix**. kerntools KT-32 bracketed on-box `mkfs` on both kernel lines: 600 MB passes, 640 MB and up
+fix**. kerntools bracketed on-box `mkfs` on both kernel lines: 600 MB passes, 640 MB and up
 fail with `wtfs: No such device or address`. The cause is stock: sdpart.c `sddevsize()` returns
 1234567 for a partition whose length it does not know, and dd.c clamps raw I/O to it, so nothing
 can be written past block 1234567 through the raw device. Host-minted images are unaffected.
@@ -5069,7 +5069,7 @@ The A4000D CD install with the TARGET on the Zulu disk at id 1 behind the A4092 
 `0x00480019`), not on the Z3660 SD. Profiles: `metal-a4000-z3660-060-a4092cd2` (AX9) and the emulator twin
 `bench-a4000-z3660-060-a4092cd2` (AX10), each its CD-1 twin with only the target keys changed. The installed kernel
 is KD060-ZA c1-u1 (sum -r 27291, 2 MiB slice); the donor is `tools/build-k1-donor.sh` ->
-`work/bootslice-donor/cd2-KD060-ZA-c1-u1.hdf`. Its chain equals kerntools' KT-50 `c1set` bootslice byte for byte.
+`work/bootslice-donor/cd2-KD060-ZA-c1-u1.hdf`. Its chain equals kerntools' `c1set` bootslice byte for byte.
 
 **Installer change** (installer-selftest audit CD2 runs every case under dash):
 - **`TARGET_SCAN_IDS`** (profile key): when set, the interview's disk scan opens exactly those ids. For CD-2 it is
@@ -5179,7 +5179,7 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   their C4-1 minors, the card-2/3 nodes 0600 root root and registered to core, no d1 row in the contents file.
   A two-card kernel's root must keep core's set.
 - A root installed before step 4d existed keeps core's d1 nodes even after apkg brings a four-card kernel. The
-  A4000D root of bench J4 (M-G3, 2026-10-27) was one: the disk (`l11-k46.hdf` 9b2edb36, installed 2026-10-26
+  A4000D bench root (2026-10-27) was one: the disk (`l11-k46.hdf` 9b2edb36, installed 2026-10-26
   19:22 with kern46m -61, kabi k46.1.0 and no `sdcards=`; its firstboot.sh had no 4d and its firstboot.conf no
   `FB_SDCARDS`). Copies of it later got kern46m -82 (`sdcards=4`) through apkg. The current media all lay
   `FB_SDCARDS=4` and step 4d. Such old roots get the set from `kbootset` -22's commit (C2-4 §14), not from the
@@ -5227,8 +5227,8 @@ The loaders take their DMA buffers by the boot partition's DosEnvec, as FFS does
 takes chip memory when the buffer lies beyond `de_Mask`; boot2 reads straight into any
 buffer the Mask allows. Until now every disk here said Mask `0xFFFFFFFC`. Each partition's
 Mask now says what its controller's DMA really reaches, from one table,
-`tools/lib/dmamask.py` (decided 2026-10-28, matching the kernel's DMA reach,
-amix-dlm `DMA_REACH 0x08000000` and C4-5; C4-2 / OQ-80.5):
+`tools/lib/dmamask.py` (2026-10-28, matching the kernel's DMA reach,
+amix-dlm `DMA_REACH 0x08000000` and C4-5; C4-2 / an open question):
 
 | Controller (SD_BOARDS name) | Mask | Why |
 |---|---|---|

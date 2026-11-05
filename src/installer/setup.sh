@@ -216,7 +216,7 @@ MINBOOT=2                # the boot-slice floor; install.sh carries the same con
 BOOTSIZE=10               # 10 MiB so every kernel cut fits; stock was 2
 OFFSET_BLOCKS=128
 BLOCKS_PER_MB=2048
-# E-BIG (KT-32, 2026-10-02): the STOCK kernel cannot write an on-box filesystem
+# E-BIG (2026-10-02): the STOCK kernel cannot write an on-box filesystem
 # past block 1234567 -- sdpart.c sddevsize() answers 1234567 for an unknown
 # partition length and dd.c clamps raw I/O to it, so mkfs dies "wtfs: No such
 # device or address" on any root above ~603 MB (600 MB proven, 640 fails).
