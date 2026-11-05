@@ -12,6 +12,10 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -41 (2026-11-05): amix cf069bd -- the package description no longer names a
+# commit, which went stale; the copyright file names the pinned one.  Box
+# binary, manual page, whatis and rc scripts as -40.
+#
 # -40 (2026-11-05): amix cf069bd -- the refusal of a misplaced safe mark calls
 # it the administrator's.  The binary also links bootinfo.c's new ax_memcap,
 # which kbootset does not call.  Built in amix-toolchain:dist: the box binary
@@ -276,5 +280,5 @@ KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261105-40
+KB_VERSION=1.1.0.261105-41
 KB_SOURCE_EPOCH=1793836800
