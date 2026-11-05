@@ -34,6 +34,22 @@ here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")
 ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
 # the pinned content check (amix tools/ at the set's revision, tools/build-l11-inputs.sh), not the checkout's tip
 RC="${L11_IN:-$repo/work/l11}/amix-tools/release-check"
+# wipe_earlier OUT: nothing from an earlier build may pass as this one's, nor be counted in its record
+wipe_earlier() {
+	rm -f "${1:?}"/amix-1.1-*.iso "${1:?}"/amix-1.1-*.adf "${1:?}"/amix-1.1-*.hdf "${1:?}"/amix-1.1-*.sha256 \
+		"${1:?}"/amix-1.1-*.MANIFEST "${1:?}/SHA256SUMS" "${1:?}/MEDIA.txt" "${1:?}/RELEASE-CHECK.txt"
+}
+if [ "${1:-}" = --selftest ]; then
+	d=$(mktemp -d) || exit 1; rc=0
+	for f in amix-1.1-install.iso amix-1.1-netinstall.iso amix-1.1-netinstall.iso.sha256 amix-1.1-boot-k46-1.adf amix-1.1-boot-z3660.hdf \
+		amix-1.1-install.iso.MANIFEST SHA256SUMS MEDIA.txt RELEASE-CHECK.txt keep.txt; do : > "$d/$f"; done
+	mkdir "$d/work"
+	wipe_earlier "$d"
+	[ "$(ls -A "$d" | tr '\n' ' ')" = "keep.txt work " ] || { echo "  FAIL left behind: $(ls -A "$d" | tr '\n' ' ')"; rc=1; }
+	rm -rf "${d:?}"
+	[ "$rc" = 0 ] && echo "build-release-media --selftest: PASS" || echo "build-release-media --selftest: FAIL"
+	exit $rc
+fi
 TREE= R46= R30= OUT= N46= N30= SET=x11
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -56,9 +72,7 @@ L11_IN="${L11_IN:-$repo/work/l11}"; export L11_IN
 [ ! -s "$L11_IN/UNPINNED" ] || die "$L11_IN rolled userland unpinned: not inputs of record"
 [ -z "$(git -C "$repo" status --porcelain)" ] || die "the tree has uncommitted changes: release media name one commit"
 mkdir -p "$OUT"
-# nothing from an earlier build may pass as this one's, nor be counted in its record
-rm -f "${OUT:?}"/amix-1.1-*.iso "${OUT:?}"/amix-1.1-*.adf "${OUT:?}"/amix-1.1-*.hdf "${OUT:?}"/amix-1.1-*.sha256 \
-	"${OUT:?}"/amix-1.1-*.MANIFEST "${OUT:?}/SHA256SUMS" "${OUT:?}/MEDIA.txt" "${OUT:?}/RELEASE-CHECK.txt"
+wipe_earlier "$OUT"
 W="$OUT/work"; mkdir -p "$W"
 rel() {	# rel FILE -- its .sha256 beside it
 	( cd "$(dirname "$1")" && sha256sum "$(basename "$1")" > "$(basename "$1").sha256" )
