@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — amitools falls back to our copy (044f81f)
+
+`amitools.distfile` falls back to a release asset of amigaux/amix-distfiles; the bytes are the same.
+
 ## 2026-11-05 — the media image retries the Ubuntu snapshot (9b85218)
 
 As the build image does.
