@@ -86,14 +86,14 @@ static const struct mcase cases[] = {
 	{ "k46", K46S(128, 129), { CHIP, { 0x5, BANK + 0x20, BANK + MB(128) + 0x10000, BANK + MB(128) } } },
 	{ "k46", "", { CHIP, FAST(BANK, 128, 128) } },
 	{ "k46", "", { CHIP, FAST(BANK, 64, 64) } },
-	/* k46: a touching bank stays joined and counts */
-	{ "k46", K46S(128, 144), { CHIP, BELOW(16), FAST(BANK, 128, 112) } },
-	{ "k46", K46S(128, 272), { CHIP, BELOW(16), FAST(BANK, 256, 112) } },
-	{ "k46", "", { CHIP, BELOW(16), FAST(BANK, 112, 112) } },
+	/* k46: the kernel uses its bind region alone: a touching bank neither
+	 * counts nor changes, and costs the kernel nothing */
+	{ "k46", "", { CHIP, BELOW(8), FAST(BANK, 128, 128) } },
+	{ "k46", "", { CHIP, BELOW(16), FAST(BANK, 128, 128) } },
+	{ "k46", "", { CHIP, BELOW(64), FAST(BANK, 128, 128) } },
 	{ "k46", "", { CHIP, BELOW(16), FAST(BANK, 64, 64) } },
-	{ "k46", K46S(128, 192), { CHIP, BELOW(64), FAST(BANK, 128, 64) } },
-	/* k46: one over half the cap would leave too little: out, a page short */
-	{ "k46", K46S(128, 256), { CHIP, SHORT(96), FAST(BANK, 256, 128) } },
+	{ "k46", K46S(128, 256), { CHIP, BELOW(16), FAST(BANK, 256, 128) } },
+	{ "k46", K46S(128, 256), { CHIP, BELOW(64), FAST(BANK, 256, 128) } },
 	/* a bank of its own, as without a card */
 	{ "k46", "", { CHIP, FAST(0x07000000UL, 16, 16) } }
 };

@@ -64,16 +64,14 @@ After the kernel is relocated and before the hand-off copy:
 1. it decompresses the image (CRC-32 checked, L3 on a mismatch, as any
    member) to **the top of the largest fast-memory region the kernel can
    use**: below 0x40000000, and within the line's limit above the bind
-   base (`AX_K30_MEMCAP`, 64 MiB; `AX_K46_MEMCAP`, 128 MiB). When a touching
-   region has shortened the kernel's own on k46, the image can lie above
-   that region's end, which the kernel leaves alone. The image starts on a 64 KiB
+   base (`AX_K30_MEMCAP`, 64 MiB; `AX_K46_MEMCAP`, 128 MiB). The image starts on a 64 KiB
    boundary. It is claimed with AllocAbs while AmigaOS still runs; when
    the top is in use (a software MapROM tool's Kickstart copy, a
    reset-proof RAM disk), it goes at the highest free 64 KiB boundary
    below, still above the kernel's end (version 5, `ax_rd_place`);
 2. it ends that region's entry in `bootinfo.memory[]` at the image's
-   start, unless it already ends lower, so the kernel never uses the
-   image's pages, nor anything above them;
+   start, so the kernel never uses the image's pages, nor anything above
+   them;
 3. it writes the image's **physical address and size** into the loader
    record (`AXL1` offsets 116 and 120);
 4. it writes the root selector `ramdisk` (kind 2) and the swap selector

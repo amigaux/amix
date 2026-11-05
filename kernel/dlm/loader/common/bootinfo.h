@@ -115,19 +115,19 @@ struct ax_memr {
  * one over 64 MiB stops it before the banner (the stage-3 emulator
  * rows, 2026-10-26); 10 section 3 */
 #define AX_K30_MEMCAP	0x04000000UL
-/* the most a k46 kernel has been run with: its kernel map shrinks with the
- * memory it describes; 10 section 3 */
+/* the most fast memory a k46 kernel can describe: kvm_init sizes its segmap
+ * window from the memory, and at about 128 MiB the window reaches kvsegu;
+ * 10 section 3 */
 #define AX_K46_MEMCAP	0x08000000UL
 
-/* in the MemHeader copies mems[0..n) (bootinfo.memory[] to be), so that the
- * kernel, which joins touching regions into its main store, sees at most
- * cap (mh_Lower and mh_Upper only: the kernel reads no other field).  base
- * is the kernel's bind address, ax_bind_region's answer; that region is
- * shortened to fit.  A fast region that ends at base stays joined and counts
- * against the cap; with pool set, or when it is over half the cap, it ends a
- * 2 KiB page short of base instead and stays out of the main store with its
- * range intact (on k30, for the DMA pool; 10 section 3.2).  Returns the size
- * the main store would have had when the bind region was shortened, else 0 */
+/* in the MemHeader copies mems[0..n) (bootinfo.memory[] to be): the fast
+ * region whose base is the kernel's bind address (ax_bind_region's answer)
+ * ends at most cap bytes above it (mh_Lower and mh_Upper only: the kernel
+ * reads no other field).  With pool set (k30), a fast region that ends at
+ * base ends a 2 KiB page short of it instead, so the kernel, which would
+ * join them, leaves it out of its main store with its range intact for the
+ * DMA pool (10 section 3.2).  Returns the size the bind region had when the
+ * cap shortened it, else 0 */
 ax_u32 ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap, int pool);
 ax_u32 ax_bind_region(const struct ax_memr *r, int n, ax_u32 *size);
 
