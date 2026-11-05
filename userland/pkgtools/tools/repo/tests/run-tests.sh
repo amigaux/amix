@@ -3047,6 +3047,26 @@ raise SystemExit(0 if v(b + '62.1', b + '62') == 1 and v(b + '62', b + '62.1') =
     ar34 "$S34/out6/1.1" --previous "$S34/out5/1.1" --userland "$S34/ul3" >/dev/null 2>&1
     check "  ... and an assembly over that tree reads the #old #fstype line back: same catalog" \
         bash -c "test $? -eq 0 && cmp -s '$C5' '$S34/out6/1.1/catalog'"
+    # a published catalog older than the mark: the row stays, the mark is carried
+    rm -rf "${S34:?}/nofs"; mkdir -p "$S34/nofs"; cp -r "$S34/out3/1.1" "$S34/nofs/1.1"
+    sed -i '/^#ext fstype 1$/d; /^#fstype /d' "$S34/nofs/1.1/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/nofs/1.1/catalog" | cut -c1-32)" > "$S34/nofs/1.1/catalog.md5"
+    ar34 "$S34/out7/1.1" --previous "$S34/nofs/1.1" >"$WORK/t34.7" 2>&1
+    C7="$S34/out7/1.1/catalog"
+    check "a published row with no #fstype: this build's is carried, and said" \
+        bash -c "test $? -eq 0 && grep -A1 -x '#ext fstype 1' '$C7' | grep -qx '#fstype ufst ufs' && grep -q 'the published row has no #fstype line; this build.s is carried' '$WORK/t34.7'"
+    check "  ... no 'differs' note about it, and the row itself is the published one" \
+        bash -c "! grep -q 'differs from the published row.*#fstype' '$WORK/t34.7' && test \"\$(grep '^ufst|' '$C7')\" = \"\$(grep '^ufst|' '$S34/nofs/1.1/catalog')\""
+    ar34 "$S34/out7b/1.1" --previous "$S34/out7/1.1" >"$WORK/t34.7b" 2>&1
+    check "  ... the next assembly over that tree changes nothing and carries nothing" \
+        bash -c "test $? -eq 0 && cmp -s '$C7' '$S34/out7b/1.1/catalog' && ! grep -q 'no #fstype line' '$WORK/t34.7b'"
+    # a published mark that disagrees is still only noted: the published row stands
+    rm -rf "${S34:?}/difs"; mkdir -p "$S34/difs"; cp -r "$S34/out3/1.1" "$S34/difs/1.1"
+    sed -i 's/^#fstype ufst ufs$/#fstype ufst s5/' "$S34/difs/1.1/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/difs/1.1/catalog" | cut -c1-32)" > "$S34/difs/1.1/catalog.md5"
+    ar34 "$S34/out8/1.1" --previous "$S34/difs/1.1" >"$WORK/t34.8" 2>&1
+    check "a published #fstype that disagrees: kept, and noted as a difference" \
+        bash -c "test $? -eq 0 && grep -qx '#fstype ufst s5' '$S34/out8/1.1/catalog' && grep -q 'differs from the published row in: the #fstype line' '$WORK/t34.8'"
     toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "${S34:?}/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a published version with other bytes: refused" "is published with other bytes" \

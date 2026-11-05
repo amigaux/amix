@@ -1,5 +1,13 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-05 — assemble-release.py: a published row gains the #fstype it lacks
+
+A published catalog older than the mark has no `#fstype` lines, and keeping its row dropped the mark:
+`amixrt` 1.0-2 is UFS-only (long file names under /opt/amix/doc/amixrt) and apkg's check would not
+have applied to it on s5. When an input carries the line and the published row has none, the line is
+carried, and said: the bytes are the same and the mark is true of them. A published line that
+disagrees stays, with a note. On the 1.1 inputs the catalog gains the one line `#fstype amixrt ufs`.
+
 ## 2026-11-05 — the repo tools stop rather than pass without having looked
 
 Every tool that could report a pass over nothing now refuses, each with a test that fails on the old code:
