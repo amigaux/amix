@@ -5,6 +5,7 @@
 #   gca-src      gcc-cross-amix at the commit in gcc-cross-amix.pin
 #   g14-src      gcc14-cross-amix at the commit in gcc14-cross-amix.pin
 #   amix-system  a checkout of amigaux/amix-system (the AMIX root under usr/)
+#   base-debs    the base image's CA certificates and openssl (base-*.distfile)
 #
 # Every path inside the image is fixed, so no build folder, user name or host
 # path of the machine that builds it ends up in the toolchains; dates come from
@@ -16,23 +17,27 @@
 FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS base
 
 # The Ubuntu archive as it was at this moment, so the host packages are the
-# same on every build. snapshot.ubuntu.com answers only over https, so the CA
-# certificates come first, from the live archive; every package after them
-# comes from the snapshot, whose signatures apt checks as usual. The snapshot
+# same on every build. snapshot.ubuntu.com answers only over https and the base
+# image has no CA certificates, so those and the openssl they need come first:
+# the snapshot's own packages, base-*.distfile, fetched and checked by sha256 by
+# container-build.sh, never from the live archive, which moves. Changing SNAPSHOT
+# means changing those two pins. Every package after them comes from the
+# snapshot, whose signatures apt checks as usual. The snapshot
 # service answers 5xx at times, for minutes: apt retries each file 5 times,
 # backing off to 2 minutes; an update fails on any index it could not fetch
 # (apt would go on without it), and each update or install is tried 4 times,
 # 2 minutes apart.
 ARG SNAPSHOT=20261028T000000Z
 ENV DEBIAN_FRONTEND=noninteractive LC_ALL=C.UTF-8 TZ=UTC
-RUN printf '%s\n' 'Acquire::Retries "5";' 'Acquire::Retries::Delay::Maximum "120";' \
+RUN --mount=type=bind,from=base-debs,target=/tmp/base-debs \
+    printf '%s\n' 'Acquire::Retries "5";' 'Acquire::Retries::Delay::Maximum "120";' \
       > /etc/apt/apt.conf.d/80retries \
  && try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
  && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
       cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
- && try upd \
- && try apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/ubuntu.sources \
+ && rm -f /etc/apt/sources.list.d/ubuntu.sources \
+ && dpkg -i /tmp/base-debs/*.deb \
+ && apt-mark auto openssl \
  && printf '%s\n' 'Types: deb' \
       "URIs: https://snapshot.ubuntu.com/ubuntu/$SNAPSHOT" \
       'Suites: noble noble-updates noble-security' \

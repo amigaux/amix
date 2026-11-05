@@ -37,8 +37,10 @@ startup objects). That is the `usr/` tree of `amigaux/amix-system`; see
 
 `Containerfile` builds both toolchains from their pins on a fixed base image
 (Ubuntu 24.04, pinned by digest, host packages from a fixed archive
-snapshot, the same release as CI's runner). `container-build.sh` prepares its
-inputs and runs the build:
+snapshot, the same release as CI's runner; the two packages https needs first
+are that snapshot's too, pinned by sha256 in `base-*.distfile`). `container-build.sh`
+prepares its inputs and runs the build, with the toolchains and amix-system each
+exported at its pin under a fixed umask:
 
 ```sh
 system/fetch-amix-system /path/to/amix-system                 # at its pin

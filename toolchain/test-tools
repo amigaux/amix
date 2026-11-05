@@ -176,7 +176,13 @@ check "image-manifest: a file's content is" sh -c "! cmp -s '$T/im/1' '$T/im/3'"
 # --- container-build.sh --------------------------------------------------------
 cb=$T/cb
 mkdir -p "$cb/toolchain" "$cb/system" "$cb/bin" "$cb/src"
-cp "$here/container-build.sh" "$cb/toolchain/"
+cp "$here/container-build.sh" "$here/fetch-distfile" "$cb/toolchain/"
+mkdir -p "$cb/build/pkg/common" "$cb/debs"
+cp "$here/../build/pkg/common/fetch.sh" "$cb/build/pkg/common/"
+for d in ca-certificates openssl; do
+	printf '%s deb\n' "$d" > "$cb/debs/$d.deb"
+	echo "https://example.invalid/$d.deb $(sha256sum "$cb/debs/$d.deb" | cut -c1-64)" > "$cb/toolchain/base-$d.distfile"
+done
 pinned() {	# pinned <name> <pin file>: a repository, its one commit pinned
 	r=$cb/src/$1
 	git init -q "$r"
@@ -208,14 +214,14 @@ cat > "$cb/bin/docker" <<DOCKER
 #!/bin/sh
 for a in "\$@"; do
 	case \$a in
-	gca-src=*|g14-src=*|amix-system=*)
+	gca-src=*|g14-src=*|amix-system=*|base-debs=*)
 		(cd "\${a#*=}" && find . -printf '%m %p\n') > "$cb/context-\${a%%=*}" ;;
 	esac
 done
 DOCKER
 chmod 755 "$cb/bin/docker"
 build() {	# build <system checkout>, under a umask that writes group bits
-	( umask 002; CONTAINER=$cb/bin/docker GCA_REPO=$cb/src/gca G14_REPO=$cb/src/g14 \
+	( umask 002; CONTAINER=$cb/bin/docker GCA_REPO=$cb/src/gca G14_REPO=$cb/src/g14 AMIX_DISTFILES=$cb/debs \
 		sh "$cb/toolchain/container-build.sh" "$1" amix-toolchain:test )
 }
 check "container-build: runs on a checkout past its pin, with untracked files" build "$sys"
@@ -235,6 +241,15 @@ for c in gca-src g14-src amix-system; do
 done
 git init -q "$cb/src/other"
 refused "container-build: a checkout without the pinned commit" "is not in" build "$cb/src/other"
+check "container-build: the base image's two packages reach the build" \
+	sh -c "grep -q 'ca-certificates.deb' '$cb/context-base-debs' && grep -q 'openssl.deb' '$cb/context-base-debs'"
+printf 'other bytes\n' > "$cb/debs/openssl.deb"
+refused "container-build: a base package with other bytes" "not the pinned" build "$sys"
+snapshot=$(sed -n 's/^ARG SNAPSHOT=//p' "$here/Containerfile")
+check "Containerfile: the base packages come from the snapshot apt uses after them" \
+	sh -c "[ -n '$snapshot' ] && grep -q '/ubuntu/$snapshot/' '$here/base-ca-certificates.distfile' && grep -q '/ubuntu/$snapshot/' '$here/base-openssl.distfile'"
+check "Containerfile: the base image's own archive list is gone before apt reads any" \
+	sh -c "awk '/ubuntu.sources/&&!s{s=NR} /try upd/&&!u{u=NR} END{exit !(s&&u&&s<u)}' '$here/Containerfile'"
 
 echo "$pass/$((pass + fail)) passed"
 [ "$fail" -eq 0 ]

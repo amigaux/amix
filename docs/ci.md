@@ -56,8 +56,8 @@ built; the 68040/68060 port comes from `kernel/port/port.pin`.
 
 Building the container is most of the time, so the image is cached: a
 `docker save` of it, compressed with zstd, under a key made from the files
-it is built from (`Containerfile`, the pins, `container-build.sh` and the
-`system/` pin, manifest and check). Any change to those builds a new image;
+it is built from (`Containerfile`, the pins, `base-*.distfile`, `container-build.sh`
+and the `system/` pin, manifest and check). Any change to those builds a new image;
 anything else loads the cached one. The image is about 650 MB of the
 repository's 10 GB cache, and only the newest is useful: when a push to
 `master` saves a new image, the job deletes the images of every other key
