@@ -85,13 +85,16 @@ echo "contents-fsck rc=$frc"
 echo
 echo "########## pkginfo -R (must list all) ##########"
 "$PKGINFO" -R "$ROOT" || fail "pkginfo -R"
+for pkg in $PKGS; do
+	"$PKGINFO" -R "$ROOT" -q "$pkg" || fail "pkginfo -R does not list $pkg"
+done
 
 echo
 echo "########## emit contents DB + name service for host digest ##########"
 mkdir -p "$EMIT"
-cp "$CDB" "$EMIT/contents"
-cp "$ROOT/etc/passwd" "$EMIT/passwd"
-cp "$ROOT/etc/group" "$EMIT/group"
+cp "$CDB" "$EMIT/contents" || fail "emit contents"
+cp "$ROOT/etc/passwd" "$EMIT/passwd" || fail "emit passwd"
+cp "$ROOT/etc/group" "$EMIT/group" || fail "emit group"
 echo "emitted: $EMIT/{contents,passwd,group}"
 ls -l "$EMIT"
 

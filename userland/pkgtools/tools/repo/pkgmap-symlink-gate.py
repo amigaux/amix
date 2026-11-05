@@ -7,8 +7,9 @@ Usage:  pkgmap-symlink-gate.py <pkgmap> [<pkgmap> ...]
         pkgmap-symlink-gate.py --pkg <datastream.pkg> [...]
 
 Exit 0 = every link entry is well formed; exit 1 = at least one is not
-(with the offending line printed).  build-packages.sh runs this on the
-pkgmap pkgmk produces, for every package it mints.
+(with the offending line printed), or a file with no pkgmap entry at all,
+which is not a pkgmap this gate has looked at.  build-packages.sh runs this
+on the pkgmap pkgmk produces, for every package it mints.
 
 WHY THIS EXISTS
 ---------------
@@ -80,6 +81,7 @@ def parse_pkgmap(path):
             # "<volno> <ftype> <class> <path>[=<target>] ..."
             ftype = fields[1]
             if ftype == "i":
+                entries.append((lineno, ftype, fields[2], None, line))
                 continue
             if len(fields) < 4:
                 continue
@@ -98,6 +100,10 @@ def check_pkgmap(path):
     entries, declared = parse_pkgmap(path)
     problems = []
     nlinks = 0
+
+    if not entries:
+        problems.append("%s: NOTHING INSPECTED: no pkgmap entry in it; that is "
+                        "not a pass" % path)
 
     for lineno, ftype, objpath, target, line in entries:
         if ftype not in LINK_FTYPES:

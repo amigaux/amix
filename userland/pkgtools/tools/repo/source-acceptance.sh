@@ -99,11 +99,14 @@ cat "$SCRATCH/fsck.out"
 # --- pkginfo -R must list every package -----------------------------
 echo "--- pkginfo -R ---"
 "$PKGINFO" -R "$ROOT" || fail "pkginfo -R"
+for pkg in $PKGS; do
+	"$PKGINFO" -R "$ROOT" -q "$pkg" || fail "pkginfo -R does not list $pkg"
+done
 
 # --- emit DB + name service for the host canonical-tree digest ------
 cp "$CDB" "$EMIT/contents" || fail "emit contents"
-cp "$ROOT/etc/passwd" "$EMIT/passwd"
-cp "$ROOT/etc/group"  "$EMIT/group"
+cp "$ROOT/etc/passwd" "$EMIT/passwd" || fail "emit passwd"
+cp "$ROOT/etc/group"  "$EMIT/group" || fail "emit group"
 echo "emitted: $EMIT/{contents,passwd,group}"
 ls -l "$EMIT"
 

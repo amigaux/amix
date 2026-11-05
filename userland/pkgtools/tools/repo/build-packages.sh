@@ -768,7 +768,8 @@ if [ $do_cdfs -eq 1 ]; then
       exit 1
     fi
   else
-    echo "cdfs Gate 3: WARNING - cannot reach amix-cdfs git to assert lineage; trusting recorded provenance ($CDFS_PROV_COMMIT >= $CDFS_MIN_COMMIT)" >&2
+    echo "FATAL cdfs Gate 3: cannot read $CDFS_PROV_COMMIT and $CDFS_MIN_COMMIT in $CDFS_REPO: the lineage is not asserted" >&2
+    exit 1
   fi
   C="$WORK/cdfs"; mkdir -p "$C"
   cat > "$C/pkginfo" <<EOF

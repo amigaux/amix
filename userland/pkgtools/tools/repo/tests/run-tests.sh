@@ -141,17 +141,15 @@ check ".Z pkginfo parsed from decompressed stream" \
     test "$(field "$S4/catalog" testpkg 2)" = "1.0"
 
 # ---------------------------------------------------------------- T5 ----
-echo "T5: malformed files reported and skipped, not fatal"
+echo "T5: a malformed file is named, and no catalog is written without it"
 S5="$WORK/t5"; mkdir -p "$S5"
 cp "$FIX/toy.pkg" "$S5/"
 head -c 1000 /dev/urandom > "$S5/garbage.pkg"
 head -c 300 "$FIX/TESTpkg.pkg" > "$S5/truncated.pkg"
 python3 "$GEN" "$S5" >"$WORK/t5.out" 2>"$WORK/t5.err"
-check "exit 0 despite malformed files" test $? -eq 0
-check "good package still cataloged" \
-    test "$(field "$S5/catalog" jutoy 3)" = "JUTOY"
-check "only the good entry emitted" \
-    test "$(grep -vc '^#' "$S5/catalog")" = 1
+check "exit 1: a catalog that leaves one out reads as a good one" test $? -eq 1
+check "no partial catalog" test ! -e "$S5/catalog"
+check "the refusal counts them" grep -q 'catalog NOT written (2 of 3 package file(s) refused' "$WORK/t5.err"
 check "garbage.pkg reported on stderr" \
     grep -q 'SKIP garbage.pkg' "$WORK/t5.err"
 check "truncated.pkg reported on stderr" \
@@ -195,12 +193,12 @@ check "APKG_DESC honored" \
     test "$(field "$S6/catalog" synpkg 9)" = "A synthetic test package with authored deps"
 
 # ---------------------------------------------------------------- T7 ----
-echo "T7: duplicate catalog name skipped with report"
+echo "T7: a duplicate catalog name is named, and no catalog is written"
 S7="$WORK/t7"; mkdir -p "$S7"
 cp "$FIX/TESTpkg.pkg" "$S7/"
 cp "$FIX/TESTpkg.pkg" "$S7/TESTpkg-copy.pkg"
 python3 "$GEN" "$S7" >/dev/null 2>"$WORK/t7.err"
-check "one entry survives" test "$(grep -vc '^#' "$S7/catalog")" = 1
+check "exit 1, no catalog" bash -c "test $? -eq 1 && test ! -e '$S7/catalog'"
 check "duplicate reported" grep -q 'duplicate catalog name' "$WORK/t7.err"
 
 # ---------------------------------------------------------------- T8 ----
@@ -268,8 +266,8 @@ S10b="$WORK/t10b"; mkdir -p "$S10b/stock" "$S10b/base"
 cp "$FIX/TESTpkg.pkg" "$S10b/stock/"
 cp "$FIX/TESTpkg.pkg" "$S10b/base/"
 python3 "$GEN" "$S10b" >/dev/null 2>"$WORK/t10b.err"
-check "cross-subdir duplicate: one entry survives" \
-    test "$(grep -vc '^#' "$S10b/catalog")" = 1
+check "cross-subdir duplicate: exit 1, no catalog" \
+    bash -c "test $? -eq 1 && test ! -e '$S10b/catalog'"
 check "cross-subdir duplicate reported" \
     grep -q 'duplicate catalog name' "$WORK/t10b.err"
 
@@ -354,7 +352,8 @@ if [ -x "$PUBPT" ]; then
     check "publish: exit 0" test $? -eq 0
     check "publish: the served tree is the staged tree" diff -r "$S11d" "$D11d/1.1"
     check "publish: no pkgs/pkgs" test ! -e "$D11d/1.1/pkgs/pkgs"
-    cp "$FIX/toy.pkg" "$S11d/pkgs/TSTpkg.pkg"; rm -f "${S11d:?}/pkgs/stock/TESTpkg.pkg"
+    cp "$FIX/toy.pkg" "$S11d/pkgs/TSTpkg.pkg"; rm -f "${S11d:?}/pkgs/stock/TESTpkg.pkg" "${S11d:?}/pkgs/base/deep/toy.pkg"
+    python3 "$GEN" --packages-conf none -o "$S11d" "$S11d/pkgs" >/dev/null 2>&1
     PUBLISH_DEST="$D11d" PUBLISH_URL="file://$D11d" bash "$PUB" 1.1 "$S11d" >"$WORK/t11d-2.out" 2>&1
     check "re-publish: exit 0" test $? -eq 0
     check "re-publish: a changed package is replaced" cmp -s "$FIX/toy.pkg" "$D11d/1.1/pkgs/TSTpkg.pkg"
@@ -590,9 +589,16 @@ check "publish wrote nothing to the destination" \
 # stock-core-like one (no markers) -- the NAS-publish path must NOT refuse
 # stock content.  (dry-run, so it exits before the HTTP verify.)
 if [ -x "$PUBPT" ]; then
-    S13g="$WORK/t13g"; mkdir -p "$S13g"
+    # (a whole datastream: the licence gate unpacks it, and the hand-made one
+    # above has no payload behind its pkgmap)
+    S13g="$WORK/t13g"; B13g="$WORK/t13g-b"; mkdir -p "$S13g" "$B13g/spool"
     cp "$FIX/toy.pkg" "$S13g/"
-    mk_stock_stand_pkg "$S13g"
+    printf 'PKG=COREMOCK\nNAME=Mock stock core\nARCH=Amiga\nVERSION=2.1\nCATEGORY=system\nCLASSES=none\n' > "$B13g/pkginfo"
+    echo unix > "$B13g/unix"; echo boot > "$B13g/boot"
+    printf 'i pkginfo=%s\nd none /stand 0755 root root\nf none /stand/unix=%s 0644 root root\nf none /stand/boot2.boot=%s 0644 root root\n' \
+        "$B13g/pkginfo" "$B13g/unix" "$B13g/boot" > "$B13g/proto"
+    "$(dirname "$PUBPT")/pkgmk" -o -d "$B13g/spool" -f "$B13g/proto" >/dev/null 2>&1 &&
+        "$PUBPT" -s "$B13g/spool" "$S13g/COREMOCK.pkg" COREMOCK >/dev/null 2>&1
     python3 "$GEN" "$S13g" >/dev/null 2>&1            # valid catalog incl. the stock pkg
     DEST13g="$WORK/t13g-dest"; mkdir -p "$DEST13g"
     PUBLISH_DEST="$DEST13g" bash "$PUB" --dry-run 1.1 "$S13g" >"$WORK/t13g.out" 2>&1; RC=$?
@@ -787,8 +793,7 @@ check "spacey category reported as a SKIP" \
     grep -q 'SKIP toy.pkg' "$WORK/t15c.err"
 check "spacey category names cats.conf in the message" \
     grep -q 'cats.conf: bad category' "$WORK/t15c.err"
-check "the other package still catalogs" \
-    test "$(field "$S15c/catalog" testpkg 3)" = "TESTpkg"
+check "and no catalog is written without that package" test ! -e "$S15c/catalog"
 
 # a DECLARED vocabulary is a CLOSED set.  '@group' lines say which categories
 # the repo is willing to emit; an override outside them is a typo or an
@@ -802,13 +807,12 @@ python3 "$GEN" "$S15d" >/dev/null 2>"$WORK/t15d.err"
 check "an override naming a DECLARED group is applied" \
     test "$(field "$S15d/catalog" jutoy 8)" = "games"
 printf '@group games: games\njutoy: utility\n' > "$S15d/cats.conf"
+rm -f "${S15d:?}/catalog"
 python3 "$GEN" "$S15d" >/dev/null 2>"$WORK/t15d2.err"
-check "an override naming an UNDECLARED group is refused" \
-    bash -c "! grep -q '^jutoy|' '$S15d/catalog'"
+check "an override naming an UNDECLARED group is refused, no catalog" \
+    bash -c "test $? -eq 1 && test ! -e '$S15d/catalog'"
 check "the refusal names the undeclared category" \
     grep -q 'undeclared category' "$WORK/t15d2.err"
-check "a package outside the vocabulary still catalogs" \
-    test "$(field "$S15d/catalog" testpkg 3)" = "TESTpkg"
 # the pkginfo fallback stays permissive (it is upstream metadata, not
 # hand-authored here) but says so, because that is the path by which a
 # sibling repo's un-agreed CATEGORY would reach the catalog unnoticed
@@ -929,13 +933,10 @@ check "no names.conf value contains the field separator" \
 # PINNED membership.  A catalog-name mapping is a RENAME as far as every
 # deployed box is concerned -- `apkg install <name>` stops resolving under the
 # old one -- so adding a second mapping must be a deliberate edit of this
-# test, never drift.  Here: amixbench -> amix-benchmark (published 09-16).
-# The recipe-built ones (gtar -> tar, diffutil -> diffutils, coreutil ->
-# coreutils, amixbch14 -> amix-benchmark-gcc14) are in the packages layer.
-check "names.conf maps exactly the packages that need it" \
-    bash -c "diff '$WORK/names.keys' <(printf '%s\n' amixbench)"
-check "amixbench maps to the published catalog name" \
-    grep -q '^amixbench:[[:space:]]*amix-benchmark$' "$NAMES"
+# test, never drift.  Here: none, every one comes from a recipe and is in the
+# packages layer (gtar -> tar, diffutil -> diffutils, coreutil -> coreutils,
+# amixbench -> amix-benchmark, amixbch14 -> amix-benchmark-gcc14).
+check "names.conf maps nothing of its own" test ! -s "$WORK/names.keys"
 if [ -f "$PKGCONF/names.conf" ]; then
     grep -v '^[[:space:]]*#' "$PKGCONF/names.conf" | grep ':' \
         | sed 's/:.*//; s/[[:space:]]//g' | sort > "$WORK/pnames.keys"
@@ -1574,8 +1575,7 @@ check "the refusal names descs.conf" \
     grep -q "descs.conf: description for jutoy contains" "$WORK/t18c.err"
 check "the refusal never emitted the rewritten form" \
     bash -c "! grep -q 'pipe / inside' '$S18C/catalog'"
-check "the other package still catalogs" \
-    test "$(field "$S18C/catalog" testpkg 3)" = "TESTpkg"
+check "and no catalog is written without that package" test ! -e "$S18C/catalog"
 
 # an EMPTY override is a truncated line, not an instruction to blank a
 # description the pkginfo did supply
@@ -2546,15 +2546,14 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
     check "the testpkg entry is byte-identical with and without a marked neighbour" \
         test "$(grep '^testpkg|' "$S28B/catalog")" = "$(grep '^testpkg|' "$S28/stg/catalog")"
 
-    # a malformed mark: per-package SKIP, the rest catalogues
+    # a malformed mark: a SKIP naming it, and no catalog
     S28C="$WORK/t28c"; mkdir -p "$S28C"
     mint28 BADFS "$S28C/BADFS-1.0.pkg" "APKG_FSTYPE=UFS"
     cp "$FIX/TESTpkg.pkg" "$S28C/"
     python3 "$GEN" "$S28C" >/dev/null 2>"$WORK/t28c.err"
-    check "malformed APKG_FSTYPE: rc 0, the package SKIPped" \
+    check "malformed APKG_FSTYPE: the package SKIPped, naming it" \
         grep -q "SKIP BADFS-1.0.pkg: APKG_FSTYPE='UFS' is not a list of filesystem types" "$WORK/t28c.err"
-    check "  ... and not in the catalog" \
-        bash -c "! grep -q '^badfs|' '$S28C/catalog' && grep -q '^testpkg|' '$S28C/catalog'"
+    check "  ... and no catalog" test ! -e "$S28C/catalog"
 
     # pkgadd ignores the parameter: the host heirloom engine installs the
     # marked package, long names intact (the host filesystem has them)
@@ -2620,14 +2619,15 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ]; then
     mint28 ESSYES "$S30/ESSYES-1.0.pkg" "APKG_ESSENTIAL=yes"
     mint28 ESSNO "$S30/ESSNO-1.0.pkg" "APKG_ESSENTIAL=no"
     mint28 ESSQ "$S30/ESSQ-1.0.pkg" 'APKG_ESSENTIAL="yes"'
-    mint28 ESSBAD "$S30/ESSBAD-1.0.pkg" "APKG_ESSENTIAL=Yes"
+    S30b="$WORK/t30b"; mkdir -p "$S30b"
+    mint28 ESSBAD "$S30b/ESSBAD-1.0.pkg" "APKG_ESSENTIAL=Yes"
+    python3 "$GEN" "$S30b" >/dev/null 2>"$WORK/t30.err"
+    check "a value other than yes or no is SKIPped, naming it, no catalog" \
+        bash -c "grep -q \"SKIP ESSBAD-1.0.pkg: APKG_ESSENTIAL='Yes' is not yes or no\" '$WORK/t30.err' && test ! -e '$S30b/catalog'"
     python3 "$GEN" "$S30" >/dev/null 2>"$WORK/t30.err"
     check "gen-catalog rc 0 with marked packages" test $? -eq 0
     check "yes, no and a quoted yes catalogue" \
         bash -c "grep -q '^essyes|' '$S30/catalog' && grep -q '^essno|' '$S30/catalog' && grep -q '^essq|' '$S30/catalog'"
-    check "a value other than yes or no is SKIPped, naming it" \
-        grep -q "SKIP ESSBAD-1.0.pkg: APKG_ESSENTIAL='Yes' is not yes or no" "$WORK/t30.err"
-    check "  ... and not in the catalog" bash -c "! grep -q '^essbad|' '$S30/catalog'"
     check "the mark adds no catalog line or trailer" \
         bash -c "! grep -qi 'essential' '$S30/catalog'"
 else
@@ -2957,6 +2957,34 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
     t34no 3 "a stock file the lock names, not there: [MISSING], rc 3" "core-2.1.pkg is not in"
     mv "${S34:?}/core.save" "${S34:?}/st/core-2.1.pkg"
     t34no 3 "no --userland directory: [MISSING], rc 3" "\[MISSING\] assemble-release: --userland" --userland "$S34/nosuch"
+    # an empty input and a scan that looked at nothing stop; each of these
+    # assembled a tree and printed a clean scan before
+    mkdir -p "$S34/e0/pkgs"; echo "#apkg-catalog 1" > "$S34/e0/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/e0/catalog" | cut -c1-32)" > "$S34/e0/catalog.md5"
+    t34no 1 "an input catalog with no entry: refused" "--kspace: .*catalog has no entry" --kspace "$S34/e0"
+    t34no 3 "a release with no stock lock: [MISSING], rc 3" "no stock lock" --stock-lock "$S34/nosuch"
+    echo "# nothing" > "$S34/lock0"
+    t34no 1 "a stock lock that names nothing: refused" "names no stock package" --stock-lock "$S34/lock0"
+    k34() {     # k34 <dir> <PKG>: a catalog of one #kpkg line
+        mkdir -p "$1/pkgs"; toy34 "$2" 1.0 "$1/pkgs/$2-1.0.pkg"
+        {   echo "#apkg-catalog 1"; echo "#ext kpkg 1"
+            echo "#kpkg $2-k46 1.0 role=module line=k46 kabi=k46.1.0 pin=gcc-x size=$(wc -c < "$1/pkgs/$2-1.0.pkg") sha256=$(sha256sum < "$1/pkgs/$2-1.0.pkg" | cut -c1-64) file=$2-1.0.pkg pkginst=$2"
+            echo "#end kpkg"; } > "$1/catalog"
+        printf '%s  catalog\n' "$(md5sum < "$1/catalog" | cut -c1-32)" > "$1/catalog.md5"
+    }
+    k34 "$S34/ka" kmoda; k34 "$S34/kb" kmodb
+    t34no 1 "no live row outside stock/: the 68060 scan stops" "68060 scan: NOTHING INSPECTED: no live row outside stock/" \
+        --userland "$S34/ka" --kspace "$S34/kb" --apkg ""
+    mkdir -p "$S34/ul0/pkgs"; toy34 ufst 1.0 "$S34/ul0/pkgs/ufst-1.0.pkg"; cpconf34 "$S34/ul0/pkgs"
+    python3 "$GEN" --packages-conf none -o "$S34/ul0" "$S34/ul0/pkgs" >/dev/null 2>&1
+    t34no 1 "live rows and not one ELF in them: the 68060 scan stops" "68060 scan: NOTHING INSPECTED: 3 package(s) and not one m68k ELF" \
+        --userland "$S34/ul0" --kspace "$S34/kb"
+    printf '#!/bin/sh\nexit 0\n' > "$S34/bin/pt0"; chmod +x "$S34/bin/pt0"
+    AMIX_PKGTRANS="$S34/bin/pt0" t34no 1 "a row that unpacks to nothing: the 68060 scan stops" "pkgtrans unpacked nothing"
+    printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000' > "$S34/x86.elf"
+    mkdir -p "$S34/ulx/pkgs"; cp "$S34/ul/pkgs/zlibt-1.0.pkg" "$S34/ulx/pkgs/"; toy34 xelf 1.0 "$S34/ulx/pkgs/xelf-1.0.pkg" "" "$S34/x86.elf"; cpconf34 "$S34/ulx/pkgs"
+    python3 "$GEN" --packages-conf none -o "$S34/ulx" "$S34/ulx/pkgs" >/dev/null 2>&1
+    t34no 1 "an ELF for another machine in a live row: refused" "opt/xelf.elf is an ELF for another machine" --userland "$S34/ulx"
 
     # the next release: the published tree is an input, and stays
     rm -f "${S34:?}/ap/APKG-0.3.6.pkg" "${S34:?}/ap/APKG-0.3.6.pkg.md5"; toy34 APKG 0.3.10 "$S34/ap/APKG-0.3.10.pkg"
@@ -2971,6 +2999,23 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
         bash -c "cmp -s '$S34/out/1.1/pkgs/base/APKG-0.3.6.pkg' '$S34/out3/1.1/pkgs/base/APKG-0.3.6.pkg' && diff <(grep -v '^apkg|\|^#isize apkg ' '$C34') <(grep -v '^apkg|\|^#isize apkg \|^#ext older\|^#old \|^#end older' '$C3') >/dev/null"
     check "  ... apkg reads one row per name (the older block is skipped)" \
         grep -q "apkg reads the tree: catalog updated: 6 packages, 1 kernel-space" "$WORK/t34.p"
+    # make dist's catalogs have no #isize lines and a tree's has: not a note.
+    # A real difference is one, naming what differs.
+    check "  ... a republished row with the same text: no note" \
+        bash -c "! grep -q 'published row' '$WORK/t34.p'"
+    check "  ... the one note is the row that moved" \
+        bash -c "test \$(grep -c '^note: ' '$WORK/t34.p') = 1 && grep -q '^note: apkg 0.3.10 (apkg/stock) replaces apkg 0.3.6' '$WORK/t34.p'"
+    mkdir -p "$S34/uld/pkgs"; cp -r "$S34/ul/pkgs/." "$S34/uld/pkgs/"; printf 'zlibt: another description\n' >> "$S34/uld/pkgs/descs.conf"
+    python3 "$GEN" --packages-conf none -o "$S34/uld" "$S34/uld/pkgs" >/dev/null 2>&1
+    printf '#ext isize 1\n#isize ufst 1\n' >> "$S34/uld/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S34/uld/catalog" | cut -c1-32)" > "$S34/uld/catalog.md5"
+    ar34 "$S34/outd/1.1" --previous "$S34/out3/1.1" --userland "$S34/uld" >"$WORK/t34.d" 2>&1
+    check "a description that differs from the published row: a note naming it, the published row kept" \
+        bash -c "test $? -eq 0 && grep -q '^note: zlibt 1.0 (userland) differs from the published row in: description; ' '$WORK/t34.d' && cmp -s '$C3' '$S34/outd/1.1/catalog'"
+    check "  ... an #isize that disagrees with the published one: a note naming it" \
+        grep -q '^note: ufst 1.0 (userland) differs from the published row in: the #isize line; ' "$WORK/t34.d"
+    check "  ... and those two are the only such notes" \
+        test "$(grep -c 'differs from the published row' "$WORK/t34.d")" = 2
     # a point after a build number sorts after it, as apkg_vercmp has it
     check "assemble-release orders -62.1 after -62 and before -63" \
         env PYTHONDONTWRITEBYTECODE=1 python3 -c "import importlib.util as u
@@ -3009,6 +3054,202 @@ raise SystemExit(0 if v(b + '62.1', b + '62') == 1 and v(b + '62', b + '62.1') =
         --previous "$S34/out/1.1"
 else
     echo "  skip- assemble-release checks (no host pkgmk/pkgtrans, no host apkg or no m68k-linux-gnu-as/ld)"
+fi
+
+# --------------------------------------------------------------- T35 ----
+# A check that looked at nothing stops.  Every case here passed before.
+echo "T35: the tools stop rather than pass without having looked"
+S35="$WORK/t35"; mkdir -p "$S35"
+cat35() { printf '%s  catalog\n' "$(md5sum < "$1/catalog" | cut -c1-32)" > "$1/catalog.md5"; }
+
+# gen-catalog
+mkdir -p "$S35/gc0"; echo keep > "$S35/gc0/catalog"
+python3 "$GEN" "$S35/gc0" >/dev/null 2>"$WORK/t35.gc0"
+check "gen-catalog on no package: rc 1, naming it" \
+    bash -c "test $? -eq 1 && grep -q 'no \*.pkg / \*.pkg.Z in .*catalog NOT written' '$WORK/t35.gc0'"
+check "  ... an existing catalog is left as it was" test "$(cat "$S35/gc0/catalog")" = keep
+python3 "$GEN" --scan-private "$S35/gc0" >/dev/null 2>"$WORK/t35.sp0"
+check "--scan-private on no package: rc 1, not OK" \
+    bash -c "test $? -eq 1 && grep -q 'NOTHING PROVEN: 0 package' '$WORK/t35.sp0'"
+mkdir -p "$S35/gcg"; cp "$FIX/toy.pkg" "$S35/gcg/"; head -c 700 /dev/urandom > "$S35/gcg/junk.pkg"
+python3 "$GEN" --scan-private "$S35/gcg" >"$WORK/t35.spg" 2>&1
+check "--scan-private with an unparseable package: rc 1, not OK" \
+    bash -c "test $? -eq 1 && grep -q 'NOTHING PROVEN: 2 package(s), 1 of them unparseable' '$WORK/t35.spg' && ! grep -q 'scan-private: OK' '$WORK/t35.spg'"
+mkdir -p "$S35/nomap/b/NOMAP"
+printf 'PKG=NOMAP\nNAME=no map\nARCH=Amiga\nVERSION=1.0\nCATEGORY=system\n' > "$S35/nomap/b/NOMAP/pkginfo"
+{ printf '# PaCkAgE DaTaStReAm\nNOMAP 1 1\n# end of header\n'; head -c 512 /dev/zero; } | head -c 512 > "$S35/nomap/NOMAP.pkg"
+( cd "$S35/nomap/b" && printf 'NOMAP/pkginfo\n' | cpio -o -H odc --quiet >> ../NOMAP.pkg )
+rm -rf "${S35:?}/nomap/b"
+python3 "$GEN" --isize "$S35/nomap" >/dev/null 2>"$WORK/t35.is"
+check "--isize when no package could be sized: rc 1, no catalog" \
+    bash -c "test $? -eq 1 && grep -q 'none of 1 package(s) could be sized' '$WORK/t35.is' && test ! -e '$S35/nomap/catalog'"
+
+# gen-catalog --check-tree, the catalog against the tree
+ct35() {    # ct35 <desc> <stderr text>: <S35/ct> refused
+    python3 "$GEN" --check-tree "$S35/ct" >"$WORK/t35.ct" 2>"$WORK/t35.cte"
+    local rc=$?
+    if [ "$rc" -eq 1 ] && grep -q -- "$2" "$WORK/t35.cte" && [ ! -s "$WORK/t35.ct" ]; then ok "$1"
+    else bad "$1 (rc $rc)"; sed 's/^/        /' "$WORK/t35.cte" | tail -3; fi
+}
+mkct35() {
+    rm -rf "${S35:?}/ct"; mkdir -p "$S35/ct/pkgs/base"
+    cp "$FIX/toy.pkg" "$S35/ct/pkgs/base/"; cp "$FIX/TESTpkg.pkg" "$S35/ct/pkgs/"
+    python3 "$GEN" --packages-conf none -o "$S35/ct" "$S35/ct/pkgs" >/dev/null 2>&1
+}
+mkct35
+python3 "$GEN" --check-tree "$S35/ct" >"$WORK/t35.ct" 2>"$WORK/t35.cte"
+check "--check-tree: a good tree, rc 0, every file with its size" \
+    bash -c "test $? -eq 0 && grep -qx \"$(wc -c < "$FIX/toy.pkg") base/toy.pkg\" '$WORK/t35.ct' && test \$(wc -l < '$WORK/t35.ct') = 2 && grep -q 'OK (2 file' '$WORK/t35.cte'"
+rm -f "${S35:?}/ct/pkgs/base/toy.pkg";            ct35 "--check-tree: a row with no file" "base/toy.pkg: the catalog names it, the tree does not hold it"
+mkct35; printf 'x' >> "$S35/ct/pkgs/base/toy.pkg"; ct35 "--check-tree: a file of another size" "base/toy.pkg: .* B, the catalog says"
+mkct35; python3 -c "import sys; p=sys.argv[1]; b=bytearray(open(p,'rb').read()); b[-1]^=1; open(p,'wb').write(b)" "$S35/ct/pkgs/base/toy.pkg"
+ct35 "--check-tree: a file of another digest" "base/toy.pkg: md5 "
+mkct35; cp "$FIX/toy.pkg" "$S35/ct/pkgs/stray.pkg"; ct35 "--check-tree: a package no row names" "stray.pkg: a package no catalog row names"
+mkct35; { grep -v '^[^#]' "$S35/ct/catalog"; echo '#ext older 1'; echo '#old gone|1|GONE|gone.pkg|0|1|none|system|gone'; echo '#end older'; grep '^[^#]' "$S35/ct/catalog"; } > "$S35/ct/c"; mv "${S35:?}/ct/c" "${S35:?}/ct/catalog"
+ct35 "--check-tree: an older row with no file" "gone.pkg: the catalog names it"
+mkct35; { cat "$S35/ct/catalog"; echo '#ext kpkg 1'; echo "#kpkg k 1 role=module line=k46 kabi=x pin=y size=$(wc -c < "$FIX/toy.pkg") sha256=00 file=base/k.pkg pkginst=k"; echo '#end kpkg'; } > "$S35/ct/c"; mv "${S35:?}/ct/c" "${S35:?}/ct/catalog"; cp "$FIX/toy.pkg" "$S35/ct/pkgs/base/k.pkg"
+ct35 "--check-tree: a #kpkg file of another sha256" "base/k.pkg: sha256 "
+mkct35; printf '#apkg-catalog 1\n' > "$S35/ct/catalog"; rm -rf "${S35:?}/ct/pkgs"; mkdir "$S35/ct/pkgs"
+ct35 "--check-tree: a catalog with no row" "NOTHING INSPECTED"
+
+# publish.sh
+if [ -x "$PUBPT" ]; then
+    pub35() {   # pub35 <rc> <desc> <text> <staging> [env]: refused, destination untouched
+        local want="$1" desc="$2" text="$3" st="$4"; shift 4
+        rm -rf "${S35:?}/dest"; mkdir -p "$S35/dest"
+        env PUBLISH_DEST="$S35/dest" PUBLISH_URL="file://$S35/dest" "$@" bash "${PUB35:-$PUB}" 1.1 "$st" >"$WORK/t35.pub" 2>&1
+        local rc=$?
+        if [ "$rc" -eq "$want" ] && grep -q -- "$text" "$WORK/t35.pub" && [ -z "$(find "$S35/dest" -mindepth 1 -print -quit)" ]; then ok "$desc"
+        else bad "$desc (rc $rc)"; sed 's/^/        /' "$WORK/t35.pub" | tail -4; fi
+    }
+    mkct35; rm -f "${S35:?}/ct/pkgs/base/toy.pkg"
+    pub35 6 "publish: a row with no file: rc 6, nothing synced" "the catalog names it, the tree does not hold it" "$S35/ct"
+    mkct35; printf '#apkg-catalog 1\n' > "$S35/ct/catalog"; cat35 "$S35/ct"
+    pub35 6 "publish: packages and a catalog with no row (the sync would prune to it): rc 6" "a package no catalog row names" "$S35/ct"
+    rm -rf "${S35:?}/ct/pkgs"; mkdir "$S35/ct/pkgs"
+    pub35 4 "publish: no package at all: rc 4" "NOTHING PROVEN" "$S35/ct"
+    mkct35; head -c 700 /dev/urandom > "$S35/ct/pkgs/junk.pkg"
+    pub35 4 "publish: a package the private scan cannot read: rc 4" "NOTHING PROVEN" "$S35/ct"
+    mkct35; mkdir -p "$S35/nogate"; cp "$PUB" "$GEN" "$S35/nogate/"
+    PUB35="$S35/nogate/publish.sh" pub35 5 "publish: the licence gate missing: rc 5, no warning and on" "payload would not be screened" "$S35/ct"
+    # what is served: the catalog alone is not the repository
+    mkct35; rm -rf "${S35:?}/srv"; mkdir -p "$S35/srv/1.1" "$S35/dest2"
+    cp "$S35/ct/catalog" "$S35/srv/1.1/"
+    PUBLISH_DEST="$S35/dest2" PUBLISH_URL="file://$S35/srv" bash "$PUB" 1.1 "$S35/ct" >"$WORK/t35.srv" 2>&1
+    check "publish: the catalog served and a package not: rc 3, naming it" \
+        bash -c "test $? -eq 3 && grep -q 'pkgs/base/toy.pkg: served size' '$WORK/t35.srv' && grep -q '2 of 2 catalogued files are not served' '$WORK/t35.srv'"
+    rm -rf "${S35:?}/dest3"; mkdir -p "$S35/dest3"
+    PUBLISH_DEST="$S35/dest3" PUBLISH_URL="file://$S35/dest3" bash "$PUB" 1.1 "$S35/ct" >"$WORK/t35.ok" 2>&1
+    check "publish: everything served: rc 0, says so" \
+        bash -c "test $? -eq 0 && grep -q 'OK -- 2 catalogued file(s) served at their sizes' '$WORK/t35.ok'"
+    # the licence gate: a package whose pkgmap promises what is not there
+    mkdir -p "$S35/trunc"; mk_stock_stand_pkg "$S35/trunc"
+    python3 "$HERE/../payload-licence-gate.py" "$S35/trunc/COREMOCK.pkg" >/dev/null 2>"$WORK/t35.tr"
+    check "licence gate: pkgtrans cannot unpack it whole: rc 1, not OK" \
+        bash -c "test $? -eq 1 && grep -q 'pkgtrans exit [1-9]' '$WORK/t35.tr'"
+    if [ "$(id -u)" != 0 ]; then
+        mkdir -p "$S35/unread"; echo x > "$S35/unread/a"; echo y > "$S35/unread/b"; chmod 000 "$S35/unread/b"
+        python3 "$HERE/../payload-licence-gate.py" --strict "$S35/unread" >"$WORK/t35.ur" 2>&1
+        check "licence gate: a file it cannot read is UNKNOWN, not passed over" \
+            bash -c "test $? -eq 2 && grep -q 'UNKNOWN b: could not be read' '$WORK/t35.ur'"
+        chmod 644 "$S35/unread/b"
+    fi
+else
+    echo "  skip- publish.sh and the licence gate looking (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
+fi
+
+# scan060 on an ELF with no code, and a pkgtrans that fails
+if command -v m68k-linux-gnu-objdump >/dev/null 2>&1 && command -v m68k-linux-gnu-as >/dev/null 2>&1; then
+    printf '\t.data\n\t.long 1\n' > "$S35/nc.s"
+    m68k-linux-gnu-as -m68020 -o "$S35/nc.o" "$S35/nc.s"
+    python3 "$HERE/../scan060.py" "$S35/nc.o" >"$WORK/t35.nc" 2>&1
+    check "scan060: a data-only object (a font, unix.sym) is read: rc 0, named NO CODE, not CLEAN" \
+        bash -c "test $? -eq 0 && grep -q 'NO CODE .*nc.o' '$WORK/t35.nc' && ! grep -q CLEAN '$WORK/t35.nc'"
+    printf '\t.text\n\t.globl _start\n_start:\trts\n' > "$S35/co.s"
+    m68k-linux-gnu-as -m68020 -o "$S35/co.o" "$S35/co.s"
+    mkdir -p "$S35/fakeobj"
+    printf '#!/bin/sh\nexit 0\n' > "$S35/fakeobj/m68k-linux-gnu-objdump"; chmod +x "$S35/fakeobj/m68k-linux-gnu-objdump"
+    PATH="$S35/fakeobj:$PATH" python3 "$HERE/../scan060.py" "$S35/co.o" >"$WORK/t35.fo" 2>&1
+    check "scan060: code and an objdump that decodes none of it: rc 2, not CLEAN" \
+        bash -c "test $? -eq 2 && grep -q 'NOTHING .*co.o: not one instruction decoded' '$WORK/t35.fo' && ! grep -q CLEAN '$WORK/t35.fo'"
+    m68k-linux-gnu-ld -e _start -o "$S35/co.x" "$S35/co.o"
+    python3 -c "import sys; d=bytearray(open(sys.argv[1],'rb').read()); d[32:36]=b'\0\0\0\0'; d[48:52]=b'\0\0\0\0'; open(sys.argv[2],'wb').write(d)" "$S35/co.x" "$S35/nosh.x"
+    python3 "$HERE/../scan060.py" "$S35/nosh.x" >"$WORK/t35.ns" 2>&1
+    check "scan060: an ELF with no section table: stops, not CLEAN" \
+        bash -c "test $? -ne 0 && ! grep -q CLEAN '$WORK/t35.ns' && ! grep -q 'NO CODE' '$WORK/t35.ns'"
+    printf '#!/bin/sh\necho partial > "$3/partial"\nexit 1\n' > "$S35/pt-fail"; chmod +x "$S35/pt-fail"
+    AMIX_PKGTRANS="$S35/pt-fail" python3 "$HERE/../scan060.py" "$FIX/TESTpkg.pkg" >"$WORK/t35.ptf" 2>&1
+    check "scan060: a pkgtrans that fails, leaving a part: stops, naming it" \
+        bash -c "test $? -ne 0 && grep -q 'pkgtrans failed (exit 1)' '$WORK/t35.ptf'"
+else
+    echo "  skip- scan060 looking (no m68k-linux-gnu-objdump/as on PATH)"
+fi
+
+# the link gate, the attest, the s5 scan, the 1.0 move
+: > "$S35/map0"
+python3 "$HERE/../pkgmap-symlink-gate.py" "$S35/map0" >/dev/null 2>"$WORK/t35.lg"
+check "link gate: a file with no pkgmap entry: rc 1, not OK" \
+    bash -c "test $? -eq 1 && grep -q 'NOTHING INSPECTED' '$WORK/t35.lg'"
+printf ': 1 1\n1 i pkginfo 200 12345 1234567890\n' > "$S35/map1"
+python3 "$HERE/../pkgmap-symlink-gate.py" "$S35/map1" >/dev/null 2>&1
+check "link gate: a pkgmap of install files only is a pkgmap: rc 0" test $? -eq 0
+: > "$S35/contents"; printf 'root:x:0:0::/:/bin/sh\n' > "$S35/passwd"; printf 'root::0:\n' > "$S35/group"
+python3 "$HERE/../altroot_attest.py" --contents "$S35/contents" --passwd "$S35/passwd" --group "$S35/group" >"$WORK/t35.at" 2>&1
+check "attest: an empty contents file: rc 3, no digest" \
+    bash -c "test $? -eq 3 && grep -q 'NOTHING INSPECTED' '$WORK/t35.at' && ! grep -q '^DIGEST' '$WORK/t35.at'"
+mkdir -p "$S35/s5"; printf ': 1 1\n' > "$S35/s5.map"; mkpkg "$S35/s5" S5NONE "$S35/s5.map"
+python3 "$HERE/../s5-collision-scan.py" --fail-on-collision "$S35/s5" >/dev/null 2>"$WORK/t35.s5"
+check "s5 scan: packages without one object: rc 2, not zero collisions" \
+    bash -c "test $? -eq 2 && grep -q 'NOTHING INSPECTED' '$WORK/t35.s5'"
+D35="$S35/mv"; mkdir -p "$D35/pkgs" "$D35/1.0/pkgs"
+printf '#apkg-catalog 1\n' > "$D35/catalog"; cat35 "$D35"; cp "$D35/catalog" "$D35/catalog.md5" "$D35/1.0/"
+bash "$HERE/../move-1.0-tree.sh" --remove-root "$D35" >"$WORK/t35.mv" 2>&1
+check "move-1.0 --remove-root over a 1.0 tree with no package: refuses, the root stays" \
+    bash -c "test $? -ne 0 && grep -q 'NOTHING INSPECTED' '$WORK/t35.mv' && test -f '$D35/catalog' && test -d '$D35/pkgs'"
+
+# the box gates, with stand-ins for the engine
+E35="$S35/eng"; mkdir -p "$E35"
+printf '#!/bin/sh\nprintf "%%b" "$PKGCHK_OUT"\nexit ${PKGCHK_RC:-0}\n' > "$E35/pkgchk"
+printf '#!/bin/sh\ncase " $* " in *" -q $PKGINFO_MISS "*) exit 1 ;; esac\nexit 0\n' > "$E35/pkginfo"
+printf '#!/bin/sh\nexit 0\n' > "$E35/pkgadd"; cp "$E35/pkgadd" "$E35/contents-fsck"; cp "$E35/pkgadd" "$E35/apkg"
+chmod +x "$E35"/*
+cg35() { PKGCHK="$E35/pkgchk" PKGCHK_OUT="$1" PKGCHK_RC="$2" sh "$HERE/../content-gate.sh" "$S35" pk >"$WORK/t35.cg" 2>&1; }
+cg35 "" 0;                                           check "content gate: clean: rc 0" test $? -eq 0
+cg35 "ERROR: /a\n    modtime <x> expected <y> actual\n" 1; check "content gate: modtime alone: rc 0" test $? -eq 0
+cg35 "ERROR: /a\n    file cksum <x> expected <y> actual\n" 1; check "content gate: a cksum: rc 1" test $? -eq 1
+cg35 "ERROR: /a\n    modtime <x> expected <y> actual\nERROR: /b\n    pathname does not exist\n" 1
+check "content gate: a missing file beside a modtime drift: rc 1, not tolerated" \
+    bash -c "test $? -eq 1 && grep -q 'not only modtime' '$WORK/t35.cg'"
+cg35 "ERROR: no pathnames were associated with <pk>\n" 1; check "content gate: nothing compared: rc 1" test $? -eq 1
+R35="$S35/r"; mkdir -p "$R35/etc" "$R35/var/sadm/install" "$S35/pd" "$S35/sc"
+printf 'root:x:0:0::/:/bin/sh\n' > "$R35/etc/passwd"; printf 'root::0:\n' > "$R35/etc/group"; : > "$R35/var/sadm/install/contents"
+: > "$S35/pd/core-2.1.pkg"; : > "$S35/pd/bsd-2.1.pkg"; : > "$S35/admin"
+aa35() { env ENGINE="$E35" ROOT="$R35" PKGDIR="$S35/pd" ADMIN="$S35/admin" SCRATCH="$S35/sc" PKGS="core bsd" GATEDIR="$HERE/.." "$@" sh "$HERE/../altroot-acceptance.sh" >"$WORK/t35.aa" 2>&1; }
+aa35;                     check "altroot acceptance with the stand-ins: rc 0" test $? -eq 0
+aa35 PKGINFO_MISS=bsd
+check "altroot acceptance: pkginfo does not list a package: fails, naming it" \
+    bash -c "test $? -eq 1 && grep -q 'ACCEPTANCE-FAIL: pkginfo -R does not list bsd' '$WORK/t35.aa'"
+mv "${R35:?}/etc/group" "${R35:?}/etc/group.save"
+env ENGINE="$E35" ROOT="$R35" PKGDIR="$S35/pd" ADMIN="$S35/admin" SCRATCH="$S35/sc" PKGS="core" GATEDIR="$HERE/.." sh "$HERE/../altroot-acceptance.sh" >"$WORK/t35.aa" 2>&1
+check "altroot acceptance: what it emits for the digest cannot be copied: fails" \
+    bash -c "test $? -eq 1 && grep -q 'ACCEPTANCE-FAIL: emit group' '$WORK/t35.aa'"
+mv "${R35:?}/etc/group.save" "${R35:?}/etc/group"
+sa35() { env APKG="$E35/apkg" CONF="$S35/admin" ROOT="$S35/sr" ADMIN="$S35/admin" SCRATCH="$S35/sc" ENGINE="$E35" PKGS="core bsd" GATEDIR="$HERE/.." "$@" sh "$HERE/../source-acceptance.sh" >"$WORK/t35.sa" 2>&1; }
+# the stand-in apkg lays down the contents file a real install would
+printf '#!/bin/sh\ncase " $* " in *" install "*) : > "%s/sr/var/sadm/install/contents" ;; esac\nexit 0\n' "$S35" > "$E35/apkg"
+sa35;                     check "source acceptance with the stand-ins: rc 0" test $? -eq 0
+sa35 PKGINFO_MISS=core
+check "source acceptance: pkginfo does not list a package: fails, naming it" \
+    bash -c "test $? -eq 1 && grep -q 'ACCEPTANCE-FAIL: pkginfo -R does not list core' '$WORK/t35.sa'"
+
+# the cdfs arm of build-packages.sh: a lineage it cannot read is not asserted
+if [ -x "$PUBPT" ]; then
+    mkdir -p "$S35/cdfs/build/amix"; : > "$S35/cdfs/build/amix/mount"
+    CDFS_REPO="$S35/cdfs" GIT_CEILING_DIRECTORIES="$S35" bash "$HERE/../build-packages.sh" --cdfs "$S35/cdfs-out" >"$WORK/t35.cd" 2>&1
+    check "build-packages --cdfs: a lineage it cannot read: rc 1, no package" \
+        bash -c "test $? -eq 1 && grep -q 'FATAL cdfs Gate 3: cannot read' '$WORK/t35.cd' && test -z \"\$(find '$S35/cdfs-out' -name '*.pkg' -print -quit)\""
+else
+    echo "  skip- the cdfs lineage gate (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
 fi
 
 # -------------------------------------------------------------- done ----
