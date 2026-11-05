@@ -13,15 +13,19 @@ ADDRS="52.59.174.203"
 now=$(getent ahostsv4 pkg.amigaux.org 2>/dev/null | awk 'NR == 1 {print $1}')
 [ -z "$now" ] || [ "$now" = "$ADDRS" ] || ADDRS="$ADDRS $now"
 check() {
-	local a f n hit=0 where
+	local a f n hit=0 where rc
 	for a in $ADDRS; do
 		for f in "$@"; do
 			if [ -d "$f" ]; then
-				where=$(grep -rlaF -- "$a" "$f" 2>/dev/null | head -8)
-				[ -z "$where" ] || { echo "$where" | sed "s|^|medium-address-check: $a in |"; hit=1; }
+				where=$(grep -rlaF -- "$a" "$f"); rc=$?
+				[ "$rc" != 2 ] || { echo "medium-address-check: STOP, could not read all of $f"; hit=2; }
+				[ -z "$where" ] || { echo "$where" | head -8 | sed "s|^|medium-address-check: $a in |"; hit=1; }
 			elif [ -f "$f" ]; then
-				n=$(grep -acF -- "$a" "$f")
+				n=$(grep -acF -- "$a" "$f"); rc=$?
+				[ "$rc" != 2 ] || { echo "medium-address-check: STOP, could not read $f"; hit=2; continue; }
 				[ "$n" = 0 ] || { echo "medium-address-check: $a in $(basename "$f"): $n line(s)"; hit=1; }
+			else
+				echo "medium-address-check: STOP, no such artefact: $f"; hit=2
 			fi
 		done
 	done
@@ -34,6 +38,14 @@ if [ "${1:-}" = --self-test ]; then
 	printf 'x\0# echo 52.59.174.203 pkg.amigaux.org\n' > "$t/bad"; cp "$t/bad" "$t/dbad/f"
 	check "$t/good" "$t/dgood" > /dev/null && echo "  ok   a file and a tree naming the host only -> clean" || { echo "  FAIL clean"; ok=0; }
 	check "$t/bad" > /dev/null; [ $? = 1 ] && echo "  ok   the address in a binary file -> refused" || { echo "  FAIL file"; ok=0; }
+	check "$t/absent" > /dev/null; [ $? = 2 ] && echo "  ok   a missing artefact -> stops" || { echo "  FAIL a missing artefact passed"; ok=0; }
+	check "$t/good" "$t/absent" > /dev/null; [ $? = 2 ] && echo "  ok   a missing artefact among good ones -> stops" || { echo "  FAIL a missing one among good ones passed"; ok=0; }
+	if [ "$(id -u)" != 0 ]; then
+		cp "$t/bad" "$t/nr"; chmod 000 "$t/nr"
+		check "$t/nr" > /dev/null 2>&1; [ $? = 2 ] && echo "  ok   an unreadable file -> stops" || { echo "  FAIL an unreadable file passed"; ok=0; }
+		mkdir "$t/dnr"; cp "$t/bad" "$t/dnr/f"; chmod 000 "$t/dnr/f"
+		check "$t/dnr" > /dev/null 2>&1; [ $? = 2 ] && echo "  ok   a tree with an unreadable file -> stops" || { echo "  FAIL a tree with an unreadable file passed"; ok=0; }
+	fi
 	check "$t/dbad" > /dev/null; [ $? = 1 ] && echo "  ok   the address in a tree -> refused" || { echo "  FAIL tree"; ok=0; }
 	rm -rf "${t:?}"
 	echo "medium-address-check selftest: $([ "$ok" = 1 ] && echo PASS || echo FAIL)"

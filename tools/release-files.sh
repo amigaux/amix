@@ -21,6 +21,14 @@ ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absol
 RC="${L11_IN:-$(dirname "$here")/work/l11}/amix-tools/release-check"
 # not_release_files FILE...: names a file of the release set must not have (a raw k30 netinstall image is a
 # bench medium, build-netinstall.sh --raw-k30), by its name and by the rows of a SHA256SUMS. 0 when none.
+# missing_lines DIR: the kernel lines with no image in DIR; one line's image is not a release set. 0 when none.
+missing_lines() {
+	local L hit=0
+	for L in k46 k30; do
+		[ -f "$1/amix-1.1-$L-4g.img" ] || { echo "$L"; hit=1; }
+	done
+	return $hit
+}
 not_release_files() {
 	local f hit=0
 	for f in "$@"; do
@@ -39,6 +47,13 @@ if [ "${1:-}" = --selftest ]; then
 	not_release_files "$d"/* > /dev/null && { echo "  FAIL a raw k30 image passed"; rc=1; }
 	rm -f "${d:?}/amix-1.1-netinstall-k30.img"; echo "00  amix-1.1-netinstall-k30.img" > "$d/SHA256SUMS"
 	not_release_files "$d"/* > /dev/null && { echo "  FAIL a SHA256SUMS row for it passed"; rc=1; }
+	[ "$(missing_lines "$d")" = k46 ] || { echo "  FAIL k30 alone counted as the set"; rc=1; }
+	: > "$d/amix-1.1-k46-4g.img"
+	missing_lines "$d" > /dev/null || { echo "  FAIL both lines refused"; rc=1; }
+	rm -f "${d:?}/amix-1.1-k30-4g.img"
+	[ "$(missing_lines "$d")" = k30 ] || { echo "  FAIL k46 alone counted as the set"; rc=1; }
+	rm -f "${d:?}/amix-1.1-k46-4g.img"
+	[ "$(missing_lines "$d" | tr '\n' ' ')" = "k46 k30 " ] || { echo "  FAIL an empty directory counted as the set"; rc=1; }
 	rm -rf "${d:?}"
 	[ "$rc" = 0 ] && echo "release-files --selftest: PASS" || echo "release-files --selftest: FAIL"
 	exit $rc
@@ -62,6 +77,9 @@ bad=0
 say() { echo "$*" | tee -a "$R"; }
 : > "$R"
 say "# release files, $(date -u +%Y-%m-%dT%H:%M:%SZ), tools/release-files.sh"
+if _m=$(missing_lines "$IMG"); then :; else
+	say "FAIL no image of the line(s): $(echo $_m): stop"; say "release-files: FAILED"; exit 1
+fi
 declare -a _mdirs=()
 for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do _mdirs+=("$(dirname "$m")"/*); done
 if _h=$(not_release_files "$IMG"/* "${_mdirs[@]+"${_mdirs[@]}"}" "${MEDIA[@]+"${MEDIA[@]}"}"); then :; else

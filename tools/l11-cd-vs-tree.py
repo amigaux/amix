@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """l11-cd-vs-tree.py EXTRACTED-CD REPO-TREE -- every package datastream on the install CD against the repository
-tree's: identical, different or missing, by package instance and sha256.
+tree's: identical, different or missing, by package instance and sha256. Exit 0 every package on the CD is in the tree byte for byte, 1 otherwise,
+2 it could not look: no package found on the CD or in the tree.
 """
 import hashlib, os, sys
+if len(sys.argv) != 3:
+    sys.exit(__doc__)
 X, T = sys.argv[1], sys.argv[2]
 def inst(p):
     with open(p, "rb") as f:
@@ -18,6 +21,9 @@ def scan(root):
                 out[p] = (hashlib.md5(open(p, "rb").read()).hexdigest(), inst(p), os.path.relpath(p, root))
     return out
 cd, tree = scan(X), scan(os.path.join(T, "pkgs"))
+if not cd or not tree:
+    print("l11-cd-vs-tree: STOP, could not look: %d packages under %s, %d under %s/pkgs" % (len(cd), X, len(tree), T))
+    sys.exit(2)
 tmd5 = {v[0]: v for v in tree.values()}
 tinst = {}
 for v in tree.values():
@@ -38,3 +44,4 @@ print("== in the tree (%d), against the CD" % len(tree))
 for p, (m, i, rel) in sorted(tree.items(), key=lambda kv: kv[1][2]):
     if m not in cmd5:
         print("  %-14s %-10s %s" % ("NOT ON THE CD" if i not in cinst else "OTHER VERSION", i, rel))
+sys.exit(1 if diff or miss else 0)

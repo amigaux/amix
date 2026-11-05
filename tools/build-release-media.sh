@@ -56,6 +56,9 @@ L11_IN="${L11_IN:-$repo/work/l11}"; export L11_IN
 [ ! -s "$L11_IN/UNPINNED" ] || die "$L11_IN rolled userland unpinned: not inputs of record"
 [ -z "$(git -C "$repo" status --porcelain)" ] || die "the tree has uncommitted changes: release media name one commit"
 mkdir -p "$OUT"
+# nothing from an earlier build may pass as this one's, nor be counted in its record
+rm -f "${OUT:?}"/amix-1.1-*.iso "${OUT:?}"/amix-1.1-*.adf "${OUT:?}"/amix-1.1-*.hdf "${OUT:?}"/amix-1.1-*.sha256 \
+	"${OUT:?}"/amix-1.1-*.MANIFEST "${OUT:?}/SHA256SUMS" "${OUT:?}/MEDIA.txt" "${OUT:?}/RELEASE-CHECK.txt"
 W="$OUT/work"; mkdir -p "$W"
 rel() {	# rel FILE -- its .sha256 beside it
 	( cd "$(dirname "$1")" && sha256sum "$(basename "$1")" > "$(basename "$1").sha256" )
@@ -116,7 +119,7 @@ fi
 } > "$OUT/MEDIA.txt"
 cat "$OUT/MEDIA.txt"
 python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
-	"$ISO" ${NI:+"$NI"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
+	"$ISO" ${NI:+"$NI"} "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf "$R46" "$R30" ${N46:+"$N46"} ${N30:+"$N30"} 2>&1 | tee "$OUT/RELEASE-CHECK.txt"
 rc=${PIPESTATUS[0]}
 python3 "$here/known-bad-scan.py" "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf 2>&1 \
 	| tee -a "$OUT/RELEASE-CHECK.txt"

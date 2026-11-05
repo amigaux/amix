@@ -101,6 +101,23 @@ def scan_bytes(p, bad, need=0.9):
     return hits
 
 
+def cannot_look(bad, arts=()):
+    """Why a CLEAN from here would prove nothing, or None: an empty list, a listed module without its bytes (only a
+    whole-file hash could then match, a disk image would pass), an artefact that is missing or empty."""
+    if not bad:
+        return "the known-bad list is empty"
+    nobytes = [s[:16] for s, v in bad.items() if not v[2]]
+    if nobytes:
+        return "no bytes for %s under build/pins: a module inside a disk image would not be found" % " ".join(nobytes)
+    for a in arts:
+        if os.path.isdir(a):
+            if not any(fs for _, _, fs in os.walk(a)):
+                return "no file in " + a
+        elif not os.path.isfile(a) or not os.path.getsize(a):
+            return "missing or empty: " + a
+    return None
+
+
 def scan(art, bad):
     if os.path.isdir(art):
         return scan_tree(art, bad, art)
@@ -112,6 +129,8 @@ def scan(art, bad):
                                capture_output=True, text=True)
             if r.returncode != 0:
                 return ["%s: xorriso could not read it" % art]
+            if not any(fs for _, _, fs in os.walk(d)):
+                return ["%s: no file came out of it: not an ISO, or an empty one" % art]
             hits += scan_tree(d, bad, art)
         finally:
             subprocess.run(["chmod", "-R", "u+w", d])
@@ -157,6 +176,21 @@ def selftest():
             good = got == want
             ok &= good
             print("  %s %s -> %s" % ("ok  " if good else "FAIL", what, "HIT" if got else "clean"))
+        # could not look: never CLEAN
+        nb = {sha: (14006, "zbad: test", None)}
+        empty = os.path.join(t, "empty.iso")
+        open(empty, "wb").close()
+        for what, got in (("an empty list", cannot_look({})), ("a module without its bytes", cannot_look(nb)),
+                          ("an empty medium", cannot_look(bad, [empty])),
+                          ("a missing medium", cannot_look(bad, [os.path.join(t, "absent")])),
+                          ("an empty tree", (os.makedirs(os.path.join(t, "e")), cannot_look(bad, [os.path.join(t, "e")]))[1])):
+            ok &= bool(got)
+            print("  %s %s -> %s" % ("ok  " if got else "FAIL", what, "stops" if got else "CLEAN"))
+        junk = os.path.join(t, "junk.iso")
+        open(junk, "wb").write(b"not an iso" * 100)
+        got = bool(scan(junk, bad))
+        ok &= got
+        print("  %s a file that is no ISO -> %s" % ("ok  " if got else "FAIL", "reported" if got else "clean"))
     finally:
         shutil.rmtree(t)
     print("known-bad-scan selftest: %s" % ("PASS" if ok else "FAIL"))
@@ -173,15 +207,17 @@ def main(argv):
         print("known-bad-scan: no %s" % LIST)
         return 2
     bad = load()
-    nobytes = [s[:16] for s, v in bad.items() if not v[2]]
+    why = cannot_look(bad, argv)
+    if why:
+        print("known-bad-scan: STOP, could not look: " + why)
+        return 2
     hits = []
     for a in argv:
         hits += scan(a, bad)
     for h in hits:
         print("HIT " + h)
-    print("known-bad-scan: %d artefact(s), %d known-bad module(s)%s: %s"
-          % (len(argv), len(bad), " (%s by hash only)" % " ".join(nobytes) if nobytes else "",
-             "CLEAN" if not hits else "%d HIT(S)" % len(hits)))
+    print("known-bad-scan: %d artefact(s), %d known-bad module(s): %s"
+          % (len(argv), len(bad), "CLEAN" if not hits else "%d HIT(S)" % len(hits)))
     return 1 if hits else 0
 
 
