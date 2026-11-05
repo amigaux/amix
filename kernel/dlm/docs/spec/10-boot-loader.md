@@ -325,6 +325,12 @@ the loader-trial flag (set by `kbootset loader-install`, cleared by
 block and tally block extents, CRC-32 of the header. boot1 takes the valid
 copy with the higher sequence number.
 
+`kbootset loader-install` moves the primary to the secondary only when the
+primary is not on trial. While it is, the secondary is the loader that last
+completed a boot, and a second install replaces only the primary, so
+retrying after a failed trial keeps the way back. A secondary whose CRC-32
+fails is replaced by the primary, as the only copy left.
+
 **Why the loader attempt is not in the header or the control block.** The
 header is written only by `kbootset` and changes rarely, so no boot code
 ever rewrites it; the control block needs CRC and directory logic that does

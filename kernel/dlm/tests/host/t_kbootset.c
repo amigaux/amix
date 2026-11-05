@@ -64,7 +64,7 @@ setup(struct ks *k)
 	k->jrn.clear = jclear;
 }
 
-static ax_u8 kern[300000], boot2a[20000], boot2b[21000];
+static ax_u8 kern[300000], boot2a[20000], boot2b[21000], boot2c[22000];
 
 static void
 fill(ax_u8 *p, ax_u32 n, ax_u32 seed)
@@ -354,6 +354,7 @@ test_kbootset(void)
 	setup(&k);
 	fill(boot2a, sizeof(boot2a), 7);
 	fill(boot2b, sizeof(boot2b), 8);
+	fill(boot2c, sizeof(boot2c), 9);
 	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_OK);
 	/* a store is not replaced by accident; --force replaces it */
 	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_EREFUSE);
@@ -461,8 +462,26 @@ test_kbootset(void)
 	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2a, sizeof(boot2a)) == 0);
 	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 0), KS_OK);	/* secondary ran */
 	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	/* a second install while it is on trial, as after that failed boot:
+	 * the loader that completed a boot stays the secondary */
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	T_EQ(k.hdr.boot2[0].len, sizeof(boot2c));
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2a));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2a, sizeof(boot2a)) == 0);
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2c, sizeof(boot2c)) == 0);
+	/* and a damaged secondary is not kept: the primary replaces it */
+	img[AX_BOOT2_B_OFF] ^= 0xFF;
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2c));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2c, sizeof(boot2c)) == 0);
 	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
 	T_CHECK(!(k.hdr.flags & AXF_LDRTRIAL));
+	/* accepted: the next install moves it to the secondary */
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2b));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2b, sizeof(boot2b)) == 0);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
 	/* the journal: an interrupted commit is reported and cleared */
 	strcpy(jrn, "commit 42");
 	T_EQ(ks_open(&k), KS_OK);

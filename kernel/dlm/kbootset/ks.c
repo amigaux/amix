@@ -1013,6 +1013,23 @@ ks_collect(struct ks *k)
 	return KS_OK;
 }
 
+/* a primary on trial, and a secondary that reads back whole */
+static int
+secondary_stays(struct ks *k)
+{
+	ax_u32 slen = k->hdr.boot2[1].len;
+	ax_u8 *b;
+	int ok;
+
+	if (!(k->hdr.flags & AXF_LDRTRIAL) || slen == 0 || slen > AX_BOOT2_MAX ||
+	    (b = malloc(slen)) == 0)
+		return 0;
+	ok = get(k, k->hdr.boot2[1].off, b, slen) == KS_OK &&
+	     ax_crc32(k->crctab, b, slen) == k->hdr.boot2[1].crc;
+	free(b);
+	return ok;
+}
+
 int
 ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 		  const ax_u8 *boot1)
@@ -1030,27 +1047,31 @@ ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 	if (boot1 && (memcmp(boot1, "DOS\0", 4) != 0))
 		return fail(k, KS_EREFUSE, 0, "boot1 is not a framed bootblock");
 	/* 1. the current primary becomes the secondary: written and recorded
-	 * before the primary area is touched, so both copies are good */
-	if (clen == 0 || clen > AX_BOOT2_MAX || (cur = malloc(clen)) == 0)
-		return fail(k, KS_ESTORE, 0, "the installed loader is not recorded");
-	if ((rc = get(k, k->hdr.boot2[0].off, cur, clen)) != KS_OK) {
+	 * before the primary area is touched, so both copies are good.  Not
+	 * while a primary is on trial: it has not completed a boot, and the
+	 * secondary is the loader that last did, so that one stays */
+	if (!secondary_stays(k)) {
+		if (clen == 0 || clen > AX_BOOT2_MAX || (cur = malloc(clen)) == 0)
+			return fail(k, KS_ESTORE, 0, "the installed loader is not recorded");
+		if ((rc = get(k, k->hdr.boot2[0].off, cur, clen)) != KS_OK) {
+			free(cur);
+			return rc;
+		}
+		if (ax_crc32(k->crctab, cur, clen) != k->hdr.boot2[0].crc) {
+			free(cur);
+			return fail(k, KS_EREFUSE, 0, "the installed primary loader is damaged; "
+				    "not replacing the copy the box can still boot");
+		}
+		rc = put(k, AX_BOOT2_B_OFF, cur, clen);
 		free(cur);
-		return rc;
+		if (rc != KS_OK)
+			return rc;
+		h = k->hdr;
+		h.boot2[1] = h.boot2[0];
+		h.boot2[1].off = AX_BOOT2_B_OFF;
+		if ((rc = write_hdr(k, &h)) != KS_OK)
+			return rc;
 	}
-	if (ax_crc32(k->crctab, cur, clen) != k->hdr.boot2[0].crc) {
-		free(cur);
-		return fail(k, KS_EREFUSE, 0, "the installed primary loader is damaged; "
-			    "not replacing the copy the box can still boot");
-	}
-	rc = put(k, AX_BOOT2_B_OFF, cur, clen);
-	free(cur);
-	if (rc != KS_OK)
-		return rc;
-	h = k->hdr;
-	h.boot2[1] = h.boot2[0];
-	h.boot2[1].off = AX_BOOT2_B_OFF;
-	if ((rc = write_hdr(k, &h)) != KS_OK)
-		return rc;
 	/* 2. the new primary; until the header names it, its CRC does not
 	 * match and boot1 takes the secondary (B2) */
 	if ((rc = put(k, AX_BOOT2_A_OFF, boot2, len)) != KS_OK)
