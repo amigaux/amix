@@ -5,8 +5,9 @@
 Every tool that could report a pass over nothing now refuses, each with a test that fails on the old code:
 
 - `assemble-release.py`: no live row outside stock/, a row that unpacks to nothing, no m68k ELF in the whole
-  tree (one package without an ELF stays normal), an ELF for another machine, an input catalog with no entry, a
-  stock lock that names nothing, a release with no lock.
+  tree (one package without an ELF stays normal), an input catalog with no entry, a stock lock that names
+  nothing, a release with no lock. An ELF for another machine is named as not scanned: the kit's `modfix` is
+  one, by design.
 - `gen-catalog.py`: no package, or any refused package (SKIP): the others are still read so every refusal is
   named, then no catalog is written. Before, rc 0 and a catalog short of the package, and `make dist` only looks
   at the rc. `--scan-private` no longer says OK over nothing or over a package it could not parse. New

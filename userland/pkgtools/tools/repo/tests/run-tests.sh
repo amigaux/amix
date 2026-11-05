@@ -2984,7 +2984,9 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
     printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000' > "$S34/x86.elf"
     mkdir -p "$S34/ulx/pkgs"; cp "$S34/ul/pkgs/zlibt-1.0.pkg" "$S34/ulx/pkgs/"; toy34 xelf 1.0 "$S34/ulx/pkgs/xelf-1.0.pkg" "" "$S34/x86.elf"; cpconf34 "$S34/ulx/pkgs"
     python3 "$GEN" --packages-conf none -o "$S34/ulx" "$S34/ulx/pkgs" >/dev/null 2>&1
-    t34no 1 "an ELF for another machine in a live row: refused" "opt/xelf.elf is an ELF for another machine" --userland "$S34/ulx"
+    ar34 "$S34/outx2/1.1" --userland "$S34/ulx" >"$WORK/t34.xe" 2>&1
+    check "an ELF for another machine in a live row (a kit's host tool): rc 0, named as not scanned" \
+        bash -c "test $? -eq 0 && grep -q 'not scanned, an ELF for another machine: xelf-1.0.pkg!.*opt/xelf.elf' '$WORK/t34.xe'"
 
     # the next release: the published tree is an input, and stays
     rm -f "${S34:?}/ap/APKG-0.3.6.pkg" "${S34:?}/ap/APKG-0.3.6.pkg.md5"; toy34 APKG 0.3.10 "$S34/ap/APKG-0.3.10.pkg"

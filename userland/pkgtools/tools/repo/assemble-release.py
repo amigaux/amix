@@ -69,8 +69,8 @@
 #     knows by sha256: without one the tool does not start (exit 3);
 #   - a scan that looked at nothing: no live row outside stock/, a row that
 #     unpacks to nothing, or no m68k ELF in the whole tree (one package without
-#     an ELF is normal, a tree without one is not); an ELF for another machine
-#     in a live row, which no scan can read;
+#     an ELF is normal, a tree without one is not).  An ELF for another machine
+#     no scan can read (dlmkit's host tools) is named on the scan's line;
 #   - tools/release-check refusing the tree;
 #   - apkg itself not reading the tree as one repository (`update`, `list`).
 # The tree is written to OUT.tmp and renamed into place only after every
@@ -619,15 +619,14 @@ def scan_userland(files, a, work):
     scan060.py reports on it must be one scan060-g14.py explains (inside a
     sized switch table, or at an odd address: scan060.py sizes tables by gcc
     2.7's layout and reads GCC 14's as code).  A package without an ELF has
-    nothing to scan, but one that unpacks to nothing was not looked at, and
-    an ELF for another machine is one no scan can read.
-    -> (period ELFs, gcc14 ELFs) counted."""
+    nothing to scan, but one that unpacks to nothing was not looked at.
+    -> (period ELFs, gcc14 ELFs) counted, [ELFs for another machine] named."""
     pkgtrans = os.environ.get("AMIX_PKGTRANS") or os.path.join(
         PKGTOOLS, "heirloom", "build-host", "bin", "pkgtrans")
     if not os.access(pkgtrans, os.X_OK):
         raise Missing("pkgtrans for the scan: %s (AMIX_PKGTRANS=)" % pkgtrans)
     objdump = objdump_tool()
-    period, g14 = [], []
+    period, g14, other = [], [], []
     for i, f in enumerate(files):
         with open(f, "rb") as fp:
             head = fp.read(512).split(b"\n")
@@ -651,8 +650,7 @@ def scan_userland(files, a, work):
                 if m68k_elf(p):
                     (g14 if built_by_gcc14(p) else period).append(p)
                 elif any_elf(p):
-                    raise Refused("%s: %s is an ELF for another machine"
-                                  % (os.path.basename(f), os.path.relpath(p, d)))
+                    other.append("%s!%s" % (os.path.basename(f), os.path.relpath(p, d)))
     if period:
         run_check([sys.executable, "-I", a.scan060] + period, "scan060", (2,))
     if g14:
@@ -673,7 +671,7 @@ def scan_userland(files, a, work):
                 raise ToolError("scan060 failed on %s (exit %d)" % (p, r.returncode))
             run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump,
                        "--explain", hits, p], "scan060-g14 --explain", (1, 3), g14env)
-    return len(period), len(g14)
+    return len(period), len(g14), other
 
 
 def apkg_reads(apkg_bin, tree, n_rows, n_k):
@@ -810,7 +808,7 @@ def main():
                           "stock/; that is not a pass")
         sw = tempfile.mkdtemp(prefix="assemble-release-scan.")
         try:
-            np, ng = scan_userland(scan, a, sw)
+            np, ng, other = scan_userland(scan, a, sw)
         finally:
             shutil.rmtree(sw, ignore_errors=True)
         if np + ng == 0:
@@ -818,6 +816,8 @@ def main():
                           "one m68k ELF in them; that is not a pass" % len(scan))
         print("68060 scan: %d package(s), %d period ELF(s), %d GCC 14 ELF(s): clean"
               % (len(scan), np, ng))
+        for o in other:
+            print("68060 scan: not scanned, an ELF for another machine: %s" % o)
         run_check([a.release_check, "--rom-register", a.rom_register,
                    "--private-patterns", a.private_patterns, tmp],
                   "release-check", (1,))
