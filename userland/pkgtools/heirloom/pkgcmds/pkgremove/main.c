@@ -565,7 +565,9 @@ main(int argc, char *argv[])
 	nact.sa_flags = SA_RESTART;
 	(void) sigemptyset(&nact.sa_mask);
 
-	(void) sigaction(SIGHUP, &nact, &oact);
+	if (!pkg_sighup_ignored()) {
+		(void) sigaction(SIGHUP, &nact, &oact);
+	}
 
 	/* release hold on signals */
 

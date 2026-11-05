@@ -221,9 +221,7 @@ esystem(char *cmd, int ifd, int ofd)
 
 		/* reset any signals to default */
 
-		for (i = 0; i < NSIG; i++) {
-			(void) sigset(i, SIG_DFL);
-		}
+		pkg_sig_default();
 
 		if (ifd > 0) {
 			(void) dup2(ifd, STDIN_FILENO);
@@ -397,9 +395,7 @@ esystem_bounded(char *cmd, int ifd, long nbytes)
 
 		/* reset any signals to default */
 
-		for (i = 0; i < NSIG; i++) {
-			(void) sigset(i, SIG_DFL);
-		}
+		pkg_sig_default();
 
 		(void) dup2(pfd[0], STDIN_FILENO);
 
@@ -753,9 +749,7 @@ e_ExecCmdArray(int *r_status, char **r_results,
 
 		/* reset any signals to default */
 
-		for (i = 0; i < NSIG; i++) {
-			(void) sigset(i, SIG_DFL);
-		}
+		pkg_sig_default();
 
 		/* assign stdin, stdout, stderr as appropriate */
 

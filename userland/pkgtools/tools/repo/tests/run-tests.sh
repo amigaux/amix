@@ -3274,6 +3274,59 @@ else
     echo "  skip- the cdfs lineage gate (host pkgmk/pkgtrans missing: heirloom/build-host.sh)"
 fi
 
+# --------------------------------------------------------------- T36 ----
+# A login's end during an install: an ignored SIGHUP stays ignored in the engine
+# and in what it starts, so nohup works; one that is not ignored still interrupts,
+# and the next install puts the package right.
+echo "T36: the engine and a hangup"
+S36="$WORK/t36"; mkdir -p "$S36/src/opt/hupt"
+if [ -x "$HB/pkgadd" ] && [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1; then
+    echo data > "$S36/src/opt/hupt/data"
+    # each script says what it inherited, marks its start and takes a moment
+    hold36() { printf '#!/bin/sh\ngrep SigIgn /proc/$$/status > %s/sigign\n: > %s/mark\nsleep 2\n: > %s/done\nexit 0\n' "$S36" "$S36" "$S36"; }
+    hold36 > "$S36/postinstall"; hold36 > "$S36/preremove"
+    printf 'PKG=HUPT\nNAME=hupt\nVERSION=1.0\nARCH=Amiga\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' > "$S36/pkginfo"
+    printf 'i pkginfo=%s/pkginfo\ni postinstall=%s/postinstall\ni preremove=%s/preremove\nd none /opt 0755 root sys\nd none /opt/hupt 0755 root sys\nf none /opt/hupt/data=%s/src/opt/hupt/data 0644 root sys\n' \
+        "$S36" "$S36" "$S36" "$S36" > "$S36/prototype"
+    mkdir -p "$S36/spool"
+    ( cd "$S36" && "$HB/pkgmk" -o -d "$S36/spool" -f prototype && "$HB/pkgtrans" -s "$S36/spool" "$S36/HUPT.pkg" HUPT ) >"$WORK/t36.mk" 2>&1
+    printf 'mail=\ninstance=overwrite\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' > "$S36/admin"
+    R36="$S36/root"; mkdir -p "$R36/etc" "$R36/var/sadm/install"
+    printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$R36/etc/passwd"
+    printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$R36/etc/group"
+    SAVE36="$WORK/t36-fake"
+    clr36() { rm -f "${S36:?}/mark" "${S36:?}/done" "${S36:?}/sigign"; }
+    run36() { # run36 <ignore|default> <engine command> <args>: the hangup at the script's start
+        local m="$1" c="$2"; shift 2; clr36
+        fakeroot -i "$SAVE36" -s "$SAVE36" python3 -I -B "$HERE/hup-run.py" "$m" "$S36/mark" "$HB/$c" -R "$R36" -n -a "$S36/admin" "$@" >"$WORK/t36.out" 2>&1
+    }
+    add36() { run36 "$1" pkgadd -d "$S36/HUPT.pkg" HUPT; }
+    rm36()  { run36 "$1" pkgrm HUPT; }
+    q36()   { fakeroot -i "$SAVE36" -s "$SAVE36" "$HB/pkginfo" -R "$R36" "$@" >/dev/null 2>&1; }
+    : > "$SAVE36"
+    add36 ignore
+    check "SIGHUP ignored, hung up during an install: pkgadd rc 0" test $? -eq 0
+    check "  ... the install script ran to its end" test -e "$S36/done"
+    check "  ... and inherited SIGHUP ignored" \
+        bash -c "m=\$(awk '{print \$2}' '$S36/sigign'); test \$((0x\$m & 1)) -eq 1"
+    check "  ... the package is whole" bash -c "! grep -q partial <<<\"\$(fakeroot -i '$SAVE36' -s '$SAVE36' '$HB/pkginfo' -R '$R36' -l HUPT)\" && test -f '$R36/opt/hupt/data'"
+    rm36 ignore
+    check "SIGHUP ignored, hung up during a removal: pkgrm rc 0, the package gone" \
+        bash -c "test $? -eq 0 && test -e '$S36/done' && test ! -e '$R36/opt/hupt/data'"
+    add36 default
+    check "SIGHUP at its default, hung up during an install: pkgadd rc 3, interrupted" test $? -eq 3
+    check "  ... the install script did not finish" test ! -e "$S36/done"
+    check "  ... the package is left marked partial" q36 -p HUPT
+    clr36; touch "$S36/mark"
+    fakeroot -i "$SAVE36" -s "$SAVE36" "$HB/pkgadd" -R "$R36" -n -a "$S36/admin" -d "$S36/HUPT.pkg" HUPT >"$WORK/t36.re" 2>&1
+    check "  ... the next pkgadd puts it right: rc 0, no longer partial" \
+        bash -c "test $? -eq 0 && ! fakeroot -i '$SAVE36' -s '$SAVE36' '$HB/pkginfo' -R '$R36' -p HUPT >/dev/null 2>&1 && test -e '$S36/done'"
+    rm36 default
+    check "SIGHUP at its default, hung up during a removal: pkgrm rc 3, interrupted" test $? -eq 3
+else
+    echo "  skip- the engine and a hangup (no host engine or fakeroot: heirloom/build-host.sh)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

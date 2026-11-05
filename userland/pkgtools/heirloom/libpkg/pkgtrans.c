@@ -716,7 +716,9 @@ pkgtrans(char *device1, char *device2, char **pkg, int options,
 	nact.sa_flags = SA_RESTART;
 	(void) sigemptyset(&nact.sa_mask);
 
-	if (sigaction(SIGHUP, &nact, &oact) < 0) {
+	if (pkg_sighup_ignored()) {
+		sighupHandler = SIG_IGN;
+	} else if (sigaction(SIGHUP, &nact, &oact) < 0) {
 		sighupHandler = SIG_DFL;
 	} else {
 		sighupHandler = oact.sa_handler;
