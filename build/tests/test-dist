@@ -637,6 +637,54 @@ clean:
                   DOCKER_ARGS=argf, PRIVACY_PATTERNS=os.path.join(tmp, "nosuch"))
     check("a release input that does not exist: refused before the container",
           rc == 1 and "PRIVACY_PATTERNS=%s does not exist" % os.path.join(tmp, "nosuch") in out, out)
+    # dist-proof, with a stand-in dist.sh in the commit it clones
+    pt = os.path.join(tmp, "proved")
+    write(os.path.join(pt, "build", "dist.sh"), '''mkdir -p out
+case $1 in
+media) if [ "${GAP_SILENT:-}" != media ]; then echo "[MISSING] media: not yet"; fi; exit 3 ;;
+lock)
+	if [ -n "${LOCK:-}" ]; then cmp -s out/lock "$LOCK"; exit $?; fi
+	if [ -n "${BY_PATH:-}" ]; then pwd > out/lock; else echo one lock > out/lock; fi ;;
+esac
+''')
+    shutil.copy2(os.path.join(TOP, "build", "dist-proof"), os.path.join(pt, "build", "dist-proof"))
+    git("init", "-q", cwd=pt)
+    git("add", ".", cwd=pt)
+    git("commit", "-q", "-m", "one", cwd=pt)
+    pn = [0]
+
+    def prove(**env):
+        pn[0] += 1
+        return run(os.path.join(tmp, "pw%d" % pn[0]), where=os.path.join(pt, "build", "dist-proof"),
+                   DIST_HOST=None, **env)
+    rc, out = prove()
+    check("dist-proof: the same lock twice, exit 0", rc == 0 and "the two locks are identical" in out, out)
+    check("dist-proof: the summary names the machine", "machine: " in out and " CPUs" in out, out)
+    check("dist-proof: and that one filesystem compared no directory order",
+          "directory order not compared" in out, out)
+    check("dist-proof: and the gaps it did not compare, in both runs",
+          "not compared, known gaps: a/media b/media" in out, out)
+    rc, out = prove(GAP_SILENT="media")
+    check("dist-proof: an exit 3 with no [MISSING] line stops it", rc == 1 and "with no [MISSING] line" in out, out)
+    rc, out = prove(BY_PATH="1")
+    check("dist-proof: two locks that differ, exit 1", rc == 1 and "the two locks differ" in out, out)
+    rec = os.path.join(tmp, "lock-of-record")
+    write(rec, "one lock\n")
+    rc, out = prove(LOCK=rec)
+    check("dist-proof: with a lock of record both runs still write theirs, and pass it",
+          rc == 0 and "the two locks are identical" in out, out)
+    write(rec, "another lock\n")
+    rc, out = prove(LOCK=rec)
+    check("dist-proof: a lock of record they are not stops it", rc == 1 and "lock FAILED" in out, out)
+    if os.path.isdir("/dev/shm") and os.stat("/dev/shm").st_dev != os.stat(tmp).st_dev:
+        far = tempfile.mkdtemp(prefix="test-dist.", dir="/dev/shm")
+        try:
+            rc, out = prove(ELSEWHERE=far)
+            check("dist-proof: the second clone on another filesystem compares the order",
+                  rc == 0 and "two filesystems: directory order compared" in out, out)
+        finally:
+            shutil.rmtree(far)
+
     # dist-proof refuses a second filesystem that is not one, before it clones
     proof = os.path.join(top, "build", "dist-proof")
     shutil.copy2(os.path.join(TOP, "build", "dist-proof"), proof)
