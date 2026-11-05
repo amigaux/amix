@@ -5,7 +5,8 @@ acompat (the libamixcompat library): BSD-2-Clause (acompat/LICENSE).
 Packages built by these recipes contain third-party programs under their own
 licences (GPL-2.0-or-later: grep, gzip, tar, patch, make, diffutils,
 coreutils; GPL-3.0-or-later: rsync; GPL-3.0-or-later OR BSD-2-Clause: less;
-Zlib: zlib; bzip2-1.0.6: bzip2); INDEX.md lists each package's licence. Each
+Zlib: zlib; bzip2-1.0.6: bzip2; public domain: Dhrystone 2.1, in
+amix-benchmark and amix-benchmark-gcc14); INDEX.md lists each package's licence. Each
 package ships its upstream licence text under <prefix>/doc/<tool>/, and each
 package.sh pins the exact upstream source (URL + sha256) beside the patches
 in its directory; together they are the corresponding source of the

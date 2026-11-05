@@ -1,0 +1,15 @@
+amix-benchmark -- the amix-bench benchmark suite
+
+The suite (the driver, iobench, fpbench, membench, vmbench and their shared
+header) is MIT; see LICENSE.amix beside this file.
+
+dhry is Dhrystone 2.1 by Reinhold P. Weicker and Rick Richardson (1988),
+public domain, compiled as published.
+
+The binaries link the startup objects and the shared libc of the stock Amiga
+UNIX (Amix) SVR4 system.  On 2026-09-23 Amiga Corporation approved the
+distribution of the Commodore Amiga binaries that this project builds on.
+
+This project and its developers are not affiliated with, endorsed by, or
+sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga
+Corporation.
