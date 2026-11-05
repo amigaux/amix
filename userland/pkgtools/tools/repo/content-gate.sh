@@ -34,10 +34,16 @@ for pkg in "$@"; do
 	# but a modtime-only mismatch is metadata drift (e.g. a pre-seeded
 	# EDITABLE /etc/passwd|group that pkgadd correctly preserves), NOT
 	# content corruption - real corruption always moves size and/or
-	# cksum too.  Fail closed on size/cksum; tolerate modtime-only.
+	# cksum too.  Fail closed on size/cksum; tolerate modtime-only, and only
+	# when modtime is ALL it says: a missing file ("pathname does not exist")
+	# has no size or cksum line and was never compared.
 	if grep 'cksum' "$tmp" > /dev/null 2>&1 || \
 	   grep 'file size' "$tmp" > /dev/null 2>&1; then
 		echo "content-gate: $pkg: FAILED - content (size/cksum) discrepancy:"
+		sed 's/^/    /' "$tmp"
+		rc=1
+	elif grep -v '^ERROR:' "$tmp" | grep -v 'modtime' | grep . > /dev/null 2>&1; then
+		echo "content-gate: $pkg: FAILED - pkgchk rc=$prc, not only modtime:"
 		sed 's/^/    /' "$tmp"
 		rc=1
 	elif grep 'modtime' "$tmp" > /dev/null 2>&1; then

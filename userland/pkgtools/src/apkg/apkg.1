@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.10" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.11" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -86,7 +86,34 @@ line when the installed package is essential.
 .TP
 .BI download " name"
 Fetch the package file into the cache directory and verify its md5
-checksum against the catalog.
+checksum against the catalog.  The file stays there until a good install
+uses it or
+.B clean
+removes it.
+.TP
+.B clean
+Remove every package file from the cache directory and say how many
+bytes that freed; with
+.BR \-n ,
+only say what it would remove.  It takes only files named
+.BR *.pkg ,
+.B *.pkg.Z
+and their
+.B .part
+downloads, and refuses while a transaction is journaled, which
+.B recover
+needs them for.  The catalog beside the cache stays.
+.TP
+.BI licence " name"
+Print the licence notice an installed package carries, saved as
+.BI /var/sadm/pkg/ pkginst /install/copyright
+when it was installed, and name the licence files among its files.
+A package's notice goes with the package: it is never removed apart from it.
+.B apkg
+prints no licence at install or upgrade, with
+.B \-v
+too: this verb is how to read one, and a transaction says so at its end when a
+package left a notice.
 .TP
 .BI install " name ..."
 Resolve dependencies recursively from the catalog, download and
@@ -749,6 +776,17 @@ and packages from
 Package download cache (default
 .BR /var/apkg/cache ).
 The catalog lives next to it, in the cache directory's parent.
+A good
+.B install
+or
+.B upgrade
+removes the packages it fetched from here once its journal has cleared; a
+failed one keeps them for
+.B recover
+or another try.  The directory is apkg's own: do not point it at a repository.
+.TP
+.B keepcache
+1 keeps the fetched packages after a good transaction (default 0).
 .TP
 .B pkgadd
 pkgadd binary (default
@@ -1228,8 +1266,9 @@ the transaction journal
 prints no licence at install or upgrade: it hands
 .B pkgadd \-S
 to the engine, which still saves a package's notice as
-.BI /var/sadm/pkg/ pkginst /install/copyright ,
-the place to read it.  The stock
+.BI /var/sadm/pkg/ pkginst /install/copyright ;
+.B "apkg licence"
+reads it.  The stock
 .B /usr/sbin/pkgadd
 refuses
 .BR \-S ,

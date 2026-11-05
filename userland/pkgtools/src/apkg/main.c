@@ -43,6 +43,8 @@ static void usage(void)
         "  search <substr>     case-insensitive search of name/description\n"
         "  info <name>         show one catalog entry + installed state\n"
         "  download <name>     fetch a package into the cache and verify\n"
+        "  clean               remove the package files from the cache\n"
+        "  licence <name>      print an installed package's licence notice\n"
         "  install <name>...   resolve deps, download, pkgadd\n"
         "  upgrade [<name>...] pkgadd over the installed instances when the\n"
         "                      catalog is newer, one transaction (no pkgrm;\n"
@@ -649,6 +651,28 @@ int main(int argc, char **argv)
             return EX_USAGE;
         }
         return cmd_recover(&cf);
+    }
+
+    if (strcmp(verb, "clean") == 0) {
+        if (i != argc) {
+            usage();
+            return EX_USAGE;
+        }
+        return cmd_clean(&cf);
+    }
+
+    if (strcmp(verb, "licence") == 0 || strcmp(verb, "license") == 0) {
+        if (argc - i != 1) {
+            usage();
+            return EX_USAGE;
+        }
+        /* the catalog is optional: it only maps a friendly name */
+        if (catalog_load(cf.catalog, &cat) == CAT_OK) {
+            rc = cmd_licence(&cf, argv[i], to_pkginst(&cat, argv[i]));
+            catalog_free(&cat);
+            return rc;
+        }
+        return cmd_licence(&cf, argv[i], argv[i]);
     }
 
     warnx2("unknown verb '%s'", verb);

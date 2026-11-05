@@ -31,6 +31,8 @@ purge <name>            remove, and delete the config files remove keeps
 conffiles [list|resolve] [<name>]
                         pending/edited config files; decide pending ones
 recover                 finish an interrupted transaction from /var/apkg/txn
+clean                   remove the package files from the cache
+licence <name>          print an installed package's licence notice
                         (-f: print and discard the journal)
 version                 client version
 

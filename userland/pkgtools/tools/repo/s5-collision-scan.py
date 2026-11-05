@@ -420,6 +420,9 @@ def main(argv):
         if not pkgfiles:
             raise ScanError("no *.pkg / *.pkg.Z found")
         res = scan(pkgfiles, gen)
+        if not res["object_universe"]:
+            raise ScanError("NOTHING INSPECTED: %d package(s) and not one object "
+                            "in their pkgmaps" % len(pkgfiles))
     except ScanError as exc:
         sys.stderr.write("s5-collision-scan: %s\n" % exc)
         return 2

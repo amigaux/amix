@@ -54,6 +54,9 @@
 #     #fstype or #isize line naming a package its catalog does not carry;
 #   - two inputs carrying one name, pkginst or filename, whatever the
 #     versions: no newest-wins between inputs;
+#   - an input catalog with no entry at all, a stock lock that names nothing,
+#     a release with no stock lock: an empty input is a wrong path, not a
+#     smaller release;
 #   - against --previous: a published name and version whose bytes differ,
 #     a version older than the published live one, a row that changes kind;
 #   - a dependency that names no live row;
@@ -64,6 +67,10 @@
 #     scan060-g14.py gets the gcc14 sysroot (--sysroot, default
 #     $AMIX_SYSROOT; it must have usr/lib) for the stock data in .text it
 #     knows by sha256: without one the tool does not start (exit 3);
+#   - a scan that looked at nothing: no live row outside stock/, a row that
+#     unpacks to nothing, or no m68k ELF in the whole tree (one package without
+#     an ELF is normal, a tree without one is not).  An ELF for another machine
+#     no scan can read (dlmkit's host tools) is named on the scan's line;
 #   - tools/release-check refusing the tree;
 #   - apkg itself not reading the tree as one repository (`update`, `list`).
 # The tree is written to OUT.tmp and renamed into place only after every
@@ -371,6 +378,8 @@ def stock_files(d, lock):
             if len(f) != 4 or not f[1].isdigit():
                 raise ToolError("%s: malformed line: %s" % (lock, line))
             want.append(f)
+    if not want:
+        raise Refused("%s names no stock package" % lock)
     if d is None:
         raise Missing("--stock: %s names %d stock package(s); give their "
                       "directory" % (os.path.basename(lock), len(want)))
@@ -390,6 +399,28 @@ def stock_files(d, lock):
 
 
 # ---------------------------------------------------------------- merge
+
+ROW_FIELDS = ("name", "version", "pkginst", "filename", "md5", "size", "deps",
+              "category", "description")
+
+
+def row_differences(p, e):
+    """What the row e of this build says otherwise than the published p, whose
+    bytes are the same.  make dist's catalogs have no #isize lines, and a tree's
+    come from the datastream: only two lines that disagree are a difference."""
+    out = []
+    if p.line != e.line:
+        if p.kind == "row":
+            out += [f for f, a, b in zip(ROW_FIELDS, p.line.split("|"), e.line.split("|"))
+                    if a != b]
+        else:
+            out.append("the #kpkg line")
+    for kind in ANN:
+        a, b = p.ann.get(kind), e.ann.get(kind)
+        if a != b and not (kind == "isize" and (a is None or b is None)):
+            out.append("the #%s line" % kind)
+    return out
+
 
 def merge(inputs, prev_live, prev_older):
     """-> (live, older, notes).  inputs: [Entry] from this build."""
@@ -421,9 +452,10 @@ def merge(inputs, prev_live, prev_older):
                 raise Refused("%s: version %s is published with other bytes "
                               "(%s, md5 %s); a published version never changes"
                               % (e.who(), e.version, p.filename, p.file_md5))
-            if p.line != e.line or p.ann != e.ann:
-                notes.append("%s: the row text differs from the published "
-                             "one; the published row is kept" % e.who())
+            what = row_differences(p, e)
+            if what:
+                notes.append("%s differs from the published row in: %s; the "
+                             "published row is kept" % (e.who(), ", ".join(what)))
             continue
         f = pub_files.get(e.filename)
         if f is not None:
@@ -546,6 +578,11 @@ def m68k_elf(path):
     return len(h) == 20 and h[:4] == b"\x7fELF" and h[5] == 2 and h[18:20] == b"\x00\x04"
 
 
+def any_elf(path):
+    with open(path, "rb") as fp:
+        return fp.read(4) == b"\x7fELF"
+
+
 def built_by_gcc14(path):
     """GCC 14's ident in the ELF's .comment: that toolchain's switch tables
     are sized by scan060-g14.py, not scan060.py (build/pkg's D4 gate)."""
@@ -582,13 +619,14 @@ def scan_userland(files, a, work):
     scan060.py reports on it must be one scan060-g14.py explains (inside a
     sized switch table, or at an odd address: scan060.py sizes tables by gcc
     2.7's layout and reads GCC 14's as code).  A package without an ELF has
-    nothing to scan.  -> (period ELFs, gcc14 ELFs) counted."""
+    nothing to scan, but one that unpacks to nothing was not looked at.
+    -> (period ELFs, gcc14 ELFs) counted, [ELFs for another machine] named."""
     pkgtrans = os.environ.get("AMIX_PKGTRANS") or os.path.join(
         PKGTOOLS, "heirloom", "build-host", "bin", "pkgtrans")
     if not os.access(pkgtrans, os.X_OK):
         raise Missing("pkgtrans for the scan: %s (AMIX_PKGTRANS=)" % pkgtrans)
     objdump = objdump_tool()
-    period, g14 = [], []
+    period, g14, other = [], [], []
     for i, f in enumerate(files):
         with open(f, "rb") as fp:
             head = fp.read(512).split(b"\n")
@@ -600,12 +638,19 @@ def scan_userland(files, a, work):
         r = subprocess.run([pkgtrans, "-o", f, d, inst], capture_output=True, text=True)
         if r.returncode != 0:
             raise ToolError("pkgtrans %s: %s" % (os.path.basename(f), r.stderr.strip()[:200]))
+        if not os.listdir(d):
+            raise Refused("68060 scan: NOTHING INSPECTED in %s: pkgtrans unpacked "
+                          "nothing; that is not a pass" % os.path.basename(f))
         for root, dirs, names in os.walk(d):
             dirs.sort()
             for n in sorted(names):
                 p = os.path.join(root, n)
-                if os.path.isfile(p) and not os.path.islink(p) and m68k_elf(p):
+                if not os.path.isfile(p) or os.path.islink(p):
+                    continue
+                if m68k_elf(p):
                     (g14 if built_by_gcc14(p) else period).append(p)
+                elif any_elf(p):
+                    other.append("%s!%s" % (os.path.basename(f), os.path.relpath(p, d)))
     if period:
         run_check([sys.executable, "-I", a.scan060] + period, "scan060", (2,))
     if g14:
@@ -626,7 +671,7 @@ def scan_userland(files, a, work):
                 raise ToolError("scan060 failed on %s (exit %d)" % (p, r.returncode))
             run_check([sys.executable, "-I", a.scan060_g14, "--objdump", objdump,
                        "--explain", hits, p], "scan060-g14 --explain", (1, 3), g14env)
-    return len(period), len(g14)
+    return len(period), len(g14), other
 
 
 def apkg_reads(apkg_bin, tree, n_rows, n_k):
@@ -705,12 +750,13 @@ def main():
             if not os.path.isdir(d):
                 raise Missing("--%s: no directory %s" % (src, d))
             live, _ = read_catalog(d, src)
+            if not live:
+                raise Refused("--%s: %s/catalog has no entry" % (src, d))
             inputs += live
         loose = []
         if a.apkg:
             loose += apkg_files(a.apkg)
-        if os.path.isfile(lock) or a.stock:
-            loose += stock_files(a.stock, lock)
+        loose += stock_files(a.stock, lock)
         scratch = tempfile.mkdtemp(prefix="assemble-release.")
         try:
             if loose:
@@ -757,14 +803,21 @@ def main():
         # rows were checked when they were published.
         scan = sorted(os.path.join(tmp, "pkgs", e.filename) for e in live.values()
                       if e.kind == "row" and not e.filename.startswith("stock/"))
-        if scan:
-            sw = tempfile.mkdtemp(prefix="assemble-release-scan.")
-            try:
-                np, ng = scan_userland(scan, a, sw)
-            finally:
-                shutil.rmtree(sw, ignore_errors=True)
-            print("68060 scan: %d package(s), %d period ELF(s), %d GCC 14 ELF(s): clean"
-                  % (len(scan), np, ng))
+        if not scan:
+            raise Refused("68060 scan: NOTHING INSPECTED: no live row outside "
+                          "stock/; that is not a pass")
+        sw = tempfile.mkdtemp(prefix="assemble-release-scan.")
+        try:
+            np, ng, other = scan_userland(scan, a, sw)
+        finally:
+            shutil.rmtree(sw, ignore_errors=True)
+        if np + ng == 0:
+            raise Refused("68060 scan: NOTHING INSPECTED: %d package(s) and not "
+                          "one m68k ELF in them; that is not a pass" % len(scan))
+        print("68060 scan: %d package(s), %d period ELF(s), %d GCC 14 ELF(s): clean"
+              % (len(scan), np, ng))
+        for o in other:
+            print("68060 scan: not scanned, an ELF for another machine: %s" % o)
         run_check([a.release_check, "--rom-register", a.rom_register,
                    "--private-patterns", a.private_patterns, tmp],
                   "release-check", (1,))

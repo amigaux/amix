@@ -261,13 +261,18 @@ def scan_tree(root):
         dirnames.sort()
         for f in sorted(filenames):
             full = os.path.join(dirpath, f)
+            rel = os.path.relpath(full, root)
+            if os.path.islink(full) and not os.path.exists(full):
+                continue                # a link, its target another package's
             try:
                 with open(full, "rb") as fp:
                     data = fp.read()
-            except OSError:
+            except OSError as exc:
+                findings.append((rel, UNKNOWN, ["could not be read: %s" % exc]))
+                if worst == CLEAN:
+                    worst = UNKNOWN
                 continue
             n_file += 1
-            rel = os.path.relpath(full, root)
             rom = kickstart_rom(data)
             if rom:
                 findings.append((rel, REFUSE, [rom + " -- not covered by "
@@ -351,9 +356,11 @@ def scan_package(path):
         r = subprocess.run([PKGTRANS, "-o", path, tmp,
                             datastream_pkginst(path)],
                            capture_output=True, text=True, timeout=600)
-        if not os.listdir(tmp):
-            print("payload-licence-gate: %s: pkgtrans unpacked nothing (%s)"
-                  % (path, (r.stderr or "").strip()[:120]), file=sys.stderr)
+        if r.returncode != 0 or not os.listdir(tmp):
+            print("payload-licence-gate: %s: pkgtrans exit %d, unpacked %d "
+                  "entries (%s)" % (path, r.returncode, len(os.listdir(tmp)),
+                                    (r.stderr or "").strip()[:120]),
+                  file=sys.stderr)
             raise SystemExit(1)
         return scan_tree(tmp)
 

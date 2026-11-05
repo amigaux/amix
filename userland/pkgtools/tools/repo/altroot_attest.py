@@ -317,6 +317,13 @@ def main(argv):
         print("altroot-attest: %s" % exc, file=sys.stderr)
         return 3
 
+    if not records:
+        # the digest of nothing would compare equal to the digest of nothing
+        print("altroot-attest: NOTHING INSPECTED: no object in %s%s; that is "
+              "not a pass" % (args.contents, " for " + args.only if only else ""),
+              file=sys.stderr)
+        return 3
+
     dg = digest(records)
     print("altroot-attest: objects=%d digest=%s" % (len(records), dg))
     print("DIGEST %s" % dg)

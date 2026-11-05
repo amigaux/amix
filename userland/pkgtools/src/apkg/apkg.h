@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.10"
+#define APKG_VERSION "0.3.11"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -220,6 +220,7 @@ struct conf {
     char *conffile;    /* config file actually consulted               */
     char *repo;        /* repository / source spec (URL, /path, raw:..) */
     char *cachedir;    /* package download cache                       */
+    int  keepcache;    /* keep packages after a good transaction       */
     char *pkgadd;      /* pkgadd binary (engine; NOT -R prefixed)       */
     char *pkgrm;       /* pkgrm binary (engine; NOT -R prefixed)        */
     char *admin;       /* admin(4) file passed with -a                 */
@@ -412,6 +413,9 @@ extern int cmd_upgrade(const struct conf *cf, struct catalog *cat,
 extern int cmd_remove(const struct conf *cf, struct catalog *cat,
                       const char *name);
 extern int cmd_recover(const struct conf *cf);
+extern int cmd_clean(const struct conf *cf);
+extern int cmd_licence(const struct conf *cf, const char *name,
+                       const char *pkginst);
 
 /* -------- config files (conffile.c) -------- */
 

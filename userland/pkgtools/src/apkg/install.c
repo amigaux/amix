@@ -62,7 +62,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -175,6 +177,8 @@ static int run_cmd(char **argv)
     int pid;
     int st;
 
+    fflush(stdout);         /* what apkg said goes before what pkgadd says */
+    fflush(stderr);
     pid = fork();
     if (pid < 0) {
         warnx2("fork failed");
@@ -407,8 +411,8 @@ static void announce_kspace(int nk)
 {
     if (nk > 0)
         printf("kernel space: %d package%s in this transaction; a "
-               "generation build (kbootset) and a power cycle follow\n",
-               nk, nk == 1 ? "" : "s");
+               "generation build (kbootset) follows, and its last line says "
+               "whether a power cycle is needed\n", nk, nk == 1 ? "" : "s");
 }
 
 /* the pkginst a staged kernel-space datastream installs as, after the
@@ -514,6 +518,71 @@ static void txn_add_removal(struct txn *t, const struct kreplace *r)
     txn_add(t, &kent, r->pkginst, "-", 0, "-");
 }
 
+/* a good transaction's staged file out of the cache: nothing reads it once
+ * the journal has cleared.  A plain .pkg on a medium is staged in place and
+ * is not in the cache; a decompressed one leaves its .Z beside it. */
+static void drop_staged(const struct conf *cf, const char *path)
+{
+    unsigned n;
+    char *z;
+
+    n = (unsigned)strlen(cf->cachedir);
+    if (cf->keepcache || opt_dryrun || strncmp(path, cf->cachedir, n) != 0 ||
+        path[n] != '/' || strchr(path + n + 1, '/') != NULL)
+        return;
+    if (unlink(path) != 0 && file_exists(path))
+        warnx2("cannot remove %s from the cache", path);
+    else
+        note("removed %s from the cache", path);
+    z = cat2(path, ".Z");
+    (void)unlink(z);
+    free(z);
+}
+
+/* the saved notice of an installed package; the caller frees it */
+static char *notice_path(const struct conf *cf, const char *pkginst)
+{
+    char *dir;
+    char *path;
+
+    dir = cat3(cf->sadmpkg, "/", pkginst);
+    path = cat2(dir, "/install/copyright");
+    free(dir);
+    return path;
+}
+
+/* what a transaction of several packages did, before the generation lines:
+ * the plan and each package's own lines have scrolled away by now */
+static void txn_summary(const struct conf *cf, int upgrade,
+                        struct pkgent **todo, char **insts, char **from,
+                        const struct txnpkg *p, int nt)
+{
+    char *path;
+    int ndone;
+    int notices;
+    int i;
+
+    ndone = 0;
+    notices = 0;
+    for (i = 0; i < nt; i++)
+        if (p[i].done) {
+            ndone++;
+            path = notice_path(cf, insts[i]);
+            notices += file_exists(path) ? 1 : 0;
+            free(path);
+        }
+    printf("summary: %d of %d packages %s\n", ndone, nt,
+           upgrade ? "upgraded" : "installed");
+    for (i = 0; i < nt; i++) {
+        printf("  %s %s%s%s%s\n", todo[i]->name,
+               from[i] != NULL ? from[i] : "",
+               from[i] != NULL ? " -> " : "", todo[i]->version,
+               p[i].done ? "" : ": not done");
+    }
+    if (notices > 0)
+        printf("licence notices: apkg licence <name>\n");
+}
+
 /* pkgadd one staged package and, for kernel space, write its record */
 static int install_one(const struct conf *cf, const char *pkgadd,
                        const char *file, const char *pkginst, int ow,
@@ -547,6 +616,7 @@ static int commit_txn(const struct conf *cf, const struct source *src,
     char *sid;
     char *pkgrm;
     char iver[128];
+    char **from;
     int i;
     int rc;
     int upgrade;
@@ -568,6 +638,12 @@ static int commit_txn(const struct conf *cf, const struct source *src,
             free(pkgrm);
         return EX_USAGE;
     }
+
+    /* the versions these replace, for the summary */
+    from = (char **)xmalloc((unsigned)(nt * sizeof(char *)));
+    for (i = 0; i < nt; i++)
+        from[i] = ent_installed(cf, todo[i], iver, sizeof(iver)) &&
+                  iver[0] != '\0' ? xstrdup(iver) : NULL;
 
     /* the other kernel package of the line first: both ship
      * /stand/<line>/unix */
@@ -613,8 +689,26 @@ static int commit_txn(const struct conf *cf, const struct source *src,
                        todo[i]->version);
         }
     }
+    if (nt > 1 && !opt_dryrun) {
+        txn_summary(cf, upgrade, todo, insts, from, t.p + nrep, nt);
+    } else if (!opt_dryrun && t.p[nrep].done) {
+        char *np;
+
+        np = notice_path(cf, insts[0]);
+        if (file_exists(np))
+            printf("licence notice: apkg licence %s\n", todo[0]->name);
+        free(np);
+    }
+    for (i = 0; i < nt; i++)
+        if (from[i] != NULL)
+            free(from[i]);
+    free((char *)from);
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);
+    /* good, and the journal cleared: recover will not read them */
+    if (rc == EX_OK && !txn_exists(cf))
+        for (i = 0; i < nt; i++)
+            drop_staged(cf, files[i]);
     /* the config files a class action script kept beside a new default
      * (conffile(5)): reported, and decided here, after the engine ran */
     if (!opt_dryrun) {
@@ -804,6 +898,7 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     if (rc == EX_OK)
         rc = kspace_preflight(cf, todo, nt);
     if (rc != EX_OK) {
+        warnx2("nothing was changed");
         if (rep != NULL)
             free((char *)rep);
         free((char *)todo);
@@ -945,32 +1040,68 @@ static void order_set(struct pkgent **todo, int *ow, int nt)
 int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                 char **names, int nnames);
 
+/* set for the one cmd_upgrade call upgrade_all makes */
+static int upgrading_all = 0;
+
+/* a no-name upgrade refused for its kernel space: the userland packages in
+ * it have no part in that, and go when named */
+static void hint_by_name(struct pkgent **todo, int nt)
+{
+    char *line;
+    char *next;
+    int i;
+
+    line = xstrdup("");
+    for (i = 0; i < nt; i++) {
+        if (todo[i]->kspace)
+            continue;
+        next = cat3(line, " ", todo[i]->name);
+        free(line);
+        line = next;
+    }
+    if (line[0] != '\0')
+        warnx2("these have no part in that and can go by name: apkg upgrade%s",
+               line);
+    free(line);
+}
+
 /* `apkg upgrade` with no names: every installed package the catalog has a
- * newer version of, one transaction (a refused entry is left out) */
+ * newer version of, one transaction (a refused entry is left out, and named) */
 static int upgrade_all(const struct conf *cf, struct catalog *cat)
 {
     char **names;
     char iver[128];
     struct pkgent *e;
     int n;
+    int nleft;
     int i;
     int rc;
 
     names = (char **)xmalloc((unsigned)((cat->n + 1) * sizeof(char *)));
     n = 0;
+    nleft = 0;
     for (i = 0; i < cat->n; i++) {
         e = &cat->ents[i];
-        if (e->refused != NULL || !ent_installed(cf, e, iver, sizeof(iver)) ||
+        if (!ent_installed(cf, e, iver, sizeof(iver)) ||
             apkg_vercmp(e->version, iver) <= 0)
             continue;
+        if (e->refused != NULL) {
+            warnx2("%s %s is left out: the catalog entry is refused: %s",
+                   e->name, e->version, e->refused);
+            nleft++;
+            continue;
+        }
         names[n++] = e->name;
     }
     if (n == 0) {
-        printf("every installed package is up to date\n");
+        printf(nleft > 0 ? "no other installed package has a newer version\n"
+                         : "every installed package is up to date\n");
         free((char *)names);
         return EX_OK;
     }
+    upgrading_all = 1;
     rc = cmd_upgrade(cf, cat, names, n);
+    upgrading_all = 0;
     free((char *)names);
     return rc;
 }
@@ -1058,8 +1189,15 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     nrep = 0;
     rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
          kspace_replaces(cf, todo, nt, &rep, &nrep);
-    if (rc == EX_OK)
+    if (rc == EX_OK) {
         rc = kspace_preflight(cf, todo, nt);
+        if (rc != EX_OK && upgrading_all) {
+            warnx2("nothing was changed");
+            hint_by_name(todo, nt);
+        } else if (rc != EX_OK) {
+            warnx2("nothing was changed");
+        }
+    }
     if (rc != EX_OK) {
         if (rep != NULL)
             free((char *)rep);
@@ -1403,8 +1541,166 @@ int cmd_recover(const struct conf *cf)
     } else {
         txn_clear(cf);
     }
-    if (rc == EX_OK)
+    if (rc == EX_OK) {
         printf("transaction finished\n");
+        for (i = 0; i < t.n; i++)
+            drop_staged(cf, t.p[i].staged);
+    }
     txn_free(&t);
     return rc;
+}
+
+/* ---------------- the cache and the notices ---------------- */
+
+/* what `apkg clean` takes: package files and their cut downloads only */
+static int is_cache_file(const char *name)
+{
+    static const char *const suf[] = {
+        ".pkg", ".pkg.Z", ".pkg.part", ".pkg.Z.part", NULL
+    };
+    unsigned n;
+    unsigned m;
+    int i;
+
+    n = (unsigned)strlen(name);
+    for (i = 0; suf[i] != NULL; i++) {
+        m = (unsigned)strlen(suf[i]);
+        if (n > m && strcmp(name + n - m, suf[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+int cmd_clean(const struct conf *cf)
+{
+    DIR *d;
+    struct dirent *de;
+    struct stat st;
+    char *path;
+    long bytes;
+    int nfiles;
+    int rc;
+
+    if (txn_refuse_if_pending(cf) != 0)
+        return EX_USAGE;
+    bytes = 0;
+    nfiles = 0;
+    rc = EX_OK;
+    d = opendir(cf->cachedir);
+    while (d != NULL && (de = readdir(d)) != NULL) {
+        if (!is_cache_file(de->d_name))
+            continue;
+        path = cat3(cf->cachedir, "/", de->d_name);
+        if (lstat(path, &st) == 0 && (st.st_mode & S_IFMT) == S_IFREG) {
+            if (opt_dryrun) {
+                printf("would remove %s (%ld bytes)\n", path, (long)st.st_size);
+            } else if (unlink(path) != 0) {
+                warnx2("cannot remove %s", path);
+                rc = EX_USAGE;
+                free(path);
+                continue;
+            } else {
+                note("removed %s (%ld bytes)", path, (long)st.st_size);
+            }
+            bytes += (long)st.st_size;
+            nfiles++;
+        }
+        free(path);
+    }
+    if (d != NULL)
+        closedir(d);
+    if (nfiles == 0)
+        printf("the cache holds no package files\n");
+    else
+        printf("%s %d package file%s, %ld bytes\n",
+               opt_dryrun ? "would remove" : "removed", nfiles,
+               nfiles == 1 ? "" : "s", bytes);
+    return rc;
+}
+
+/* the last path component names a licence file */
+static int names_licence(const char *path, unsigned len)
+{
+    static const char *const word[] = {
+        "licen", "copying", "copyright", "notice", ".lic", NULL
+    };
+    char base[256];
+    unsigned b;
+    int i;
+
+    b = len;
+    while (b > 0 && path[b - 1] != '/')
+        b--;
+    if (len - b >= sizeof(base))
+        return 0;
+    memcpy(base, path + b, len - b);
+    base[len - b] = '\0';
+    for (i = 0; word[i] != NULL; i++)
+        if (ci_strfind(base, word[i]))
+            return 1;
+    return 0;
+}
+
+/* name the licence files the package database lists for pkginst; the
+ * count.  Its lines read: <path>[=<target>] <fields...> <pkginst...> */
+static int list_licence_files(const struct conf *cf, const char *pkginst)
+{
+    FILE *fp;
+    char line[2048];
+    char *sp;
+    char *w;
+    unsigned plen;
+    int n;
+
+    n = 0;
+    fp = fopen(cf->contents, "r");
+    if (fp == NULL)
+        return 0;
+    plen = (unsigned)strlen(pkginst);
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        sp = strchr(line, ' ');
+        if (line[0] != '/' || sp == NULL ||
+            !names_licence(line, (unsigned)(sp - line)))
+            continue;
+        for (w = sp; (w = strstr(w, pkginst)) != NULL; w += plen) {
+            if (w[-1] == ' ' && (w[plen] == ' ' || w[plen] == '\n' ||
+                                 w[plen] == '\0')) {
+                *sp = '\0';
+                printf("licence file: %s\n", line);
+                n++;
+                break;
+            }
+        }
+    }
+    fclose(fp);
+    return n;
+}
+
+int cmd_licence(const struct conf *cf, const char *name, const char *pkginst)
+{
+    FILE *fp;
+    char buf[512];
+    char iver[128];
+    char *path;
+    int shown;
+
+    if (!installed_version(cf, pkginst, iver, sizeof(iver))) {
+        warnx2("%s is not installed", name);
+        return EX_USAGE;
+    }
+    shown = 0;
+    path = notice_path(cf, pkginst);
+    fp = fopen(path, "r");
+    free(path);
+    if (fp != NULL) {
+        while (fgets(buf, sizeof(buf), fp) != NULL)
+            fputs(buf, stdout);
+        fclose(fp);
+        shown = 1;
+    }
+    shown += list_licence_files(cf, pkginst);
+    if (!shown)
+        printf("%s carries no licence notice and lists no licence file\n",
+               name);
+    return EX_OK;
 }

@@ -260,6 +260,7 @@ mkconf() {
 # apkg test configuration
 repo=$2
 cachedir=$ROOT/var/apkg/cache
+keepcache=1
 pkgadd=$3
 pkgrm=$WORK/bin/pkgrm-shim
 admin=$ROOT/var/apkg/admin
@@ -1034,12 +1035,23 @@ if [ -s "$TMPL" ]; then
     else
         ok "the shipped apkg.conf names no address"
     fi
+    # One version, in every place that states it.
+    VH=$(sed -n 's/^#define APKG_VERSION "\(.*\)"$/\1/p' "$SRC/apkg.h")
+    VB=$(sed -n 's/^VER_APKG="\(.*\)"$/\1/p' "$SRC/../../tools/repo/build-packages.sh")
+    [ -n "$VH" ] && [ "$VH" = "$VB" ] && grep -q "\"apkg $VH\" \"Amix User Commands\"" "$SRC/apkg.1" \
+        && ok "apkg.h, build-packages.sh and apkg.1 state one version ($VH)" \
+        || bad "the version differs: apkg.h $VH, build-packages.sh $VB"
     # What ships stays on the box: no internal document, no test history.
     if grep -Eq 'C[0-9]-[0-9]|bench-proven|on metal|contract' "$TMPL" "$SRC/apkg.1"; then
         bad "the shipped apkg.conf or apkg.1 cites an internal document or test" \
             "$(grep -En 'C[0-9]-[0-9]|bench-proven|on metal|contract' "$TMPL" "$SRC/apkg.1")"
     else
         ok "the shipped apkg.conf and apkg.1 cite no internal document or test"
+    fi
+    if strings "$APKG" | grep -Eq 'C[0-9]-[0-9] (v|version)'; then
+        bad "a message of apkg cites an internal document" "$(strings "$APKG" | grep -E 'C[0-9]-[0-9] (v|version)')"
+    else
+        ok "apkg's messages cite no internal document"
     fi
     TMPLREPO=$(sed -n 's/^repo=//p' "$TMPL" | head -1)
     [ "$TMPLREPO" = "$CANON_REPO" ] \
@@ -1536,7 +1548,7 @@ s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
 # port: while the server holds it, our bind fails
 wait_udp() {
     n=0
-    while [ $n -lt 50 ]; do
+    while [ $n -lt 200 ]; do    # up to 20 s: python starts slowly on a loaded host
         python3 -c "import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 try:
@@ -2307,7 +2319,7 @@ kreset
 "$APKG" -c "$KCONF" install kernel-k46 > "$WORK/kinst.out" 2>&1; rc=$?
 OUT=$(cat "$WORK/kinst.out")
 [ $rc -eq 0 ] && ok "install kernel-k46 (rc 0)" || bad "kernel install failed (rc=$rc)" "$OUT"
-echo "$OUT" | grep -q "kernel space: 1 package in this transaction; a generation build (kbootset) and a power cycle follow" \
+echo "$OUT" | grep -q "kernel space: 1 package in this transaction; a generation build (kbootset) follows, and its last line says whether a power cycle is needed" \
     && ok "the transaction announces kernel space before it starts" \
     || bad "no kernel-space announcement" "$OUT"
 grep -q "^pkgadd -n -S -a $ROOT/var/apkg/admin -d $KR/pkgs/kernel/kernel-k46-1.1.0.pkg KERNK46$" "$SHIMLOG" \
@@ -2448,7 +2460,7 @@ echo "$OUT" | grep -q "refused by a rule (status 3): refused: the boot store is 
     && ok "status 3 passes the kbootset line on" || bad "status 3 message" "$OUT"
 kreset; echo build=2 > "$WORK/kb.mode"
 run 6 "status 2 (usage) exits 6" "$APKG" -c "$KCONF" -f install z3660scsi-k46
-echo "$OUT" | grep -q "contract C2-4 version 2" && ok "status 2 asks whether kbootset speaks C2-4" \
+echo "$OUT" | grep -q "a kbootset this apkg can drive" && ok "status 2 asks whether kbootset speaks C2-4" \
     || bad "status 2 message" "$OUT"
 "$APKG" -c "$KCONF" -f recover >/dev/null 2>&1
 kreset; echo build=1 > "$WORK/kb.mode"
@@ -2572,16 +2584,16 @@ echo "$OUT" | grep -q "^Kernel-space: loader, line any$" && echo "$OUT" | grep -
     && ok "a loader entry: line any, loader 3, no kabi or pin, not refused" \
     || bad "loader entry info" "$OUT"
 OUT=$("$APKG" -c "$KCONF" info loaderkabi 2>&1)
-echo "$OUT" | grep -q "^Refused:     a loader entry may not carry kabi= (C2-2 v3 §1.1)$" \
+echo "$OUT" | grep -q "^Refused:     a loader entry may not carry kabi=$" \
     && ok "a loader entry carrying kabi= is refused (C2-2 v3)" || bad "loader+kabi" "$OUT"
 OUT=$("$APKG" -c "$KCONF" info loaderk46 2>&1)
 echo "$OUT" | grep -q "^Refused:     a loader needs line=any, not k46$" \
     && ok "a loader entry with line=k46 is refused" || bad "loader line" "$OUT"
 OUT=$("$APKG" -c "$KCONF" info loadernov 2>&1)
-echo "$OUT" | grep -q "^Refused:     missing key loader= (C2-2 v3 §1.1)$" \
+echo "$OUT" | grep -q "^Refused:     missing key loader=$" \
     && ok "a loader entry without loader= is refused" || bad "loader without loader=" "$OUT"
 OUT=$("$APKG" -c "$KCONF" info kernnopin 2>&1)
-echo "$OUT" | grep -q "^Refused:     missing key pin= (C2-2 v3 §1.1)$" \
+echo "$OUT" | grep -q "^Refused:     missing key pin=$" \
     && ok "a kernel entry missing pin= is refused (C2-2 v3)" || bad "kernel without pin" "$OUT"
 run 3 "a refused loader entry cannot be installed (exit 3)" "$APKG" -c "$KCONF" install loaderkabi
 kreset
@@ -3309,7 +3321,7 @@ echo "$OUT" | grep -q "the installed module mc must be upgraded or removed with 
 echo "$OUT" | grep -q "the installed module md must be upgraded or removed with the kernel kset-k" && \
 echo "$OUT" | grep "2 installed modules would be left behind:" | grep -q " mc" && \
 echo "$OUT" | grep "2 installed modules would be left behind:" | grep -q " md" && \
-echo "$OUT" | grep -q "'apkg upgrade' with no names takes every newer package), or 'apkg remove' them; nothing was changed" \
+echo "$OUT" | grep -q "'apkg upgrade' with no names takes every newer package), or 'apkg remove' them" \
     && ok "the refusal names mc and md, then one summary with the two ways out" \
     || bad "misfit listing" "$OUT"
 echo "$OUT" | grep -qx "apkg: mc: kabi k46.1.0 does not match the kernel kset-k (kabi k46.2.0)" \
@@ -3404,7 +3416,7 @@ xcat "$XS/repoX" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg
 mkkconf "$XS/confX" "file://$XS/repoX"
 xa -c "$XS/confX" update >/dev/null 2>&1
 run 0 "info on a module row carrying kbootset=" xa -c "$XS/confX" info ma
-echo "$OUT" | grep -q "Refused:     only a kernel entry may carry kbootset= (C2-2 v6 §1.1)" \
+echo "$OUT" | grep -q "Refused:     only a kernel entry may carry kbootset=" \
     && ok "a module row with kbootset= is refused" || bad "kbootset= on a module" "$OUT"
 run 0 "info on the kernel row with kbootset=" xa -c "$XS/confB" info kset-k
 echo "$OUT" | grep -q "Refused" && bad "a kernel row with kbootset= refused" "$OUT" \
@@ -3533,6 +3545,206 @@ rm -f "${EN:?}/usr/apkg/bin/pkgadd" "${EN:?}/var/apkg/cache/foo-1.0.pkg"; : > "$
 run 0 "the fallback to the stock pkgadd, which refuses -S" EA install foo
 grep -q "^usr/sbin/pkgadd -n -a " "$SHIMLOG" && ok "... does not get it" || bad "stock -S" "$OUT $(cat "$SHIMLOG")"
 rm -rf "${EN:?}"
+# ------------------------------------------------ the cache after a transaction
+# in a root of their own: nothing is installed there, and the shims keep it so
+CR=$WORK/cr
+CC=$CR/var/apkg/cache
+CCAT=$CR/var/apkg/catalog
+mkdir -p "$CR/var/sadm/pkg" "$CR/var/sadm/install" "$CR/var/apkg"
+: > "$CR/var/sadm/install/contents"
+crconf() {  # crconf <file> <repo> <pkgadd>: as mkconf, in that root, keepcache at its default
+    mkconf "$1" "$2" "$3"
+    sed -i -e '/^keepcache=/d' -e "s|$ROOT/|$CR/|g" "$1"
+}
+crconf "$WORK/conf-nokeep" "http://127.0.0.1:$PORT/repo" "$WORK/bin/pkgadd-shim"
+crconf "$WORK/conf-nokeepfail" "http://127.0.0.1:$PORT/repo" "$WORK/bin/pkgadd-fail"
+crconf "$WORK/conf-medium" "file://$WORK/repo" "$WORK/bin/pkgadd-shim"
+sed 's/^cachedir=.*/&\nkeepcache=1/' "$WORK/conf-nokeep" > "$WORK/conf-keep"
+sed 's/^cachedir=.*/&\nkeepcache=2/' "$WORK/conf-nokeep" > "$WORK/conf-badkeep"
+AC() { APKG_ROOT=$CR "$APKG" "$@"; }
+CA() { AC -c "$WORK/conf-nokeep" "$@"; }
+cacheempty() { [ -z "$(ls "$CC" 2>/dev/null)" ]; }
+CA update >/dev/null 2>&1
+
+rm -rf "${CC:?}"; : > "$SHIMLOG"
+run 0 "install baz with the default cache policy" CA install baz
+[ "$(grep -c '^pkgadd' "$SHIMLOG")" = 3 ] && cacheempty && [ -f "$CCAT" ] \
+    && ok "three pkgadds, the fetched packages gone, the catalog stays" \
+    || bad "cache after a good install" "$OUT $(ls "$CC")"
+echo "$OUT" | grep -qx "summary: 3 of 3 packages installed" && echo "$OUT" | grep -qx "  foo 1.0" \
+    && ok "several packages end in a summary" || bad "summary" "$OUT"
+run 0 "install one package" CA install foo
+! echo "$OUT" | grep -q "^summary:" && cacheempty \
+    && ok "one package: no summary, the cache empty" || bad "single install" "$OUT"
+run 0 "download keeps its file" CA download foo
+[ -f "$CC/foo-1.0.pkg" ] && ok "... until an install uses it" || bad "download" "$OUT"
+run 0 "-n install leaves the cache" CA -n install foo
+[ -f "$CC/foo-1.0.pkg" ] && ok "... a dry run removes nothing" || bad "dry run" "$OUT"
+run 0 "install after download" CA install foo
+! echo "$OUT" | grep -q "^downloading" && cacheempty \
+    && ok "... it uses the cached file and removes it" || bad "download then install" "$OUT"
+rm -rf "${CC:?}"
+run 0 "keepcache=1 install" AC -c "$WORK/conf-keep" install foo
+[ -f "$CC/foo-1.0.pkg" ] && ok "keepcache=1 keeps the package" || bad "keepcache=1" "$OUT"
+run 0 "a bad keepcache is not fatal" AC -c "$WORK/conf-badkeep" install foo
+echo "$OUT" | grep -q "bad keepcache '2', keeping 0" && ok "... and says so" || bad "bad keepcache" "$OUT"
+
+rm -rf "${CC:?}"
+run 4 "a failed install exits 4" AC -c "$WORK/conf-nokeepfail" install baz
+[ -f "$CC/foo-1.0.pkg" ] && [ -f "$CC/baz-1.1.pkg" ] \
+    && ok "a failed transaction keeps what it fetched" || bad "cache after a failure" "$OUT"
+echo "$OUT" | grep -qx "summary: 0 of 3 packages installed" && echo "$OUT" | grep -qx "  foo 1.0: not done" \
+    && ok "... and its summary says what was not done" || bad "failure summary" "$OUT"
+run 0 "the next try" CA install baz
+! echo "$OUT" | grep -q "^downloading" && cacheempty \
+    && ok "... uses them, then removes them" || bad "retry" "$OUT"
+
+rm -rf "${CC:?}"
+run 0 "a .Z package" CA install zpkg
+cacheempty && ok "... leaves neither the .Z nor the decompressed file" || bad ".Z in the cache" "$(ls "$CC")"
+AC -c "$WORK/conf-medium" update >/dev/null 2>&1
+run 0 "a plain package on a medium" AC -c "$WORK/conf-medium" install foo
+[ -f "$WORK/repo/pkgs/foo-1.0.pkg" ] && cacheempty && ok "... stays on the medium" || bad "medium" "$OUT"
+run 0 "a .Z on a medium" AC -c "$WORK/conf-medium" install zpkg
+[ -f "$WORK/repo/pkgs/zpkg-1.0.pkg.Z" ] && cacheempty \
+    && ok "... stays there, its decompressed copy does not" || bad "medium .Z" "$OUT $(ls "$CC")"
+CA update >/dev/null 2>&1
+
+# recover needs the staged file while the journal stands, and not after
+mkkconf "$WORK/conf-kh" "http://127.0.0.1:$PORT/krepo"
+mkkconf "$WORK/conf-khfail" "http://127.0.0.1:$PORT/krepo"
+sed -i '/^keepcache=/d' "$WORK/conf-kh" "$WORK/conf-khfail"
+sed -i "s|^pkgadd=.*|pkgadd=$WORK/bin/pkgadd-fail|" "$WORK/conf-khfail"
+"$APKG" -c "$WORK/conf-kh" update >/dev/null 2>&1
+"$APKG" -c "$KCONF" remove loader >/dev/null 2>&1
+rm -rf "${CACHE:?}"; kreset
+run 4 "a failed kernel-space install" "$APKG" -c "$WORK/conf-khfail" install loader
+[ -f "$TXN" ] && [ -n "$(ls "$CACHE" 2>/dev/null)" ] && ok "... keeps its journal and its package" || bad "kspace failure" "$OUT"
+run 1 "clean refuses while a journal stands" "$APKG" -c "$WORK/conf-kh" clean
+[ -n "$(ls "$CACHE" 2>/dev/null)" ] && echo "$OUT" | grep -q "apkg recover" && ok "... and leaves the package" || bad "clean with a journal" "$OUT"
+run 0 "recover finishes it" "$APKG" -c "$WORK/conf-kh" recover
+echo "$OUT" | grep -q "transaction finished" && [ ! -f "$TXN" ] && [ -z "$(ls "$CACHE" 2>/dev/null)" ] \
+    && ok "... and then removes the package" || bad "recover and the cache" "$OUT $(ls "$CACHE")"
+"$APKG" -c "$KCONF" remove loader >/dev/null 2>&1
+"$APKG" -c "$KCONF" update >/dev/null 2>&1
+
+# what apkg says stays in order with what pkgadd says, also in a log
+cat > "$WORK/bin/pkgadd-say" <<EOF
+#!/bin/sh
+echo "PKGADD-OUTPUT"
+exit 0
+EOF
+chmod +x "$WORK/bin/pkgadd-say"
+crconf "$WORK/conf-say" "http://127.0.0.1:$PORT/repo" "$WORK/bin/pkgadd-say"
+rm -rf "${CC:?}"
+AC -c "$WORK/conf-say" install bar > "$WORK/say.log" 2>&1
+awk '/^downloading foo/ { d = NR } /^PKGADD-OUTPUT/ && !p { p = NR } /^installed foo/ { i = NR }
+     END { exit !(d && p && i && d < p && p < i) }' "$WORK/say.log" \
+    && ok "redirected output keeps its order: the plan, pkgadd, the result" \
+    || bad "output order" "$(cat "$WORK/say.log")"
+
+# ------------------------------------------------ apkg clean
+mkdir -p "$CC/d.pkg"
+printf 12345 > "$CC/a.pkg"; printf 123 > "$CC/b.pkg.Z"; printf 12 > "$CC/c.pkg.part"
+echo keep > "$CC/keep.txt"
+run 0 "clean -n" CA -n clean
+echo "$OUT" | grep -qx "would remove 3 package files, 10 bytes" && echo "$OUT" | grep -q "would remove $CC/a.pkg (5 bytes)" \
+    && [ -f "$CC/a.pkg" ] && ok "... says what it would free and removes nothing" || bad "clean -n" "$OUT"
+run 0 "clean" CA clean
+echo "$OUT" | grep -qx "removed 3 package files, 10 bytes" && [ ! -e "$CC/a.pkg" ] && [ ! -e "$CC/b.pkg.Z" ] && \
+[ ! -e "$CC/c.pkg.part" ] && ok "... takes the package files and says how much" || bad "clean" "$OUT"
+[ -f "$CC/keep.txt" ] && [ -d "$CC/d.pkg" ] && [ -f "$CCAT" ] \
+    && ok "... and nothing else: another file, a directory, the catalog" || bad "clean took too much" "$(ls "$CC")"
+run 0 "clean again" CA clean
+echo "$OUT" | grep -qx "the cache holds no package files" && ok "... says the cache holds none" || bad "clean again" "$OUT"
+rm -rf "${CC:?}"
+run 0 "clean with no cache directory" CA clean
+
+# ------------------------------------------------ apkg licence
+SADM=$CR/var/sadm/pkg
+mkdir -p "$SADM/LICX/install" "$SADM/LICY" "$SADM/FOO/install"
+printf 'PKG=LICX\nVERSION=1.0\n' > "$SADM/LICX/pkginfo"
+printf 'PKG=LICY\nVERSION=1.0\n' > "$SADM/LICY/pkginfo"
+printf 'PKG=FOO\nVERSION=1.0\n' > "$SADM/FOO/pkginfo"
+echo "the notice of licx" > "$SADM/LICX/install/copyright"
+echo "the notice of foo" > "$SADM/FOO/install/copyright"
+cat >> "$CR/var/sadm/install/contents" <<EOF
+/opt/doc/licx/LICENSE f none 0644 root sys 1 2 3 LICX
+/opt/doc/licx/LICENSE.other f none 0644 root sys 1 2 3 LICX2
+/opt/doc/licx/README f none 0644 root sys 1 2 3 LICX
+/opt/doc/shared/COPYING f none 0644 root sys 1 2 3 OTHER LICX
+EOF
+run 0 "licence prints the saved notice" CA licence LICX
+echo "$OUT" | grep -qx "the notice of licx" && echo "$OUT" | grep -qx "licence file: /opt/doc/licx/LICENSE" \
+    && echo "$OUT" | grep -qx "licence file: /opt/doc/shared/COPYING" \
+    && ! echo "$OUT" | grep -q "LICENSE.other\|README" \
+    && ok "... and names this package's licence files, no other's" || bad "licence" "$OUT"
+run 0 "licence takes a catalog name" CA licence foo
+echo "$OUT" | grep -qx "the notice of foo" && ok "... through its pkginst" || bad "licence by name" "$OUT"
+run 0 "the other spelling" CA license LICX
+mkdir -p "$SADM/FOO/install"; printf 'PKG=FOO\nVERSION=1.0\n' > "$SADM/FOO/pkginfo"; echo n > "$SADM/FOO/install/copyright"
+run 0 "one package with a notice" CA -f install foo
+echo "$OUT" | grep -qx "licence notice: apkg licence foo" && ok "... says how to read it" || bad "single notice line" "$OUT"
+run 0 "a package with neither" CA licence LICY
+echo "$OUT" | grep -qx "LICY carries no licence notice and lists no licence file" && ok "... says so" || bad "no notice" "$OUT"
+run 1 "licence of a package not installed" CA licence nosuchpkg
+run 1 "licence without a name" CA licence
+
+# a summary names the notices when a package left one (FOO is installed here)
+run 0 "a summary with a notice" CA -f install foo bar
+echo "$OUT" | grep -qx "licence notices: apkg licence <name>" && ok "... says how to read it" || bad "notice hint" "$OUT"
+echo "$OUT" | grep -qx "  foo 1.0 -> 1.0" && ok "... and what it replaced" || bad "summary from" "$OUT"
+rm -rf "${SADM:?}/LICX" "${SADM:?}/LICY" "${SADM:?}/FOO"
+
+# versions: a point after a build number sorts after it and before the next
+cc -I"$SRC" -o "$WORK/vercmp-driver" "$TESTS/vercmp-driver.c" "$SRC/vercmp.c" 2>/dev/null
+for t in "k46.1.4.261103-62.1 k46.1.4.261103-62 1" "k46.1.4.261103-62 k46.1.4.261103-62.1 -1" \
+         "k46.1.4.261103-62.1 k46.1.4.261103-63 -1" "0.3.10 0.3.9 1" "1.2 1.2.0 0"; do
+    set -- $t
+    [ "$("$WORK/vercmp-driver" "$1" "$2")" = "$3" ] && ok "vercmp $1 $2 is $3" \
+        || bad "vercmp $1 $2" "$("$WORK/vercmp-driver" "$1" "$2")"
+done
+
+# ------------------------------------------------ a refused upgrade says what it did
+xreset
+xa -c "$XS/confL" update >/dev/null 2>&1
+run 5 "no names, a misfit in the set: refused" xa -c "$XS/confL" upgrade
+[ "$(echo "$OUT" | grep -c 'nothing was changed')" = 1 ] && [ ! -s "$SHIMLOG" ] \
+    && ok "... 'nothing was changed', once, and no pkgadd" || bad "no-name refusal" "$OUT"
+echo "$OUT" | grep -qx "apkg: these have no part in that and can go by name: apkg upgrade kbootset" \
+    && ok "... and the userland that can go by name is named" || bad "by-name hint" "$OUT"
+run 5 "the same by name" xa -c "$XS/confL" upgrade kset-k
+echo "$OUT" | grep -q "nothing was changed" && ! echo "$OUT" | grep -q "can go by name" \
+    && ok "... says the same, without the hint" || bad "named refusal" "$OUT"
+kreset
+xcat "$XS/repoN" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xmods 2.0 k46.2.0 $NEWPIN 'a'; xmods 1.0 k46.1.0 $PIN 'b c d')" 3
+xcat "$XS/repoR" $KB35 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg !future=1; xmods 1.0 k46.1.0 $PIN 'b c d')" 3
+xcat "$XS/repoS" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg !future=1; xmods 1.0 k46.1.0 $PIN 'b c d')" 3
+for r in N R S; do
+    mkkconf "$XS/conf$r" "file://$XS/repo$r"
+    sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/conf$r"
+done
+xa -c "$XS/confN" update >/dev/null 2>&1
+run 5 "a module newer than its kernel, no names: refused" xa -c "$XS/confN" upgrade
+echo "$OUT" | grep -q "does not match the kernel" && echo "$OUT" | grep -q "nothing was changed" \
+    && ! echo "$OUT" | grep -q "can go by name" && [ ! -s "$SHIMLOG" ] \
+    && ok "... 'nothing was changed', and no hint with no userland in it" || bad "module refusal" "$OUT"
+xa -c "$XS/confR" update >/dev/null 2>&1
+kreset
+run 0 "a refused entry and a good one, no names" xa -c "$XS/confR" upgrade
+echo "$OUT" | grep -q "apkg: ma 2.0 is left out: the catalog entry is refused:" && \
+grep -q '^pkgadd .* kbootset$' "$SHIMLOG" && ! grep -q 'MODA' "$SHIMLOG" \
+    && ok "... the refused one is named and left out, the other goes" || bad "left out" "$OUT $(cat "$SHIMLOG")"
+xa -c "$XS/confS" update >/dev/null 2>&1
+xreset
+xa -c "$XS/confS" update >/dev/null 2>&1
+kreset
+run 0 "only a refused entry is newer" xa -c "$XS/confS" upgrade
+echo "$OUT" | grep -qx "no other installed package has a newer version" && [ ! -s "$SHIMLOG" ] \
+    && ok "... it does not say everything is up to date" || bad "only refused" "$OUT"
 
 # ------------------------------------------------ exit-code sanity extras
 run 1 "unknown verb fails with exit 1" "$APKG" frobnicate

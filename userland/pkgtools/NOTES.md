@@ -1,5 +1,64 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-05 — the repo tools stop rather than pass without having looked
+
+Every tool that could report a pass over nothing now refuses, each with a test that fails on the old code:
+
+- `assemble-release.py`: no live row outside stock/, a row that unpacks to nothing, no m68k ELF in the whole
+  tree (one package without an ELF stays normal), an input catalog with no entry, a stock lock that names
+  nothing, a release with no lock. An ELF for another machine is named as not scanned: the kit's `modfix` is
+  one, by design.
+- `gen-catalog.py`: no package, or any refused package (SKIP): the others are still read so every refusal is
+  named, then no catalog is written. Before, rc 0 and a catalog short of the package, and `make dist` only looks
+  at the rc. `--scan-private` no longer says OK over nothing or over a package it could not parse. New
+  `--check-tree`.
+- `publish.sh`: no licence gate is a refusal, not a warning. Before the sync, which prunes: at least one row,
+  each row's file with its size and digest, no package without a row. After it: every catalogued file's served
+  size, not only the catalog's md5.
+- `scan060.py`: code sections and nothing decoded, or no section table (it printed CLEAN, 0 insns); a failed
+  pkgtrans. A readable ELF with no code section is named NO CODE and is no failure: the real ones are the kit's
+  `sunfont.o` and each kernel's `unix.sym`.
+- `payload-licence-gate.py` a failed pkgtrans, a file it cannot read. `pkgmap-symlink-gate.py` a file with no
+  entry. `altroot_attest.py` a contents file with no object (the digest of nothing compares equal to itself).
+  `s5-collision-scan.py` no object. `move-1.0-tree.sh` no row, before `--remove-root` removes the root.
+  `content-gate.sh` a missing file beside a modtime drift, which the modtime branch tolerated. The acceptance
+  scripts ask pkginfo for each package and check what they emit. `build-packages.sh --cdfs` a lineage it cannot
+  read.
+
+Left alone on purpose: UNKNOWN for a stripped binary in the licence gate (the Kickstart test read the file, and
+`--strict` exists), and gen-catalog's warning when the packages conf directory is absent (`make repro-check`'s
+copy of userland/pkgtools alone has none).
+
+The `#isize` note: make dist's catalogs have no `#isize` lines and an assembled tree's has, so every republished
+row reported a difference. Only two lines that disagree count now, and the note names the field.
+
+`amix-benchmark` left `cats.conf` and `names.conf` here: it has a recipe now and the packages layer owns its rows.
+
+## 2026-11-04 — apkg 0.3.11: the cache, the output, a refused upgrade (built, NOT minted)
+
+**The cache.** A kernel upgrade fetched 2.3 to 2.9 MB and kept it, on a root with about 20 MB free, and
+file names carry the version, so nothing was ever replaced. Nothing reads a package after a good
+transaction: `apkg recover` reads a staged file only for what is not done, and kbootset works from its
+generations. So a good transaction now removes what it staged from the cache once its journal has
+cleared. A failed one keeps them for `recover` or another try; a plain .pkg on a medium is staged in
+place and stays. `keepcache=1` keeps them. `apkg clean` (-n says what it would) takes only package
+files and their cut downloads, and refuses while a journal stands. The catalog beside the cache stays.
+
+**The output.** stdout was
+not flushed before a fork, so in a log the plan landed after all of pkgadd's output; it is now in order.
+Several packages end in a summary (from which version to which, what was not done), before the
+generation lines. `apkg licence <name>` prints the notice pkgadd saved in
+/var/sadm/pkg/<pkginst>/install/copyright and names the licence files among the package's files. The
+plan no longer promises a power cycle: kbootset's last line says whether one is needed (a set that changes
+nothing has "nothing to commit").
+
+**APKG's notice.** The package carried no licence notice of its own; it now has its MIT notice and the
+source's place as `i copyright`, so `apkg licence apkg` shows it.
+
+**A refused upgrade.** It stays all or nothing. A refusal now says "nothing was changed" in every form;
+a no-name upgrade refused for kernel space names the userland that can go by name; a refused catalog
+entry left out of a no-name upgrade is named. Messages cite no internal document.
+
 ## 2026-11-04 — APKGENG 1.12.8 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this entry's

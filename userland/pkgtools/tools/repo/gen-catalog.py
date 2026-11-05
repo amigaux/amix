@@ -153,7 +153,9 @@
 #   archive carries <PKG>/pkginfo and <PKG>/pkgmap.  Heirloom pkgtrans
 #   emits either odc ("070707", portable ASCII) or newc ("070701") cpio
 #   depending on build; both are handled.  A malformed package is reported
-#   and skipped, never fatal.
+#   as a SKIP, the other packages are read too so that every refusal is named,
+#   and then no catalog is written: a catalog that leaves out a package it was
+#   given, or holds none, reads as a good one.
 #
 # ------------------------------------------------------ UFS-ONLY BLOCK ---
 # A package whose pkginfo carries APKG_FSTYPE=<type>[,<type>...] installs
@@ -1341,6 +1343,84 @@ def build_raw_image(outdir, catalog_bytes, md5_bytes, entries, staging):
     return path, end
 
 
+def catalog_files(path):
+    """[(filename, size, algorithm, digest)] of every entry of a catalog: its
+    rows, its #kpkg lines and the rows of its older block."""
+    files = []
+    with open(path, encoding="utf-8") as fp:
+        for n, line in enumerate(fp, 1):
+            line = line.rstrip("\n")
+            if line.startswith("#old "):
+                line = line[5:]
+                if line.startswith(("#isize ", "#fstype ")):
+                    continue
+            if line.startswith("#kpkg "):
+                kv = dict(t.split("=", 1) for t in line.split() if "=" in t)
+                if not all(k in kv for k in ("file", "size", "sha256")):
+                    raise Malformed("line %d: a #kpkg line without file=, size= "
+                                    "or sha256=" % n)
+                files.append((kv["file"], kv["size"], "sha256", kv["sha256"]))
+            elif line and not line.startswith("#"):
+                f = line.split("|")
+                if len(f) not in (9, 10):
+                    raise Malformed("line %d: not a catalog row (%d fields)"
+                                    % (n, len(f)))
+                files.append((f[3], f[5], "md5", f[4]))
+    return files
+
+
+def check_tree(staging):
+    """The tree publish.sh is about to sync, against its own catalog: the
+    packages are in <staging>/pkgs/ when that directory exists, else beside
+    the catalog (publish.sh's rule).  -> exit status; '<size> <filename>' per
+    file on stdout for the check of what is served afterwards."""
+    pkgs = os.path.join(staging, "pkgs")
+    if not os.path.isdir(pkgs):
+        pkgs = staging
+    try:
+        files = catalog_files(os.path.join(staging, "catalog"))
+    except (OSError, Malformed) as exc:
+        print("gen-catalog: check-tree: %s/catalog: %s" % (staging, exc),
+              file=sys.stderr)
+        return 1
+    bad = []
+    named = set()
+    for fname, size, algo, want in files:
+        path = os.path.normpath(os.path.join(pkgs, fname))
+        if fname.startswith("/") or ".." in fname.split("/"):
+            bad.append("%s: not a path below the tree" % fname)
+            continue
+        named.add(path)
+        if not os.path.isfile(path):
+            bad.append("%s: the catalog names it, the tree does not hold it" % fname)
+            continue
+        if str(os.path.getsize(path)) != size:
+            bad.append("%s: %d B, the catalog says %s" % (fname, os.path.getsize(path), size))
+            continue
+        with open(path, "rb") as fp:
+            got = hashlib.new(algo, fp.read()).hexdigest()
+        if got != want:
+            bad.append("%s: %s %s, the catalog says %s" % (fname, algo, got, want))
+    for dirpath, dirnames, filenames in os.walk(pkgs):
+        dirnames.sort()
+        for f in sorted(filenames):
+            path = os.path.normpath(os.path.join(dirpath, f))
+            if f.endswith((".pkg", ".pkg.Z")) and path not in named:
+                bad.append("%s: a package no catalog row names"
+                           % os.path.relpath(path, pkgs))
+    if not files:
+        bad.append("the catalog names no package: NOTHING INSPECTED")
+    for b in bad:
+        print("gen-catalog: check-tree: %s" % b, file=sys.stderr)
+    if bad:
+        return 1
+    for fname, size, _algo, _want in files:
+        print("%s %s" % (size, fname))
+    print("gen-catalog: check-tree: OK (%d file(s), each its row's size and "
+          "digest)" % len(files), file=sys.stderr)
+    return 0
+
+
 def main(argv):
     ap = argparse.ArgumentParser(
         description="Generate an apkg v1 catalog from a staging directory "
@@ -1368,6 +1448,13 @@ def main(argv):
                          "KSUM_R/BOOT2_SHA markers) and exit nonzero (rc=3) if "
                          "any are found. The publish-path licensing gate; "
                          "fail closed, no override.")
+    ap.add_argument("--check-tree", action="store_true",
+                    help="do NOT build a catalog: check <staging>'s existing "
+                         "catalog against its packages (every row, kernel-space "
+                         "line and older row has its file, with its size and "
+                         "digest; no package without a row; at least one row), "
+                         "and print '<size> <filename>' per file. publish.sh's "
+                         "look at the tree before it syncs and prunes.")
     ap.add_argument("--packages-conf", metavar="DIR", default=PACKAGES_CONF,
                     help="the userland packages' conf directory, read "
                          "alongside the staging root's confs (default: "
@@ -1381,6 +1468,8 @@ def main(argv):
     if not os.path.isdir(staging):
         print("gen-catalog: %s: not a directory" % staging, file=sys.stderr)
         return 1
+    if args.check_tree:
+        return check_tree(staging)
 
     deps_conf = ConfLayers("deps.conf", normalize_deps)
     names_conf = ConfLayers("names.conf")
@@ -1461,12 +1550,9 @@ def main(argv):
                 if km:
                     offenders[fname] = km
             except Malformed as exc:
-                # Cannot parse => cannot prove clean.  Warn loudly but do not
-                # block on this alone: the gate's contract is "carries a kernel
-                # marker => refuse"; build-packages.sh only ever emits
-                # well-formed datastreams, which this scan reads.
-                print("gen-catalog: scan-private: WARNING %s: unparseable "
-                      "(%s) -- not scanned" % (fname, exc), file=sys.stderr)
+                # Cannot parse => cannot prove clean => not clean.
+                print("gen-catalog: scan-private: %s: unparseable (%s) -- not "
+                      "scanned" % (fname, exc), file=sys.stderr)
                 unparseable += 1
         if offenders:
             for fn in sorted(offenders):
@@ -1478,9 +1564,13 @@ def main(argv):
             print("gen-catalog: scan-private: REFUSE (%d private package(s); "
                   "no --force)" % len(offenders), file=sys.stderr)
             return 3
-        print("gen-catalog: scan-private: OK (%d package(s) scanned, %d "
-              "unparseable; none carry the kernel-package markers)"
-              % (len(candidates), unparseable))
+        if unparseable or not candidates:
+            print("gen-catalog: scan-private: NOTHING PROVEN: %d package(s), %d "
+                  "of them unparseable; that is not a pass"
+                  % (len(candidates), unparseable), file=sys.stderr)
+            return 1
+        print("gen-catalog: scan-private: OK (%d package(s) scanned; none carry "
+              "the kernel-package markers)" % len(candidates))
         return 0
 
     entries = []
@@ -1533,13 +1623,16 @@ def main(argv):
               % (len(conflicts), " ".join(conflicts)), file=sys.stderr)
         return 4
 
-    if candidates and not entries:
-        print("gen-catalog: all %d package file(s) malformed; catalog NOT "
-              "written" % skipped, file=sys.stderr)
+    # A catalog that leaves out a package it was given, or that holds none, is
+    # what a wrong path or a bad roll looks like, and it reads as a good one.
+    if skipped:
+        print("gen-catalog: catalog NOT written (%d of %d package file(s) "
+              "refused, above)" % (skipped, len(candidates)), file=sys.stderr)
         return 1
     if not candidates:
-        print("gen-catalog: warning: no *.pkg / *.pkg.Z in %s; writing an "
-              "empty catalog" % staging, file=sys.stderr)
+        print("gen-catalog: no *.pkg / *.pkg.Z in %s; catalog NOT written"
+              % staging, file=sys.stderr)
+        return 1
 
     kentries = sorted((e for e in entries if e.get("kspace")),
                       key=lambda e: e["name"])
@@ -1589,6 +1682,10 @@ def main(argv):
     # of this file).  A package whose pkgmap could not be summed gets no
     # line at all: absence is the honest signal for a free-space gate.
     if args.isize:
+        if entries and all(e.get("isize") is None for e in entries):
+            print("gen-catalog: --isize: none of %d package(s) could be sized; "
+                  "catalog NOT written" % len(entries), file=sys.stderr)
+            return 1
         body += "#ext isize 1\n"
         for e in entries:
             if e.get("isize") is None:

@@ -40,8 +40,13 @@
 # canonical public host pkg.amigaux.org on 2026-09-15; see NOTES.md.
 #
 # --dry-run maps to rsync -n: nothing is written, and the post-publish HTTP
-# verification (curl of $PUBLISH_URL/<release>/catalog + md5 compare) is
-# skipped.
+# verification (the served catalog against the staged one, the served size of
+# every file the catalog names) is skipped.
+#
+# Exit: 0 published; 1 usage, or a staging that is not one; 2 the catalog could
+# not be fetched back; 3 what is served differs; 4 the private-content scan
+# refused, or did not prove the tree clean; 5 the payload licence gate refused,
+# or did not run; 6 the catalog and the tree do not agree.
 
 set -euo pipefail
 
@@ -108,7 +113,7 @@ fi
 # (core) that ship /stand members as original content publish normally.
 # Delegated to gen-catalog.py --scan-private so "what is a private kernel
 # package" is defined in exactly one place.  Fail closed (no --force): if the
-# scan cannot even run, refuse.
+# scan cannot run, or could not read a package, or found none to read, refuse.
 SELFDIR="$(cd "$(dirname "$0")" && pwd)"
 GEN="$SELFDIR/gen-catalog.py"
 SCAN_RC=0
@@ -144,20 +149,33 @@ fi
 # it prints, because "not inspected" must never read as "clean".
 echo "publish: payload licence gate"
 PLG="$SELFDIR/payload-licence-gate.py"
-if [[ -f "$PLG" ]]; then
-    PLG_RC=0
-    python3 "$PLG" "$STAGING" || PLG_RC=$?
-    if [[ $PLG_RC -eq 2 ]]; then
-        echo "publish: REFUSING to publish $STAGING -- a payload carries" >&2
-        echo "         content the public repo may not ship (a Kickstart ROM;" >&2
-        echo "         see above). Fix the mint; there is no --force." >&2
-        exit 5
-    elif [[ $PLG_RC -ne 0 ]]; then
-        echo "publish: REFUSING -- payload licence gate could not run (rc=$PLG_RC)." >&2
-        exit 5
-    fi
-else
-    echo "publish: WARNING: $PLG missing -- payload NOT screened" >&2
+if [[ ! -f "$PLG" ]]; then
+    echo "publish: REFUSING -- $PLG missing: the payload would not be screened." >&2
+    exit 5
+fi
+PLG_RC=0
+python3 "$PLG" "$STAGING" || PLG_RC=$?
+if [[ $PLG_RC -eq 2 ]]; then
+    echo "publish: REFUSING to publish $STAGING -- a payload carries" >&2
+    echo "         content the public repo may not ship (a Kickstart ROM," >&2
+    echo "         or nothing inspected; see above). Fix the mint; there is no" >&2
+    echo "         --force." >&2
+    exit 5
+elif [[ $PLG_RC -ne 0 ]]; then
+    echo "publish: REFUSING -- payload licence gate could not run (rc=$PLG_RC)." >&2
+    exit 5
+fi
+
+# ---- the catalog against the tree ----------------------------------------
+# The sync below prunes the served tree to what is staged.  So before it: at
+# least one row, every row's file there with the row's size and digest (a
+# client would refuse it), and no package a row does not name.
+FILELIST="$(mktemp)"
+trap 'rm -f "${FILELIST:?}"' EXIT
+if ! python3 "$GEN" --check-tree "$STAGING" > "$FILELIST"; then
+    echo "publish: REFUSING to publish $STAGING -- its catalog and its packages" >&2
+    echo "         do not agree (above)." >&2
+    exit 6
 fi
 
 RSYNC_OPTS=(-av)
@@ -172,7 +190,7 @@ fi
 # directory itself, not the skeleton's root, so the docroot's own mode and
 # times are never touched.
 SKEL="$(mktemp -d)"
-trap 'rm -rf "${SKEL:?}"' EXIT
+trap 'rm -f "${FILELIST:?}"; rm -rf "${SKEL:?}"' EXIT
 mkdir -p "${SKEL:?}/${RELEASE:?}/pkgs"
 chmod 755 "${SKEL:?}/${RELEASE:?}" "${SKEL:?}/${RELEASE:?}/pkgs"
 echo "publish: release tree -> ${TREE:?}/"
@@ -208,7 +226,7 @@ fi
 # client uses) and compare checksums against the staged copy.
 echo "publish: verifying $URL/$RELEASE/catalog"
 TMP="$(mktemp)"
-trap 'rm -rf "${SKEL:?}"; rm -f "${TMP:?}"' EXIT
+trap 'rm -f "${FILELIST:?}" "${TMP:?}"; rm -rf "${SKEL:?}"' EXIT
 if ! curl -fsS --max-time 30 "$URL/$RELEASE/catalog" -o "$TMP"; then
     echo "publish: ERROR: could not fetch $URL/$RELEASE/catalog" >&2
     exit 2
@@ -220,3 +238,21 @@ if [[ "$LOCAL_MD5" != "$REMOTE_MD5" ]]; then
     exit 3
 fi
 echo "publish: OK -- served catalog matches staging (md5 $LOCAL_MD5)"
+
+# The catalog is not the repository: a client also fetches what it names.
+N_SERVED=0
+N_BAD=0
+while read -r SIZE FILE; do
+    N_SERVED=$((N_SERVED + 1))
+    GOT="$(curl -fsSI --max-time 30 "$URL/$RELEASE/pkgs/$FILE" 2>/dev/null |
+           tr -d '\r' | awk 'tolower($1) == "content-length:" { print $2 }')" || GOT=""
+    if [[ "$GOT" != "$SIZE" ]]; then
+        echo "publish: ERROR: $URL/$RELEASE/pkgs/$FILE: served size '$GOT', the catalog says $SIZE" >&2
+        N_BAD=$((N_BAD + 1))
+    fi
+done < "$FILELIST"
+if [[ $N_BAD -ne 0 ]]; then
+    echo "publish: ERROR: $N_BAD of $N_SERVED catalogued files are not served as staged" >&2
+    exit 3
+fi
+echo "publish: OK -- $N_SERVED catalogued file(s) served at their sizes"

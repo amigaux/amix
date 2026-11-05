@@ -346,8 +346,11 @@ def targets_of(path, tmpdirs):
         pkgtrans = pkgtrans_tool()
         tmp = tempfile.mkdtemp(prefix="scan060.")
         tmpdirs.append(tmp)
-        subprocess.run([pkgtrans, "-o", path, tmp, datastream_pkginst(path)],
-                       capture_output=True, text=True, timeout=600)
+        r = subprocess.run([pkgtrans, "-o", path, tmp, datastream_pkginst(path)],
+                           capture_output=True, text=True, timeout=600)
+        if r.returncode != 0:
+            raise SystemExit("scan060: %s: pkgtrans failed (exit %d): %s"
+                             % (path, r.returncode, r.stderr.strip()[:160]))
         if not os.listdir(tmp):
             raise SystemExit("scan060: %s: pkgtrans unpacked nothing" % path)
         return [(os.path.relpath(e, tmp), e) for e in walk_elfs(tmp)]
@@ -410,6 +413,19 @@ def main(argv):
                 continue
             for rel, e in elfs:
                 total, hits, ntab, nobj = scan_elf(e, objdump)
+                if total == 0:
+                    with open(e, "rb") as fp:
+                        d = fp.read()
+                    if struct.unpack(">H", d[48:50])[0] and not exec_sections(d):
+                        # read, and data only: a font object, a symbol file
+                        print("  NO CODE   %s!%s" % (label, rel))
+                        n_elf += 1
+                        continue
+                    print("  NOTHING   %s!%s: %s; that is not a pass"
+                          % (label, rel, "not one instruction decoded"
+                             if exec_sections(d) else "no section table to read"))
+                    rc = 2
+                    continue
                 n_elf += 1
                 verdict = "CLEAN" if not hits else "HITS %d" % len(hits)
                 print("  %-9s %s!%s (%d insns, %d switch tables skipped%s)"

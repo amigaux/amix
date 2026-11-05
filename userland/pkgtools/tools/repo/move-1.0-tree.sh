@@ -88,6 +88,10 @@ verify() {
         fi
     done < <(grep -v '^#' "$tree/catalog")
     echo "move-1.0: $tree: catalog.md5 OK, $n package(s) checked, $bad bad"
+    if [[ $n -eq 0 ]]; then
+        echo "move-1.0: $tree/catalog names no package: NOTHING INSPECTED" >&2
+        return 1
+    fi
     [[ $bad -eq 0 ]]
 }
 
