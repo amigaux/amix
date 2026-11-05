@@ -14,6 +14,7 @@ Modes (exactly one):
   --tree REF             check only the files at REF
   --exclude-remotes      with --range or --all: skip commits that any
                          remote-tracking ref already has
+  --empty-ok             with --range: a range with no commits is not an error
 
 In commit modes, classes 1 and 3 judge only the lines a commit adds: for a
 commit with parents, the lines added relative to its first parent (a merge
@@ -40,7 +41,10 @@ Classes:
   5  AI attribution in our commit messages
 
 Output: one line per hit, "<short sha> <class> <path|message> <detail>".
-Exit status: 0 clean, 1 hits, 2 usage or git error (never 0 on error).
+Exit status: 0 clean, 1 hits, 2 usage or git error (never 0 on error). Having
+looked at nothing is an error: a range with no commits (--empty-ok says that is
+expected), a tree with no file or holding a submodule, a local list that names
+nothing. A push that sends no new commit has nothing to look at, and passes.
 
 Environment:
   PRIVACY_OURS      extra "Name <email>" identities that count as ours,
@@ -413,9 +417,13 @@ class Checker(object):
             self.allow = load_allowlist(allow)
         pp = os.environ.get("PRIVACY_PATTERNS")
         self.patterns = load_patterns(pp) if pp else []
+        if pp and not self.patterns:
+            raise UsageError("PRIVACY_PATTERNS lists nothing")
         self.binary_patterns = bytes_patterns(self.patterns)
         pb = os.environ.get("PRIVACY_BLOCKED")
         self.blocked = load_blocked(pb) if pb else {}
+        if pb and not self.blocked:
+            raise UsageError("PRIVACY_BLOCKED lists nothing")
         self.objects = Objects()
         self.manifests = {}
         self.tip_manifest = {}
@@ -700,7 +708,7 @@ class Checker(object):
             mode, typ, oid = meta.decode().split(" ")
             path = os.fsdecode(raw_path)
             if typ != "blob":
-                continue
+                raise GitError("%s in the tree is a %s: not read" % (path, typ))
             count += 1
             if commit is None and is_tool_file_path(path):
                 self.hit(label, 2, path, "local tool file in tree")
@@ -812,6 +820,8 @@ def build_parser():
     p.add_argument("--exclude-remotes", action="store_true",
                    help="with --range or --all: skip commits any "
                         "remote-tracking ref already has")
+    p.add_argument("--empty-ok", action="store_true",
+                   help="with --range: a range with no commits is not an error")
     p.add_argument("--ours", action="append", metavar="'Name <email>'",
                    help="identity whose commits are ours (repeatable; "
                         "replaces the default)")
@@ -830,9 +840,13 @@ def run(argv):
         raise UsageError("--exclude-remotes needs --range or --all")
     not_remotes = ["--not", "--remotes"] if args.exclude_remotes else []
     checker = Checker(args)
+    if not checker.patterns:
+        sys.stderr.write("privacy-check: no local patterns: the public classes only\n")
     try:
         if args.tree is not None:
             n = checker.check_tree(args.tree)
+            if not n:
+                raise UsageError("--tree %s holds no file: nothing was checked" % args.tree)
             sys.stderr.write("privacy-check: %d file(s), %d hit(s)\n"
                              % (n, checker.hits))
         else:
@@ -840,6 +854,9 @@ def run(argv):
                 if ".." not in args.range:
                     raise UsageError("--range needs A..B")
                 commits = rev_list(args.range, *not_remotes)
+                if not commits and not args.empty_ok:
+                    raise UsageError("--range %s has no commits: nothing was checked "
+                                     "(--empty-ok says that is expected)" % args.range)
                 tip_spec = args.range.rsplit("..", 1)[1].lstrip(".") or "HEAD"
                 tips = [rev_parse(tip_spec + "^{commit}")]
             elif args.all is not None:

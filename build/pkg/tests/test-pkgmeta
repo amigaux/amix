@@ -644,8 +644,10 @@ try:
     empty = os.path.join(tmp, "empty")
     write(os.path.join(empty, "README.md"), "# no packages\n")
     rc, out = check_packages(empty)
-    check("check-packages: nothing to check in a directory with no package.sh",
-          rc == 0 and "nothing to check" in out, out)
+    check("check-packages: no package.sh in the directory is a failure, nothing was checked",
+          rc == 1 and "nothing was checked" in out, out)
+    rc, out = check_packages(os.path.join(tmp, "nothere"))
+    check("check-packages: a directory that does not exist is a failure", rc == 1 and "no directory" in out, out)
     cp = os.path.join(tmp, "cp")
     shutil.copytree(RECIPES, cp)
     rc, out = check_packages(cp)
@@ -679,7 +681,7 @@ try:
     rc, out = check_packages(pk)
     check("check-packages: one root given, the other is not read",
           rc == 1 and "1 recipe" not in out and "3 recipe(s)" in out, out)
-    p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp, os.path.join(tmp, "nothere")],
+    p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp],
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = p.stdout.decode()
     check("check-packages: generated files missing in the first root are refused",
@@ -687,11 +689,12 @@ try:
           and "4 recipe(s)" in out, out)
     run("index", pk, bp)
     run("fragments", pk, bp, "-o", os.path.join(pk, "conf"))
+    p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = p.stdout.decode()
+    check("check-packages: two roots current", p.returncode == 0 and "are current" in out, out)
     p = subprocess.run(["sh", CHECK_PACKAGES, pk, bp, os.path.join(tmp, "nothere")],
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    out = p.stdout.decode()
-    check("check-packages: two roots current, a missing one skipped",
-          p.returncode == 0 and "are current" in out, out)
+    check("check-packages: a missing root is refused, not skipped", p.returncode == 1, p.stdout.decode())
     check("check-packages: nothing written into the second root",
           sorted(os.listdir(bp)) == ["sbase"])
     os.makedirs(os.path.join(tmp, "dupe"))
@@ -742,6 +745,11 @@ try:
     recipe(cyc, "x", PKG="x", BUILD_DEPENDS='"y"')
     recipe(cyc, "y", PKG="y", BUILD_DEPENDS='"x"')
     refused("build-order refuses a cycle, naming it", ("build-order", cyc), "BUILD_DEPENDS cycle: x -> y -> x")
+
+    # --- a gate over nothing is no gate ------------------------------------------------
+    os.makedirs(os.path.join(tmp, "nothing-built"))
+    refused("guard over an empty directory is refused", ("guard", os.path.join(tmp, "nothing-built")), "nothing was checked")
+    refused("dirs with no prototype is refused", ("dirs", os.path.join(tmp, "nothing-built")), "nothing was checked")
 
     # --- the one-version guard over built output ---------------------------------------
     cat = os.path.join(tmp, "catalog")

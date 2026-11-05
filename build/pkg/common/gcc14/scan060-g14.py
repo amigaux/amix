@@ -745,6 +745,8 @@ def scan(tool, path):
     if "Disassembly of section" not in listing:
         die("%s: objdump produced no disassembly" % path)
     insns, labels = parse(listing)
+    if not insns:
+        die("%s: objdump's listing holds no instruction" % path)
     pts = function_bounds(labels, secs, data)
     sysroot = os.environ.get("AMIX_SYSROOT", "")
     known, knotes, kproblems = known_data(data, secs, sysroot) if sysroot else ([], [], [])
@@ -847,7 +849,10 @@ def main(argv):
                 rc = max(rc, 3)
                 continue
             addrs, intab, odd, unexplained = explain(r["tables"], hitfile)
-            if unexplained:
+            if not addrs:
+                print("  UNTRUSTWORTHY %s: %s names no hit to explain" % (name, hitfile))
+                rc = max(rc, 3)
+            elif unexplained:
                 print("  UNEXPLAINED %s: %d of %d scan060.py hit(s) at an even address outside every sized table: %s"
                       % (name, len(unexplained), len(addrs), " ".join("%08x" % a for a in unexplained)))
                 rc = max(rc, 1)

@@ -1032,6 +1032,8 @@ def main(argv):
         protos = []
         for path in a.paths:
             protos += [path] if os.path.isfile(path) else kspace_prototypes(path)
+        if not protos:
+            raise Refused("dirs: no prototype under %s: nothing was checked" % " ".join(a.paths))
         bad = 0
         for proto in protos:
             for why in shared_dir_problems(proto):
@@ -1051,6 +1053,8 @@ def main(argv):
                 entries += catalog_entries(path)
             else:
                 raise Refused("%s: no such catalog or directory" % path)
+        if not entries:
+            raise Refused("guard: no package in %s: nothing was checked" % " ".join(a.paths))
         errors = one_version(entries)
         if errors:
             raise Refused("\n".join(errors))

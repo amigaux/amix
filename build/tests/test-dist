@@ -56,6 +56,7 @@ try:
         shutil.copy2(os.path.join(TOP, f), os.path.join(top, f))
     write(os.path.join(top, "system", "MANIFEST.sha256"), "")
     write(os.path.join(top, "system", "SYMLINKS"), "")
+    write(os.path.join(top, "kernel", "dlm", "pkg", "prototype"), "i pkginfo\n")
     git("init", "-q", cwd=top)
     git("add", ".", cwd=top)
     git("commit", "-q", "-m", "one", cwd=top)

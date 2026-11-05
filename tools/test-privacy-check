@@ -574,6 +574,28 @@ def main():
             f.write("(\n")
         rc, _, out = repo.check(["--all", "master"], env={"PRIVACY_PATTERNS": bad})
         t.ok(rc == 2 and "line 1" in out, "invalid PRIVACY_PATTERNS regex exits 2", out)
+        # having looked at nothing is an error
+        blank = os.path.join(root, "blank-list")
+        with open(blank, "w") as f:
+            f.write("# a comment\n\n")
+        rc, _, out = repo.check(["--all", "master"], env={"PRIVACY_PATTERNS": blank})
+        t.ok(rc == 2 and "PRIVACY_PATTERNS lists nothing" in out, "a PRIVACY_PATTERNS that lists nothing exits 2", out)
+        rc, _, out = repo.check(["--all", "master"], env={"PRIVACY_BLOCKED": blank})
+        t.ok(rc == 2 and "PRIVACY_BLOCKED lists nothing" in out, "a PRIVACY_BLOCKED that lists nothing exits 2", out)
+        rc, _, out = repo.check(["--range", "master..master"])
+        t.ok(rc == 2 and "has no commits" in out, "a range with no commits exits 2", out)
+        rc, _, out = repo.check(["--empty-ok", "--range", "master..master"])
+        t.ok(rc != 2 and "0 commit(s)" in out, "--empty-ok: a range with no commits is no error, and says 0", out)
+        rc, _, out = repo.check(["--all", "master"])
+        t.ok("no local patterns: the public classes only" in out, "without a local list the output says so", out)
+        emptytree = subprocess.run(["git", "hash-object", "-t", "tree", "/dev/null"], cwd=repo.path,
+                                   stdout=subprocess.PIPE, text=True).stdout.strip()
+        rc, _, out = repo.check(["--tree", emptytree])
+        t.ok(rc == 2 and "holds no file" in out, "a tree with no file exits 2", out)
+        sub = subprocess.run(["git", "mktree"], cwd=repo.path, stdout=subprocess.PIPE, text=True,
+                             input="160000 commit %s\tvendored\n" % ("1" * 40)).stdout.strip()
+        rc, _, out = repo.check(["--tree", sub])
+        t.ok(rc == 2 and "not read" in out, "a tree holding a submodule exits 2", out)
         empty = os.path.join(root, "not-a-repo")
         os.makedirs(empty)
         rc, _, out = repo.check(["--all", "master"], cwd=empty,

@@ -12,8 +12,8 @@
 # fragments). Without arguments, the kernel-space recipes' prototypes under
 # kernel/ pass pkgmeta dirs too: every shared directory (/opt, /opt/amix and
 # its doc and man directories) is 0755 root sys in every package. A directory
-# that does not exist is skipped. Nothing to check,
-# and exit 0, while none of them holds a package.sh.
+# that does not exist, or no package.sh in any of them, is a failure: nothing
+# was checked.
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -24,8 +24,7 @@ out=$1
 pkgmeta() { python3 -I "$here/pkgmeta" "$@"; }
 
 for r; do
-	shift
-	[ -d "$r" ] && set -- "$@" "$r"
+	[ -d "$r" ] || { echo "check-packages: no directory $r" >&2; exit 1; }
 done
 any=
 for r; do
@@ -34,10 +33,10 @@ for r; do
 	done
 done
 [ -n "$any" ] || {
-	echo "check-packages: no package.sh under $out or the other directories yet; nothing to check"
-	exit 0
+	echo "check-packages: no package.sh under $out or the other directories: nothing was checked" >&2
+	exit 1
 }
 pkgmeta check "$@"
-[ -z "$kspace" ] || [ ! -d "$kspace" ] || pkgmeta dirs "$kspace"
+[ -z "$kspace" ] || pkgmeta dirs "$kspace"
 pkgmeta index "$@" -o "$out/INDEX.md" --check
 pkgmeta fragments "$@" -o "$out/conf" --check

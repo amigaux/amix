@@ -22,7 +22,7 @@ else
 	rc=0
 	base=$(git merge-base "$PUSH_AFTER" refs/remotes/origin/master 2>/dev/null) || rc=$?
 	case $rc in
-	0) set -- --range "$base..$PUSH_AFTER" ;;
+	0) set -- --empty-ok --range "$base..$PUSH_AFTER" ;;	# a push of master itself adds nothing
 	1) set -- --all "$PUSH_AFTER" ;;	# no history in common: all of it is new
 	*)
 		echo "ci-privacy-check: cannot find a merge base for $PUSH_AFTER" >&2
