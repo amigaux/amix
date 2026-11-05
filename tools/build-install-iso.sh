@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # build-install-iso.sh -- assemble the installer payload into an /install/ tree,
-# then master the install CD with it via build-iso.sh. This is the W5.3
-# re-master: it turns the Wave-4 package disc into a self-contained install disc
+# then master the install CD with it via build-iso.sh. This is the
+# re-master: it turns the package disc into a self-contained install disc
 # the miniroot driver can run start-to-finish.
 #
 # The /install/ tree it builds (paths the driver + miniroot shim expect):
@@ -16,12 +16,12 @@
 #   /install/admin/default                        the 183-B stock admin (seeded to target)
 #   /install/order                                install order for the mastered set
 #   /install/order.<set>                          one per NAMED SET this medium can
-#                                                 satisfy in full (W3b)
-#   /install/sets                                 the interview's tier table (W3b)
+#                                                 satisfy in full
+#   /install/sets                                 the interview's tier table
 #   /install/profiles/*.profile                   target specs (copied verbatim)
 #   /install/boot/<profile>/{bootslice.img,boot2.boot,bootslice.manifest}
 #   /install/bin/install.sh + firstboot/*         the driver + first-boot payload
-#   /install/bin/setup.sh                         the W2 interactive interview
+#   /install/bin/setup.sh                         the interactive interview
 #   /install/profiles/BASE                        the base profile this medium was
 #                                                 mastered for (setup.sh reads it
 #                                                 when launched with no argument)
@@ -82,7 +82,7 @@ SETS_CONF="${SETS_CONF:-$PKGMGR/tools/repo/sets.conf}"
 # as attested here while the matrix has no reference digest for it (or the
 # reverse). `standard` joined it on 2026-08-11 when the cd-standard bench run
 # recorded 4ad8e17b69b32208c9fffa600596a428 / 11012 objects; `developer` and
-# `x11` joined on 2026-08-12 (W6) at ebd61ce15699fbb34cf0f6a2d0a07024 / 11497 and
+# `x11` joined on 2026-08-12 at ebd61ce15699fbb34cf0f6a2d0a07024 / 11497 and
 # 5439f78fc1caf4da46af82db360f5d13 / 11546.
 #
 # ★★ `full` JOINED 2026-08-14 at 68de888084500aef703a9ccd3eeaa0e5 / 28,709
@@ -90,7 +90,7 @@ SETS_CONF="${SETS_CONF:-$PKGMGR/tools/repo/sets.conf}"
 # RIG changed twice to get one. It cannot be installed as declared ON s5: FIVE
 # groups / TEN objects in gnusrc2 and X11r5src collide under s5's 14-character
 # name limit (authority: ../amix-packagemanager docs/s5-14char-collisions.md;
-# W6's own scan said three groups and was directory-blind -- it missed the
+# An earlier scan said three groups and was directory-blind -- it missed the
 # ZAPHOD/ copies of the two amixInitExt pairs). On UFS the limit does not exist
 # and `full` installs WHOLE, at its natural object count, with nothing dropped
 # and no package re-minted. The 2026-08-14 cd-full run proved that half and then
@@ -121,14 +121,14 @@ STAGE_ONLY=0
 BSLICE_ARGS=()
 
 # `base` is this repo's historical spelling of the packagemanager's `minimal` set --
-# core bsd net text sysadm cdfs APKGENG APKG, the proven base-8. Before W3b that
+# core bsd net text sysadm cdfs APKGENG APKG, the proven base-8. Before multi-set selection that
 # membership was a hardcoded array here AND a different hardcoded array in
 # build-iso.sh, and `--set full` used a third rule (every stock/*.pkg) that silently
 # dropped the three base/ packages -- so a "Full" install shipped no cdfs, no
 # package manager. All three are gone: the membership of every set now comes from
 # ../amix-packagemanager/tools/repo/sets.conf through its own resolver.
 #
-# W6.4b, still true and still the reason the base/ three are in every set: APKGENG
+# Still true and still the reason the base/ three are in every set: APKGENG
 # (the heirloom engine) + APKG (the remote client) mean an installed box has a
 # working package manager OUT OF THE BOX. The dynamic apkg needs /usr/lib/libnsl.so
 # + /usr/lib/libc.so.1 at runtime; BOTH are core members. The APKG package ships a
@@ -374,7 +374,7 @@ mkdir -p "$STAGE/bin" "$STAGE/admin" "$STAGE/profiles" "$STAGE/firstboot" "$STAG
 
 # engine + shim + sum + contents-fsck (the CD-resident static DB integrity checker
 # the driver runs after the pkgadd loop; statically linked, so it runs on the thin
-# miniroot with no libc/libnsl dependency -- W6.4b).
+# miniroot with no libc/libnsl dependency).
 cp -p "$STATIC"/bin/{pkgadd,pkgtrans,pkginfo,pkgchk,contents-fsck} "$STAGE/bin/"
 cp -p "$STATIC/sadm-helpers/pkginstall" "$STAGE/bin/pkginstall"
 cp -p "$CORE_T/usr/bin/sum" "$STAGE/bin/sum"
@@ -503,7 +503,7 @@ if grep -q '^FB_ROOT_SHADOW=none$' "$_base_profile_file" 2>/dev/null; then
   echo "build-install-iso: FB_ROOT_SHADOW=none (profile ${PROFILES[0]}) -- the medium carries no root password hash"
 fi
 
-# --- /install/fpfix (BLIZZARD F2-M1; installed-tree ufs FP patch) -------------
+# --- /install/fpfix (BLIZZARD; installed-tree ufs FP patch) -------------
 # The 040/060 line runs a UFS root, and on an FPU-less 68060 (the LC060) the
 # target's OWN /usr/lib/fs/ufs/{mkfs,fsck} die at a display-only FP expression
 # (fsck at its summary, upstream of "STATE SET TO OKAY"), so a shipped image cannot
@@ -511,7 +511,7 @@ fi
 # build time; this stages a host-PATCHED copy of the INSTALLED pair too, which
 # install.sh (§5b) cp's over the target after pkgadd and verifies by sum. Source of
 # truth = core's own usr/lib/fs/ufs/{mkfs,fsck} (the exact bytes the install lays
-# down -- 20092 / 111580 B; F2-M1 §1). patch-ufs-fp.py preserves every length, so
+# down -- 20092 / 111580 B). patch-ufs-fp.py preserves every length, so
 # the installed sizes and the altroot-attest digest do not move; the only reader
 # that notices is pkgchk (a cksum mismatch on these two paths -- the same declared
 # exception miniroot.proto already carries). Gated on the BASE profile's
@@ -585,7 +585,7 @@ if [ -n "$UNATTENDED" ]; then
   echo "build-install-iso: INSTALL_UNATTENDED=yes (profile ${PROFILES[0]}) -- wrote /install/UNATTENDED (demo-card auto-run)"
 fi
 
-# --- /install/updbootpart (W5.5) ---------------------------------------------
+# --- /install/updbootpart ---------------------------------------------
 # The on-box boot-slice reframe tool the driver lays down at /usr/sbin/updbootpart
 # on every target. It used to travel INSIDE install.sh as a quoted here-doc -- and
 # the 1991 SVR4 sh materializes every here-doc body into a REAL FILE under /tmp the
@@ -619,7 +619,7 @@ cp "$PKGMGR/LICENSE" "$STAGE/LICENSES/APKG.LICENSE"
 cp "$repo/payload/licences/GPL-2" "$repo/payload/licences/GPL-3" "$STAGE/LICENSES/"
 chmod 0644 "$STAGE"/LICENSES/*
 
-# --- /install/zenmac (P-3 address-by-card) -----------------------------------
+# --- /install/zenmac (address-by-card) -----------------------------------
 # The zen0 MAC reader install.sh lays down at /usr/amiga/bin/zenmac on a zen0
 # flavor; S99zen runs it at every boot to pick the card's address out of
 # /etc/inet/zen.conf (docs/address-by-card.md). A build artefact (vendor crt bytes,
@@ -665,10 +665,10 @@ done
 
 # --- /install/x11kit (K1 RTG desktop kit, X11KIT=rtg) -------------------------
 # The kit install.sh lays down for X11KIT=rtg (its "LAY DOWN the RTG X11 kit" block).
-# Cut 4: the RTG station's own manifest amix-z3660rtg/x11/KIT.sha256 is the pin for
+# Cut 4: the RTG project's own manifest amix-z3660rtg/x11/KIT.sha256 is the pin for
 # its four files (server, rtg-kbdback, startx-rtg, xinitrc-rtg), all taken from
 # amix-z3660rtg/build/out/; KIT.sha256 itself is pinned HERE, so a new kit is a
-# deliberate re-pin. zz9k_monsw (the P-7 fallback switch) is not in the kit and keeps
+# deliberate re-pin. zz9k_monsw (the fallback switch) is not in the kit and keeps
 # its own pin. A missing file or any mismatch STOPS the build. Staged only when a
 # requested profile sets X11KIT=rtg, so every other medium is unchanged.
 X11KIT_RTG="$repo/../../amix-z3660rtg"
@@ -677,7 +677,7 @@ X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d 
 # The 1.0 media carry kit 8beaa7bf (startx-rtg e948dbf4, xinitrc-rtg 69f6b68c); the published kit
 # (startx-rtg 5ec6a2fa, xinitrc-rtg 8f867980) differs from those files in comments only.
 X11KIT_MONSW="$X11KIT_RTG/build/tools/zz9k_monsw"
-X11KIT_MONSW_SHA=8149544a8e563cda0e2ec8b177e5999170c8013ed820c4f84f8adc15898c96bf   # P-7 fallback
+X11KIT_MONSW_SHA=8149544a8e563cda0e2ec8b177e5999170c8013ed820c4f84f8adc15898c96bf   # the fallback switch
 # 1.1 media: the server is x11r63's and the RTG tools and nodes are the z3660rtg package's, so
 # the installer lays only the launcher (x11/1.1/startx-rtg: the x11r63 server, no -ac, its log in /var/adm, pinned
 # here) and root's session file; staged as x11kit/1.1/ when a requested 1.1 profile sets X11KIT=rtg
@@ -819,7 +819,7 @@ if [ -n "$_want_l11" ]; then
     grep -q "^$_p|\|^#kpkg $_p " "$L11_IN/kpkg/catalog" \
       || { echo "STOP: $L11_IN/kpkg/catalog carries no $_p package (every 1.1 disk installs it)" >&2; exit 1; }
   done
-  # each profile's kernel, and for a module kernel modtools and its modules (S3-31):
+  # each profile's kernel, and for a module kernel modtools and its modules:
   # rows of the medium's catalog, of the kernel's line
   _kkey() { grep -m1 "^#kpkg $1 " "$L11_IN/kpkg/catalog" | tr ' ' '\n' | sed -n "s/^$2=//p"; }
   for _p in $_want_l11; do
@@ -1092,7 +1092,7 @@ fi
 # was mastered for. A medium carries ONE boot slice per family, so "which rig is
 # this disc for" is a mastering-time fact, not something the operator should have
 # to retype: setup.sh launched with no argument reads this file, which is what
-# lets the W4 miniroot hand off with a bare
+# lets the miniroot hand off with a bare
 #     exec sh /cdrom/install/bin/setup.sh
 # The FIRST --profile wins (it is the one whose boot slice the driver defaults
 # to); an explicit argument still overrides it, so every existing runbook and
@@ -1116,7 +1116,7 @@ done
 # ---------------------------------------------------------------------------
 # /install/order is the medium's DEFAULT order (the mastered set). It keeps its
 # name and its meaning: install.sh reads it when no INSTALL_ORDER key is set, so
-# every existing profile, runbook line and matrix cell is unaffected by W3b.
+# every existing profile, runbook line and matrix cell is unaffected by the named sets.
 #
 # /install/order.<set> is one file per NAMED SET this medium can satisfy in full.
 # The interview's tier menu points at them by name and the driver's INSTALL_ORDER
@@ -1245,7 +1245,7 @@ echo
 echo "=== staged /install/ tree ==="
 ( cd "$STAGE" && find . -type f | LC_ALL=C sort | sed 's/^/  install\//' )
 
-# staged-engine sum table -- the frozen CD engine set (incl. the W6.4b static
+# staged-engine sum table -- the frozen CD engine set (incl. the static
 # contents-fsck: sum -r 23366, 29468 bytes). `sum -r` is the BSD algorithm, and its
 # checksum field == the on-box SVR4 `sum -r` first field, so a re-master's table is
 # directly comparable to a value read on the box. (Byte count avoids the SVR4-vs-GNU

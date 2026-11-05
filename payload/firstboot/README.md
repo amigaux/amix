@@ -11,7 +11,7 @@ stock interactive first-boot dialog would ask for, then removes the marker.
 | `root.shadow` | the root `/etc/shadow` line to install — the bench credential, for bench media only, not a secret |
 | `S16firstboot` | the **reference** rc2 hook (the "template"). `install.sh` **writes** this byte-for-byte onto the target as `/etc/rc2.d/S16firstboot`; it is **not** copied from the CD and **not** a package member. `installer-selftest.py` audit J re-runs the driver's `emit_firstboot_hook()` and asserts it reproduces this file (drift-lock). |
 | `netset.sh` | the **network installation's second stage** (pre-POSIX SVR4 sh; runs on the target). A netinstall of a set beyond minimal installs the minimal set, the base packages, the kernel set and the boot store, and records the rest of the chosen set as the repository catalog's rows in `/var/adm/firstboot/netset`; `install.sh` copies this script beside it and writes `/etc/rc2.d/S99znetset` (`emit_netset_hook`), which runs it at the end of run level 2 at every boot while the record is there. It installs each recorded package with apkg, one at a time, after checking every row against the repository's catalog; three tries per package, one run at a time (`netset.lock`), a package already installed is skipped; a failure leaves the system bootable and the stage armed; when the set is complete the record becomes `netset.done` and the hook is removed. Audits SN and NR run it and the stage-1 side. |
-| `system.setup` | **W5** — the three-line **entry-point stub** for the first-boot dialog, and the master the driver emits from. Like `S16firstboot` it is **not** copied from the CD: `install.sh` writes it (plain `echo` lines, `emit_system_setup`) into the stock `/usr/amiga/bin/system.setup` slot, `chmod 0755`, **only** when the profile says `FIRSTBOOT_DIALOG=y`. It execs `firstboot.sh --dialog`. Audit Z RUNS the emitter and drift-locks the two byte-for-byte. |
+| `system.setup` | The three-line **entry-point stub** for the first-boot dialog, and the master the driver emits from. Like `S16firstboot` it is **not** copied from the CD: `install.sh` writes it (plain `echo` lines, `emit_system_setup`) into the stock `/usr/amiga/bin/system.setup` slot, `chmod 0755`, **only** when the profile says `FIRSTBOOT_DIALOG=y`. It execs `firstboot.sh --dialog`. Audit Z RUNS the emitter and drift-locks the two byte-for-byte. |
 
 **The dialog itself is `firstboot.sh --dialog`** — the same file as the apply
 half, two entry points, one set of `FB_*` variables. That is not tidiness, it is
@@ -24,7 +24,7 @@ matrix cells died with `Floppy fd0: no space` before the driver printed a line.
 `firstboot.sh` is already staged on the medium and already copied to the target,
 so carrying the dialog there costs no medium file and no here-doc at all.
 
-## The two tiers (W5)
+## The two tiers
 
 `FIRSTBOOT_DIALOG=n` (the default, and what every tracked profile says) is the
 unattended tier: the stock sysinit dialog is disarmed with its own `chmod -x`, and
@@ -62,8 +62,8 @@ so bench and metal differ by profile, not by editing this payload.
 `FB_ETHER_IF` · **`FB_GATEWAY`** · **`FB_DNS1`** · **`FB_DNS2`** · **`FB_KMAP`** ·
 `FB_REPO_HOST` · `FB_REPO_IP` · `FB_ROOTDEV` · `FB_SCSI_ID` · `FB_ROOT_SLICE` ·
 `FB_SWAP_SLICE` · **`FB_DIALOG`** · **`FB_ROOT_TELNET`** · **`FB_SYSLOG`** ·
-**`FB_NET_CONFIGURED`** · **`FB_TZ_KEEP`** · **`FB_REPO_URL`** · `FB_ZEN_CARDS`. The W5 additions
-(the last six) each default to the behaviour this payload had before W5, so an
+**`FB_NET_CONFIGURED`** · **`FB_TZ_KEEP`** · **`FB_REPO_URL`** · `FB_ZEN_CARDS`. The dialog's additions
+(the last six) each default to the behaviour this payload had before the dialog, so an
 older `firstboot.conf` produces a byte-identical result:
 
 - **`FB_DIALOG`** — `y` when the install armed the dialog. It is what makes
@@ -82,7 +82,7 @@ older `firstboot.conf` produces a byte-identical result:
   written `/etc/TIMEZONE` (with the colon, and with the `TZ/localtime` alias).
   `firstboot.sh` then leaves the file alone — which is also what keeps the menu's
   "Other (nonstandard)" POSIX rule string from ever being re-emitted as `TZ=:…`.
-- **`FB_ZEN_CARDS`** (P-3, 2026-09-26) — the address-by-card table, quoted
+- **`FB_ZEN_CARDS`** (2026-09-26) — the address-by-card table, quoted
   `MAC=ADDR=NAME` words plus `default=ADDR`. On a `zen0` flavor `firstboot.sh`
   (section 5d) renders it through `S99zen mkconf` into `/etc/inet/zen.conf` —
   once; an existing table is never overwritten — and S99zen picks zen0's
@@ -92,21 +92,21 @@ older `firstboot.conf` produces a byte-identical result:
   the miniroot; `firstboot.sh` re-points the `repo=` line **only** if the dialog
   named a different host, never creating the file.
 
-The **bold** ones below are W1 additions:
+The **bold** ones below came with the driver plumbing:
 
-- **`FB_TZ`** — the timezone **zone name** (e.g. `US/Eastern`). Until W1
+- **`FB_TZ`** — the timezone **zone name** (e.g. `US/Eastern`). At first
   `firstboot.sh` wrote the literal `TZ=:US/Eastern` regardless of the profile, so
   every unattended install silently diverged from its own spec. The value is the
   **bare** zone: `firstboot.sh` emits the leading colon itself
-  (`echo "TZ=:$FB_TZ"`), because the colon is load-bearing (W6.3 — a colon-less
+  (`echo "TZ=:$FB_TZ"`), because the colon is load-bearing (a colon-less
   `TZ` bus-errors every `ctime(3)` consumer at cold boot) and must never be
   reachable from data. `install.sh` strips a leading colon off the profile value
   for the same reason, and defaults the key to `US/Eastern`.
 - **`FB_GATEWAY`** — LAN default route. Consumed by the driver-written
   `/etc/rc2.d/S99zen` laydown (zen0/metal flavors), where it was the hardcoded
   `192.0.2.1`. A `zen0` profile without one fails the install closed.
-- **`FB_DNS1` / `FB_DNS2`** — resolver addresses. Recorded by W1; **applied** by
-  `firstboot.sh` since W5, as **all five parts or none** (`resolv.conf`, the
+- **`FB_DNS1` / `FB_DNS2`** — resolver addresses. Recorded by the driver; **applied** by
+  `firstboot.sh` as **all five parts or none** (`resolv.conf`, the
   `libsockdns` relink, `netconfig.DNS`, an empty `/etc/domain`, literal-IP boot
   ifconfigs) and only on a literal-IP (`zen0`) flavor. On `aen0` the fifth part
   would mean editing `/etc/inet/network-config` — never — so the dialog refuses
@@ -127,7 +127,7 @@ controller/slice · `/dev` regeneration via `/usr/amiga/lib/atdevs`.
 - **NEVER set the clock forward** — the RTC/`lastchg` aging trap poisons account
   aging with a future date. `firstboot.sh` never sets the clock.
 
-## How it is wired into the target init (W5.4f)
+## How it is wired into the target init
 
 `firstboot.sh` is inert unless something invokes it, and the **stock** Amix init
 does not: on cold boot #1 the stock sysinit dialog runs instead. `install.sh`'s
@@ -153,9 +153,9 @@ s5 read of the installed target's `/etc/inittab` + `/etc/sysinit`):
    so the hook is a no-op and the identity is read from `/etc/nodename` at sysinit.
 
 The SVR4-conventional target locations `firstboot.sh` writes are confirmed on the
-box in W5.4: the nodename store (`/etc/nodename` + `uname -S`), the timezone store
+box: the nodename store (`/etc/nodename` + `uname -S`), the timezone store
 and the numeric index-47 mapping (`/etc/TIMEZONE` + `/etc/tz.index`), `/etc/vfstab`,
 the `/etc/inet/hosts` entry, and `/dev` regeneration via `/usr/amiga/lib/atdevs`.
 
-An old `firstboot.conf` (one written before W1) stays valid: `firstboot.sh`
+An old `firstboot.conf` (one written before these keys) stays valid: `firstboot.sh`
 defaults `FB_TZ` to `US/Eastern`, which is exactly the literal it used to write.

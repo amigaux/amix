@@ -390,7 +390,7 @@ l11_bootstore()
 	run /bin/mknod "$TARGET/dev/kinfo" c 53 0
 	run chmod 0444 "$TARGET/dev/kinfo"
 	# updbootpart would frame a 1.0 chain over the store: on this disk it is the shim
-	# that refuses and names kbootset (spec 40 §2.2, P-28 D54)
+	# that refuses and names kbootset (spec 40 §2.2)
 	[ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
 	run cp "$L11/updbootpart" "$TARGET/usr/sbin/updbootpart"
 	run chmod 0755 "$TARGET/usr/sbin/updbootpart"
@@ -593,7 +593,7 @@ l11_bcheckrc()
 
 # l11_markgood -- /etc/rc2.d/S99zkbootset, the LAST run-level-2 script (it sorts after
 # S99zen): a box that came all the way up marks the booted generation good (spec 40
-# §3.3, D-3 §6, P-28 D54), with C2-4 §9's line. kbootset takes the booted generation from the loader record
+# §3.3), with C2-4 §9's line. kbootset takes the booted generation from the loader record
 # through kinfo; a box that panics or hangs in rc never gets here, and the loader's
 # try-once rule boots the previous good generation instead. kbootset's package ships it (-26
 # on: init.d/kbmarkgood with its rc2.d link); this checks it.

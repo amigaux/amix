@@ -271,7 +271,7 @@ def check_rockridge(img):
 
 
 # ------------------------------------------------------------------ CD boot ---
-# The bootable install CD (amix-dlm docs/spec/10-boot-loader.md §4.4, D-3 §10):
+# The bootable install CD (amix-dlm docs/spec/10-boot-loader.md §4.4):
 # the A4091/A4092 ROM mounts the disc with its CD filesystem (ODFileSystem, ROM
 # profile: ISO9660 + Rock Ridge + Joliet, precedence RR > Joliet > plain ISO,
 # names compared case-insensitively) and Kickstart runs S/Startup-Sequence, which
@@ -460,7 +460,7 @@ def parse_catalog(text):
         #<extname> <key> <value>          (one per package)
 
     One exists today, `isize` (gen-catalog.py --isize), carrying each package's
-    installed size in bytes. Until W3b this parser was 9-fields-EXACTLY and
+    installed size in bytes. Until multi-set selection this parser was 9-fields-EXACTLY and
     counted every one of those lines as a malformed entry, which is why
     amix-packagemanager's docs/design.md named it as the one known
     non-conforming consumer and why nothing was allowed to pass --isize into

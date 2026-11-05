@@ -458,7 +458,7 @@ exercise the **preserved Ctrl-C trap** (the `mediaboot` gate reaches the miniroo
 shell exactly as before — proof that replacing the script did not disturb the
 unattended arms); `cd-interactive` and `cd-suomi` drive the **new flow end to end**,
 including the source auto-probe finding and mounting the disc for itself after the
-harness deliberately unmounts it. See `docs/installer.md` *W4: the miniroot respin*.
+harness deliberately unmounts it. See `docs/installer.md` *The miniroot respin*.
 
 The **metal** packaging (the RDB `UNIX_Root` slice-1 image) is byte-identical to the
 fd0 one, and the metal source disk still assembles around it — but a metal **boot**

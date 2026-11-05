@@ -155,8 +155,8 @@ IFREG = 0x8000
 # HIGH BYTE of L3[0] (i.e. treating L3[0] as a packed major<<8|minor o_dev_t).
 # Every minor in a stock miniroot is < 256, so that spelling returned the right
 # minor and major 0 for EVERY node -- a decode that is wrong everywhere yet
-# never self-inconsistent -- which is why it survived from the W5.2 miniroot
-# work (where the proto and its reader were written together) until W6.
+# never self-inconsistent -- which is why it survived from the first miniroot
+# work (where the proto and its reader were written together) until the set-matrix work.
 DEV_MINOR_L3 = 0   # L3 slot holding the minor
 DEV_CONST_L3 = 1   # L3 slot holding the constant 1
 DEV_MAJOR_L3 = 2   # L3 slot holding the major
@@ -176,7 +176,7 @@ LOSTFOUND_INO = 3
 # count `s_tinode` is a ushort too. So inode 65536 has no way to be referenced,
 # cached or counted.
 #
-# W6 walked into this from the other end. The `full` package set needs ~304 MB
+# The set-matrix work walked into this from the other end. The `full` package set needs ~304 MB
 # installed, which does not fit the canonical 100 MB bench target, so the new
 # large-set matrix cells mkroot'd a 400 MB one -- and mkfs_s5 died with a bare
 #     struct.error: 'H' format requires 0 <= number <= 65535
@@ -850,7 +850,7 @@ def selftest(reference_image=None, verbose=True):
     except S5Error:
         say("    mkfs_s5(8 blocks) correctly refused")
 
-    # ---- the 16-bit inode ceiling (W6) -------------------------------------
+    # ---- the 16-bit inode ceiling -------------------------------------
     # An inode number is 16 bits in a directory entry, in s_inode[] and in
     # s_tinode, so a filesystem cannot hold more than 65535 of them. The
     # nblocks/4 rule crosses that at a ~288 MB root, and the FULL package set

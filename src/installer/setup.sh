@@ -1,5 +1,5 @@
 #!/bin/sh
-# setup.sh -- the Installer-NG INTERVIEW (wave W2 of the installer-UX rework).
+# setup.sh -- the Installer-NG INTERVIEW (part of the installer-UX rework).
 # Runs ON THE MINIROOT, single-user, after the install source has been mounted at
 # /cdrom. It asks the operator the handful of questions the original Amiga UNIX
 # installer asked, composes the answers into /tmp/answers.profile on top of a
@@ -43,7 +43,7 @@
 # ===========================================================================
 # Identical to src/installer/install.sh's; tools/installer-selftest.py audits
 # THIS file with the same greps and the same miniroot.proto-derived tool
-# allowlist (audits A, B, G, H, I, T all cover setup.sh from W2 on).
+# allowlist (audits A, B, G, H, I, T all cover setup.sh).
 #   * NO $(...)   -- use `backticks`      * NO $(( ))  -- arithmetic is `expr`
 #   * NO [[ ]]    -- test with [ ]        * NO `local`, NO arrays, NO wc
 #   * NO `export VAR=val` -- write VAR=val; export VAR
@@ -53,9 +53,9 @@
 #     the second on it returns 0 and creates nothing (bench-proven 2026-08-11,
 #     matrix run 20260811-103107-cd). Straight-line `: >` is fine. Inside a
 #     loop, create with `cp /dev/null` or append with `echo ... >>`.
-#     ★ W3b widened this: a FUNCTION called from a loop body is a loop body.
+#     ★ A later bench run widened this: a FUNCTION called from a loop body is a loop body.
 #     Every question here sits inside the `Do you wish to change any of these?`
-#     re-ask loop, so W2's straight-line `: >` truncations in scan_disks /
+#     re-ask loop, so the straight-line `: >` truncations in scan_disks /
 #     choose_disk / set_size_mb / build_set_table were only straight-line on
 #     the FIRST pass -- a second pass would have appended to a scratch file it
 #     believed it had emptied, and the operator would have been shown the disk
@@ -76,12 +76,12 @@
 #                            disk? " when the chosen disk already has an RDB.
 #   2. Partition sizes    -- the stock root/swap questions, stock arithmetic,
 #                            stock floors (MINROOT 16 / MINSWAP 5) and stock
-#                            validation messages, landing in W1's driver keys
+#                            validation messages, landing in the driver keys
 #                            TARGET_ROOT_MB / TARGET_SWAP_MB.
-#   3. Root fs type       -- NOT asked: ufs, the only target filesystem (P-35).
+#   3. Root fs type       -- NOT asked: ufs, the only target filesystem.
 #                            See "THE ROOT FILESYSTEM" below. Lands in the driver
 #                            key TARGET_ROOT_FSTYPE.
-#   4. Package set        -- amixpkg's THREE-TIER menu (W3b), data-driven from
+#   4. Package set        -- amixpkg's THREE-TIER menu, data-driven from
 #                            the medium's /install/sets table and its per-set
 #                            /install/order.<set> files, sized from the catalog's
 #                            #isize block. Tier 3 is the amixpkg CUSTOM TABLE.
@@ -91,19 +91,19 @@
 #
 # NOT asked here, deliberately (plan §8):
 #   * keymap        -- pre-mount, so it is the miniroot /etc/profile's question
-#                      (src/miniroot/profile, W4). Its answer arrives here as
+#                      (src/miniroot/profile). Its answer arrives here as
 #                      $KMAP / /tmp/kmap and lands in FB_KMAP; see "THE KEYMAP".
 #   * AmigaDOS reservation, RDB reuse, the 4th partition, per-partition fs --
 #     the phase-2 RDB-states cluster (plan §8.8), backlog.
-#   * identity/network/users -- first boot (W5); the miniroot cannot hash a
+#   * identity/network/users -- first boot; the miniroot cannot hash a
 #     password and has no network userland.
 #
 # ===========================================================================
 # ★ THE ROOT FILESYSTEM -- ufs, not asked
 # ===========================================================================
 # Stock asked `What file system type is the root partition? [s5]`; this interview
-# restored that menu with the default moved to `[ufs]` (2026-08-14), and P-35
-# (owner, 2026-10-30) removed it: s5 is no longer a target -- no install base
+# restored that menu with the default moved to `[ufs]` (2026-08-14), and a later decision
+# (2026-10-30) removed it: s5 is no longer a target -- no install base
 # runs on it, its 14-byte names block perl and later ports, and the 040/060
 # line cannot use it at all. The root is always ufs, laid by the miniroot's own
 # stock mkfs_ufs (docs/ufs-target-scoping.md), so there is nothing to ask. The
@@ -112,7 +112,7 @@
 # ===========================================================================
 # ★ WHY THE DISK SCAN DOES NOT CALL /etc/ddsize
 # ===========================================================================
-# The stock scan called `/etc/ddsize /dev/rdsk/c${i}d0s0` once per id. W1 tried
+# The stock scan called `/etc/ddsize /dev/rdsk/c${i}d0s0` once per id. An earlier cut tried
 # exactly one such call in the driver and it WEDGED THE INSTALL on the bench
 # A3000 onboard-SCSI (a3091) path: the console printed `a3091: 0x1 0 0x0` and
 # nothing ever advanced (matrix run 20260811-094255-cd, install gate FAIL after
@@ -139,7 +139,7 @@
 # ===========================================================================
 #   1. the base profile's TARGET_DISK_MB, if the chosen id IS the profile's
 #      TARGET_SCSI_ID -- the medium's own declaration about its own rig. This
-#      is the same precedence the W1 driver applies, and it is what keeps a
+#      is the same precedence the driver applies, and it is what keeps a
 #      pinned rig (bench, metal) byte-deterministic.
 #   2. the RDB's own extent, when the disk already carries an RDB: the largest
 #      (start + length) over its partitions, read with `/etc/rdb -h 5` (last
@@ -161,7 +161,7 @@
 # that is the entire merge mechanism, and it means every key the medium
 # declares (kernel sums, CD_SPEC, boot-slice paths, FB_*) survives untouched.
 # The medium is read-only, which is why the driver learned to take a profile BY
-# PATH in W1.
+# PATH.
 #
 # stdin: the interview OWNS the console; install.sh must NOT. The exec below
 # redirects install.sh's stdin from /dev/null, preserving METAL-FIX.3 (an
@@ -181,7 +181,7 @@ if [ "$SRC_KIND" = net ]; then
 	KCATF=/tmp/netk/catalog
 fi
 ANSWERS=/tmp/answers.profile
-# W4: where the miniroot's own /etc/profile leaves the keymap the operator chose
+# Where the miniroot's own /etc/profile leaves the keymap the operator chose
 # (src/miniroot/profile). See "THE KEYMAP" below.
 KMAP_FILE=/tmp/kmap
 
@@ -193,11 +193,11 @@ SET_F=/tmp/setup.sets
 TOK_F=/tmp/setup.tok
 CATN_F=/tmp/setup.catn
 ISZ_F=/tmp/setup.isz
-# W3b, the custom screen: the per-package table, its own copy of the #isize
+# The custom screen: the per-package table, its own copy of the #isize
 # block, one marker FILE per selected package (the 1991 sh has no arrays and
 # every list loop here is a subshell, so a file is the only state that survives),
 # and the composed custom order. The order goes in /tmp because the MEDIUM IS
-# READ-ONLY -- the same reason W1 taught the driver to take a profile by path.
+# READ-ONLY -- the same reason the driver takes a profile by path.
 PKG_F=/tmp/setup.pkgs
 ISZP_F=/tmp/setup.iszp
 SELP=/tmp/setup.p.
@@ -542,7 +542,7 @@ id_card()
 #   * no argument                 -> the medium's own declaration in
 #                                    $INST/profiles/BASE (written by
 #                                    tools/build-install-iso.sh from the family
-#                                    the boot slice was built for), so the W4
+#                                    the boot slice was built for), so the
 #                                    miniroot handoff can be a bare
 #                                    `exec sh /cdrom/install/bin/setup.sh`.
 #                                    Before BASE: BASE.<line> for the running
@@ -576,7 +576,7 @@ if [ -z "$PROFILE_ARG" ]; then
 fi
 if [ -z "$PROFILE_ARG" ] && [ -f "$INST/profiles/BASE" ]; then
 	PROFILE_ARG=`cat "$INST/profiles/BASE"`
-	# W4: a RAW payload slice is s5, and s5 truncates every name at 14
+	# A RAW payload slice is s5, and s5 truncates every name at 14
 	# characters -- `metal-a4000-z3660-raw.profile` is not the name that is
 	# actually on the slice. build-raw-source.sh writes the profile under an
 	# s5-safe short name for exactly that reason, so when BASE's own name does
@@ -599,7 +599,7 @@ esac
 	(available: `set -- $INST/profiles/*.profile; echo $*`  -- or pass a PATH)"
 . "$PROFILE_FILE"
 
-# --- W2 base-profile keys ----------------------------------------------------
+# --- base-profile keys ----------------------------------------------------
 #   DDSIZE_SAFE    n   may this rig's /etc/ddsize be called at all? (see above)
 #   ANSWERS_ECHO   n   write the composed profile to ANSWERS_ECHO_PATH before
 #                      the transplant, so a BLIND console (the install matrix)
@@ -723,7 +723,7 @@ fi
 if [ -n "$TARGET_SCAN_IDS" ]; then
 	SCAN_IDS="$TARGET_SCAN_IDS"
 fi
-# D-2 (r6): every id this medium can install to is SCANNED and has its NODES. The
+# r6: every id this medium can install to is SCANNED and has its NODES. The
 # K1 miniroot carries nodes for c0-c3, c5, c6, c8 and ce only, so an installable
 # id outside that set (c4 for the picker's unit 4; c9..cd on card 1) is made here.
 # Ids the medium cannot install to keep the old behaviour: no node, open fails,
@@ -751,7 +751,7 @@ done
 # harness that forgot the profile key still gets its beacon, and a real install
 # (no markers, key n) writes nothing.
 # ---------------------------------------------------------------------------
-# THE KEYMAP (W4) -- an answer given BEFORE this script existed
+# THE KEYMAP -- an answer given BEFORE this script existed
 # ---------------------------------------------------------------------------
 # The miniroot's /etc/profile asks the keyboard question first, before anything
 # is mounted, because you have to be able to type before you can be asked
@@ -763,7 +763,7 @@ done
 # KMAP` semantics and the driver's FB_KMAP semantics, unchanged.
 #
 # With NEITHER channel present the base profile's own FB_KMAP stands: that is an
-# unattended profile run, or a pre-W4 miniroot whose stock id_kmap lost $KMAP at
+# unattended profile run, or an older miniroot whose stock id_kmap lost $KMAP at
 # the Ctrl-C exec. Never guess a keyboard.
 if [ -f "$KMAP_FILE" ]; then
 	FB_KMAP=`cat "$KMAP_FILE"`
@@ -1109,7 +1109,7 @@ choose_disk()
 
 	# stock state 5: an existing RDB is destroyed, and the operator says so
 	# out loud. NO DEFAULT -- an empty answer re-asks (stock has no "" arm).
-	# P-36: 1.1 supports clean installs only -- a disk that holds Amix gets this
+	# 1.1 supports clean installs only -- a disk that holds Amix gets this
 	# question too, never an upgrade.
 	if rdb_present "$SCSI"; then
 		[ -n "$UNIVERSAL" ] && echo "\n`scsi_label $SCSI` holds `disk_contents $SCSI`.  All of it will be erased."
@@ -1128,7 +1128,7 @@ choose_disk()
 }
 
 # ---------------------------------------------------------------------------
-# 1b. THE OLD_BOOT MACHINE CLASS (W6, plan section 6)
+# 1b. THE OLD_BOOT MACHINE CLASS (plan section 6)
 # ---------------------------------------------------------------------------
 # ★ THE ONE COVERAGE HOLE THAT CURRENTLY FAILS UNDIAGNOSED. Stock 2.1 supported
 # a class of machine this installer does not: Kickstart 1.3 boxes and A2090
@@ -1384,9 +1384,9 @@ ask_sizes()
 }
 
 # ---------------------------------------------------------------------------
-# 4. PACKAGE SET -- amixpkg's three-tier menu (W3b)
+# 4. PACKAGE SET -- amixpkg's three-tier menu
 # ---------------------------------------------------------------------------
-# The menu is amixpkg's OWN and it is THREE ROWS; it always was, W2 simply had
+# The menu is amixpkg's OWN and it is THREE ROWS; it always was, the first interview simply had
 # only one set to put in it. The format strings, recovered from /bin/amixpkg's
 # .rodata (docs/installer.md "The stock amixpkg screens"):
 #
@@ -1409,7 +1409,7 @@ ask_sizes()
 # "Standard Amiga UNIX installation" MEANT on the tape -- and the medium's own
 # mastered set otherwise (on a base-8 disc there is no larger truth to offer).
 # Row 2 is everything on the disc. Row 3, Custom, is a property of the interview
-# rather than of the disc, so it is appended here. A medium mastered before W3b
+# rather than of the disc, so it is appended here. A medium mastered before set tables
 # has no /install/sets and the two tiers are synthesized from its single
 # /install/order: the menu keeps three rows and the same numbering either way,
 # which is what the blind-console install matrix types into.
@@ -1749,7 +1749,7 @@ build_set_table()
 	if [ -s "$SET_F" ]; then
 		:
 	else
-		# pre-W3b medium: one order file, and no claim about which named set
+		# older medium: one order file, and no claim about which named set
 		# it is. It is the medium's default, which is what has always been
 		# attested, so the tiers say so and both point at the same file.
 		echo "1 default order y Standard Amiga UNIX installation" >> "$SET_F"
@@ -1779,7 +1779,7 @@ build_set_table()
 
 	# Row 1's ORDER FILE and row 2's SET NAME, back in the PARENT.
 	#
-	# ★ NOT `{ read A; read B; } < "$SET_F"`. That was W3b's first try and the
+	# ★ NOT `{ read A; read B; } < "$SET_F"`. That was the first try and the
 	# bench refused it outright: this shell FORKS for a compound command with an
 	# input redirection -- the same reason every `while read ... done < FILE`
 	# loop in this tree is treated as a subshell -- so both reads happened in a
@@ -2392,7 +2392,7 @@ confirm()
 		echo "Package set:		$SET_NAME"
 	fi
 	echo "Verbose install:	$ANS_VERBOSE"
-	# W4: not a question here -- the keyboard was chosen on the miniroot before
+	# Not a question here -- the keyboard was chosen on the miniroot before
 	# this script ran. It is SHOWN because it is one of the things this run will
 	# change on the target (the default.kmap hard link), and because on a blind
 	# console it is the only place the answer becomes visible again.
@@ -2401,7 +2401,7 @@ confirm()
 	else
 		echo "Keyboard:		American (built in)"
 	fi
-	# W5: not a question either. Every interactive install arms the first-boot
+	# Not a question either. Every interactive install arms the first-boot
 	# dialog, and saying so here is the only warning the operator gets that the
 	# machine will ask for a nodename, a network and a root password when it
 	# boots off its own disk for the first time.
@@ -2467,9 +2467,9 @@ done
 # This used to be `cat "$PROFILE_FILE" > "$ANSWERS"` -- a byte copy -- and a
 # profile is 90% COMMENTS: 13,556 bytes of which about 1,000 are assignments.
 # That is 26 of the floppy's 46 free blocks spent on prose, on the same
-# filesystem the static pkgadd needs for /usr/apkg/sadm/install/scripts. W4 got
-# away with it by TWO blocks; W5's profiles grew by twenty lines of comment and
-# the run died exactly where W4's first one did: `Floppy fd0: no space` ->
+# filesystem the static pkgadd needs for /usr/apkg/sadm/install/scripts. One run got
+# away with it by TWO blocks; then the profiles grew by twenty lines of comment and
+# the run died exactly where the first interactive run did: `Floppy fd0: no space` ->
 # `pkgadd: ERROR: unable to make packaging directory` -> `STOP: base-OS install
 # FAILED for package(s): core`.
 #
@@ -2498,9 +2498,9 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 # of them on $ANSWERS (the base profile is mostly comments, and it is copied
 # whole because the medium is read-only). Echoing the composed profile as well
 # spent another 12 -- and the static pkgadd needs room on this same filesystem
-# for /usr/apkg/sadm/install/scripts. W4's first interactive run died exactly
+# for /usr/apkg/sadm/install/scripts. The first interactive run died exactly
 # there: `Floppy fd0: no space`, then `pkgadd: ERROR: unable to make packaging
-# directory`. W3b survived the same shape with SIX blocks to spare, which is
+# directory`. An earlier run survived the same shape with SIX blocks to spare, which is
 # luck, not headroom. The beacon proves the ANSWERS parsed, so the answers are
 # all it needs to carry.
 {
@@ -2537,12 +2537,12 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "INSTALL_SET=$SET_NAME"
 	echo "INSTALL_ORDER=$SET_ORDER"
 	echo "INSTALL_ATTESTED=$SET_ATT"
-	# W4: the keymap chosen on the miniroot, before this script ran. Written
+	# The keymap chosen on the miniroot, before this script ran. Written
 	# UNCONDITIONALLY -- an EMPTY value is the answer `usa` (bake nothing), and
 	# it must override a base profile that names a map, so it can never be
 	# omitted just because it is empty.
 	echo "FB_KMAP=$FB_KMAP"
-	# W5: an INTERACTIVE install arms the first-boot configuration dialog. This
+	# An INTERACTIVE install arms the first-boot configuration dialog. This
 	# is not a question -- it is what "interactive" MEANS here: someone is at
 	# this console, so someone will be at the console at the next boot, and the
 	# identity questions (nodename, network, passwords, users) belong there,

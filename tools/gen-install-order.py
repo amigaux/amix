@@ -22,7 +22,7 @@
 #     selection always yields the same file (a re-master is reproducible).
 #   * a dependency CYCLE is a hard error (deps.conf is a DAG by construction).
 #
-# The package client rides the base set (W6.4b): APKGENG (the heirloom engine)
+# The package client rides the base set: APKGENG (the heirloom engine)
 # and APKG (the remote client) are installed by the SAME pkgadd -R loop so an
 # installed box has a working package manager out of the box. deps.conf's
 # `apkg: apkgeng` edge orders APKGENG before APKG. The driver still never
@@ -33,7 +33,7 @@
 # packages, but the emitted order keeps APKG/APKGENG uppercase and core/bsd/cdfs
 # lowercase -- the case each package's SVR4 instance name and .pkg file actually use.
 #
-# SET NAME (W3b, optional): a medium now carries several order files -- the
+# SET NAME (optional): a medium now carries several order files -- the
 # mastered default as /install/order plus one /install/order.<set> per named set
 # it can satisfy in full -- so an order file that cannot say which set it IS is a
 # file you have to guess about from its own filename. `--set NAME` records the

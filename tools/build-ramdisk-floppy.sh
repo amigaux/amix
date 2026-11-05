@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # build-ramdisk-floppy.sh -- the floppy pair of the RAM-disk installer medium, one pair per line
-# (amix-dlm 50 §3, the RAM-disk profile; S4-52): two DD volumes holding one store -- boot1, the
+# (amix-dlm 50 §3, the RAM-disk profile): two DD volumes holding one store -- boot1, the
 # header and boot2 at the start of volume 1, then the kernel, the root-class modules and the
 # line's RAM-disk image, deflated, the image running on to volume 2.
 #
@@ -18,7 +18,7 @@
 # mkstore's floppy engine and read back whole by lsstore; the image is gated against the pair's
 # generation (tools/ramdisk-image-check.py: each boot- and demand-class module in it, byte for
 # byte -- on k30 since catalog b1f564f4 also the kernel package's ufs). The used and free bytes of volume 2 are
-# printed: the image may grow into them (S4-53).
+# printed: the image may grow into them.
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$(dirname "$repo")")"
 die() { echo "build-ramdisk-floppy: STOP: $*" >&2; exit 1; }

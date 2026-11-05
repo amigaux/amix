@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ramdisk-image-check.py -- a RAM-disk image against its generation (S5-33; b1f564f4).
+"""ramdisk-image-check.py -- a RAM-disk image against its generation (b1f564f4).
 
   tools/ramdisk-image-check.py [--zen0] SPEC IMAGE ufs|s5 [SPEC IMAGE ufs|s5 ...]
 
@@ -11,7 +11,7 @@ boot-class one from the RAM-disk root after `modadmin -B` (C3-5 section 5), a de
 at its first use (cdfs, fs=cdfs, at the first mount of the disc). Since catalog b1f564f4 the kernels carry no
 built-in ufs or s5: on k30 the kernel package's ufs is such a record (s5 is the promoted
 root), and without it the miniroot cannot mount the ufs target. A ufs image's block size
-must be at least 4096 (the k46 ufs module refuses a smaller one at mount, S5-13).
+must be at least 4096 (the k46 ufs module refuses a smaller one at mount).
 --zen0 (the netinstall images): /dev/zen0 must also be c 51,0 (the z3660eth package's node,
 C3-5 section 1.2), and the image's installer must carry /install/dmamask, the DosEnvec Mask
 table install.sh stamps the target with (tools/dmamask.py medium; without it the target keeps

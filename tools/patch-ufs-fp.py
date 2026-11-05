@@ -2,7 +2,7 @@
 """patch-ufs-fp.py -- BLIZZARD F2-M1: take the FP out of mkfs_ufs and fsck_ufs.
 
 The stock Amix 2.1 ufs tools execute floating point in exactly two places, both of
-them display-only, and both fatal on a 68060 with no FPU (BLIZZARD F2-M0 census):
+them display-only, and both fatal on a 68060 with no FPU (BLIZZARD census):
 
   /etc/fs/ufs/mkfs   9 FP instructions feeding "\\t%.1fMb in %d cyl groups
                      (%d c/g, %.2fMb/g, %d i/g)\\n" -- printed BEFORE any filesystem
@@ -403,7 +403,7 @@ def do_s5(image, paths, check):
 # REFUSED rather than filled, because filling one WOULD be an allocation.
 #
 # Why it has to exist: the installed tree's /etc/fs/ufs/{mkfs,fsck} come from the
-# CD's core package, so they land unpatched on every target, and BLIZZARD F2-M1
+# CD's core package, so they land unpatched on every target, and the BLIZZARD work
 # wired MINIROOT_FP_PATCH into the miniroot ONLY. On an FPU-less 68060 that means
 # a shipped image cannot fsck its own root -- exactly the failure the patch exists
 # to prevent. There is no host-side path to those two files other than this one:

@@ -56,7 +56,7 @@ PY
 [ -z "$KEEP" ] || { mkdir -p "$KEEP"; cp "$tmp/setclk.c" "$KEEP/setclk.c"; }
 
 # The stock Makefile builds with plain gcc; build the same way the fieldkit tools
-# are: AMIX_USER_CFLAGS (the T-9 defines, -m68020) from gcc-cross-amix's env.
+# are: AMIX_USER_CFLAGS (its defines, -m68020) from gcc-cross-amix's env.
 # shellcheck disable=SC2086
 m68k-cbm-sysv4-gcc ${AMIX_USER_CFLAGS:--O -m68020} -o "$tmp/setclk" "$tmp/setclk.c" \
   || die "cross build failed"

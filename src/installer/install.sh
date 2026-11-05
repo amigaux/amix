@@ -15,8 +15,8 @@
 #     `set -- pattern; echo $#`
 #   * The miniroot has NO od/cmp/sum/grep-q either; checksumming on the box is
 #     the CD-resident SVR4 `sum` at $INSTALL/bin/sum (see docs/installer.md).
-#   * NO basename/sed/touch/date -- the miniroot carries NONE of them (W5.4c
-#     proved it on the box). basename -> `expr "$x" : '.*/\(.*\)'`; sed field
+#   * NO basename/sed/touch/date -- the miniroot carries NONE of them (that
+#     was proved on the box). basename -> `expr "$x" : '.*/\(.*\)'`; sed field
 #     extractions -> `expr`/`case`/`read`; touch -> `: > file`; date -> omit
 #     (there is no wall clock we may trust; never write a time field the box
 #     cannot produce). NO ${x##*/}-style parameter expansion either (not 1991).
@@ -36,7 +36,7 @@
 #
 # The argument is a profile NAME resolved under /cdrom/install/profiles/ (the
 # original form) OR A PATH to a profile file anywhere -- the latter is what lets
-# the W2 interview compose /tmp/answers.profile and hand it straight to this
+# the interview compose /tmp/answers.profile and hand it straight to this
 # driver, since the medium is read-only.
 #
 # EVERY INSTALL WRITES A LOG. From the moment the target root is mounted, every
@@ -48,8 +48,8 @@
 #   /cdrom/install/bin/{pkgadd,pkgtrans,pkginfo,pkgchk,pkginstall,sum}  static engine + sum
 #   /cdrom/install/admin           permissive pkgadd admin(4) policy
 #   /cdrom/install/order           the install order (core first; gen-install-order.py)
-#   /cdrom/install/order.<set>     per-named-set orders (W3b; selected by INSTALL_ORDER)
-#   /cdrom/install/sets            the interview's set table (W3b; read by setup.sh)
+#   /cdrom/install/order.<set>     per-named-set orders (selected by INSTALL_ORDER)
+#   /cdrom/install/sets            the interview's set table (read by setup.sh)
 #   /cdrom/install/profiles/*.profile   target specs
 #   /cdrom/install/boot/<p>/{bootslice.img,boot2.boot,bootslice.manifest}
 #   /cdrom/install/firstboot/*     first-boot payload (armed into the target)
@@ -69,7 +69,7 @@
 #            the box; there is no host-side UFS writer and deliberately none
 #            planned (docs/ufs-target-scoping.md §3.3 costs one at 600-900 lines
 #            against a 20 KB C program we already ship).
-#   prebuilt (INSTALL_TARGET_PREBUILT=1) is RETIRED (P-35, 2026-10-30): it
+#   prebuilt (INSTALL_TARGET_PREBUILT=1) is RETIRED (2026-10-30): it
 #            mounted a root tools/mkroot.sh had minted host-side, and mkroot.sh
 #            mints s5 only. The driver refuses the key.
 # The whole author sequence -- the `/etc/rdb` create/geometry primitive included
@@ -77,7 +77,7 @@
 # script itself is /etc/profile on the stock root floppy) and, since 2026-07-31,
 # RUN END-TO-END ON THE BENCH by tools/install-matrix.sh cell `cd-author`.
 #
-# NOT boot-tested here. W5.4 runs it end-to-end on the bench profile.
+# NOT boot-tested here. The on-box run takes it end-to-end on the bench profile.
 
 PROG=install.sh
 CDROOT=/cdrom
@@ -106,7 +106,7 @@ SDDEV_CAP_BLOCKS=1234567
 SECS=64                 # blocks per cylinder (heads=1, sectors=64)
 
 # ---------------------------------------------------------------------------
-# THE INSTALL LOG + THE QUIET/VERBOSE SPLIT (W1)
+# THE INSTALL LOG + THE QUIET/VERBOSE SPLIT
 # ---------------------------------------------------------------------------
 # Every install persists a COMPLETE transcript to <target>/var/adm/install.log.
 # Until the target root is mounted there is nowhere to write it, so the pre-mount
@@ -188,7 +188,7 @@ run() {
 
 # strict non-negative-integer test (pre-POSIX; no grep, no expr anchor). The
 # boot-chain verify uses it to FAIL CLOSED: an empty or garbled checksum is NOT
-# a number, so it can never compare equal. (W5.4c: `sed` was absent, both sides
+# a number, so it can never compare equal. (Measured on the box: `sed` was absent, both sides
 # of the comparison went empty, and empty==empty printed a vacuous OK per region.)
 is_num() {
 	case "$1" in
@@ -199,17 +199,17 @@ is_num() {
 }
 
 # count_tokens FILE -- echo the number of whitespace-separated tokens in FILE.
-# The subshell-safe loops (W5.4e) count by tallying an append-only temp file after
+# The subshell-safe loops count by tallying an append-only temp file after
 # the loop. The obvious `set -- \`cat FILE\`; echo $#` is a TRAP on the miniroot sh:
 # `set --` with an EMPTY argument list is a NO-OP on $@ there (it does NOT clear the
 # positional parameters -- confirmed on-box: `set -- a b c; set -- \`cat /dev/null\``
 # leaves $#=3), so counting an EMPTY file returns whatever $# was last set to (a
-# stale count from the previous count_tokens call). W5.4e-run-1 hit exactly this:
+# stale count from the previous count_tokens call). A bench run hit exactly this:
 # all 3 boot regions verified OK (vok=3) but the empty vfails file then "counted" 3
 # and the verify false-failed. The `[ -s ]` presence guard returns 0 for an empty
 # file WITHOUT running the no-op `set --`, so $@ is only ever reset from a non-empty
 # list. cat is on the miniroot (miniroot.proto); no wc needed.
-# --- byte writing on the miniroot (D-2, measured 2026-10-05) ------------------------
+# --- byte writing on the miniroot (measured 2026-10-05) ------------------------
 # The miniroot has dd, cat, expr and the sh `echo` (which emits any byte from '\0ooo'),
 # but no od/cmp/printf and a dd WITHOUT conv=notrunc. So a few bytes are written by
 # REBUILDING their 512-byte block -- head | the bytes | tail -- and writing the whole
@@ -392,7 +392,7 @@ count_tokens() {
 }
 
 # emit_firstboot_hook FILE -- write the target's rc2 first-boot hook to FILE.
-# This is the W5.4f wiring: the payload was armed by earlier waves but nothing
+# This is the init wiring: the payload was armed by earlier work but nothing
 # in the STOCK target init invoked it, so cold boot #1 fell into the stock
 # sysinit dialog (/etc/sysinit runs /usr/amiga/bin/system.setup iff it is -x,
 # which prompts "What is the nodename of this machine? [localhost]"). The arm
@@ -502,7 +502,7 @@ net_record()
 # proven z3660net one: self-heal /dev/zen0 (mknod c 51 0), a bare `slink` FIRST then
 # `slink addaen` in a retry loop, `ifconfig zen0 <LITERAL-IP> up -trailers` (SVR4.0
 # -- NEVER `plumb`, NEVER `uname -n` in the ifconfig), all BACKGROUNDED so it can
-# never hang the boot. P-3 (2026-09-26) adds the address-by-card step in front of it:
+# never hang the boot. A later change (2026-09-26) adds the address-by-card step in front of it:
 # with /etc/inet/zen.conf present, zen0's MAC (/usr/amiga/bin/zenmac) picks the
 # address + nodename + hosts own row; without it the profile's FB_IP is used exactly
 # as before (docs/address-by-card.md). `echo` + redirection only (miniroot-clean).
@@ -687,7 +687,7 @@ emit_zen_hook() {
 		echo '		fi'
 		echo '	fi'
 		echo 'fi'
-		# P-15 I2: an ADDRESS-LESS laydown (FIRSTBOOT_DIALOG=y + empty FB_IP, the
+		# An ADDRESS-LESS laydown (FIRSTBOOT_DIALOG=y + empty FB_IP, the
 		# public flavor) leaves zen0 DOWN until the dialog (or zen.conf) gives it one,
 		# and routes only with a gateway. Emitted only then, so a LAN-flavor S99zen
 		# stays byte-identical to the master.
@@ -721,7 +721,7 @@ emit_zen_hook() {
 
 
 # emit_system_setup FILE -- write the first-boot dialog's ENTRY POINT to FILE.
-# This is W5's one new file on the target, and it goes into the STOCK
+# This is the dialog's one new file on the target, and it goes into the STOCK
 # `system.setup` slot: /etc/sysinit runs `sh /usr/amiga/bin/system.setup` iff that
 # file is executable, on /dev/syscon, BEFORE run level 2. Written ONLY when the
 # profile says FIRSTBOOT_DIALOG=y (interactive installs -- setup.sh writes the
@@ -741,7 +741,7 @@ emit_zen_hook() {
 # INTERACTIVE and the UNATTENDED path alike. So the dialog travels in
 # payload/firstboot/firstboot.sh -- already staged on the medium, already copied
 # onto the target by the arm step below -- and this stub execs it with
-# `--dialog`. W5.5 then moved updbootpart onto the medium too, so this driver now
+# `--dialog`. A later fix moved updbootpart onto the medium too, so this driver now
 # carries NO here-doc at all and the selftest's budget for one is zero.
 #
 # The wart is recorded, not hidden: writing this stub over a core package member
@@ -769,7 +769,7 @@ emit_system_setup() {
 # ---------------------------------------------------------------------------
 # The argument is EITHER a profile NAME (resolved on the medium, the original
 # form) OR A PATH to a profile file. The path form is what lets a future
-# interview (W2 setup.sh) compose its answers into /tmp/answers.profile and hand
+# interview (setup.sh) compose its answers into /tmp/answers.profile and hand
 # that straight to this driver -- the medium is read-only, so an answers profile
 # can never live under $INST/profiles. Resolution, in order:
 #   * contains a '/'          -> taken as a path, verbatim (absolute or relative)
@@ -792,10 +792,10 @@ esac
 # The profile is strict KEY=value; sourcing it defines the FB_*/CD_SPEC/etc vars.
 . "$PROFILE_FILE"
 
-# --- W1 INPUT KEYS: defaults for everything the driver used to hardcode -------
-# Each of these was a literal in this file (or in payload/firstboot) until W1.
+# --- INPUT KEYS: defaults for everything the driver used to hardcode -------
+# Each of these was once a literal in this file (or in payload/firstboot).
 # The DEFAULT is the value that literal carried, so a profile that omits the key
-# behaves EXACTLY as the pre-W1 driver did -- the de-hardcode is a pure seam.
+# behaves EXACTLY as the earlier driver did -- the de-hardcode is a pure seam.
 #
 #   INSTALL_VERBOSE  n            quiet install (stage messages only on console)
 #   FB_KMAP          <empty>      no keymap baked ("usa" means the same: the
@@ -804,16 +804,16 @@ esac
 #                                 load-bearing leading colon itself (TZ=:<zone>)
 #   FB_GATEWAY       <none>       default route for the zen0 laydown; required
 #                                 only for FB_ETHER_IF=zen0 profiles (gated below)
-#   FB_ZEN_IP        <none>       S3-31: zen0's own address when the z3660eth module
+#   FB_ZEN_IP        <none>       zen0's own address when the z3660eth module
 #   FB_ZEN_NETMASK   FB_NETMASK   is installed on a profile whose interface is not
 #   FB_ZEN_GATEWAY   <none>       zen0 (S99zen beside it); empty FB_ZEN_IP = zen0 left
 #                                 down; never FB_IP (two interfaces, one address)
-#   FB_ZEN_CARDS     <empty>      P-3 address-by-card table, "MAC=ADDR=NAME ..."
+#   FB_ZEN_CARDS     <empty>      the address-by-card table, "MAC=ADDR=NAME ..."
 #                                 (a "default=ADDR" word = the unknown-card row);
 #                                 firstboot renders it into /etc/inet/zen.conf on a
 #                                 zen0 flavor. Empty = no table (FB_IP, as before)
 #   FB_DNS1/FB_DNS2  <empty>      recorded into firstboot.conf; APPLIED by
-#                                 firstboot.sh from W5 on, and only on a
+#                                 firstboot.sh, and only on a
 #                                 literal-IP (zen0) flavor -- see payload/firstboot
 #   FB_REPO_URL      the live repo the /etc/apkg.conf line used to hardcode
 #   TARGET_ROOT_MB   <empty>      stock-default root sizing (plan_partitions)
@@ -837,11 +837,11 @@ esac
 #                                 of /etc/display (the monsw package ships the rest);
 #                                 empty or "none" = no line
 #   RUN_UNIT         6            the target chain: 6 = the profile's single chain;
-#                                 install = one pre-framed chain per unit (Q-4.15);
-#                                 hint = the family chain to any id (D-2, RTH1);
+#                                 install = one pre-framed chain per unit;
+#                                 hint = the family chain to any id (RTH1);
 #                                 stamp = the family chain + the unit's patch rows
-#                                 (D-2 fallback B). See the resolver below.
-#   ROOT_RECORD_DISK <empty>      D-2: a card-0 id whose slice 3 gets the chain plus an
+#                                 (fallback B). See the resolver below.
+#   ROOT_RECORD_DISK <empty>      a card-0 id whose slice 3 gets the chain plus an
 #                                 RTO1 root record naming the target -- for a root the
 #                                 boot ROM cannot boot (behind the A4092). Needs
 #                                 RUN_UNIT=hint and ROOT_RECORD_CARD<c>="<base> <id>
@@ -854,7 +854,7 @@ esac
 #                                 startx-rtg, zz9k_monsw (/opt/amix/bin, 755),
 #                                 /.xinitrc-rtg (644), /dev/zz9000 c 49 0 and
 #                                 /usr/X/bin on /etc/profile's PATH -- the Z3660
-#                                 station's MG5 kit; empty or "none" = nothing
+#                                 MG5 kit; empty or "none" = nothing
 #   RTC              setclk       IN-rtc: the battery clock at boot. "setclk" = lay
 #                                 our Y2K-fixed, plausibility-gated setclk over the
 #                                 stock /usr/amiga/bin/setclk (which /etc/sysinit
@@ -872,7 +872,7 @@ esac
 #                                 /usr/lib/locale/TZ; "stock" = keep the 1991 files
 #                                 (EU summer time ends in September, US on pre-2007)
 #
-# --- W3b INPUT KEYS: WHICH package set this install lays down ------------------
+# --- INPUT KEYS: WHICH package set this install lays down ------------------
 #   INSTALL_ORDER    <empty>      which order file to install from. Empty = the
 #                                 medium's own $INST/order, i.e. EXACTLY today's
 #                                 behaviour, so every existing profile, runbook
@@ -893,7 +893,7 @@ esac
 #                                 is the matrix that does, and this key is how a
 #                                 run tells the record which posture it had.
 [ -n "$INSTALL_VERBOSE" ] || INSTALL_VERBOSE=n
-# P-8: refuse a bad monitor-switch value BEFORE anything is written -- the same
+# Refuse a bad monitor-switch value BEFORE anything is written -- the same
 # bits monswctl itself accepts (1 CTS, 2 SEL, 16 CTS-low=RTG, 32 SEL-low=RTG).
 case "$MONSW" in
 	""|none|0|1|2|3|16|17|18|19|32|33|34|35|48|49|50|51)	;;
@@ -910,7 +910,7 @@ case "$INSTALL_VERBOSE" in
 esac
 [ -n "$FB_TZ" ] || FB_TZ=US/Eastern
 # The tzfile form is `TZ=:<pathname>` and the COLON IS EMITTED BY CODE, never
-# carried in data (W6.3: a colon-less TZ BUS-ERRORs every ctime(3) consumer at
+# carried in data (a colon-less TZ BUS-ERRORs every ctime(3) consumer at
 # cold boot). A profile that writes the colon anyway must not produce `TZ=::...`,
 # so strip a leading colon here and let the emitter own it.
 case "$FB_TZ" in
@@ -951,7 +951,7 @@ case "$TZFILES" in
 	tzdata|stock)	;;
 	*)	die "profile TZFILES='$TZFILES' is not 'tzdata' (default) or 'stock'" ;;
 esac
-# --- W5 INPUT KEY: does this install ARM the first-boot dialog? ----------------
+# --- INPUT KEY: does this install ARM the first-boot dialog? ----------------
 #   FIRSTBOOT_DIALOG n            NO dialog: the stock sysinit dialog is disarmed
 #                                 (`chmod -x`, its own lever) and the box configures
 #                                 itself from firstboot.conf alone. This is exactly
@@ -972,7 +972,7 @@ case "$FIRSTBOOT_DIALOG" in
 	[nN]|[nN][oO]|0)	FIRSTBOOT_DIALOG=n ;;
 	*)			die "profile FIRSTBOOT_DIALOG='$FIRSTBOOT_DIALOG' is not y or n" ;;
 esac
-# ★ NO UPGRADE INSTALL (P-36, owner 2026-10-31): 1.1 supports clean installs only, with
+# ★ NO UPGRADE INSTALL (2026-10-31): 1.1 supports clean installs only, with
 # no update path from 1.0 and no migration code. A profile or an old medium's answers
 # asking for one are refused; the disk is erased and installed afresh.
 case "${INSTALL_UPGRADE:-no}" in
@@ -1006,7 +1006,7 @@ esac
 #   TARGET_ROOT_FSTYPE  ufs  the filesystem laid on the target root slice (and on
 #                            the 1.1 data slice). ufs is the ONLY value accepted.
 #
-# ★ s5 IS NOT A TARGET (P-35, owner 2026-10-30). There is no install base on s5,
+# ★ s5 IS NOT A TARGET (2026-10-30). There is no install base on s5,
 # its 14-byte names block perl and every later port, and the 040/060 line cannot
 # run it at all, so the installer lays ufs and nothing else: an absent key means
 # ufs, and `s5` is refused with that reason rather than quietly overridden. What
@@ -1099,12 +1099,12 @@ case "$INSTALL_LAYOUT" in
 	*)	die "profile INSTALL_LAYOUT='$INSTALL_LAYOUT' is not 1.0 or 1.1" ;;
 esac
 
-# --- SOURCE dimension (W6-RAW.1): where the base packages come from -----------
+# --- SOURCE dimension: where the base packages come from -----------
 # SOURCE_KIND=cdfs (default, backward-compatible) sources the install CD via the
 # cdfs helper and the per-file pkgadd -R loop. SOURCE_KIND=raw sources a raw
 # distribution slice via the CD-resident static apkg (SRC_RAW). Each kind requires
 # a different set of profile keys; validate the right ones. Absent => cdfs, so
-# every pre-W6-RAW.1 profile keeps working unchanged.
+# every older profile keeps working unchanged.
 [ -n "$SOURCE_KIND" ] || SOURCE_KIND=cdfs
 # the netinstall medium: the miniroot's net_source read the repository and says so
 [ "$SRC_KIND" = net ] && SOURCE_KIND=net
@@ -1136,7 +1136,7 @@ if [ "$INSTALL_LAYOUT" = 1.0 ]; then	# a 1.1 disk carries no framed chain
 fi
 
 # The cXd0 block/raw namespace binds to the PRIMARY (system) SCSI controller, not
-# to whichever physical HBA the profile's TARGET_HBA names. W5.4b proved this on
+# to whichever physical HBA the profile's TARGET_HBA names. A bench run proved this on
 # the bench two-HBA rig: the target on the A3000's onboard SCSI at id 6 answered at
 # c6d0 (dd read + fsck_s5 both clean), while the SAME disk on the A4091 did not
 # ("Can't open" / I/O error, 0+0 records) -- there the A4091 carries only the CD
@@ -1216,7 +1216,7 @@ ROOT_RAW="/dev/rdsk/c${ID}d0s${TARGET_ROOT_SLICE}"
 BOOT_RAW="/dev/rdsk/c${ID}d0s${TARGET_BOOT_SLICE}"
 DISK_RAW="/dev/rdsk/c${ID}d0s0"          # whole-disk node for /etc/rdb
 
-# --- Q-4.15 PICK-AT-INSTALL: the target kernel follows the chosen unit ---------
+# --- PICK-AT-INSTALL: the target kernel follows the chosen unit ---------
 # RUN_UNIT=install (the public K1 media): the medium carries one pre-framed chain per
 # installable unit, boot/<p>/u<N>/{bootslice.img,bootslice.manifest|.man,boot2.boot,unix},
 # and boot/<p>/units ("<id> <rootdev> <kernel sum -r>" per row). The row of the chosen
@@ -1225,7 +1225,7 @@ DISK_RAW="/dev/rdsk/c${ID}d0s0"          # whole-disk node for /etc/rdb
 # RUN_UNIT=6 (or unset): the profile's single chain, exactly as before. Host-built and
 # gated chains only: nothing is patched on the box (the kernel IBLK checksum covers it).
 #
-# D-2 (r6), ONE KERNEL PER FAMILY on the medium -- two more modes; `install` stays
+# r6, ONE KERNEL PER FAMILY on the medium -- two more modes; `install` stays
 # selectable until r6 is accepted:
 # RUN_UNIT=hint (design A): the family's single chain goes to the chosen id UNCHANGED. Its
 #   loader (good_040_rth / good_rth) passes the RTH1 root hint and the kernel roots the
@@ -1413,7 +1413,7 @@ plan_partitions() {
 	# TARGET_ROOT_MB overrides the stock DEFAULT answer -- it is the profile's
 	# stand-in for what stock asked. Validated against the SAME two stock bounds
 	# the interactive prompt enforced (>= MINROOT, <= ROOTMAX); unset leaves the
-	# arithmetic byte-identical to the pre-W1 driver.
+	# arithmetic byte-identical to the earlier driver.
 	if [ -n "$TARGET_ROOT_MB" ]; then
 		is_num "$TARGET_ROOT_MB" || die "TARGET_ROOT_MB='$TARGET_ROOT_MB' is not a number"
 		[ "$TARGET_ROOT_MB" -ge "$MINROOT" ] || die "TARGET_ROOT_MB=$TARGET_ROOT_MB is below the stock minimum root of ${MINROOT}MB"
@@ -1454,21 +1454,21 @@ plan_partitions() {
 	DATA_OFF=`expr "$BOOT_OFF" + "$BOOTLEN"`
 }
 
-# --- geometry: TARGET_DISK_MB, else the REAL disk, probed (W1) ----------------
+# --- geometry: TARGET_DISK_MB, else the REAL disk, probed ----------------
 # The stock installer sized the plan from the disk it was pointed at:
 #     DISKLEN=`/etc/ddsize $rDISK`   ;   DISKMB=`expr $DISKLEN / 2048`
 # and /etc/ddsize IS on our miniroot (miniroot.proto) -- it was simply unused, so
 # a profile HINT drove the plan and a 500 MB disk got whatever layout the hint
-# described (the bench hint is 100 MB). W1 restores that input for the case the
+# described (the bench hint is 100 MB). This restores that input for the case the
 # hint cannot cover -- a disk nobody wrote a profile for:
 #   * TARGET_DISK_MB set   -> it WINS and THE PROBE IS NOT RUN AT ALL. Every
 #                             tracked profile, runbook and mkroot-prebuilt target
 #                             pins it, so today's flows do not touch ddsize.
 #   * TARGET_DISK_MB unset -> the probe drives the plan (the stock behaviour;
-#                             this is the path the W2 interview will use).
+#                             this is the path the interview uses).
 #   * probe unusable        -> 100 MB, the historical fallback.
 #
-# ★ WHY THE PIN SHORT-CIRCUITS THE PROBE (bench finding, 2026-08-11, W1).
+# ★ WHY THE PIN SHORT-CIRCUITS THE PROBE (bench finding, 2026-08-11).
 # An earlier cut of this code probed UNCONDITIONALLY, just to log the real size
 # and warn when it disagreed with the pin. That WEDGED THE INSTALL on the bench
 # rig: install-matrix cell `cd` printed the profile banner, then the kernel
@@ -1480,9 +1480,9 @@ plan_partitions() {
 # tool on the miniroot, so a hang here cannot be bounded: the only safe posture
 # is to not call it when we do not have to. The message below prints BEFORE the
 # call, so if the probe ever does wedge, the console says exactly where.
-# ★ W2 CONSUMES THIS: the interview's destination screen is specced to build a
+# ★ THE INTERVIEW CONSUMES THIS: the interview's destination screen is specced to build a
 # per-id size table from real ddsize probes. That must be re-verified on the
-# bench first -- see docs/installer.md "W1: driver plumbing".
+# bench first -- see docs/installer.md "Driver plumbing".
 #
 # ddsize prints the disk length in 512-BYTE BLOCKS (the same unit plan_partitions
 # computes DISKLEN in, and the same unit `/etc/rdb -c -d` wants). The `read`
@@ -1506,7 +1506,7 @@ plan_partitions "$DISK_MB"
 msg "plan (${DISK_MB}MB, cyl=${SECS} blocks): root ${ROOT_MB}MB @blk${ROOT_OFF}  swap ${SWAP_MB}MB @blk${SWAP_OFF}  boot ${BOOTSIZE}MB @blk${BOOT_OFF}"
 [ "$DATALEN" -gt 0 ] && msg "plan (1.1)   : data ${DATA_MB}MB @blk${DATA_OFF} (s4, /home)"
 
-# --- 1b. MACHINE CLASS: detect-and-print the OLD_BOOT hole (W6, plan sec. 6) --
+# --- 1b. MACHINE CLASS: detect-and-print the OLD_BOOT hole (plan sec. 6) --
 # The interview refuses this class outright (setup.sh check_old_boot). The
 # DRIVER only says so, for two reasons: an unattended run has already been
 # pointed at a profile by somebody who knows the rig, and this is the last point
@@ -1561,11 +1561,11 @@ build_target_author() {
 	#   /etc/rdb -p $SWAPPART -m            -F 0x72657376 $DISK      # resv swap
 	# The list ORDER root->swap->boot is the slice map (sdpart.c: slice N = Nth
 	# PART block). Swap at slice 2 is STRUCTURAL -- it is what places boot at
-	# slice 3. (Until W5.5 nothing ever opened it either; section 2c now hands it
+	# slice 3. (Until the swap fix nothing ever opened it either; section 2c now hands it
 	# to the kernel as real swap for the duration of the install, which is what
 	# the stock installer did. See mkroot.sh's header.)
 	#
-	# NOTE (W5.4b): the end-to-end install was validated via the RECOMMENDED
+	# NOTE: the end-to-end install was validated via the RECOMMENDED
 	# INSTALL_TARGET_PREBUILT=1 path (a mkroot-prebuilt target), which skips this
 	# whole block -- so author mode's create/geometry primitive below was the one
 	# on-box unknown never exercised.
@@ -1745,7 +1745,7 @@ build_target_author() {
 	# The mkfs path is a LITERAL, which is what installer-selftest audit G (the
 	# miniroot-tool allowlist, derived from miniroot.proto) can resolve. The binary
 	# is already on the medium: /bin/mkfs_ufs (19,664 B) has been a stock-miniroot
-	# proto member since W5.2, byte-identical to the stock root floppy's, and its
+	# proto member since the miniroot's first build, byte-identical to the stock root floppy's, and its
 	# only DT_NEEDED is the miniroot's own /usr/lib/libc.so.1.
 	# STOCK'S UFS RECIPE, verbatim (stock /etc/profile:
 	#     UFS_OPT="-o free=2,opt=s"
@@ -1781,7 +1781,7 @@ ufs_mkfs_opts()
 }
 
 # INSTALL_TARGET_PREBUILT=1 mounted an s5 root tools/mkroot.sh had minted
-# host-side; with s5 no longer a target (P-35) there is nothing for it to mount.
+# host-side; with s5 no longer a target there is nothing for it to mount.
 [ "${INSTALL_TARGET_PREBUILT:-0}" = 1 ] && die "INSTALL_TARGET_PREBUILT=1 is retired: mkroot.sh mints s5 roots only, and s5 is no longer a target -- install in author mode (drop the key)"
 TARGET_BUILD_MODE="authored on-box"
 build_target_author
@@ -1804,13 +1804,13 @@ msg "ufs target: no pre-mount fsck (stock ran none between mkfs and mount); the 
 # /etc/mount is the miniroot's direct-mount(2) tool. Its usage as printed on the box
 # is `mount spec dir [nflag [fstyp [data]]]`: nflag=0 => rw, fstyp=s5|ufs. The bare
 # 2-arg form omits nflag+fstyp and mount(2) rejects it (EINVAL "Invalid argument");
-# W5.4c proved `... /mnt 0 s5` mounts the prebuilt root rw and leaves it fsck-clean.
+# An on-box run proved `... /mnt 0 s5` mounts the prebuilt root rw and leaves it fsck-clean.
 # The type is passed STRAIGHT THROUGH to mount(2): /etc/mount is a thin wrapper with
 # no type table of its own, and the install kernel carries `ufs` at vfssw[2] with
 # `ufsinit` linked, so `... 0 ufs` needs no kernel change (kerntools' UFS capability
 # paper §4, all ten kernels examined).
 run /etc/mount "$ROOT_BLK" "$TARGET" 0 "$TARGET_ROOT_FSTYPE"
-# --- target-root mount note (W5.4d; mnttab written at seed, METAL-FIX.2) ------
+# --- target-root mount note (mnttab written at seed, METAL-FIX.2) ------
 # The miniroot's /etc/mount is a direct mount(2) and writes NO /etc/mnttab entry.
 # pkgadd/apkg read the RUNNING miniroot's /etc/mnttab via get_mntinfo(), keying off
 # the SHORTEST mount point being exactly "/". The engine tolerates a missing entry:
@@ -1835,7 +1835,7 @@ run /etc/mount "$ROOT_BLK" "$TARGET" 0 "$TARGET_ROOT_FSTYPE"
 # -----------------------------------------------------------------------------
 msg "target root mounted at $TARGET"
 
-# --- OPEN THE INSTALL LOG (W1) ----------------------------------------------
+# --- OPEN THE INSTALL LOG ----------------------------------------------
 # From here on every message and every child command's output is persisted to
 # <target>/var/adm/install.log, which SURVIVES the install (it is on the target
 # root, not the miniroot's RAM disk). It is a NEW, driver-written file -- never a
@@ -1847,7 +1847,7 @@ msg "target root mounted at $TARGET"
 # Both directories are made HERE and not in the seed: the log needs var/adm
 # before the first append, and $RUNOUT (the child-output scratch runq cats twice)
 # needs tmp. The miniroot's 1991 `mkdir -p` is NOT idempotent on an existing LEAF
-# (it prints "File exists" and returns 2 -- W5.4f), so each is guarded; the seed
+# (it prints "File exists" and returns 2), so each is guarded; the seed
 # in section 4 therefore no longer creates $TARGET/tmp itself.
 [ -d "$TARGET/var/adm" ] || run mkdir -p "$TARGET/var/adm"
 [ -d "$TARGET/tmp" ] || run mkdir -p "$TARGET/tmp"
@@ -1873,7 +1873,7 @@ msg "install log  : $LOGFILE (complete from this point; pre-mount window was con
 # ===========================================================================
 # 2c. REAL SWAP -- hand the target's swap slice to the kernel (STOCK PARITY)
 # ===========================================================================
-# ★ W5.5. THE INSTALL MINIROOT'S ONLY SWAP IS A BIT BUCKET, and that is what
+# ★ THE INSTALL MINIROOT'S ONLY SWAP IS A BIT BUCKET, and that is what
 # panicked the 17-package `standard` install at package 12/17:
 #
 #     PANIC: swapinub: segu_fault() failed to swap in the u area
@@ -1891,8 +1891,8 @@ msg "install log  : $LOGFILE (complete from this point; pre-mount window was con
 # that stores nothing. Note the 288 blocks already "in use" above: pages had
 # been written to it before the installer even started. Nothing goes wrong until
 # the system needs one of those pages BACK -- then segu_fault() cannot produce
-# the u area and the kernel panics. That is why the failure looked flaky (W3b
-# passed once, W4 panicked once then passed) and then became reproducible as the
+# the u area and the kernel panics. That is why the failure looked flaky (an early
+# run passed, a later one panicked once then passed) and then became reproducible as the
 # workload grew: whether a swapped-out u area is ever wanted again is a
 # scheduling accident, and 17 packages make it near-certain.
 #
@@ -1927,7 +1927,7 @@ msg "install log  : $LOGFILE (complete from this point; pre-mount window was con
 # MINIROOT-CLEAN: /bin/swap and /etc/rdb are both miniroot.proto members. The
 # two parse loops are the house `while read ... done < FILE` idiom, which runs
 # in a SUBSHELL on the 1991 sh -- so they only ever APPEND to a token file and
-# the parent decides (W5.4e).
+# the parent decides.
 SWAP_BLK="/dev/dsk/c${ID}d0s${TARGET_SWAP_SLICE}"
 SWAPOUT="$TARGET/tmp/.swapl.$$"
 SWAPTOK="$TARGET/tmp/.swaptk.$$"
@@ -2029,7 +2029,7 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 			/usr/lib/fs/cdfs/mount "$CD_SPEC" "$CDROOT" 2>/dev/null
 		fi
 	fi
-	# Stale-mount guard (W5.5a field observation): the boot-time cdfs /cdrom mount
+	# Stale-mount guard (field observation): the boot-time cdfs /cdrom mount
 	# can come up rc=0 but EMPTY -- something IS mounted, so $CDROOT/catalog is
 	# unreadable yet there is no errno-5 unit-attention to retry on, and re-mounting
 	# OVER a live mount is a no-op. The errno-5 net above cannot recover this.
@@ -2115,8 +2115,8 @@ msg "seed done (passwd/group/admin/pkg, /etc/mnttab, /tmp 1777, TMPDIR=$TMPDIR)"
 # the "installed ZERO" guard, and FAIL CLOSED -- so the SAME contents DB (and thus
 # the SAME canonical digest) results whether the medium is a cdfs CD or a raw slice.
 #
-# WHICH order file (W3b). Empty INSTALL_ORDER = the medium's own $INST/order, i.e.
-# the pre-W3b behaviour byte for byte. A bare name resolves ON the medium; a value
+# WHICH order file. Empty INSTALL_ORDER = the medium's own $INST/order, i.e.
+# the older behaviour byte for byte. A bare name resolves ON the medium; a value
 # with a '/' is a path, which is how a CUSTOM selection arrives (setup.sh filters
 # the medium's master order into /tmp -- the medium is read-only).
 ORDER="$INST/order"
@@ -2130,7 +2130,7 @@ fi
 
 # CORE-FIRST STAYS IN THE DRIVER. Gate 13 already refuses any non-core package
 # into a bare root, package by package, inside the install loop -- that is the
-# gate and W3b does not move it. But INSTALL_ORDER now lets a file the driver did
+# gate and multi-set selection does not move it. But INSTALL_ORDER now lets a file the driver did
 # not generate name the packages, so the FIRST package is checked up front too: a
 # core-less or core-late order is a mis-authored selection, and finding that out
 # after the first pkgadd has already refused is a worse diagnosis than finding it
@@ -2233,7 +2233,7 @@ fi
 # key changes nothing the driver does (see the key's own comment above), and
 # install.log is driver-written and invisible to the contents DB, so the canonical
 # digest cannot move. Subshell-safe: the redirect-fed loop only APPENDS, the
-# parent decides. A medium with no sets table (pre-W3b, or a raw slice) is left
+# parent decides. A medium with no sets table (an older one, or a raw slice) is left
 # alone -- absence is UNKNOWN, not `n`.
 if [ "$INSTALL_ATTESTED" = y ] && [ -f "$INST/sets" ]; then
 	SETATT="$TARGET/tmp/.setatt.$$"
@@ -2301,9 +2301,9 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 	[ -f "$ADMIN" ] || die "no permissive pkgadd admin at $ADMIN"
 	PKGADD="$INST/bin/pkgadd"
 
-	# SUBSHELL-SAFE COUNTING (W5.4e). The miniroot's 1991 SVR4 /bin/sh runs a
+	# SUBSHELL-SAFE COUNTING. The miniroot's 1991 SVR4 /bin/sh runs a
 	# `while read ... done < FILE` loop in a SUBSHELL, so a variable mutated inside
-	# (npkgs) reverts to its pre-loop value at `done` -- W5.4d printed "installed 0
+	# (npkgs) reverts to its pre-loop value at `done` -- one on-box run printed "installed 0
 	# package(s)" while all 5 packages sat in <target>/var/sadm/pkg. WORSE: an
 	# in-loop `die`/exit would kill only the subshell and let the PARENT sail on and
 	# arm a half-installed disk. So the loop records to append-only temp FILES (which
@@ -2492,7 +2492,7 @@ else
 fi
 
 # ===========================================================================
-# 5b. CONTENTS-DB INTEGRITY CHECK -- fail closed on any finding (W6.4b)
+# 5b. CONTENTS-DB INTEGRITY CHECK -- fail closed on any finding
 # ===========================================================================
 # The pkgadd loop above built <target>/var/sadm/install/contents (the SVR4 package
 # contents DB). Run the CD-resident STATIC contents-fsck over it as a CHECK-ONLY
@@ -2513,7 +2513,7 @@ else
 fi
 
 # ===========================================================================
-# 5b. FP-PATCH THE INSTALLED UFS TOOLS (BLIZZARD F2-M1; ufs + fpfix media only)
+# 5b. FP-PATCH THE INSTALLED UFS TOOLS (BLIZZARD; ufs + fpfix media only)
 # ===========================================================================
 # On an FPU-less 68060 (the LC060) the target's OWN /usr/lib/fs/ufs/{mkfs,fsck}
 # die at a display-only FP expression -- fsck at its summary line, UPSTREAM of
@@ -2521,7 +2521,7 @@ fi
 # itself in place. MINIROOT_FP_PATCH already fixes the MINIROOT's copies at build
 # time (which is what lets the INSTALL's own mkfs_ufs/fsck_ufs run); this fixes the
 # copies that land ON THE TARGET. build-install-iso.sh stages a host-PATCHED copy
-# of each (patch-ufs-fp.py -- the byte-for-byte F2-M1 transform, every length
+# of each (patch-ufs-fp.py -- the byte-for-byte transform, every length
 # preserved) at $INST/fpfix with a `sum -r` checksum file, IFF the medium's profile
 # set MINIROOT_FP_PATCH. Here we cp them over the freshly-installed pair and VERIFY
 # the checksum -- fail closed, because a MIS-patched fsck is worse than an unpatched
@@ -2542,7 +2542,7 @@ if [ "$TARGET_ROOT_FSTYPE" = ufs ] && [ -d "$FPFIX" ]; then
 	FPSUM="$INST/bin/sum"
 	[ -x "$FPSUM" ] || die "5b: no SVR4 sum at $FPSUM -- cannot verify the FP-patched ufs tools"
 	[ -f "$FPFIX/SUMS" ] || die "5b: $FPFIX present but no $FPFIX/SUMS -- refusing to install unverifiable binaries"
-	# The loop runs in a SUBSHELL on the miniroot sh (W5.4e): a `die` in it would end
+	# The loop runs in a SUBSHELL on the miniroot sh: a `die` in it would end
 	# only the subshell and the install would sail on to arm the disk. So it RECORDS
 	# (fpok/fpfail files, reason per line) and the parent decides after `done` (IN-fp).
 	fpok="$TARGET/tmp/.fpok.$$"
@@ -2592,7 +2592,7 @@ elif [ "$TARGET_ROOT_FSTYPE" = ufs ]; then
 fi
 
 # ===========================================================================
-# 5c. WRITE THE PACKAGE-CLIENT CONFIG (/etc/apkg.conf on the target) (W6.4b)
+# 5c. WRITE THE PACKAGE-CLIENT CONFIG (/etc/apkg.conf on the target)
 # ===========================================================================
 # The APKG package (installed above) delivers the dynamic apkg remote client and
 # ships a default /etc/apkg.conf (class `e apkgconf` since APKG 0.2.3; a plain `f` file
@@ -2601,7 +2601,7 @@ fi
 # that "the installed box's package client points at the live repo" is a DRIVER-
 # guaranteed invariant -- provable in the s5 check -- rather than contingent on
 # pkgadd's editable-file placement (which our install contract never verifies).
-# W1: the repo URL is the profile key FB_REPO_URL. Its default is the PUBLIC
+# The repo URL is the profile key FB_REPO_URL. Its default is the PUBLIC
 # canonical repo http://pkg.amigaux.org (2026-09-15; the old LAN literal repo
 # is RETIRED), so a profile that omits the key
 # points at the live public repo.
@@ -2741,9 +2741,9 @@ MAN="$INST/$BOOTSLICE_MANIFEST"
 [ -x "$SUM" ] || die "no SVR4 sum at $SUM (needed for on-target boot-chain verify)"
 [ -f "$MAN" ] || die "no boot-slice manifest at $MAN"
 msg "verifying the written boot chain against $BOOTSLICE_MANIFEST ..."
-# SUBSHELL-SAFE COUNTING (W5.4e) -- identical rationale to the pkgadd loop above.
+# SUBSHELL-SAFE COUNTING -- identical rationale to the pkgadd loop above.
 # This `while read ... done < FILE` also runs in a SUBSHELL, so vok/vfails mutated
-# inside are lost at `done`. In W5.4d the loop printed three OK lines, then the
+# inside are lost at `done`. In one on-box run the loop printed three OK lines, then the
 # aggregate guard `[ $vok -gt 0 ]` false-fired on the reset-to-zero vok ("checked
 # ZERO regions ... refusing to arm") and the driver died before first-boot. Record
 # OK/FAIL to append-only temp FILES inside; count them in the parent after `done`.
@@ -2780,7 +2780,7 @@ done < "$MAN"
 rm -f "${tmpr:?}"
 # Count in the PARENT (the subshell's increments are gone): tokens per file.
 # pre-POSIX-safe -- count_tokens `[ -s ]`-guards the empty `set --` no-op trap that
-# would otherwise carry the vok count over into an empty vfails (W5.4e-run-1).
+# would otherwise carry the vok count over into an empty vfails (seen in a bench run).
 vok=`count_tokens "$vok_f"`
 vfails=`count_tokens "$vfails_f"`
 rm -f "${vok_f:?}" "${vfails_f:?}"
@@ -2790,7 +2790,7 @@ rm -f "${vok_f:?}" "${vfails_f:?}"
 [ "$vok" -gt 0 ] || die "boot-chain verification checked ZERO regions ($BOOTSLICE_MANIFEST empty or unparseable) -- refusing to arm a possibly-unbootable disk"
 msg "boot chain verified on-target ($vok region(s), $BOOTSLICE_MANIFEST)"
 
-# --- 8b. /stand/unix = THE FRAMED KERNEL (040/060 line; Q-4.15 trap ii) ----------
+# --- 8b. /stand/unix = THE FRAMED KERNEL (040/060 line) ----------
 # The stock core package lays its 1992 030 kernel at /stand/unix. On the 040/060 line
 # an on-box reframe (`make bootpart`, updbootpart) would then frame an unbootable chain,
 # so /stand/unix becomes the exact kernel the boot slice frames -- for RUN_UNIT=install,
@@ -2820,7 +2820,7 @@ if [ -n "$STAND_UNIX" ]; then
 	fi
 fi
 
-# --- 8c. the RTO1 root record: boot disk and root disk differ (D-2, RTH1 spec) ---------
+# --- 8c. the RTO1 root record: boot disk and root disk differ (RTH1 spec) ---------
 # ROOT_RECORD_DISK=<card-0 id> names the disk Kickstart will BOOT (the A4092 ROM 42.39
 # offers no Amix partition, so a root behind it is started from a boot disk on the
 # Z3660). That disk's slice 3 gets this medium's chain and, at boot-slice offset 0x2700
@@ -2954,7 +2954,7 @@ fi
 msg "arming first-boot..."
 [ -d "$TARGET/var/adm/firstboot" ] || run mkdir -p "$TARGET/var/adm/firstboot"
 # root's alone: S16firstboot runs firstboot.sh AS ROOT whenever PENDING exists and it
-# sources firstboot.conf, so a writable dir or conf is a local root (P-15, 2026-10-03).
+# sources firstboot.conf, so a writable dir or conf is a local root (2026-10-03).
 run chmod 700 "$TARGET/var/adm/firstboot"
 run cp "$INST"/firstboot/firstboot.sh "$TARGET/var/adm/firstboot/firstboot.sh"
 run chmod 700 "$TARGET/var/adm/firstboot/firstboot.sh"
@@ -2970,7 +2970,7 @@ fi
 	echo "FB_NODENAME=$FB_NODENAME"
 	echo "FB_DOMAIN=$FB_DOMAIN"
 	echo "FB_TZNUM=$FB_TZNUM"
-	# W1: the TIMEZONE zone NAME, de-hardcoded out of firstboot.sh (which used to
+	# The TIMEZONE zone NAME, de-hardcoded out of firstboot.sh (which used to
 	# write the literal `TZ=:US/Eastern` no matter what the profile said, so every
 	# unattended install silently diverged from its own spec). The value here is
 	# the BARE zone -- firstboot.sh emits the load-bearing leading colon itself.
@@ -2978,14 +2978,14 @@ fi
 	echo "FB_IP=$FB_IP"
 	echo "FB_NETMASK=$FB_NETMASK"
 	echo "FB_ETHER_IF=$FB_ETHER_IF"
-	# W1: the LAN default-route gateway the zen0 bring-up installs (was the
+	# The LAN default-route gateway the zen0 bring-up installs (was the
 	# literal LAN gateway in emit_zen_hook).
 	echo "FB_GATEWAY=$FB_GATEWAY"
-	# P-3: the address-by-card table (MAC=ADDR=NAME words, quoted -- the conf is
+	# The address-by-card table (MAC=ADDR=NAME words, quoted -- the conf is
 	# sourced). firstboot.sh renders it into /etc/inet/zen.conf on a zen0 flavor,
 	# which S99zen reads at every boot (docs/address-by-card.md). Empty = no table.
 	echo "FB_ZEN_CARDS=\"$FB_ZEN_CARDS\""
-	# W1 recorded these; W5 APPLIES them. The five-part DNS enablement
+	# The driver records these; firstboot.sh APPLIES them. The five-part DNS enablement
 	# (resolv.conf, the libsockdns relink, netconfig.DNS, an empty /etc/domain and
 	# LITERAL-IP boot ifconfigs) is firstboot.sh's, and it fires only on a
 	# literal-IP flavor: on aen0 the fifth part is the /etc/inet/network-config
@@ -2993,7 +2993,7 @@ fi
 	# a printed line rather than half-applied.
 	echo "FB_DNS1=$FB_DNS1"
 	echo "FB_DNS2=$FB_DNS2"
-	# W5: the keys the first-boot DIALOG owns. The driver writes the profile's
+	# The keys the first-boot DIALOG owns. The driver writes the profile's
 	# values (and the defaults that preserve today's behaviour exactly); when the
 	# dialog is armed it REPLACES its own block in this file before S16 reads it.
 	#   FB_DIALOG          y when this install armed the dialog (S16 then keeps
@@ -3009,7 +3009,7 @@ fi
 	#   FB_NET_CONFIGURED  set to y only by the dialog. It gates the network
 	#                      EXTRAS (the rc.inet default route, the zen0 laydown
 	#                      refresh, DNS), so an unattended install never grows a
-	#                      step it did not have before W5.
+	#                      step it did not have before the dialog existed.
 	#   FB_TZ_KEEP         set to y only by the dialog, whose stock TZ menu has
 	#                      already written /etc/TIMEZONE (with the colon, and with
 	#                      the localtime alias): firstboot then leaves it alone.
@@ -3019,10 +3019,10 @@ fi
 	echo "FB_NET_CONFIGURED=$FB_NET_CONFIGURED"
 	echo "FB_TZ_KEEP=$FB_TZ_KEEP"
 	echo "FB_REPO_URL=$FB_REPO_URL"
-	# W1: the keymap baked onto the target at the arm step below (empty or `usa`
+	# The keymap baked onto the target at the arm step below (empty or `usa`
 	# means "none" -- the American map is compiled in and stock linked nothing).
 	echo "FB_KMAP=$FB_KMAP"
-	# W6.4c: the apkg repo host->IP, baked into /etc/inet/hosts by firstboot.sh so
+	# The apkg repo host->IP, baked into /etc/inet/hosts by firstboot.sh so
 	# `apkg update` resolves the repo with no DNS. Empty when a profile carries no
 	# repo (firstboot then skips the hosts append, silently-but-logged).
 	echo "FB_REPO_HOST=$FB_REPO_HOST"
@@ -3076,7 +3076,7 @@ run chmod 600 "$TARGET/var/adm/firstboot/firstboot.conf" "$TARGET/var/adm/firstb
 # /etc/inet/interfaces, /etc/rc.conf and /etc/display, from the profile (1.1)
 [ "$INSTALL_LAYOUT" = 1.1 ] && l11_admin
 
-# --- WIRE first-boot into the target's init (W5.4f) --------------------------
+# --- WIRE first-boot into the target's init --------------------------
 # Two moves, both proven against an s5 read of the installed target's init flow:
 #   1. DISARM the stock sysinit dialog. /etc/sysinit (a core member, run from the
 #      inittab `S2::sysinit` line at BOOT, before run level 2) does:
@@ -3094,7 +3094,7 @@ run chmod 600 "$TARGET/var/adm/firstboot/firstboot.conf" "$TARGET/var/adm/firstb
 #      inittab `con` getty spawns, so identity is baked before the console login.
 # core always ships /etc/rc2.d (a directory member), so it exists by now. The
 # miniroot's 1991 `mkdir -p` is NOT idempotent on an EXISTING leaf -- it prints
-# "File exists" and returns rc=2 (W5.4f-run-1 hit exactly this and `run` died
+# "File exists" and returns rc=2 (a bench run hit exactly this and `run` died
 # before wiring). Only mkdir when the dir is actually absent (a no-core profile).
 [ -d "$TARGET/etc/rc2.d" ] || run mkdir -p "$TARGET/etc/rc2.d"
 echo "+ emit_firstboot_hook $TARGET/etc/rc2.d/S16firstboot"
@@ -3115,7 +3115,7 @@ fi
 
 # 1.1: no reframe tool and no /stand framing tools -- kbootset owns the boot store.
 if [ "$INSTALL_LAYOUT" != 1.1 ]; then
-# --- INSTALL updbootpart onto the target (W6-I; MEDIUM-STAGED since W5.5) ----
+# --- INSTALL updbootpart onto the target (MEDIUM-STAGED) ----
 # The on-box boot-slice reframe tool -- the finisher for "kernel upgrade via a
 # package": `updbootpart --backup` -> `pkgadd KERNBENCH` -> `updbootpart` reframes
 # the UNI\0 boot slice from the freshly-landed /stand/unix, so the next cold boot
@@ -3124,20 +3124,20 @@ if [ "$INSTALL_LAYOUT" != 1.1 ]; then
 # -- being COPIED from the medium rather than written by the driver changes
 # nothing about that, because attestation is a function of what pkgadd RECORDED.
 #
-# ★ W5.5: IT COMES OFF THE MEDIUM NOW, and that is a floppy fix, not a tidy-up.
-# Until this wave the body travelled inside THIS FILE as a quoted here-doc, and
+# ★ IT COMES OFF THE MEDIUM NOW, and that is a floppy fix, not a tidy-up.
+# Until then the body travelled inside THIS FILE as a quoted here-doc, and
 # the 1991 SVR4 sh materializes every here-doc body into a real file under /tmp
 # the moment it PARSES the script -- for the life of the shell, whether or not
-# the function is ever called (W5 finding 1, proven on the box). On the miniroot
+# the function is ever called (proven on the box). On the miniroot
 # /tmp IS the 880-block install floppy, whose 46 free blocks are also where the
 # static pkgadd builds its packaging directory. 15,427 bytes of updbootpart is
-# 16 of those 46 blocks, on every install since W6-I -- the real reason this
+# 16 of those 46 blocks, on every install since updbootpart joined the driver -- the real reason this
 # floppy has been "six blocks from death" for three waves. build-install-iso.sh
 # stages payload/updbootpart at $INST/updbootpart (byte-identity gated there),
 # and the copy below costs the floppy nothing.
 #
 # core ships /usr/sbin, so it exists by now; guard the mkdir all the same (the
-# miniroot 1991 mkdir -p is not idempotent on an existing leaf -- W5.4f).
+# miniroot 1991 mkdir -p is not idempotent on an existing leaf).
 [ -d "$TARGET/usr/sbin" ] || run mkdir -p "$TARGET/usr/sbin"
 [ -f "$INST/updbootpart" ] || die "no updbootpart on the medium at $INST/updbootpart -- re-master with tools/build-install-iso.sh"
 run cp "$INST/updbootpart" "$TARGET/usr/sbin/updbootpart"
@@ -3261,7 +3261,7 @@ if [ "$INSTALL_LAYOUT" = 1.1 ]; then
 	# z3660eth ships /etc/inet/link.d/z3660eth and /dev/zen0, and dlpi-mac replaces zenmac
 	msg "network: /etc/inet/interfaces and amix-base's ifup (no S99zen, no zenmac)"
 elif [ "$FB_ETHER_IF" = zen0 ]; then
-	# P-15 I2: the public flavor (FIRSTBOOT_DIALOG=y) may leave BOTH FB_IP and
+	# The public flavor (FIRSTBOOT_DIALOG=y) may leave BOTH FB_IP and
 	# FB_GATEWAY empty -- an address-less laydown the dialog's 8a re-point fills in;
 	# zen0 stays down until it has an address. Every unattended profile keeps the
 	# hard requirement.
@@ -3276,7 +3276,7 @@ elif [ "$FB_ETHER_IF" = zen0 ]; then
 	emit_zen_hook "$TARGET/etc/rc2.d/S99zen" || die "cannot write the zen0 bring-up hook /etc/rc2.d/S99zen"
 	run chmod 0744 "$TARGET/etc/rc2.d/S99zen"
 	msg "laid down /etc/rc2.d/S99zen (zen0 @ $FB_IP netmask $FB_NETMASK gw $FB_GATEWAY; additive, not a package member)"
-	# P-3: the MAC reader S99zen's address-by-card step needs (/usr/amiga/bin/zenmac,
+	# The MAC reader S99zen's address-by-card step needs (/usr/amiga/bin/zenmac,
 	# src/zenmac, cross-built by tools/build-zenmac.sh and staged on the medium by
 	# build-install-iso.sh). Absent from an older medium it is only a WARNING: S99zen
 	# then treats the MAC as unreadable, takes the table's default row (or FB_IP) and
@@ -3289,7 +3289,7 @@ elif [ "$FB_ETHER_IF" = zen0 ]; then
 		msg "WARNING: no $INST/zenmac on this medium -- S99zen cannot read the card MAC (address-by-card falls back; re-master with tools/build-install-iso.sh)"
 	fi
 else
-	# S3-31: a disk that installs the z3660eth module gets the zen0 bring-up too, on
+	# A disk that installs the z3660eth module gets the zen0 bring-up too, on
 	# both lines, beside the profile's own interface: at its own FB_ZEN_IP /
 	# FB_ZEN_NETMASK (default FB_NETMASK) / FB_ZEN_GATEWAY (optional), or address-less
 	# (left down) without FB_ZEN_IP -- never the same address on two interfaces
@@ -3318,13 +3318,13 @@ elif [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
 fi
 
 # --- LAY DOWN the RTG X11 kit (K1, X11KIT=rtg) ---------------------------------
-# The Z3660 RTG desktop exactly as the Z3660 station installed it on metal (MG5/
+# The Z3660 RTG desktop exactly as it was installed on metal (MG5/
 # MG9, the maintainer's notes): the Xzz9000 server, the
 # startx-rtg launcher, rtg-kbdback (RT-10: gives the console keyboard back after
 # a killed server) and the zz9k_monsw fallback switch in /opt/amix/bin (755),
 # root's session file /.xinitrc-rtg (644), the ZZ9000 node /dev/zz9000 c 49 0, and
 # /usr/X/bin on /etc/profile's PATH (the session file starts olwm/xterm by name).
-# /etc/rtg-monswitch is never written: under P-8 /dev/monsw owns the line. The five
+# /etc/rtg-monswitch is never written: /dev/monsw owns the line. The five
 # files ride the medium under $INST/x11kit, staged by build-install-iso.sh only
 # after each hashed to its pin. Driver-written and additive, like S99zen and the
 # monsw bits -- EXCEPT the /etc/profile line, a one-line append to a core member
@@ -3472,7 +3472,7 @@ else
 	msg "zone files: TZFILES=stock -- the 1991 /usr/lib/locale/TZ left alone"
 fi
 
-# --- BAKE THE KEYMAP ONTO THE TARGET (stock step, restored in W1) ------------
+# --- BAKE THE KEYMAP ONTO THE TARGET (stock step, restored) ------------
 # The stock installer's LAST act before halting was to persist the keyboard the
 # operator picked at the very start:
 #     rm -f /mnt/usr/amiga/lib/kmap/default.kmap
@@ -3504,7 +3504,7 @@ else
 	msg "keymap: none baked (FB_KMAP='$FB_KMAP') -- the compiled-in American map, exactly as stock did for 'usa'"
 fi
 
-# --- PRESEED /lost+found (stock step, restored in W1) ------------------------
+# --- PRESEED /lost+found (stock step, restored) ------------------------
 # Stock created 100 entries in the root filesystem's lost+found and immediately
 # removed them:
 #     for i in 0 1 2 3 4 5 6 7 8 9; do
@@ -3520,7 +3520,7 @@ fi
 # the log). BOTH mkfs back-ends already create the directory (`lost+found` is a
 # literal in mkfs_ufs's own binary, and the 1991-installed ufs golden has one);
 # mkdir only covers the odd case where it is absent (the 1991 mkdir is not
-# idempotent on an existing leaf -- W5.4f).
+# idempotent on an existing leaf).
 LOSTFOUND="$TARGET/lost+found"
 if [ -d "$LOSTFOUND" ]; then
 	msg "preseeding $LOSTFOUND with 100 directory slots (stock step; fsck needs them)"
@@ -3551,7 +3551,7 @@ for i in 0 1 2 3 4 5 6 7 8 9; do
 done
 msg "lost+found preseeded (100 slots created + removed; the directory keeps the space)"
 
-# --- THE sysinit DIALOG SLOT: disarm it, or make it OURS (W5) ----------------
+# --- THE sysinit DIALOG SLOT: disarm it, or make it OURS ----------------
 # /etc/sysinit runs `sh /usr/amiga/bin/system.setup` iff that file is EXECUTABLE.
 # Two mutually exclusive end states, chosen by the profile:
 #

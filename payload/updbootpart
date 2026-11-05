@@ -24,7 +24,7 @@
 # Arithmetic is `expr`; command substitution is `backticks`.
 #
 # =============================================================================
-# THE BOOTCHAIN CONTRACT (W6-U probe -- codified here, do not re-derive)
+# THE BOOTCHAIN CONTRACT (on-box probe -- codified here, do not re-derive)
 # =============================================================================
 # The kernel boots from the RAW UNI\0 boot slice, NOT from /stand/unix -- the
 # /stand files are the FRAMING SOURCE. The full-conformance reframe recipe, byte
@@ -35,7 +35,7 @@
 #     ./makeiblk unix;  cat unix ) | dd conv=sync of=/dev/dsk/cNd0s3
 #   sync; sync
 #
-# Traps this tool OWNS (each proven on-box in W6-U):
+# Traps this tool OWNS (each proven on-box):
 #   * /stand/CONFIG is ABSENT on installed boxes, so the stock `make bootpart`
 #     cannot run -- we drive the pipeline DIRECTLY with the slice device computed
 #     from the running system, never `make`.
@@ -158,7 +158,7 @@ done
 # The root device is the one the kernel actually MOUNTED: `/etc/devnm /` names the
 # block node of the mounted root -- the same source /sbin/bcheckrc uses for its root
 # fsck and the mnttab entry. /etc/vfstab is install-time text: on a disk moved to
-# another unit (D-2: the RTH1 root hint lets a moved disk boot) its "/" row still
+# another unit (the RTH1 root hint lets a moved disk boot) its "/" row still
 # names the OLD id, and framing onto that id's slice 3 would write ANOTHER disk.
 # vfstab is read only to say when it disagrees. Its block-special name is
 # /dev/dsk/cNd0s1; the boot slice is /dev/dsk/cNd0s3 on the SAME controller N.
@@ -195,7 +195,7 @@ ROOT_BLK="/dev/dsk/c${CN}d0s1"
 BOOT_BLK="/dev/dsk/c${CN}d0s3"
 BOOT_RAW="/dev/rdsk/c${CN}d0s3"
 
-# both boot-slice nodes must exist (we WRITE the block node per the W6-U recipe and
+# both boot-slice nodes must exist (we WRITE the block node per the probed recipe and
 # READ BACK through the raw node so the cmp proves the DISK, not the buffer cache).
 [ -b "$BOOT_BLK" ] || die "boot-slice block node $BOOT_BLK is absent -- is c${CN}d0 the root disk?"
 [ -c "$BOOT_RAW" ] || die "boot-slice raw node $BOOT_RAW is absent -- is c${CN}d0 the root disk?"
@@ -326,7 +326,7 @@ fi
 # ---------------------------------------------------------------------------
 # 6. FRAME: build the chain into a temp file, dd it to the slice, sync, read back
 # ---------------------------------------------------------------------------
-# Exact W6-U pipeline, to a TEMP FILE first (so the write to the slice is a single
+# The exact probed pipeline, to a TEMP FILE first (so the write to the slice is a single
 # clean dd we can read back and compare). conv=sync zero-pads the final short block,
 # so the frame is a whole number of 512-byte blocks.
 msg "framing boot chain from $STAND (boot1 | iblk boot2 | boot2 | iblk unix | unix) ..."

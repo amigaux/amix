@@ -2,19 +2,19 @@
 
 The driver is what turns a booted install miniroot + an install CD into a
 running Amix system on the target disk. It replaces the stock interactive Amix
-install script with a spec-driven, non-interactive transplant. **W5.3** built
+install script with a spec-driven, non-interactive transplant. The first stage built
 the driver, the first-boot payload, the profile specs, and the ISO re-master
-that populates `/install/`; **W5.4** was the first end-to-end on-box run. Every
-wave since is a further section below.
+that populates `/install/`; the first end-to-end on-box run followed. Every
+stage since is a further section below.
 
 > **This document is wave-chronological.** Every `W…` section records what was true
 > **when that wave landed** and is deliberately left standing. The five sections
 > immediately below are *current state* and **win over any figure or s5 statement
 > quoted inside a wave section**.
 
-## The target filesystem — current (P-35, 2026-10-30)
+## The target filesystem — current (2026-10-30)
 
-**ufs is the only target filesystem**, on every line (owner decision P-35, Option C;
+**ufs is the only target filesystem**, on every line (decided 2026-10-30, Option C;
 there is no install base on s5).
 
 - `install.sh`: `TARGET_ROOT_FSTYPE` defaults to `ufs`; `s5` is refused with that
@@ -26,7 +26,7 @@ there is no install base on s5).
   is **author** mode.
 - `setup.sh` no longer asks *"What file system type is the root partition?"*; the
   composed answer is always `TARGET_ROOT_FSTYPE=ufs`.
-- The upgrade install, which mounted the old root as ufs only, is gone too (P-36,
+- The upgrade install, which mounted the old root as ufs only, is gone too (see the
   next section).
 - `install-matrix.sh`: the eleven prebuilt cells (`cd`, `cd-interactive`,
   `cd-interrupt`, `cd-suomi`, `cd-standard`, `cd-public`, `cd-public-r6`, `raw`,
@@ -39,7 +39,7 @@ there is no install base on s5).
 The installed-tree digest has no filesystem field, so every attested set's reference
 stands (proven for `minimal` by `cd-ufs`, `full`/`developer`/`x11` on the ufs rig).
 
-## Clean installs only — current (P-36, 2026-10-31)
+## Clean installs only — current (2026-10-31)
 
 **1.1 supports clean installs only** (owner: "no update path from 1.0, no migration
 code"). A disk that holds Amix is erased and installed afresh.
@@ -48,7 +48,7 @@ code"). A disk that holds Amix is erased and installed afresh.
   disk included, is asked stock's erase question and nothing else; the answers block
   has no `INSTALL_UPGRADE` or `UPGRADE_DROP_HOME` line.
 - `install.sh` refuses `INSTALL_UPGRADE` set to anything but `no`: *"1.1 requires a
-  fresh install, P-36"*. The capture, restore and put-in-place (`l11_upgrade_*`), the
+  fresh install"*. The capture, restore and put-in-place (`l11_upgrade_*`), the
   kept 1.1 layout, the held swap, `S17upgrade` and `/var/adm/upgrade` are removed, and
   so is the unattended erase guard's exemption for an upgrade.
 - `firstboot.sh` has no `FB_UPGRADED` branch: the first boot always writes the node
@@ -139,17 +139,17 @@ a byte-identical tree.
 
 | digest | objects | what it is |
 |--------|--------:|------------|
-| **`a650dd79b71de25bfd023335c1bfbded`** | **4859** | **THE canonical installed-tree digest**, re-attested **2026-10-02** (P-15 I1): the same eight packages with **APKG 0.2.2** on the release CDs (release media must not carry the retired host string). Only APKG's files moved; the count and the base-5 digest did not. Matrix `cd` 10/10, `work/install-matrix/20261002-120849-cd`. |
+| **`a650dd79b71de25bfd023335c1bfbded`** | **4859** | **THE canonical installed-tree digest**, re-attested **2026-10-02**: the same eight packages with **APKG 0.2.2** on the release CDs (release media must not carry the retired host string). Only APKG's files moved; the count and the base-5 digest did not. Matrix `cd` 10/10, `work/install-matrix/20261002-120849-cd`. |
 | ~~`e483b0cb25dfaf4087b1f783335d520d`~~ | 4859 | superseded 2026-10-02 (APKG 0.1). Was **THE canonical installed-tree digest**, re-attested **2026-08-11** — the **eight**-package base set `core bsd net text sysadm cdfs APKGENG APKG` as the **P5.4 r3 packages** actually ship it. Reproduced identically by two independent bench runs on freshly mastered media (`work/install-matrix/20260811-103107-cd` and `…-104927-cd`), with two *different* drivers, then gated green by the matrix's **`cd` cell 9/9** (`work/install-matrix/20260811-110806-cd`, 2026-08-11). See *Re-attestation 2026-08-11* below for why it moved. |
 | `86e1ceb144f1328bf441c5df38fc2798` | 4793 | the **base-5 continuity** digest — what `altroot-attest --only core,bsd,net,text,sysadm` still reproduces out of the *current* eight-package install. **UNCHANGED by the 2026-08-11 re-attestation** (and unchanged since Wave 2): it is the continuity check across waves, **not** the shipped set. |
-| **`bd91105e493297cdf40c94efd0a5741a`** | **11012** | the **`standard` set** (17 packages), **re-attested 2026-10-02/03** (P-15 I1) with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-standard` 10/10, `work/install-matrix/20261002-192444-cd-standard`. |
-| ~~`4ad8e17b69b32208c9fffa600596a428`~~ | **11012** | the **`standard` set** (17 packages), attested **2026-08-11** by the matrix's new **`cd-standard` cell 9/9** (`work/install-matrix/w3b3-std`). The SECOND attested set (plan §5.7, W3b). Its base-5 and base-8 subsets are **contained by object count** (4793 / 4859 exactly) but **not** by digest — see *W3b bench finding 2*: five shared paths are legitimately re-declared by `uucp`, `man` and `public`. | *(superseded 2026-10-02)*
+| **`bd91105e493297cdf40c94efd0a5741a`** | **11012** | the **`standard` set** (17 packages), **re-attested 2026-10-02/03** with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-standard` 10/10, `work/install-matrix/20261002-192444-cd-standard`. |
+| ~~`4ad8e17b69b32208c9fffa600596a428`~~ | **11012** | the **`standard` set** (17 packages), attested **2026-08-11** by the matrix's new **`cd-standard` cell 9/9** (`work/install-matrix/w3b3-std`). The SECOND attested set (plan §5.7). Its base-5 and base-8 subsets are **contained by object count** (4793 / 4859 exactly) but **not** by digest — see *Bench finding 2*: five shared paths are legitimately re-declared by `uucp`, `man` and `public`. | *(superseded 2026-10-02)*
 
-| **`3093f40b8dddc89bc749a6a12da8cfd5`** | **11497** | the **`developer` set** (19 packages), **re-attested 2026-10-02/03** (P-15 I1) with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-developer` 10/10, `work/install-matrix/20261002-211113-cd-developer`. |
-| ~~`ebd61ce15699fbb34cf0f6a2d0a07024`~~ | **11497** | the **`developer` set** (19 packages), attested **2026-08-12** by the W6 `cd-developer` cell 9/9 (`work/install-matrix/w6-cd-developer`). Standard plus `xdev`/`oldev`, `conf` deliberately excluded (§8.4). Ran against the 400 MB target; base-5 and base-8 containment exact by object count | *(superseded 2026-10-02)*
-| **`054e4b8e31464cd7b2f5aada5530f20b`** | **11546** | the **`x11` set** (18 packages), **re-attested 2026-10-02/03** (P-15 I1) with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-x11` 10/10, `work/install-matrix/20261002-201856-cd-x11`. |
-| ~~`5439f78fc1caf4da46af82db360f5d13`~~ | **11546** | the **`x11` set** (18 packages), attested **2026-08-12** by the W6 `cd-x11` cell 9/9 (`work/install-matrix/w6-cd-x11`). Standard plus `xtras`; same 400 MB target, same containment | *(superseded 2026-10-02)*
-| **`b1b55aae473b6fb870170054617c76ef`** | **28709** | the **`full` set** (30 packages), **re-attested 2026-10-02/03** (P-15 I1) with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-full` 10/10, `work/install-matrix/20261002-220132-cd-full`. The install took 6420 s (vs 1132 s on 08-14) on a host shared with kerntools' parallel rigs. |
+| **`3093f40b8dddc89bc749a6a12da8cfd5`** | **11497** | the **`developer` set** (19 packages), **re-attested 2026-10-02/03** with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-developer` 10/10, `work/install-matrix/20261002-211113-cd-developer`. |
+| ~~`ebd61ce15699fbb34cf0f6a2d0a07024`~~ | **11497** | the **`developer` set** (19 packages), attested **2026-08-12** by the `cd-developer` cell 9/9 (`work/install-matrix/w6-cd-developer`). Standard plus `xdev`/`oldev`, `conf` deliberately excluded (§8.4). Ran against the 400 MB target; base-5 and base-8 containment exact by object count | *(superseded 2026-10-02)*
+| **`054e4b8e31464cd7b2f5aada5530f20b`** | **11546** | the **`x11` set** (18 packages), **re-attested 2026-10-02/03** with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-x11` 10/10, `work/install-matrix/20261002-201856-cd-x11`. |
+| ~~`5439f78fc1caf4da46af82db360f5d13`~~ | **11546** | the **`x11` set** (18 packages), attested **2026-08-12** by the `cd-x11` cell 9/9 (`work/install-matrix/w6-cd-x11`). Standard plus `xtras`; same 400 MB target, same containment | *(superseded 2026-10-02)*
+| **`b1b55aae473b6fb870170054617c76ef`** | **28709** | the **`full` set** (30 packages), **re-attested 2026-10-02/03** with APKG 0.2.2 on the release CDs; count unchanged, base-5 + base-8 containment exact. Matrix `cd-full` 10/10, `work/install-matrix/20261002-220132-cd-full`. The install took 6420 s (vs 1132 s on 08-14) on a host shared with kerntools' parallel rigs. |
 | **`85bfb9256885d78d31778973ec1bd4b2`** | **28711** | the **`full-r6` set**: `full` from the public classic full disc (r6d), attested **2026-10-09** by `cd-full-pub-r6` 10/10 (`work/install-matrix/20261009-cd-full-pub-r6d-c`), 512 MB ufs. Two objects over `full`: `/usr/apkg/lib` and `/usr/apkg/lib/apkg.conf` (APKG 0.2.3). Measured, not gated: SET_REFS keeps `-` as for every r6 set (the media builder does not advertise them; installer-selftest audit X), so each run re-attests with `--attest-set`. |
 | **`b7c2be7de8834e63b10c06f4326ed8d5`** | **28711** | the **`full-060-r6`** and **`full-060-r6-a4091root`** sets: the 060 full discs (SD and A4092 root), attested **2026-10-09** by `cd1-full-pub-r6` and `cd2-full-pub-r6` 10/10 (`20261009-cd1-full-pub-r6d`, `20261009-cd2-full-pub-r6d`). Differs from `full-r6` only in `/stand/unix` (the KD060-ZA kernel). Measured, not gated: SET_REFS keeps `-` as for every r6 set (the media builder does not advertise them; installer-selftest audit X), so each run re-attests with `--attest-set`. |
 | **`43b94ef2ab6b4bd9e70d9ada24a4e430`** | **11014** | the **`standard-r6` set**: `standard` (17 packages) from the public classic full disc, attested **2026-10-10** by `cd-std200-pub-r6` 10/10 (`20261010-cd-std200-pub-r6d`) on a 200 MB disk (166 MB ufs root); on the default 100 MB disk it runs out of space (`20261009-cd-std-pub-r6d`). Measured, not gated: SET_REFS keeps `-` as for every r6 set (the media builder does not advertise them; installer-selftest audit X), so each run re-attests with `--attest-set`. |
@@ -166,7 +166,7 @@ original blocker, for the record:
 the 30-package set cannot be installed as declared **on s5**, because **five
 groups / ten objects** in `gnusrc2` and `X11r5src` collide under s5's
 14-character name limit — see *The `full` set cannot be installed as declared*
-below, where that count is corrected (W6's own scan said three, and was
+below, where that count is corrected (an earlier scan said three, and was
 directory-blind) and the **UFS route** — which removes the limit instead of
 working around it — is set against the packagemanager's Option A.
 
@@ -174,9 +174,9 @@ working around it — is set against the packagemanager's Option A.
 
 | digest | objects | when it was canonical |
 |--------|--------:|-----------------------|
-| `29a1ae6192e4c64947a0cd14f9bfd149` | 4796 | the **six**-package set at **W6.2** (`cdfs` had just joined; `APKGENG`/`APKG` had not) |
-| `a2467c6958dba203d399c4441d77f338` | 4858 | the eight-package set at **W6.4b** — one object short of the current figure, before W6.4c's `/usr/bin/apkg` symlink added the 4859th |
-| `ec31a72291e01382ab4b97403f6dad13` | 4859 | the eight-package set from **W6.4c until 2026-08-11** — the pre-r3 `APKG`/`APKGENG` mints. **SUPERSEDED 2026-08-11; never quote it as current** (same hygiene as the six-package `29a1ae61…` figure). It is still the right number when reading any record written before that date. |
+| `29a1ae6192e4c64947a0cd14f9bfd149` | 4796 | the **six**-package set (`cdfs` had just joined; `APKGENG`/`APKG` had not) |
+| `a2467c6958dba203d399c4441d77f338` | 4858 | the first eight-package set — one object short of the current figure, before the `/usr/bin/apkg` symlink added the 4859th |
+| `ec31a72291e01382ab4b97403f6dad13` | 4859 | the eight-package set from the repo-host baking **until 2026-08-11** — the pre-r3 `APKG`/`APKGENG` mints. **SUPERSEDED 2026-08-11; never quote it as current** (same hygiene as the six-package `29a1ae61…` figure). It is still the right number when reading any record written before that date. |
 
 ### Re-attestation 2026-08-11 — `ec31a72…` → `e483b0cb…`
 
@@ -221,7 +221,7 @@ e483b0cb25dfaf4087b1f783335d520d (4859 obj) + base-5
 
 ## The tracked acceptance rig — `configs/accept-bench-a3000-a4091.uae`
 
-The canonical **CD-arm** acceptance run — the *W5.4 runbook* below, and every
+The canonical **CD-arm** acceptance run — the *Runbook: the end-to-end run* below, and every
 attestation that reproduces the canonical digest from a disc — is driven by a
 **tracked** Amiberry config, so the rig never has to be rebuilt from prose again.
 
@@ -238,7 +238,7 @@ attestation that reproduces the canonical digest from a disc — is driven by a
 **`scsi_a3000=true` (with `scsi_a3000_rom_file=:ENABLED`) is load-bearing.**
 Enabling the A3000's onboard WD33C93 makes it **card 0** and the A4091 **card 1** —
 which is simultaneously (a) what makes the CD answer at cdfs `1,3`, and (b) what
-puts the target in the `cXd0` block namespace. W5.4b proved the second half the
+puts the target in the `cXd0` block namespace. A bench run proved the second half the
 hard way: on an otherwise identical rig with the target on `scsi6_a4091` the
 miniroot cannot open `c6d0` at all. (The older tape rig
 `configs/install-blank-a4091.uae` has the A3000 SCSI **off** — correct there,
@@ -249,7 +249,7 @@ stable names; rebuild them **fresh before every run**:
 
 ```sh
 # target: 100 MB blank, RDB root/swap/boot, s5 root. Run the driver with
-# INSTALL_TARGET_PREBUILT=1 to take the low-risk prebuilt path (see W5.4 runbook).
+# INSTALL_TARGET_PREBUILT=1 to take the low-risk prebuilt path (see the runbook).
 # No --sole-disk: this disk shares the machine with the CD unit.
 tools/mkroot.sh --out hdf/accept-target.hdf --size-mb 100 --scsi-id 6
 tools/build-install-iso.sh --out work/iso/amix21-install-accept.iso
@@ -260,7 +260,7 @@ Gate 1 refuses to write an image to any path git would track.
 
 The **RAW arm** (`profiles/bench-a3000-a4091-raw.profile`, `SOURCE_KIND=raw`) is a
 *different* rig — a second source disk at id 5, no CD at all — and is **not** wired
-by this config. See *W6-RAW.1*.
+by this config. See *The RAW source arm*.
 
 ## The A3000-SCSI synthesis gate — why the install kernel must be patched
 
@@ -360,18 +360,18 @@ different path — that identity *is* the regression test.
 
 | cell | status | source | target build | note |
 |------|--------|--------|--------------|------|
-| `cd` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt (`mkroot.sh`) | the canonical acceptance arm |
-| `cd-interactive` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | the same media and the same target-build path as `cd`, driven through the **whole operator flow** — since W4 that starts at the miniroot's own `/etc/profile` (keymap, install-or-repair, the source auto-probe) and continues into the interview. Gated on the answers beacon *before* the transplant runs |
-| `cd-suomi` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | `cd-interactive` with **keymap 11 (Suomi / Svenska)** instead of 12. Proves the keymap reaches the target (`default.kmap` hard-linked to `kmap/s`, same inode; `FB_KMAP=s` in `firstboot.conf`) **and** that it does not fork the attestation — the link is driver-written, so the digest must not move |
-| `cd-interrupt` | RETIRED (P-35: prebuilt s5) | cdfs install CD at `1,3` | prebuilt | **W5's resilience cell**, and the only one that can prove the contract: the same install as `cd-interactive`, but the first cold boot is **power-cycled part-way through the first-boot dialog**. The next boot must come up healthy (S16 applied the mechanical keys anyway), the dialog must re-run **from the top** (`chmod -x` fires only at the clean exit), completing it must leave a clean third boot — and the digest must not move |
-| `cd-standard` | RETIRED (P-35: prebuilt s5) | cdfs install CD mastered `--set standard` | prebuilt | the second attested set (17 packages), and the heaviest-I/O memory-headroom measurement for it |
-| `cd-public` | RETIRED (P-35: prebuilt s5) | cdfs install CD mastered for the **public** profile | prebuilt | **W6 / P8.3.** `cd-interactive` on a disc mastered from the distro-neutral profile — no nodename, no address, no netmask, no gateway, no resolver, no repository address, no disk size, dialog armed. The disc names `public-a3000-a4091` in `/install/profiles/BASE`, so the miniroot hands off to it with no argument, exactly as a stranger booting the disc would. The assertion is that **nothing moves**: same answers, and the installed tree is still the canonical `minimal` digest. A profile is data; if emptying the `FB_*` seam moved one installed byte, the seam was not where we thought it was |
-| ★ `cd-full` | RUNNABLE (**10/10 2026-08-14**) | cdfs install CD mastered `--set full` | **author** (**512 MB**, ufs) | All thirty packages, ~276 MB declared / 292.8 MiB realised. The heaviest install, the first run *with* W5.5's real swap, and the only set s5 cannot hold at all. The rig was 400 MB and **overran it by 8.5 MiB on 2026-08-14** — `pkgadd` spools each datastream onto the target, so peak = tree + largest package, and the largest installs last. 512 MB puts ~97 MiB over that peak |
-| `cd-developer` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set developer` | **author** (**512 MB**, ufs) | **W6.** 19 packages — standard plus `xdev`/`oldev`, with `conf` deliberately excluded (§8.4) |
-| `cd-x11` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set x11` | **author** (**512 MB**, ufs) | **W6.** 18 packages — standard plus `xtras` |
-| `cd-author` | RUNNABLE | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_s5`; `mkfs_ufs` since P-35) | the other target-build path: the blank target is partitioned + `mkfs_s5`-ed **on the box** and must still reach the same digest. Was RED on 2026-07-30 — its first run exposed three shipped defects; green since 2026-07-31, see *What the author cell found* below |
+| `cd` | RETIRED (prebuilt s5) | cdfs install CD at `1,3` | prebuilt (`mkroot.sh`) | the canonical acceptance arm |
+| `cd-interactive` | RETIRED (prebuilt s5) | cdfs install CD at `1,3` | prebuilt | the same media and the same target-build path as `cd`, driven through the **whole operator flow** — since the miniroot respin that starts at the miniroot's own `/etc/profile` (keymap, install-or-repair, the source auto-probe) and continues into the interview. Gated on the answers beacon *before* the transplant runs |
+| `cd-suomi` | RETIRED (prebuilt s5) | cdfs install CD at `1,3` | prebuilt | `cd-interactive` with **keymap 11 (Suomi / Svenska)** instead of 12. Proves the keymap reaches the target (`default.kmap` hard-linked to `kmap/s`, same inode; `FB_KMAP=s` in `firstboot.conf`) **and** that it does not fork the attestation — the link is driver-written, so the digest must not move |
+| `cd-interrupt` | RETIRED (prebuilt s5) | cdfs install CD at `1,3` | prebuilt | **The dialog's resilience cell**, and the only one that can prove the contract: the same install as `cd-interactive`, but the first cold boot is **power-cycled part-way through the first-boot dialog**. The next boot must come up healthy (S16 applied the mechanical keys anyway), the dialog must re-run **from the top** (`chmod -x` fires only at the clean exit), completing it must leave a clean third boot — and the digest must not move |
+| `cd-standard` | RETIRED (prebuilt s5) | cdfs install CD mastered `--set standard` | prebuilt | the second attested set (17 packages), and the heaviest-I/O memory-headroom measurement for it |
+| `cd-public` | RETIRED (prebuilt s5) | cdfs install CD mastered for the **public** profile | prebuilt | `cd-interactive` on a disc mastered from the distro-neutral profile — no nodename, no address, no netmask, no gateway, no resolver, no repository address, no disk size, dialog armed. The disc names `public-a3000-a4091` in `/install/profiles/BASE`, so the miniroot hands off to it with no argument, exactly as a stranger booting the disc would. The assertion is that **nothing moves**: same answers, and the installed tree is still the canonical `minimal` digest. A profile is data; if emptying the `FB_*` seam moved one installed byte, the seam was not where we thought it was |
+| ★ `cd-full` | RUNNABLE (**10/10 2026-08-14**) | cdfs install CD mastered `--set full` | **author** (**512 MB**, ufs) | All thirty packages, ~276 MB declared / 292.8 MiB realised. The heaviest install, the first run *with* the real swap, and the only set s5 cannot hold at all. The rig was 400 MB and **overran it by 8.5 MiB on 2026-08-14** — `pkgadd` spools each datastream onto the target, so peak = tree + largest package, and the largest installs last. 512 MB puts ~97 MiB over that peak |
+| `cd-developer` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set developer` | **author** (**512 MB**, ufs) | 19 packages — standard plus `xdev`/`oldev`, with `conf` deliberately excluded (§8.4) |
+| `cd-x11` | RUNNABLE (**owed a re-run**) | cdfs install CD mastered `--set x11` | **author** (**512 MB**, ufs) | 18 packages — standard plus `xtras` |
+| `cd-author` | RUNNABLE | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_s5`; `mkfs_ufs` since 2026-10-30) | the other target-build path: the blank target is partitioned + `mkfs_s5`-ed **on the box** and must still reach the same digest. Was RED on 2026-07-30 — its first run exposed three shipped defects; green since 2026-07-31, see *What the author cell found* below |
 | ★ `cd-ufs` | RUNNABLE (**green 2026-08-14, 10/10**) | cdfs install CD at `1,3` | **author** (on-box `/etc/rdb` + `mkfs_ufs`) | **the UFS lane.** Same media, same rig, same 100 MB target, same `minimal` set as `cd` — the operator answers the restored stock s5/ufs question and gets a **Berkeley** root. It *must* be author mode: `mkfs_ufs` runs on the box, there is no host-side UFS writer, and the driver refuses a `ufs` prebuilt target rather than mounting `mkroot`'s s5 root under the wrong type. The assertion is that **nothing moves** — still `e483b0cb…` / 4859 with base-5 exact, because the digest is contents-DB-derived and the contents DB has no filesystem field. What *does* move is the disk, and the new `rootfs` gate is the only one that can see it. Read against two neighbours: `cd-author` is the same author path on s5, `cd-interactive` the same interview on prebuilt s5 |
-| `raw` | RETIRED (P-35: prebuilt s5) | raw distribution slice (`apkg SRC_RAW`) | prebuilt | implemented; needs a **bench** raw source disk (`--src-hdf`). None exists — W6-RAW.1 built one and did not keep it, and building one is *mastering media* |
+| `raw` | RETIRED (prebuilt s5) | raw distribution slice (`apkg SRC_RAW`) | prebuilt | implemented; needs a **bench** raw source disk (`--src-hdf`). None exists — the RAW source arm work built one and did not keep it, and building one is *mastering media* |
 | `z3660-raw` | INFEASIBLE | self-booting metal source `.hdf` at id 0 | author | the bench cannot boot the metal source disk **by design** (runbook §0). Bench proves its contents; metal proves its boot |
 | `tape` | RETIRED | dist tape on the A4091 | stock | timeout-prone, and the stock tape path does not run this driver at all |
 
@@ -379,7 +379,7 @@ An infeasible cell stays **in** the table with its reason. A cell that is merely
 absent reads as "we covered everything we could", which is how coverage quietly
 shrinks.
 
-**Coverage the P-35 retirement took with it** (not wanted back for now, orchestrator
+**Coverage the retirement of s5 took with it** (not wanted back for now,
 2026-10-30): the Suomi keymap reaching the target (`cd-suomi`) and the interrupted
 first-boot dialog (`cd-interrupt`). Both were prebuilt only because their rig was;
 either can come back as an **author-mode** cell on the same profile (`cd-ufs`'s shape,
@@ -440,7 +440,7 @@ of every floppy/ISO, plus the two generated `.uae` rigs) → `mediaboot` (instal
 kernel up, root floppy inserted at the prompt, **miniroot shell confirmed**) →
 `source` (source mounted **and proven readable**) → `install` (the driver's **exit
 status**) → `coldboot` (target cold-booted **twice**: identity baked, first-boot
-once-only — and since W5, on an interactive cell, the **first-boot dialog typed on
+once-only — and since the dialog, on an interactive cell, the **first-boot dialog typed on
 the console before the box can reach run level 2 at all**, plus the assertion that
 it disarmed itself and that an unattended cell never armed one) → `digest` (the
 attestation) → `bootchain` (host-side boot-slice re-verify) → `teardown` (emulator
@@ -455,7 +455,7 @@ the bench down and still prints a verdict from what the ledger actually contains
 > ⚠ **Do not edit `install-matrix.sh` while a run is in flight.** Bash reads a
 > script *incrementally*, keeping a byte offset into the open file, so rewriting
 > it in place mid-run makes the shell resume from that offset into shifted text.
-> W6 did exactly this and lost a `cd` run to it: the harness had just passed
+> This was done once and lost a `cd` run to it: the harness had just passed
 > `mediaboot` when it printed `install-matrix.sh: line 2162: gate: command not
 > found` and fell straight through to the verdict — `source:NEVER-RAN
 > install:NEVER-RAN …`. The fail-closed ledger behaved perfectly (a run that did
@@ -647,7 +647,7 @@ reach through the RDB, and all of them scan 0..15.
 | first-boot | `payload/firstboot/{firstboot.sh,root.shadow}` | armed into the target; bakes identity on first boot |
 | profiles | `profiles/*.profile` | per-rig spec (kernel, CD, disk, first-boot identity) |
 | boot slice | `tools/build-bootslice.py` | extracts the gated boot chain + loader + `sum -r` manifest |
-| order | `tools/gen-install-order.py` | core-first topological install order from `deps.conf` (base set: `core bsd net text sysadm cdfs APKGENG APKG` — W6.4b; case preserved) |
+| order | `tools/gen-install-order.py` | core-first topological install order from `deps.conf` (base set: `core bsd net text sysadm cdfs APKGENG APKG`; case preserved) |
 | ISO re-master | `tools/build-install-iso.sh` + `build-iso.sh --install-src` | assembles `/install/`, masters the disc |
 | structural proof | `tools/installer-selftest.py` | run-checks.sh check 8 |
 
@@ -685,17 +685,17 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
 1. **profile** — `install.sh <profile-name | /path/to/answers.profile>` (default
    `bench-a3000-a4091`). A **name** resolves to
    `/cdrom/install/profiles/<name>.profile`; an argument containing `/`, or
-   naming an existing file, is taken as a **path** (W1 — the medium is read-only,
-   so the W2 interview's `/tmp/answers.profile` needs the path form).
+   naming an existing file, is taken as a **path** (the medium is read-only,
+   so the interview's `/tmp/answers.profile` needs the path form).
 2. **plan** — the stock partition arithmetic (`BREAKPT=120 LGSWAP=30 SMSWAP=18
    BOOTSIZE=2 …`) in `expr`, fed by a real `/etc/ddsize` probe of the target
-   unless the profile pins `TARGET_DISK_MB` (W1), with optional
+   unless the profile pins `TARGET_DISK_MB`, with optional
    `TARGET_ROOT_MB`/`TARGET_SWAP_MB` overrides bounded by the stock floors.
    `installer-selftest.py` proves this arithmetic is **byte-identical to
    `tools/mkroot.sh`** across disk sizes, including the BREAKPT boundary, and
    that the overrides unset reproduce that layout exactly.
 3. **target-root build** — see *the host/on-box split* below.
-3b. **open the install log** (W1) — right after the target root is mounted, the
+3b. **open the install log** — right after the target root is mounted, the
    driver creates `<target>/var/adm/install.log` and everything from there on is
    persisted to it. The pre-mount window is console-only by nature and the log
    says so in its opening marker.
@@ -708,7 +708,7 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
    `<root>/var/sadm/pkg`, `<root>/tmp` mode 1777, and `TMPDIR` onto the target.
 6. **install** — `pkgadd -R /mnt -n -a <admin> -d <pkg> <name>` down the order
    file (core first, Gate 13). The base set is **eight** packages —
-   `core bsd net text sysadm cdfs APKGENG APKG` (W6.2 added `cdfs`; **W6.4b added
+   `core bsd net text sysadm cdfs APKGENG APKG` (`cdfs` came first; **later additions were
    `APKGENG` + `APKG`** so an installed box has a working package manager out of
    the box). All three of `cdfs`/`APKGENG`/`APKG` ship under `/pkgs/base/`, and the
    driver resolves each `stock/`-then-`base/`, **case-sensitively** —
@@ -717,14 +717,14 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
    The base-5 subset still produces the continuity tree digest
    `86e1ceb144f1328bf441c5df38fc2798`. The driver installs `APKG` but never
    **invokes** apkg during the install.
-6b. **contents-DB integrity check** (W6.4b) — run the CD-resident **static**
+6b. **contents-DB integrity check** — run the CD-resident **static**
    `contents-fsck /mnt/var/sadm/install/contents` (CHECK-ONLY, never `-r`) over
    the freshly built contents DB, **fail closed**: any non-zero exit is a hard
    `die` before first-boot is armed (a fresh DB with findings means the install is
    wrong). It is statically linked, so it runs on the thin miniroot.
-6c. **write `/etc/apkg.conf`** (W6.4b) — the driver writes the target's package-
+6c. **write `/etc/apkg.conf`** — the driver writes the target's package-
    client config on the miniroot (identity-independent → not first-boot) with
-   `repo=$FB_REPO_URL` + `cachedir` + `admin`. W1 de-hardcodes that URL into the
+   `repo=$FB_REPO_URL` + `cachedir` + `admin`. A later change de-hardcodes that URL into the
    profile key; its default is the same `http://files.example.net/html/amix`
    literal that used to be in the driver. *(Since 2026-09-14 the default is
    `http://pkg.amigaux.org`; the files.example.net repo is retired.)*
@@ -743,8 +743,8 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
    All regions are block-aligned, so reads are `dd bs=512` (no bs=1 crawl).
 10. **arm + wire first-boot** (drop the payload + `PENDING`, write the
     `/etc/rc2.d/S16firstboot` hook, and `chmod -x` the stock `system.setup`
-    dialog — see *W5.4f* below), **bake the keymap** and **preseed
-    `/lost+found`** (both stock steps, restored in W1), then **final fsck +
+    dialog — see *WIRE first-boot into the target init* below), **bake the keymap** and **preseed
+    `/lost+found`** (both stock steps, restored), then **final fsck +
     summary**.
 
 ## The host/on-box split (mkroot.sh ↔ the driver)
@@ -753,7 +753,7 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
 `rdbtool` RDB → `s5` mkfs → read-back gate → `layout.json`. The driver does the
 **on-box** equivalent with the miniroot's own tools. Two supported modes:
 
-> **Since P-35 (2026-10-30) only author mode exists, and it lays ufs**
+> **Since 2026-10-30 only author mode exists, and it lays ufs**
 > (`/bin/mkfs_ufs`); the prebuilt mode below is retired and the driver refuses it.
 > The text below is the record of how both modes came to be.
 
@@ -771,7 +771,7 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
 - **prebuilt** (`INSTALL_TARGET_PREBUILT=1`): the target was fully built
   host-side by `tools/mkroot.sh` (RDB + s5 root, read-back-gated); the driver
   skips authoring/mkfs and only fscks + mounts. **This is the low-risk path
-  recommended for the W5.4 canonical run** — `mkroot.sh` is proven, has its own
+  recommended for the canonical run** — `mkroot.sh` is proven, has its own
   read-back gate, and runs identically for metal.
 
 ## Two admin files (deliberate)
@@ -833,13 +833,13 @@ slices + first-boot + driver) and masters the disc via `build-iso.sh
 per-artefact owner decision); the release gate refuses a tracked path. All Wave-4 gates (8 catalog / 9 name / 17 licensing) re-fire on
 the re-mastered disc.
 
-## W5.4d folds the driver hardening + the engine-side pkgadd fix together
+## The re-master that folds the driver hardening + the engine-side pkgadd fix together
 
 `work/iso/amix21-install-base-w54{b,c}-20260722.iso` were mastered from the driver
-**before** the W5.5b host-only hardening: the `basename`/`sed`/`touch` purge (the
-miniroot carries none of them), the **fail-closed** boot-chain verify (W5.4c saw
+**before** the host-only hardening: the `basename`/`sed`/`touch` purge (the
+miniroot carries none of them), the **fail-closed** boot-chain verify (an earlier run saw
 `sed` absent and printed vacuous per-region OKs on empty-vs-empty), and the
-`installer-selftest.py` miniroot-tool allowlist regression armor. The **W5.4d**
+`installer-selftest.py` miniroot-tool allowlist regression armor. The next
 re-master folds those in together with the resolution of the old miniroot
 `pkgadd -R` blocker, which is now fixed **engine-side**, not in the driver:
 
@@ -855,17 +855,17 @@ re-master folds those in together with the resolution of the old miniroot
   now writes the `/` root line **unconditionally** (`echo "/dev/root / s5 rw 0" >
   /etc/mnttab`, OVERWRITE). A `/mnt` line does NOT satisfy `get_mntinfo` (shortest
   mount point must be `/`). See **“## METAL-FIX.2”** at the end of this doc.
-- **Stale-CD guard (W5.5a).** The boot-time cdfs `/cdrom` mount can come up rc=0
+- **Stale-CD guard.** The boot-time cdfs `/cdrom` mount can come up rc=0
   but EMPTY, with no errno-5 unit-attention to retry on. The driver now verifies
   `/cdrom/catalog` after the mount step and, if unreadable, does a best-effort
   `umount` + one re-mount before a hard STOP.
 
-The W5.4d re-master ships the **fixed static engine** (`pkgadd`/`pkgchk`/`pkginstall`
+That re-master ships the **fixed static engine** (`pkgadd`/`pkgchk`/`pkginstall`
 rebuilt from `0d3a21c`) at `/install/bin/`.
 
-## W5.4e: subshell-safe loop counters (the last driver defect)
+## Subshell-safe loop counters (the last driver defect)
 
-The W5.4d on-box run was green on everything upstream — 5/5 `pkgadd -R` rc=0, all
+That re-master's on-box run was green on everything upstream — 5/5 `pkgadd -R` rc=0, all
 three boot regions read back with the right `sum -r` — yet it aborted before arming
 first-boot. Root cause: the miniroot's **1991 SVR4 `/bin/sh` runs a
 `while read … ; do … ; done < FILE` loop in a SUBSHELL**, so a variable mutated
@@ -892,12 +892,12 @@ the loop instead of silently continuing.
 
 `installer-selftest.py` **audit H** locks the pattern out: it flags any
 `done < FILE` loop whose body assigns a variable referenced after the loop
-(negative fixtures reproduce the exact W5.4d `npkgs`/`vok` shapes), and passes the
+(negative fixtures reproduce the exact `npkgs`/`vok` shapes), and passes the
 temp-file idiom. NB the self-test's `_strip_quotes` runs before inline-comment
 stripping, so **inline comments must not contain a stray apostrophe** (it opens a
 phantom single-quote span) — a lesson from armoring this fix.
 
-**Second-order trap: `set --` with an empty arg list (W5.4e bench run 1).** The
+**Second-order trap: `set --` with an empty arg list (the first bench run of this fix).** The
 first re-master's `pkgadd` count was correct (5) but the boot-chain verify
 false-failed with "FAILED (3 region(s))" *after* printing three `OK` lines. Root
 cause: the post-loop count `set -- \`cat FILE\`; n=$#` is a TRAP on the miniroot
@@ -912,9 +912,9 @@ the driver. With `count_tokens` the full acceptance is green: 5 `pkgadd` rc=0,
 `86e1ceb144f1328bf441c5df38fc2798` (4793 objects) and `bootchain-verify` PASSes
 (flags-based `f287ff3a` boot2).
 
-## W5.4f: WIRE first-boot into the target init (the last Wave-5 gap)
+## WIRE first-boot into the target init (the last gap of that stage)
 
-W5.4e was the first run to get *past* the boot-chain verify and cold-boot the
+That fix's run was the first to get *past* the boot-chain verify and cold-boot the
 target, and it surfaced the last defect: the payload was **armed** (all of
 `/var/adm/firstboot/{firstboot.sh,root.shadow,firstboot.conf}` + `PENDING` present
 with `FB_NODENAME=uaeamix …`) but **nothing in the stock target init invoked it**.
@@ -982,17 +982,17 @@ and disarms `system.setup`; a **drift-lock** extracts the driver's
 references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
 `PENDING`.
 
-## W5.4 runbook (the end-to-end run)
+## Runbook: the end-to-end run
 
 - **Rig:** the canonical `bench-a3000-a4091` profile — Amiberry, A3000+A4091,
   KS2.04/ECS, 68030, **64 MB** Fast RAM (the standing bench value; the old "16 MB
   Amix ceiling" was inherited, never measured — the real limit is the frame-arena
   law, ~80 MB networked max on metal).
-- **Media:** the fd0/miniroot install kernel + root (W5.2), a **blank target
+- **Media:** the fd0/miniroot install kernel + root, a **blank target
   disk on the A3000's onboard SCSI at id 6** (`scsi6_a3000` → `c6d0`; use
   `tools/mkroot.sh` to pre-build it and run the driver with
   `INSTALL_TARGET_PREBUILT=1` — the low-risk path), and the re-mastered install
-  CD on the **A4091** at cdfs `1,3`. **W5.4b established the split:** the `cXd0`
+  CD on the **A4091** at cdfs `1,3`. **A bench run established the split:** the `cXd0`
   block namespace binds to the *primary* (A3000) SCSI, not the A4091 — the target
   must hang off the A3000 controller to answer at `c6d0`; the A4091 carries only
   the CD (by card index).
@@ -1002,16 +1002,16 @@ references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
 - **Expected:** 5 `pkgadd -R` all rc=0; installed tree digest
   **`86e1ceb144f1328bf441c5df38fc2798`** (the Wave-2/3 reference); boot chain
   verified on-target; first boot bakes `uaeamix` identity and reaches multiuser.
-  *(These figures are W5.4-era and left standing per the wave convention — the
+  *(These figures are of that era and left standing — the
   shipped set is no longer five packages; for what a run must reproduce today see*
   **Canonical digests — current** *at the top.)*
-- **W5.4b diagnostic evidence (the target-HBA fix):** with the target on
+- **Diagnostic evidence (the target-HBA fix):** with the target on
   `scsi6_a3000`, `dd if=/dev/rdsk/c6d0s0 bs=512 count=8` → `8+0 records in/out`
   and `/bin/fsck_s5 /dev/rdsk/c6d0s1` → Phases 1–5 clean; the identical rig with
   the target on `scsi6_a4091` failed both (`Can't open` / I/O error, `0+0
   records`). The `rootdev` `0x00480016` (`c6d0s1`) is therefore correct as shipped.
 - **Confirm on-box (author mode only, still open):** the exact `/etc/rdb`
-  create/geometry primitive — W5.4b validated the install via the recommended
+  create/geometry primitive — that run validated the install via the recommended
   `INSTALL_TARGET_PREBUILT=1` prebuilt path, which does not exercise author mode.
   *(Wave text left standing per the document convention. **Answered 2026-07-30** by
   the `cd-author` matrix cell: the miniroot's `rdb` needs `-d size` and refuses the
@@ -1019,18 +1019,18 @@ references only target-present tools (`/sbin/sh`); and `firstboot.sh` removes
   512-byte blocks, the driver is fixed, and `cd-author` is green end-to-end. See*
   **What the author cell found** *above.)*
 
-## W6.2: `cdfs` joins the base set + the first-boot TZ fix
+## `cdfs` joins the base set + the first-boot TZ fix
 
 Two Wave-6 outcomes integrated and proven end-to-end from a pristine target.
 
-> **Historical.** The `BASE_SET` arrays this section and the W6.4b one below
-> describe were **deleted by W3b** — set membership now comes from
+> **Historical.** The `BASE_SET` arrays this section and the installer-completeness one below
+> describe were **deleted by multi-set selection** — set membership now comes from
 > `../amix-packagemanager/tools/repo/sets.conf` through its own resolver. The
 > *content* of the base-8 set is unchanged (that is the point: `sets.conf`'s
 > `minimal` is these eight packages, in this order). See
-> "W3b: multi-set package selection goes live".
+> "Multi-set package selection goes live".
 
-- **`cdfs` in the base set (six packages *at W6.2*; eight since W6.4b).**
+- **`cdfs` in the base set (six packages *at this point*; eight once the package client joined).**
   `build-install-iso.sh`'s `BASE_SET`
   becomes `core bsd net text sysadm cdfs`. `cdfs` (the `/usr/lib/fs/cdfs/mount`
   helper + `/cdrom` mount point; the kernel side already ships in `core`) is our
@@ -1042,7 +1042,7 @@ Two Wave-6 outcomes integrated and proven end-to-end from a pristine target.
   keeps it ordered after `core`, and the driver resolves it `stock/`-then-`base/`.
   Result: an installed box can `mount -F cdfs <card>,<unit> /cdrom` with the full
   mount front-end + our userland — no miniroot required.
-- **The first-boot TZ fix (W6.3).** `firstboot.sh` wrote `TZ=US/Eastern` to
+- **The first-boot TZ fix.** `firstboot.sh` wrote `TZ=US/Eastern` to
   `/etc/TIMEZONE` **without** the leading colon. SVR4 `ctime`/`tzset` only reads a
   tzfile when `TZ` is `:<pathname>`; the colon-less string is parsed as a POSIX
   rule, walks off into garbage, and every consumer (`date`, `who -r`, `ls -l`,
@@ -1056,13 +1056,13 @@ Two Wave-6 outcomes integrated and proven end-to-end from a pristine target.
 - **Digests.** The base-5 subset digest is **unchanged** —
   `86e1ceb144f1328bf441c5df38fc2798` (4793 objects) — proving continuity. The full
   **six-package** installed-tree digest `29a1ae6192e4c64947a0cd14f9bfd149` (4796
-  objects) was recorded as the Wave-6 reference here, in `CHANGELOG.md` / the W6.2
-  report. **It is superseded** — the base set grew to eight at W6.4b/c and the
+  objects) was recorded as the reference here, in `CHANGELOG.md` and in that
+  report. **It is superseded** — the base set grew to eight and the
   current canonical is `e483b0cb25dfaf4087b1f783335d520d` (4859 objects, re-attested
-  2026-08-11; it was `ec31a72291e01382ab4b97403f6dad13` from W6.4c until then). See
+  2026-08-11; it was `ec31a72291e01382ab4b97403f6dad13` from the repo-host baking until then). See
   *Canonical digests — current*.
 
-## W6.4b: installer completeness — the package client, out of the box + a fail-closed contents-DB gate
+## Installer completeness — the package client, out of the box + a fail-closed contents-DB gate
 
 Two completeness gaps closed so a freshly installed box is a *finished* system:
 it carries a working package manager and its contents DB is proven intact before
@@ -1139,16 +1139,16 @@ It is written on the **miniroot** against the mounted target (identity-independe
 The base-5 continuity digest is **unchanged** — `86e1ceb144f1328bf441c5df38fc2798`
 (4793 objects) — via `altroot-attest --only core,bsd,net,text,sysadm`. The full
 **eight-package** installed-tree digest `a2467c6958dba203d399c4441d77f338` (4858
-objects) was the W6.4b canonical, recorded in `CHANGELOG.md` / the W6.4b report.
-It stood for exactly one wave: W6.4c's `/usr/bin/apkg` symlink adds the 4859th
+objects) was the canonical at this point, recorded in `CHANGELOG.md` and that report.
+It stood only until the next section: its `/usr/bin/apkg` symlink adds the 4859th
 object (below), giving the **current** canonical.
 
-## W6.4c: repo-host baking — the package manager, *zero-touch* out of the box
+## Repo-host baking — the package manager, *zero-touch* out of the box
 
-W6.4b proved `apkg update` works over the network, but only after a **manual**
+The previous section proved `apkg update` works over the network, but only after a **manual**
 `/etc/inet/hosts` edit: the fresh box has no DNS on the bench LAN, and `firstboot.sh`
 baked only the box's **own** nodename (`§5`), so it could not resolve the repo host
-(`files.example.net`) that `/etc/apkg.conf`'s `repo=` names. W6.4c closes that last
+(`files.example.net`) that `/etc/apkg.conf`'s `repo=` names. This closes that last
 manual step so a fresh install runs `apkg update` with **zero** hand-holding.
 
 ### The mechanism (spec-driven, three seams)
@@ -1173,7 +1173,7 @@ manual step so a fresh install runs `apkg update` with **zero** hand-holding.
      `firstboot.sh`'s documented `FIRSTBOOT_EXTRA`), pre-POSIX-safe.
 
 With the repo host resolvable, bare **`apkg`** (the `/usr/bin/apkg` symlink the
-W6.4c APKG mint adds, on the default `PATH`) runs `apkg version` / `apkg update` /
+new APKG mint adds, on the default `PATH`) runs `apkg version` / `apkg update` /
 `apkg list` on cold boot #1 with no manual prep.
 
 `installer-selftest.py` **audit L** locks all three seams: `firstboot.sh` appends
@@ -1186,19 +1186,19 @@ bake), with a negative fixture proving the append check fires.
 ### Digests
 
 The base-5 continuity digest stays `86e1ceb144f1328bf441c5df38fc2798` (via
-`altroot-attest --only core,bsd,net,text,sysadm`). The W6.4c **APKG** mint adds the
+`altroot-attest --only core,bsd,net,text,sysadm`). The new **APKG** mint adds the
 `/usr/bin/apkg` **symlink** (an `s` entry in the contents DB), so the full
-eight-package installed-tree digest shifts by exactly that one object versus W6.4b:
+eight-package installed-tree digest shifts by exactly that one object versus the previous section:
 **`ec31a72291e01382ab4b97403f6dad13`** (4859 objects, `a2467c69…`+1). That was the
-canonical from W6.4c onward, and every arm and medium of that era (cdfs, RAW, metal
+canonical from here onward, and every arm and medium of that era (cdfs, RAW, metal
 M-RUN2/M-RUN3, the P1.1e parity run) reproduced it exactly. Also recorded in
-`CHANGELOG.md` / the W6.4c report. **It was superseded on 2026-08-11** by
+`CHANGELOG.md`. **It was superseded on 2026-08-11** by
 `e483b0cb25dfaf4087b1f783335d520d` (same 4859 objects) when the P5.4 r3 `APKG`/
 `APKGENG` re-mints reached freshly mastered media — see *Re-attestation 2026-08-11*.
 The object arithmetic in this section is unaffected: the r3 change is recorded sizes,
 not membership.
 
-## W6-RAW.1: the RAW source arm (the metal path under the no-burn rule)
+## The RAW source arm (the metal path under the no-burn rule)
 
 Everything above sources the base packages from a **cdfs CD** mounted at `/cdrom`.
 The **RAW arm** adds a second source medium — a **raw distribution slice** driven by
@@ -1210,7 +1210,7 @@ source medium changes.
 
 ### The source dimension (`SOURCE_KIND`)
 
-Profiles gain a `SOURCE_KIND` key — `cdfs` (default; every pre-W6-RAW.1 profile is
+Profiles gain a `SOURCE_KIND` key — `cdfs` (default; every older profile is
 cdfs) or `raw`. `install.sh` reads it, validates it, and **fails closed on an
 unknown kind**. The two source kinds require different profile keys:
 
@@ -1298,14 +1298,14 @@ filesystems — see `build-miniroot.sh`'s header), so the builder splits:
    **off the built slice**, which the tool compares byte-for-byte to the host
    manifest. (The box is the "s5 reader" — `s5.py` reads only metadata/small files,
    so a real content gate needs the box's `sum`.) s5.py-authored s5 filesystems are
-   **proven to mount rw on Amix** — W5.4b mounted a mkroot-prebuilt s5 root — so this
+   **proven to mount rw on Amix** — a bench run mounted a mkroot-prebuilt s5 root — so this
    is a known-good path.
 
 `build-install-iso.sh` gained a **`--stage-only`** flag (stage `/install/`, master
 no ISO); `build-raw-source.sh` calls it so the payload slice carries the *identical*
 tree the CD arm ships.
 
-### s5's 14-char filename limit (bench finding, W6-RAW.1)
+### s5's 14-char filename limit (bench finding)
 
 The payload slice is **s5**, and Amix s5 is the classic System-V filesystem with a
 **14-character filename limit** (`DIRSIZ=14`; confirmed on the box — `bootslice.manifest`
@@ -1323,7 +1323,7 @@ confined to the s5-authoring tool — the CD arm and the tracked profiles are un
 
 ### Digests
 
-Same content, different medium ⇒ **same digests**. **Bench-proven (W6-RAW.1, Amiberry,
+Same content, different medium ⇒ **same digests**. **Bench-proven (Amiberry,
 16 MB):** a full pristine→install→cold-boot run reproduced the eight-package canonical
 **`ec31a72291e01382ab4b97403f6dad13` (4859 objects)** — **byte-identical to the cdfs
 arm's** — and the base-5 continuity digest **`86e1ceb144f1328bf441c5df38fc2798`** (via
@@ -1333,7 +1333,7 @@ contents-fsck clean, boot chain verified on-target, first-boot armed; cold boot 
 reached multiuser with the `uaeamix` identity and a **zero-touch `apkg update`** over
 the network (`catalog updated: 31 packages`), cold boot #2 confirmed once-only. The RAW
 double-materialization (cache + pkgadd spool) fit **16 MB** with no wedge — the standing
-bench = metal config. The metal RAW run (a *bootable* install disk) is W6-RAW.2.
+bench = metal config. The metal RAW run (a *bootable* install disk) is covered below.
 
 `installer-selftest.py` **audit M** locks the arm: the `SOURCE_KIND` dimension on
 every profile; the driver's default-cdfs/validate/`die`-on-unknown branch; the RAW
@@ -1342,10 +1342,10 @@ negative fixture proving a softened `apkg … || true` is caught); **no `APKG_RO
 assignment**; the subshell-safe order→apkg name list; the documented
 payload-at-`/cdrom` mount; and the builder's presence.
 
-## W6-RAW.2b: the *bootable* metal source disk (`--bootable`)
+## The *bootable* metal source disk (`--bootable`)
 
-W6-RAW.1 proved the RAW *content* path on the bench with a two-slice source disk
-(payload + raw). **W6-RAW.2b** turns that into the actual **metal deliverable**: a
+The RAW source arm proved the RAW *content* path on the bench with a two-slice source disk
+(payload + raw). **This step** turns that into the actual **metal deliverable**: a
 single self-booting `.hdf`, mapped at **SCSI id 0**, whose slice-1 miniroot the
 machine boots — so the metal install needs no tape, no CD, no boot floppy.
 `tools/build-raw-source.sh --bootable` (profile **`metal-a4000-z3660-raw`**) authors
@@ -1397,7 +1397,7 @@ bench** (2026-07-31, `cd-author` green; *What the author cell found* above) — 
 side of it is now only a confirmation that the fixed line behaves the same there. **Still
 open**: triple-unit presentation and the full-27-set 16 MB headroom; base-8 only.
 
-## W6-I.1: the three card-1 blockers, and why they were invisible
+## The three card-1 blockers, and why they were invisible
 
 `updbootpart` could not install a kernel on a **card-1 (`ced0s1`) image** at all until
 2026-09-09. Three independent defects, each alone sufficient, all fail-closed — which is
@@ -1428,7 +1428,7 @@ device-derivation and boot2 gate are extracted and RUN (`ced0s1` -> CN=`e`, CN_V
 refused; both proven loaders accepted, an unknown one refused as unproven). All three
 fault-injected. (C) is gated statically only — there is no behavioural ROOTDEV fixture yet.
 
-## W6-I: `updbootpart` — kernel upgrade via a package
+## `updbootpart` — kernel upgrade via a package
 
 The install writes the boot slice once and arms the box. But a kernel is not
 special-cased in the package world: to **upgrade the kernel later**, on a running,
@@ -1471,7 +1471,7 @@ needed by both modes and depends on neither), and the reframe's own identity gat
 still re-sums `/stand/unix` *after* the copy — that second look is what catches a
 short write, not redundancy for its own sake.
 
-### The reframe recipe (W6-U probe — codified, not re-derived)
+### The reframe recipe (on-box probe — codified, not re-derived)
 
 Full byte-for-byte conformance with the boot-chain contract, driven **directly** (no
 `make bootpart` — `/stand/CONFIG` is *absent* on installed boxes, so the stock rule
@@ -1484,7 +1484,7 @@ cd /stand
 sync; sync
 ```
 
-Traps the tool **owns** (each proven on-box in W6-U): `makeiblk` is invoked
+Traps the tool **owns** (each proven on-box): `makeiblk` is invoked
 `./makeiblk` (it is `/stand/makeiblk`, not on `PATH`); the boot slice is **s3 of the
 root disk** with **N derived** from the `/` line of `/etc/vfstab` (root `cNd0s1` →
 boot `cNd0s3`), *never* hardcoded; and `/stand/boot2.boot` must be the **flags-based
@@ -1505,14 +1505,14 @@ tools the thin miniroot lacks. Like `S16firstboot`, it is **additive**: it is **
 a package member, so it never reaches the contents DB (`pkgchk`/altroot-attest
 unaffected).
 
-**Since W5.5 it travels on the MEDIUM, not inside the driver.** `build-install-iso.sh`
+**Since the floppy fix it travels on the MEDIUM, not inside the driver.** `build-install-iso.sh`
 stages `payload/updbootpart` at `/install/updbootpart` (and stops unless the staged
 copy is byte-identical to the master), and the arm step is a plain
 `cp "$INST/updbootpart" "$TARGET/usr/sbin/updbootpart"` that fails closed on media
-mastered before W5.5. It used to be a quoted here-doc inside `install.sh` — which the
+mastered before that fix. It used to be a quoted here-doc inside `install.sh` — which the
 1991 `sh` materializes as a real file on the 880-block install floppy the moment it
 *parses* the script, measured at 15,427 bytes = **16 of that floppy's 46 free 1 KB
-blocks, on every install** (see W5.5 below). Being copied rather than emitted changes
+blocks, on every install** (see *`updbootpart` moves onto the medium* below). Being copied rather than emitted changes
 nothing about attestation: the digest is a function of what `pkgadd` **recorded**.
 
 **Audit O** scans `payload/updbootpart` independently — target pre-POSIX + parse, the
@@ -1535,7 +1535,7 @@ not a gate value — but it is what an operator types after `--ksum`, and what
 | `KERNBENCH` | `49667-2026.08.16` | **49667** | 1,586,312 B | a4091 bench (A3000+A4091) — bench-smoke 8/8, not metal-flown |
 | `KERNZ3660` | `60364-2026.08.16` | **60364** | 1,587,524 B | A4000+Z3660 metal — **metal-proven 2026-08-15**, the last metal-validated kernel identity |
 
-`BOOT2_SHA` is `f287ff3a…` in both, unchanged since W6-P — the boot2 loader gate
+`BOOT2_SHA` is `f287ff3a…` in both, unchanged — the boot2 loader gate
 (`sum -r` **14193**) is untouched by a kernel re-mint. **r4 is additive, not a
 retraction:** the r3 pair (`KERNBENCH-64049-2026.08.07` / `KERNZ3660-45833-2026.08.07`)
 was never defective, is metal-green from the 2026-08-07 calibration, and its `.pkg` files
@@ -1780,7 +1780,7 @@ staging; unconditional — bench profiles need logging as much as metal):
 | piece | mode | notes |
 |-------|------|-------|
 | `/etc/syslog.conf` | 0444 | 2.1c conf 1.1 (63870/1,928) — `*.notice;kern.none → /var/log/notice` already selects inetd's `daemon.err`; no edit needed |
-| `/etc/init.d/syslogd` | 0544 | the **ENABLED** copy (28819/967): the vendor disable — one bare `exit` — was commented **at media staging** (the miniroot has no `sed`); §5's enablement, pre-applied. Start and stop also trust `/etc/syslog.pid` only when `ps -p` shows that pid is a syslogd, and remove a stale file: the vendor `kill -0` test let an earlier boot's pid, held by another process now, keep syslogd from ever starting (S3-31) |
+| `/etc/init.d/syslogd` | 0544 | the **ENABLED** copy (28819/967): the vendor disable — one bare `exit` — was commented **at media staging** (the miniroot has no `sed`); §5's enablement, pre-applied. Start and stop also trust `/etc/syslog.pid` only when `ps -p` shows that pid is a syslogd, and remove a stale file: the vendor `kill -0` test let an earlier boot's pid, held by another process now, keep syslogd from ever starting |
 | `/etc/rc2.d/S70syslogd`, `/etc/rc0.d/K50syslogd` | — | **hard links** (`ln`) to the init script — the stock one-inode **3-link** topology. Any later edit must be **`cp` in place, never `mv`** (throttle doc §4): `mv` would orphan the rc links and the fix would work once, then never again after a reboot |
 | `/usr/sbin/syslogd` | 0100 | the 2.1c "major revisions" daemon (53154/22,728) over core's 2.1 copy — the `boot2.boot`-class content touch; keeps the exact combination the goldens run and the throttle doc validated end to end |
 | `/var/log/{alert,bus-errors,console,critical,kernel,news-urgent,notice,security}` | 0644 | eight zero-length stubs (syslogd appends to existing files; the vendor patch ships exactly these) |
@@ -1810,11 +1810,11 @@ medium carries m4 in its base (see the 1.1 section).
 
 ---
 
-## W1: driver plumbing — the input keys the interview will land on
+## Driver plumbing — the input keys the interview will land on
 
-**Wave W1 of the installer-UX rework** (`docs/installer-ux-rework-plan.md` §9).
+**Part of the installer-UX rework** (`docs/installer-ux-rework-plan.md` §9).
 The rework is a *veneer*: an interview that produces an answers-profile, executed
-by this proven driver. W1 is the driver half — it adds nowhere-else-to-land input
+by this proven driver. This is the driver half — it adds nowhere-else-to-land input
 keys, restores two stock steps the NG driver had dropped, and gives the install a
 persistent log. **Everything here is non-interactive and behaviour-preserving:**
 every new key's default is the literal it replaced, and all four tracked profiles
@@ -1834,7 +1834,7 @@ Resolution order: an argument containing `/` is a path; a bare argument naming a
 existing file is a path; anything else is
 `/cdrom/install/profiles/<name>.profile`. The install medium is read-only, so an
 answers profile can never live under `/install/profiles` — the path form is what
-makes the W2 interview possible without touching the transplant engine.
+makes the interview possible without touching the transplant engine.
 `installer-selftest.py` audit S **runs** the extracted resolution block on all
 four argument shapes rather than grepping for it.
 
@@ -1872,7 +1872,7 @@ Two boundaries, both declared in the log itself rather than left to be discovere
 `<target>/var/adm` and `<target>/tmp` are created at the log-open step (the log
 needs the first, `runq`'s scratch file the second). The seed in §4 therefore no
 longer `mkdir`s `<target>/tmp` — the miniroot's 1991 `mkdir -p` returns 2 on an
-existing leaf (W5.4f).
+existing leaf.
 
 ### 3. Stock stage strings
 
@@ -1926,14 +1926,14 @@ DISKLEN=`/etc/ddsize $rDISK`   ;   DISKMB=`expr $DISKLEN / 2048`
 
 `/etc/ddsize` **is on our miniroot** (`miniroot.proto`) — it was simply unused, so
 a profile *hint* drove the plan and a 500 MB disk would have got whatever layout
-the hint described. W1 restores the stock input **for the case the hint cannot
+the hint described. This restores the stock input **for the case the hint cannot
 cover** — a disk nobody wrote a profile for:
 
 - `TARGET_DISK_MB` set → it **wins and the probe is not run at all**. Every
   tracked profile, runbook and `mkroot`-prebuilt target pins it, so no shipped
   flow calls `ddsize`;
 - `TARGET_DISK_MB` empty → the **probe** drives the plan (stock behaviour; this is
-  the path the W2 interview will use);
+  the path the interview uses);
 - probe unusable → 100 MB, the historical fallback.
 
 The probe is `is_num`-guarded: an unreadable device yields empty output, which is
@@ -1962,17 +1962,17 @@ The posture is therefore: *never call it when we do not have to*. A pinned
 unconditional probe), and the driver prints its "probing …" message **before** the
 call so a future wedge is diagnosable from the console instead of silent.
 
-**W2 must re-verify this before it builds on it.** §2.4 of the rework plan specs
+**The interview must re-verify this before it builds on it.** §2.4 of the rework plan specs
 the destination screen as a per-id table of *real `ddsize` probes* — on this
 evidence that scan would hang the interview on the first id. Treat "make `ddsize`
-usable on our kernels (or find another size source)" as a W2 prerequisite, not a
+usable on our kernels (or find another size source)" as an interview prerequisite, not a
 detail.
 
 `TARGET_ROOT_MB` / `TARGET_SWAP_MB` are the two answers stock **asked** for,
 bounded by the same four stock limits the interactive prompts enforced — root
 `>= MINROOT` (16) and `<= ROOTMAX` (what leaves `MINSWAP` free); swap
 `>= MINSWAP` (5) and `<=` what actually remains after root. Unset, the arithmetic
-is the pre-W1 code path unchanged; audit E proves that by re-running the extracted
+is the earlier code path unchanged; audit E proves that by re-running the extracted
 `plan_partitions` with the keys empty and diffing the layout, then proves each of
 the four bounds (and a non-numeric value) actually refuses.
 
@@ -1980,10 +1980,10 @@ the four bounds (and a non-numeric value) actually refuses.
 
 | was | now | note |
 |---|---|---|
-| `TZ=:US/Eastern` literal in `firstboot.sh` | `TZ=:$FB_TZ` | the **colon is emitted by code**, never carried in data — a colon-less `TZ` bus-errors `date`/`who -r`/`ls -l`/`cron` at cold boot (W6.3). The driver strips a leading colon off the profile value so `TZ=::zone` is unreachable too. Audit F's W6.3 guard was extended to the parametrized emission, with negative fixtures for both broken shapes. |
+| `TZ=:US/Eastern` literal in `firstboot.sh` | `TZ=:$FB_TZ` | the **colon is emitted by code**, never carried in data — a colon-less `TZ` bus-errors `date`/`who -r`/`ls -l`/`cron` at cold boot. The driver strips a leading colon off the profile value so `TZ=::zone` is unreachable too. Audit F's colon guard was extended to the parametrized emission, with negative fixtures for both broken shapes. |
 | `route add default 192.0.2.1 1` in `emit_zen_hook` | `FB_GATEWAY` | the tracked master `payload/S99zen` gained an `@FB_GATEWAY@` placeholder; audit P's drift-lock resolves it and proves a **second distinct** IP/gateway pair flows through. A `zen0` profile with an empty `FB_GATEWAY` fails closed, exactly like the existing empty-`FB_IP` gate. |
 | `repo=http://files.example.net/html/amix` in §5c | `FB_REPO_URL` | default = that literal, so the installed `/etc/apkg.conf` is byte-identical. *(Default `http://pkg.amigaux.org` since 2026-09-14.)* |
-| — | `FB_DNS1` / `FB_DNS2` | **plumbed only**: recorded into `firstboot.conf`, applied nowhere. Audit S fails if `firstboot.sh` starts writing `resolv.conf`/`netconfig`/`libsockdns`/`/etc/domain` — that is W5, and on `aen0` flavors it collides with the never-edit-`network-config` rule. |
+| — | `FB_DNS1` / `FB_DNS2` | **plumbed only**: recorded into `firstboot.conf`, applied nowhere. Audit S fails if `firstboot.sh` starts writing `resolv.conf`/`netconfig`/`libsockdns`/`/etc/domain` — that is the dialog's job, and on `aen0` flavors it collides with the never-edit-`network-config` rule. |
 
 ### 7. `/lost+found` — the other stock step we had dropped
 
@@ -2011,10 +2011,10 @@ Two of S's proofs are behavioural rather than textual — the profile-by-path
 resolution and the quiet/verbose logging split are **executed** (extracted from
 the driver, run under `dash`, console and log compared) rather than grepped for.
 
-## W2: the interview — `/install/bin/setup.sh`
+## The interview — `/install/bin/setup.sh`
 
-**Wave W2 of the installer-UX rework** (`docs/installer-ux-rework-plan.md` §9).
-W1 gave the driver the input keys; W2 is the thing that fills them from a human.
+**Part of the installer-UX rework** (`docs/installer-ux-rework-plan.md` §9).
+The driver plumbing gave the driver the input keys; the interview is the thing that fills them from a human.
 `src/installer/setup.sh` runs on the miniroot after the source is mounted, asks
 the questions the *original* installer asked, composes `/tmp/answers.profile`
 over the media-resident base profile, and hands it to the unchanged driver:
@@ -2024,7 +2024,7 @@ miniroot shell
   └─ sh /cdrom/install/bin/setup.sh [base-profile]
        ├─ destination disk   (stock table, stock question, stock erase confirm)
        ├─ partition sizes    (stock arithmetic, stock floors, stock messages)
-       ├─ root fs type       (NOT asked since P-35: always ufs; until then the
+       ├─ root fs type       (NOT asked since 2026-10-30: always ufs; until then the
        │                      stock s5/ufs menu with its default moved to [ufs])
        ├─ package set        (data-driven from /install/order*)
        ├─ verbose install?
@@ -2052,14 +2052,14 @@ truncates it at 10,240 bytes).
 `installer-selftest.py` audit **U6** checks all 18 quoted strings **byte-for-byte
 against those artifacts**, and the table spells out the three places stock
 parameterised what we resolve — stock asked about "the disk you want to `$MODE`"
-because it also did repairs (repair mode is W4, on the miniroot), and its two
+because it also did repairs (repair mode is on the miniroot), and its two
 size prompts interpolate its own default variables. Declaring the deviations
 beats a fuzzy match that would quietly accept a drifted string.
 
 ### ★ The scan never calls `/etc/ddsize`
 
 This is the wave's load-bearing constraint, and it exists because of a
-measurement, not a worry. W1 added **one** unconditional
+measurement, not a worry. The driver work added **one** unconditional
 `/etc/ddsize /dev/rdsk/c6d0s0` to the driver and it **wedged the install** on the
 bench A3000 onboard-SCSI (a3091) path: the console printed `a3091: 0x1 0 0x0` and
 nothing ever advanced (matrix run `20260811-094255-cd`, install gate FAIL after
@@ -2086,7 +2086,7 @@ would read that as a call).
 
 1. **The base profile's `TARGET_DISK_MB`**, when the chosen id is the profile's
    own `TARGET_SCSI_ID` — the medium's declaration about its own rig. Same
-   precedence the W1 driver applies, and what keeps a pinned rig deterministic.
+   precedence the driver applies, and what keeps a pinned rig deterministic.
 2. **The RDB's extent** — the largest `start + length` over its partitions, read
    with `/etc/rdb -h 5` (last partition number) and `/etc/rdb -p N`
    (`name start length`, the exact three-token shape the stock script parses with
@@ -2142,12 +2142,12 @@ is fenced by `# W2-ANSWERS-BEGIN` / `# W2-ANSWERS-END` and carries
 `INSTALL_VERBOSE`.
 
 `/install/profiles/BASE` (written by `build-install-iso.sh` from the first
-`--profile`) names the family the medium was mastered for, so the W4 miniroot
+`--profile`) names the family the medium was mastered for, so the miniroot
 handoff *is* a bare `exec sh /cdrom/install/bin/setup.sh`. An explicit argument
 still overrides it, so every existing runbook line is unaffected.
 ★ **On a RAW payload slice the name in `BASE` does not resolve**: the slice is s5,
 s5 truncates every name at 14 characters, and `build-raw-source.sh` therefore
-writes the profile under an s5-safe short name (`raw.profile`). W4 taught the
+writes the profile under an s5-safe short name (`raw.profile`). The miniroot respin taught the
 resolver to fall back to that short name when `BASE`'s own name is not on the
 medium — without it the argument-less handoff would die on exactly the media the
 metal runbook uses. (A cleaner fix is for `build-raw-source.sh` to rewrite `BASE`
@@ -2167,7 +2167,7 @@ into the tty queue ahead of the prompts — the run would hang with no diagnosis
 
 Sets are enumerated from the medium's `/install/order*` files into a table of
 `<n> <orderfile> <label>` rows; the menu prints rows and `Choose: [1] ` reads the
-answer. Today there is exactly one order file, so there is one row. When W3b ships
+answer. Today there is exactly one order file, so there is one row. When multi-set selection ships
 per-set order files the same loop prints three and the same prompt reads the
 choice — more rows, no new code.
 
@@ -2225,10 +2225,10 @@ refuses a root floppy that already carries a beacon, so a previous run's answers
 can never be read as this one's.
 
 The **keymap** is not `setup.sh`'s: it is pre-mount, so it is the miniroot's own
-prompt. *(W2 left it there and the `mediaboot` gate Ctrl-C'd past it, which meant
-`FB_KMAP` could only come from a canned profile. **W4 closes that loop** — the
+prompt. *(The first interview left it there and the `mediaboot` gate Ctrl-C'd past it, which meant
+`FB_KMAP` could only come from a canned profile. **The miniroot respin closes that loop** — the
 miniroot's own menu hands the answer over as `$KMAP` / `/tmp/kmap` and `setup.sh`
-records it; see *W4: the miniroot respin* below.)*
+records it; see *The miniroot respin* below.)*
 
 ### Selftest lockstep
 
@@ -2238,7 +2238,7 @@ allowlist as the driver** (no target-side extras: no `sed`, no `touch`, no
 
 * **U — structure.** Scan is `ddsize`-free; `SCAN_IDS` derived from
   `miniroot.proto`; stdin discipline; no `stty`; the answers-profile shape and
-  both beacon fences; stock wording byte-for-byte; and both W2 keys present and
+  both beacon fences; stock wording byte-for-byte; and both interview keys present and
   valid in all four tracked profiles.
 * **V — the interview's sizing defaults *are* the driver's plan.** Both blocks are
   **extracted and executed** under `dash` on nine disk sizes and required to
@@ -2283,9 +2283,9 @@ INSTALL_VERBOSE=n
 That is the whole claim in one table: the same tree, from the same media, whether
 a human answered the questions or a profile did.
 
-## The stock `amixpkg` screens (recovered — the W3b screen freeze)
+## The stock `amixpkg` screens (recovered — the screen freeze)
 
-W3b reimplements amixpkg's menus over our catalog, so the exact rendering had to
+Multi-set selection reimplements amixpkg's menus over our catalog, so the exact rendering had to
 stop being an open question. `/bin/amixpkg` was extracted from the stock root
 floppy (12,216 B, md5 `d63408968f87027313dc9115a6756d55`) and analysed
 **statically** — `strings` over the ELF's `.rodata`, no execution. Every string
@@ -2300,7 +2300,7 @@ below is a literal from that binary.
 Choose: [1] 
 ```
 
-Row 2's `tape` becomes `disc` for us — the one changed word (plan §2.7). W2 uses
+Row 2's `tape` becomes `disc` for us — the one changed word (plan §2.7). The first interview uses
 row 1 and the `Choose: [1] ` prompt as-is.
 
 **The custom-selection table.** The row format is
@@ -2355,15 +2355,15 @@ Go ahead with the installation anyway? [n]
 
 The tape `List` header amixpkg parses uses the keys `pkg=`, `name=`, `size=`,
 `opt=`, `zcat=` and `Version` — our catalog's `#isize` block is the equivalent
-input, which is why W3b needs it (plan §5.3) and why W2 already reads it when a
+input, which is why multi-set selection needs it (plan §5.3) and why the interview already reads it when a
 medium carries one.
 
-Per-package progress is `Installing %s` — the string the W1 driver already prints
+Per-package progress is `Installing %s` — the string the driver already prints
 in quiet mode.
 
-## W3b: multi-set package selection goes live
+## Multi-set package selection goes live
 
-W2 gave the installer a human. W3b gives the human something to choose. The
+The interview gave the installer a human. This gives the human something to choose. The
 packagemanager half landed first (`gen-catalog.py --isize`, `cats.conf`,
 `sets.conf` + `sets.py`); this is the media/installer half, and it turns
 amixpkg's three-tier menu from a one-row table into the real thing.
@@ -2450,7 +2450,7 @@ Row 2 is everything on the disc. Row 3 is a UI constant and is emitted by
 `setup.sh`. On a minimal medium rows 1 and 2 are the same set and the menu says
 so **twice** rather than hiding a row: a menu whose numbering depends on the
 medium is a menu the blind-console matrix cannot type into. A medium mastered
-before W3b has no `/install/sets` and the two tiers are synthesized from its
+before this has no `/install/sets` and the two tiers are synthesized from its
 single `/install/order` — three rows, same numbering, either way.
 
 **The MB figures are BUDGETED at ~1.10×.** The `#isize` block is a payload byte
@@ -2477,7 +2477,7 @@ yes      core       Amiga Unix essentials                      20.9
 Enter package name to install or ignore; enter GO when ready.
 ```
 
-`%-8s %-10s %-40s %6.1f`, Size last — the layout frozen by W2's static analysis
+`%-8s %-10s %-40s %6.1f`, Size last — the layout frozen by static analysis
 of `/bin/amixpkg`, reproduced with `padr()` because the miniroot has no `printf`.
 Header and rules use `%-8s %-10s %-40s %8s` with `Size  ` / `----  ` / `====  `,
 and the total is `%53s Total: %6.1f MB`; the numbers land in columns 62–67 in
@@ -2542,12 +2542,12 @@ advertised.
 
 | key | default | meaning |
 |---|---|---|
-| `INSTALL_ORDER` | *(empty)* | empty ⇒ `$INST/order`, i.e. **byte-for-byte** the pre-W3b behaviour. A bare name resolves on the medium; a value with `/` is a path — which is how a Custom selection arrives, because the medium is read-only. |
+| `INSTALL_ORDER` | *(empty)* | empty ⇒ `$INST/order`, i.e. **byte-for-byte** the older behaviour. A bare name resolves on the medium; a value with `/` is a path — which is how a Custom selection arrives, because the medium is read-only. |
 | `INSTALL_SET` | *(empty)* | the set's name for the log; empty ⇒ read the order file's `# set:` header. |
 | `INSTALL_ATTESTED` | `y` | `n` softens no gate; it records that the gate was waived. |
 
 **Core-first stays in the driver.** Gate 13 already refuses any non-core package
-into a bare root, package by package, and W3b does not move it — but
+into a bare root, package by package, and this does not move it — but
 `INSTALL_ORDER` now lets a file the driver did not generate name the packages, so
 the first package is checked up front as well. Subshell-safe, of course: the
 probe records to a file inside the redirect-fed loop and the parent decides.
@@ -2562,11 +2562,11 @@ rows **with no MB figures** (absence is unknown, never 0.0) and Custom answers
 returns to the menu. Named sets still install normally — `/install/sets` and the
 per-set order files ride the payload slice like the rest of the `/install` tree.
 Giving RAW media a readable catalog copy is a `build-raw-source.sh` change and
-belongs with W6's RAW catalog-region measurement.
+belongs with the RAW catalog-region measurement.
 
 ### ★ Bench finding 1: a redirected `read` is a FORK on the miniroot sh
 
-W3b's first `cd-interactive` run (`w3b2-cdi`) died on its own guard, and the
+The first `cd-interactive` run here (`w3b2-cdi`) died on its own guard, and the
 console said exactly why:
 
 ```
@@ -2624,12 +2624,12 @@ later package to overwrite anything.
 This is a property of the *distribution*, not of the installer, and it is worth
 knowing before anyone tries to gate a set on a subset digest again.
 
-### ★ A W2 latent bug found and fixed: `: >` inside a *function* called from a loop
+### ★ A latent interview bug found and fixed: `: >` inside a *function* called from a loop
 
-The 2026-08-11 finding was "never `: > file` inside a loop". W3b widens it: **a
+The 2026-08-11 finding was "never `: > file` inside a loop". This widens it: **a
 function called from a loop body is a loop body.** Every question in the
 interview sits inside the stock `Do you wish to change any of these?` re-ask
-loop, so W2's straight-line `: >` truncations in `scan_disks`, `choose_disk`,
+loop, so the straight-line `: >` truncations in `scan_disks`, `choose_disk`,
 `set_size_mb` and `build_set_table` were only straight-line on the *first* pass.
 A second pass would have appended to a scratch file it believed it had emptied,
 and the operator would have been shown **the disk table and the package menu
@@ -2648,7 +2648,7 @@ All three cells **9/9**:
 | `cd-standard` ★ | `w3b3-std` | standard (17) | `rc=0`, 537 s | **`4ad8e17b69b32208c9fffa600596a428` / 11012** + base-5 4793 / base-8 4859 CONTAINED |
 
 The interview's beacon, recovered from the root floppy `.adf` before its
-transplant ran, now carries the W3b keys as well:
+transplant ran, now carries the set keys as well:
 
 ```
 # install set: Standard Amiga UNIX installation
@@ -2682,7 +2682,7 @@ plan flagged (§5 item 8): **nobody had ever installed 17 packages in one run on
 No memory-pressure symptom appeared at any point (the class to watch for is the
 RAW double-materialisation livelock, which reads like a SCSI or network hang).
 `Full` (30) / `Developer` (19) / `X11` (18) stay **offered-but-unattested** and
-ride W6 with the headroom measurement they depend on — 30 packages is another
+ride the set-matrix work with the headroom measurement they depend on — 30 packages is another
 ~210 MB of source trees and a different question from this one.
 
 The one operational consequence: a medium mastered **before** the reference was
@@ -2695,7 +2695,7 @@ anyway.
 The installer-UX plan's source-exclusion table carried one hardware exclusion:
 *CD on an a4091-sole-HBA rig wedges*. The observation predates the stack-sdcom
 (`amix-z3660scsi a5af58a`) and cdfs page-crossing-DMA (`fa9db1a` / `31e8c3b`)
-fixes, so §8.11 made re-verifying it a W2 bench item **before** the exclusion got
+fixes, so §8.11 made re-verifying it an interview bench item **before** the exclusion got
 hard-coded into the interview.
 
 **Rig** (generated into `work/wedge-verify/<ts>/`, never a tracked config — the
@@ -2736,25 +2736,25 @@ categorically off the table on an A4091-sole rig.
 with the A3000 controller switched off — `0,3` is refused and `1,3` is the CD.
 The natural assumption (drop the first controller, everything shifts down) is
 wrong, so an a4091-sole profile keeps `CD_SPEC=1,3`. The miniroot's own probe
-order (W4 hardcodes `1,3` → `0,2` → `1,2`) already tries the right one first.
+order (the miniroot hardcodes `1,3` → `0,2` → `1,2`) already tries the right one first.
 
 Not claimed by this run: that a full *install* from that rig succeeds. The
 exclusion this retires is about the source medium being mountable and readable,
 which is what was measured.
 
-## W4: the miniroot respin — the install script becomes ours
+## The miniroot respin — the install script becomes ours
 
 Until this wave the NG miniroot booted the **stock** install script (`/etc/profile`
 on the stock root floppy, 19,351 B) and the operator escaped it: `Ctrl-C` at the
 first prompt, mount the CD by hand, run the driver. Everything the last three waves
 built — the interview, the sets menu, the driver's input keys — sat behind that
-manual dance. W4 replaces the one file, and the dance is gone.
+manual dance. The respin replaces the one file, and the dance is gone.
 
 `src/miniroot/profile` (15,998 B) is now `/etc/profile` on the built miniroot. The
 anatomy is in `docs/miniroot.md`; what matters here is the seam:
 
 ```
-console login shell sources /etc/profile          [miniroot, ours since W4]
+console login shell sources /etc/profile          [miniroot, ours since the respin]
   ├─ "Amiga UNIX install script"  + the stock Ctrl-C trap (FIRST)
   ├─ keymap menu (stock's, entry 11 relabelled "Suomi / Svenska")
   │     -> /etc/sioc 5 …  and  $KMAP + /tmp/kmap handed forward
@@ -2839,7 +2839,7 @@ canned conversation and over the halt lines.
 
 This is not a harness workaround. It is the same law the KVM discovered on metal on
 2026-08-11 (`/` → `-` when the KVM keymap and the AMIX map disagree), and the reason
-the W4 flow is worth having: **it asks for no paths at all.**
+the new flow is worth having: **it asks for no paths at all.**
 
 ### Selftest lockstep
 
@@ -2849,7 +2849,7 @@ allowlist, with its own vacuity guard), **H**/**H2** (subshell loops, redirected
 reads), **I** (`set --` counting), **T** (`: >` in a loop) — and gets one of its
 own:
 
-* **Y — the W4 miniroot script.** The screen ORDER (banner → trap → keymap →
+* **Y — the miniroot script.** The screen ORDER (banner → trap → keymap →
   install-or-repair → probe → hand-off) and the trap before the first `readask`;
   the hand-off is `setup.sh` and never `install.sh` directly; the keymap menu has
   14 rows, default 12, no `usa1`, entry 11 relabelled and stock's own entry 11
@@ -2878,7 +2878,7 @@ prompt now, and every fixture carries the prompt.
 
 ### ★ The probe that panicked the kernel (and what it cost)
 
-The first `cd-interactive` run on the W4 miniroot **panicked the box** in the
+The first `cd-interactive` run on the new miniroot **panicked the box** in the
 source probe, a few seconds after `Searching for the installation source...`:
 
 ```
@@ -2934,7 +2934,7 @@ back by refactoring.
 
 ### The RAW payload slice's own trap: `BASE` names a profile that is not there
 
-The W4 hand-off is argument-less (`exec sh /cdrom/install/bin/setup.sh`), so it
+The hand-off is argument-less (`exec sh /cdrom/install/bin/setup.sh`), so it
 depends on `/install/profiles/BASE`. On a **RAW payload slice** that file names a
 profile the slice does not carry:
 
@@ -2952,7 +2952,7 @@ resolve; the cleaner fix (have `build-raw-source.sh` rewrite `BASE` when it
 renames the profile) is queued rather than done, because that tool was outside
 this wave's blast radius.
 
-### ★ The other thing W4 measured: the interactive path was six blocks from death
+### ★ The other thing the respin measured: the interactive path was six blocks from death
 
 The second `cd-interactive` run got all the way through the flow — probe, hand-off,
 interview, **answers beacon verified** — and then the transplant died:
@@ -2974,9 +2974,9 @@ The root filesystem in an install is **the 880-block floppy**, and the static
 | `/matrix.ans` | 12 180 B (12 blk) | the beacon — *the same profile again* |
 | `/tmp/setup.*`, `/matrix.*` | ~10 blk | the interview's scratch + the harness markers |
 
-**46 free → 8 free**, and `pkgadd` wanted more than that. The W3b runs did the same
+**46 free → 8 free**, and `pkgadd` wanted more than that. The earlier multi-set runs did the same
 thing and passed with **six** blocks to spare — the same s5 walk of `w3b3-cdi`'s
-floppy proves it. That was luck, not headroom; W4 spent four of those blocks and
+floppy proves it. That was luck, not headroom; the respin spent four of those blocks and
 the margin was gone.
 
 Two changes, both in `setup.sh`, and neither of them a workaround:
@@ -2993,7 +2993,7 @@ The lesson generalizes past this wave: **on the miniroot, the root filesystem is
 floppy with tens of blocks free, and anything an interactive path leaves in `/tmp`
 is taken directly out of the installer's own working room.**
 
-### W4 bench acceptance (fresh media, 2026-08-11)
+### Miniroot respin bench acceptance (fresh media, 2026-08-11)
 
 Miniroot: `sum -r` **62398**, 901 120 B, proto-conformant (212 entries), its
 `/etc/profile` byte-identical to `src/miniroot/profile` (md5 `f36c5033…`) read back
@@ -3016,10 +3016,10 @@ The two claims the wave exists for, both green:
   digest**, because the `default.kmap` link is driver-written and therefore
   invisible to the contents DB.
 
-⚠ **One flake worth recording, and it is not W4's.** The first `cd-standard`
+⚠ **One flake worth recording, and it is not the respin's.** The first `cd-standard`
 attempt panicked at package 12/17 with `PANIC: swapinub: segu_fault() failed to
 swap in the u area` — memory pressure, on a miniroot whose only swap is
-`/dev/fakeswap`. The re-run installed all 17 in 537 s with no symptom. W3b's entry
+`/dev/fakeswap`. The re-run installed all 17 in 537 s with no symptom. The multi-set entry
 ("the 16 MB headroom question is ANSWERED for 17 packages") rests on a single run;
 this says the answer is **marginal, not comfortable**, and a 17-package install at
 16 MB should be expected to fail occasionally until something changes.
@@ -3062,7 +3062,7 @@ The installed root really is mounted and readable (`uaeamix` is the box the
 `sync`, `umount /mnt`, `uadmin 2 0`. `fsck` was not exercised: this filesystem was
 clean, so the offer did not appear (stock only asks when the mount fails).
 
-## W5: the first-boot configuration dialog — two stages, one application path
+## The first-boot configuration dialog — two stages, one application path
 
 Until this wave a freshly-installed box never asked its owner anything. The
 installer disarmed the stock sysinit dialog (`chmod -x
@@ -3070,7 +3070,7 @@ installer disarmed the stock sysinit dialog (`chmod -x
 `/etc/rc2.d/S16firstboot` baked whatever the **profile** said — nodename,
 timezone, address, the shipped root password. That is exactly right for the
 unattended tier and useless for anybody installing from a disc onto their own
-machine. W5 gives that person the original's first-boot conversation back,
+machine. The dialog gives that person the original's first-boot conversation back,
 without giving up a single one of the mechanical steps the profile path
 guarantees.
 
@@ -3175,13 +3175,13 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
 
    and on the miniroot that `/tmp` **is** the 880-block install floppy, which has
    46 free blocks. The updbootpart body cost **16 of those 46 blocks on every
-   install since W6-I** — which is the real reason this floppy has been "six
+   install since updbootpart joined the driver** — which is the real reason this floppy has been "six
    blocks from death" for three waves. Adding 29 KB of dialog on top asked for
    more than the floppy had. So the dialog moved into `firstboot.sh` behind a
    `--dialog` entry point, the slot gets a three-line stub the driver emits with
    plain `echo` lines, and `installer-selftest` enforces the law.
 
-   > **Two corrections, both W5.5 (2026-08-12).** The figure above read "15,818
+   > **Two corrections, both from the swap-fix work (2026-08-12).** The figure above read "15,818
    > bytes = 31 of those 46 blocks" when this was written, and **both halves were
    > wrong**. The scanner that produced 15,818 counted the *comment* that
    > described the here-doc as part of it (it began matching at the prose
@@ -3190,15 +3190,15 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
    > the box. And 31 was that inflated byte count divided by **512**, while the
    > floppy's 46 free blocks are **1 KB** blocks — so the true cost is 16 of 46,
    > not 31 of 46. `_heredoc_bodies` skips whole-line comments now, and the law
-   > is **zero here-docs**, because W5.5 moved the last one onto the medium.
+   > is **zero here-docs**, because the same work moved the last one onto the medium.
 
 2. **The interview was spending 26 of the floppy's 46 free blocks on
    *comments*.** `/tmp/answers.profile` was a byte copy of the base profile, and
    a profile is 90% prose: 13,556 bytes of which about 1,000 are assignments —
    on the same 880-block filesystem the static `pkgadd` needs for
-   `/usr/apkg/sadm/install/scripts`. W4 got away with it by **two blocks**; W5's
+   `/usr/apkg/sadm/install/scripts`. The respin got away with it by **two blocks**; the dialog's
    profiles grew by twenty lines of comment and the first full run died exactly
-   where W4's first one did: `Floppy fd0: no space` → `pkgadd: ERROR: unable to
+   where the respin's first one did: `Floppy fd0: no space` → `pkgadd: ERROR: unable to
    make packaging directory` → `STOP: base-OS install FAILED for package(s):
    core`. The interview now copies the **assignments only** (a `case` glob in a
    redirect-fed loop — there is no `grep` or `sed` on the miniroot), which is the
@@ -3216,7 +3216,7 @@ the installer on the real miniroot (2026-08-12). None of them is visible to
 4. **SVR4 `sed` has no `\|` alternation**, and its failure mode is silence.
    Both of `firstboot.sh`'s duplicate guards were written as
    `\([ TAB]\|$\)` — measured on the box, that expression matches **nothing**, so
-   neither guard has fired since W6.4c and a re-run appended the repo-host line a
+   neither guard has fired since the repo-host baking and a re-run appended the repo-host line a
    second time. (Nobody noticed: the resolver takes the first match.) Both are
    two `-e` expressions now — one for "token followed by whitespace", one for
    "token at end of line" — and audit Z forbids `\|` in any on-box `sed`.
@@ -3276,7 +3276,7 @@ The enablement is `resolv.conf` + the `libsockdns` relink + `netconfig.DNS` +
 an **empty** `/etc/domain` + **literal-IP boot ifconfigs**, and a half-applied
 one costs ~3 minutes on every boot (each name-taking `ifconfig` runs before the
 default route exists and burns the full resolver retransmit). Part five is why
-this is `zen0`-only in W5: our `S99zen` already uses a literal address, but on
+this is `zen0`-only here: our `S99zen` already uses a literal address, but on
 `aen0` the bring-up line lives in `/etc/inet/network-config` — **the one file
 this project never edits** — so the dialog refuses DNS there out loud rather
 than serving half of it. The loopback half of part five (`S69inet`'s `ifconfig
@@ -3357,10 +3357,10 @@ which is the mechanical proof that arming is opt-in. New cell **`cd-interrupt`**
 power-cycles the box mid-dialog and then requires a healthy boot, a dialog that
 re-runs from the top, a clean third boot — and the same digest.
 
-## W5.5: the `swapinub` panic — the install miniroot's only swap is a bit bucket
+## The `swapinub` panic — the install miniroot's only swap is a bit bucket
 
-`cd-standard` — the 17-package `standard` set — stopped being installable. W3b
-attested it once; W4 saw one panic and one green re-run; on W5 media it was **2/2
+`cd-standard` — the 17-package `standard` set — stopped being installable. Multi-set selection
+attested it once; the respin saw one panic and one green re-run; on dialog-era media it was **2/2
 reproducible**, always at the same place:
 
 ```
@@ -3458,9 +3458,9 @@ Two deliberate choices:
 Nothing about the installed tree moves: no file is written, and attestation is a
 function of what `pkgadd` **recorded**.
 
-## W5.5: `updbootpart` moves onto the medium — 16 blocks back on every install
+## `updbootpart` moves onto the medium — 16 blocks back on every install
 
-W5's finding 1 — *a here-doc is a file on the install floppy from the moment the
+The dialog's finding 1 — *a here-doc is a file on the install floppy from the moment the
 shell parses the script* — left one here-doc standing: `emit_updbootpart`'s. This
 is the wave that removes it, and the cost it was charging was measured first, on
 a real run, by starting the driver in the background and listing `/tmp`:
@@ -3488,23 +3488,23 @@ the `/stand` framing tools:
   drift lock the here-doc used to give for free, re-established in the one place
   that can still see both files;
 * `install.sh`'s arm step is `cp "$INST/updbootpart" …` + `chmod 0755`, and it
-  **fails closed** if the medium has no `updbootpart` (media mastered before W5.5
+  **fails closed** if the medium has no `updbootpart` (media mastered before this
   cannot silently produce a target without the reframe tool);
 * the RAW arm inherits it for free — `build-raw-source.sh` stages the payload
   tree by calling `build-install-iso.sh --stage-only`.
 
 **The here-doc law tightens to zero.** All three miniroot scripts (`install.sh`,
 `setup.sh`, the miniroot `/etc/profile`) now carry no here-doc at all, so the
-budget is 0 bytes rather than W5's "one, at most 16 KB". On the miniroot you
+budget is 0 bytes rather than the dialog's "one, at most 16 KB". On the miniroot you
 write a file with `echo` lines, or you stage it on the medium and `cp` it. The
 scanner behind the law was fixed in the same pass: it skips whole-line comments
 now, having previously counted the prose *describing* a here-doc as part of it
-(that is where W5's 15,818-byte figure came from), and it carries both a
+(that is where the dialog's 15,818-byte figure came from), and it carries both a
 non-vacuity fixture and a negative one for the comment case.
 
-## W6: the public flavor, the whole set matrix, and two holes surfaced in-product
+## The public flavor, the whole set matrix, and two holes surfaced in-product
 
-W6 is the closing wave of the installer-UX rework, and it is mostly about
+This is the closing stage of the installer-UX rework, and it is mostly about
 *honesty*: a disc a stranger can install from, a measured answer for the three
 package sets nobody had ever installed, and two in-product messages for the two
 classes of machine this installer cannot serve.
@@ -3514,7 +3514,7 @@ classes of machine this installer cannot serve.
 Every profile in this tree described a machine on one particular LAN. That is
 right for the unattended tier — the matrix has to reproduce a byte-identical tree
 with nobody at the console, so every answer must be on the disc in advance — and
-wrong for a disc handed to somebody else. W6 splits a profile's two dimensions
+wrong for a disc handed to somebody else. This work splits a profile's two dimensions
 explicitly:
 
 * the **rig** dimension (boot slice, kernel + sums, SCSI id, `ROOTDEV`) — a
@@ -3548,7 +3548,7 @@ one. That is a mechanism, and the `cd-interrupt` cell is what proves it.
 **Root-telnet defaults to ENABLED and is never silently disabled** (decision
 §8.6). `CONSOLE=` in `/etc/default/login` gates *root* only — ordinary users can
 telnet in whichever way it is set — and telnet is the only remote login this
-system has until ssh exists. A buyer who cannot reach the box they just installed
+system has until ssh exists. Someone who cannot reach the box they just installed
 has no way to find out why, so the dialog asks, with `y` as the default.
 
 **The repository has a host and no address.** `FB_REPO_HOST=pkg.amigaux.org`,
@@ -3573,7 +3573,7 @@ hand. Half a resolver is worse than none.
 > the LAN cell's 79 and the interview correctly refused the follow-on swap of 18
 > — "You only have 17 remaining megabytes available." — which is the arithmetic
 > working, not failing.) In prebuilt mode the plan does not repartition anything:
-> the driver mounts slice 1 whatever its size, and W5.5's swap step reads the
+> the driver mounts slice 1 whatever its size, and the swap step reads the
 > real slice length out of the RDB, so the installed tree is untouched.
 
 > ★ **The empty default was a hang.** Writing the flavor exposed a real defect in
@@ -3616,7 +3616,7 @@ A590, A4091).
 **★ The OLD_BOOT class — the one that failed silently.** Kickstart 1.3 machines
 and A2090 controllers cannot be booted by the modern boot chain at all; stock
 handled them with the "old Johann ROM magic cookie" method (RDB moved to block 8,
-patched boot block). Nothing in this tree does that, and until W6 nothing
+patched boot block). Nothing in this tree does that, and until this work nothing
 *noticed*: the install would run to completion, write a perfectly good root
 filesystem and a boot slice those ROMs cannot read, and the machine would simply
 never boot. Unlike the IDE hole, which at least announces itself as "no disks",
@@ -3696,7 +3696,7 @@ inputs, and nothing this bench can produce makes it fire wrongly.
 live on the CD, not on the 880-block floppy; both additions are `echo` lines and
 comments, and there is no here-doc anywhere (the law is zero). The only floppy
 traffic is the driver's `/tmp/dioc.$$` — one short line, written and removed
-inside the probe — so the ~41 KB of free floppy W5.5 bought back is untouched.
+inside the probe — so the ~41 KB of free floppy the swap-fix work bought back is untouched.
 
 ### ★ The `full` set cannot be installed as declared — s5 truncates at 14 characters
 
@@ -3706,8 +3706,8 @@ own 1991 source packages contain filename pairs that cannot coexist on the
 filesystem the 1991 installer creates.
 
 Amix's s5 has the classic System V `DIRSIZ = 14`. This project has been bitten by
-it twice already — the RAW payload slice (W6-RAW.1) and `firstboot.conf` vs
-`firstboot.conf.new` (W5) — and `installer-selftest` audits every on-target path
+it twice already — the RAW payload slice and `firstboot.conf` vs
+`firstboot.conf.new` — and `installer-selftest` audits every on-target path
 this tree writes for it. Nobody had ever audited the *package content*.
 
 Observed on the bench, mid-run, exactly as the console printed it:
@@ -3752,7 +3752,7 @@ stage1's declaration, 16896/52794 is stage2's.
 | `amixInitExtMon` | `amixInitExtMono.c` / `.o` | `…/ddx/amix/ZAPHOD/` | `X11r5src` |
 
 > ★ **CORRECTION (2026-08-14): this table used to say THREE groups and four
-> files to exclude.** W6's scan was **directory-blind** — it grouped on the
+> files to exclude.** The earlier scan was **directory-blind** — it grouped on the
 > truncated *basename* alone, so the two `amixInitExt*` pairs that exist in
 > **both** `WORK/` and `ZAPHOD/` each collapsed into one row. The six filenames
 > it named were right; the fix is per-**path**, and there are ten paths. Acting
@@ -3815,7 +3815,7 @@ rig**. `work/install-matrix/ufs-full-1`, `cd-full` on the flipped
 - `mkfs_ufs -o free=2,opt=s` authored a 367 MiB Berkeley root on the box and the
   driver mounted it (`/etc/mount /dev/dsk/c6d0s1 /mnt 0 ufs`), with no pre-mount
   fsck — stock's own behaviour on either filesystem.
-- W5.5's real swap replaced the dummydisk fake; the `/etc/mnttab` seed line
+- The real swap replaced the dummydisk fake; the `/etc/mnttab` seed line
   stayed the literal `s5`, describing the miniroot as it must.
 - **29 of the 30 packages went down in under 14 minutes.** Not one 14-character
   collision: the limit genuinely is not there on ufs.
@@ -3952,7 +3952,7 @@ install.sh: attestation: /cdrom/install/sets marks set 'full' UNATTESTED;
 The direction is the whole design. `n`→`y` is refused by construction — a disc
 must never be able to talk a run *into* claiming an attestation, and a profile
 that deliberately waived the gate keeps its waiver. A medium with **no** table
-(pre-W3b, or a raw slice) and a set the table does not mention are both left
+(an older one, or a raw slice) and a set the table does not mention are both left
 alone: absence is *unknown*, never `n`.
 
 **It cannot move a digest**, which is why it was safe to land on the same media
@@ -4045,7 +4045,7 @@ newline (33 B) whatever the package count. So the RAW arm needs no change for
 the full set, and the "32+ rows" question is answered with room to spare rather
 than with an assurance.
 
-### The device-major decode defect (W5.5 queue, closed)
+### The device-major decode defect (closed)
 
 `tools/lib/s5.py` had no device decoder; `miniroot-selftest.py` read the major out
 of the **high byte of `di_addr` L3 slot 0**, as if a device inode stored a packed
@@ -4072,7 +4072,7 @@ that did not move is `/dev/console`, which is genuinely char major 0.
 
 The decoded values cross-check exactly against the grimoire major-number registry:
 `/dev/dsk/*` block **18** (`dd`), `/dev/rdsk/*` char **40** (`dd`), `/dev/fakeswap`
-block **19** (`dummydisk` — the bit bucket W5.5 named), `/dev/dsk/fd*` block **16**
+block **19** (`dummydisk` — the bit bucket the swap fix named), `/dev/dsk/fd*` block **16**
 and `/dev/rdsk/fd0f` char **17** (`fd`), `/dev/rmt/*` char **16** (`ct`),
 `mem`/`kmem`/`null`/`zero` char **3**, `/dev/tty` **2**, `/dev/amiga` **6**,
 `/dev/scsi` **11**, `/dev/machid` **12**. The corrected proto conforms against both
@@ -4089,12 +4089,12 @@ name. `build-raw-source.sh` then makes the payload tree s5-safe — s5 truncates
 14 characters, so it keeps exactly one profile under the short name `raw.profile`
 and deletes the rest — and left `BASE` naming the file it had just removed.
 Nothing ever failed, because `setup.sh` carries a fallback (`raw.profile` when
-`BASE` does not resolve) written for precisely this reason. W6 writes the truth
-and keeps the fallback for pre-W6 media, so the fallback stops being
+`BASE` does not resolve) written for precisely this reason. The builder now writes the truth
+and keeps the fallback for older media, so the fallback stops being
 load-bearing; the builder now also refuses to finish if `BASE` names a profile it
 did not stage.
 
-### W6 bench acceptance — ten cells, nine green
+### Public-flavor bench acceptance — ten cells, nine green
 
 Media mastered from the committed tree (`…-w6-20260812r3.iso`, one per set);
 every cell a full from-scratch install on fresh media.
@@ -4110,7 +4110,7 @@ every cell a full from-scratch install on fresh media.
 | ★ `cd-public` | **9/9** | 372 s | `e483b0cb…` / **4859 — UNMOVED** |
 | ★ `cd-developer` | **9/9** | 599 s | **`ebd61ce1…` / 11497** (attested) |
 | ★ `cd-x11` | **9/9** | 598 s | **`5439f78f…` / 11546** (attested) |
-| `cd-full` (s5, 400 MB, W6) | **RED** | — | not attestable on s5; see the 14-character finding above |
+| `cd-full` (s5, 400 MB) | **RED** | — | not attestable on s5; see the 14-character finding above |
 | `cd-full` (ufs, 400 MB, 08-14) | **RED** | — | **ran out of disk**, not out of names: 29/30 packages in <14 min, then `/mnt: file system full` inside the thirtieth. Nothing attested — see *The `full` set fits the filesystem and not the disk* below |
 | ★★ `cd-full` (ufs, **512 MB**, 08-14) | **10/10** | 1132 s install | **`68de888084500aef703a9ccd3eeaa0e5` / 28709 — ATTESTED**, and 28,709 was the pre-registered prediction. The whole distribution, installed and cold-booted. `work/install-matrix/ufs-full-2` |
 
@@ -4122,9 +4122,9 @@ tree**. Emptying the `FB_*` seam moves nothing. That is what makes the flavor a
 data change rather than a second product.
 
 **The `standard` soak verdict: stable.** Four consecutive greens on freshly
-mastered media across two waves and two driver generations — 2× in W5.5 and 2×
+mastered media across two stages and two driver generations — 2× with the swap fix and 2×
 here — at the identical digest and, both times, the identical 537 s. Before
-W5.5's real-swap fix the same cell reproduced `PANIC: swapinub` **3 times out of
+the real-swap fix the same cell reproduced `PANIC: swapinub` **3 times out of
 3**. The set is no longer flaky, and the fix is the reason.
 
 **What `cd-full` cost, and what it measured.** The run reached `Xsource` (the
@@ -4160,7 +4160,7 @@ them they contain every measured fact behind it:
 
 | question | answer |
 |---|---|
-| does the miniroot carry `mkfs_ufs` / `fsck_ufs`? | **yes, since W5.2** — proto members, byte-identical to the stock root floppy's, every undefined symbol resolving against the miniroot's own `libc.so.1`. The build starts from a byte copy of the stock image and the proto preserves them |
+| does the miniroot carry `mkfs_ufs` / `fsck_ufs`? | **yes, since the miniroot's first build** — proto members, byte-identical to the stock root floppy's, every undefined symbol resolving against the miniroot's own `libc.so.1`. The build starts from a byte copy of the stock image and the proto preserves them |
 | does the install kernel have `ufs`? | **yes** — `ufsinit` at `vfssw[2]` in all ten kernels examined, `fd0unix` included |
 | does it need configuring? | **no** — `rootfstype` is compiled **empty** (*"Empty means try them all"*), so `vfs_mountroot` probes `s5` first, gets `EINVAL` on a ufs root, and takes `ufs` on the second try |
 | does the installed system have the ufs back end? | **yes** — `core-2.1.pkg` ships `mkfs/fsck/mount/labelit` + 17 more; a *larger* suite than the s5 one |
@@ -4285,7 +4285,7 @@ The key's default is `s5` and every profile declares `s5`, while the *product*
 default is `ufs`. That is not a contradiction, it is two different defaults doing
 two different jobs:
 
-- the **key's** default is the compatibility floor — the seam law every W1 key
+- the **key's** default is the compatibility floor — the seam law every driver key
   follows, so a profile or a medium written before this key installs the
   byte-identical tree it always did;
 - the **profiles** are the pinned rigs every attested digest was measured on.
@@ -4452,7 +4452,7 @@ teardown   PASS    3  emulator confirmed gone, tap0 confirmed gone
 ```
 
 `standard` = **4ad8e17b69b32208c9fffa600596a428 / 11,012 objects**, byte-exact against
-the W6 reference — which was measured on **s5**, **prebuilt**, **100 MB**, from the
+the earlier reference — which was measured on **s5**, **prebuilt**, **100 MB**, from the
 `…-standard-w6-20260812r3` disc (run `work/install-matrix/w6-cd-standard`), i.e. four
 things different at once and a freshly mastered medium besides. That is the digest's
 filesystem- and size-independence
@@ -4461,7 +4461,7 @@ rather than the minting of a new baseline.
 
 Media: `work/iso/amix21-install-standard-512-20260814.iso`, freshly mastered from the
 committed tree with `--profile bench-a3000-a4091-big --set standard` (the fresh-media
-rule; the W6 standard disc predates the UFS default). Note the medium is usable by
+rule; the earlier standard disc predates the UFS default). Note the medium is usable by
 **both** standard cells: `build-install-iso.sh` stages every `profiles/*.profile`
 verbatim, and the two bench profiles name the same `BOOTSLICE_IMG` with the same
 `ROOTDEV`, so they differ only in the two keys the driver reads at install time.
@@ -4474,7 +4474,7 @@ slowness theory `cd-full` already refuted.
 
 The 2026-07-14 recipe (**never** edit `/etc/inet/network-config`; bake only hosts, the
 password and `CONSOLE=`) is not applied to this image by hand — `firstboot.sh` *is*
-that recipe, and has been since W5. Read off the candidate itself on a **third** cold
+that recipe, and has been since the dialog. Read off the candidate itself on a **third** cold
 boot (`work/golden-candidate/netready-check.out`, one held telnet session):
 
 | fact | measured |
@@ -4486,9 +4486,9 @@ boot (`work/golden-candidate/netready-check.out`, one held telnet session):
 | root pw | the bench value of `payload/firstboot/root.shadow` — the bench credential, and **every aging field empty**: the RTC-1978 `lastchg` trap cannot bite this image |
 | root telnet | `#CONSOLE=/dev/console` (commented = permitted) |
 | vfstab | `/dev/dsk/c6d0s1 /dev/rdsk/c6d0s1 / ufs 1 yes -` — left as measured. That `yes` is the mount-at-boot defect fixed on 2026-08-15; this image predates the fix, so it still grumbles `Device busy` at every boot. Media mastered after it write `1 no -` |
-| TZ | `TZ=:US/Eastern` — with the leading colon (the W5 `getpwnam` cascade fix) |
+| TZ | `TZ=:US/Eastern` — with the leading colon (the `getpwnam` cascade fix) |
 | filesystem | `/sbin/df -n /` → `ufs`; `df /` → 779,364 blocks / 183,902 files free |
-| kernel | `sum -r /stand/unix` → **55482 2882** — **not a kernel of ours at all**: it is the stock `core` package's 1992 `/stand/unix` (1,475,108 B), which every medium lays down unchanged. Corrected 2026-08-16 at the r4 re-master, where this row *stayed* while both framed brels moved (49227 → 50544, 51865 → 28387) — the earlier wording "the r3 kernel exactly as the media installs it" read a package member as a media pin. **R2 does not carry r4**, and still does not: R3 flew the r4 combined kernel on metal **2026-08-15** and the `VER_KERN*` mint pins moved to the r4 pair on **2026-08-16** (`KERNBENCH` 49667 / `KERNZ3660` 60364, *W6-I* above), but those are **post-handoff** identities, reached only via `pkgadd` + `updbootpart` |
+| kernel | `sum -r /stand/unix` → **55482 2882** — **not a kernel of ours at all**: it is the stock `core` package's 1992 `/stand/unix` (1,475,108 B), which every medium lays down unchanged. Corrected 2026-08-16 at the r4 re-master, where this row *stayed* while both framed brels moved (49227 → 50544, 51865 → 28387) — the earlier wording "the r3 kernel exactly as the media installs it" read a package member as a media pin. **R2 does not carry r4**, and still does not: R3 flew the r4 combined kernel on metal **2026-08-15** and the `VER_KERN*` mint pins moved to the r4 pair on **2026-08-16** (`KERNBENCH` 49667 / `KERNZ3660` 60364, *`updbootpart`* above), but those are **post-handoff** identities, reached only via `pkgadd` + `updbootpart` |
 | packages | `pkginfo` piped to `wc -l` → 17 |
 | dialog | `system.setup` `-rw-r--r--` (disarmed), `/var/adm/firstboot/PENDING` absent |
 | both directions | box → host: `/usr/sbin/ping 192.0.2.17` → `192.0.2.17 is alive` |
@@ -4902,7 +4902,7 @@ sysinit read ran before the dialog, in the image's default zone).
 - the boot path never writes the RTC; `setclk -s` writes it from the system time, to the minute
   (minute resolution, seconds as 0; the year right from 2000 on), and base's ntpsync runs it after a sync.
 
-**The year encoding (measured on metal, T-16 F4).** The RTC's year register holds the
+**The year encoding (measured on metal).** The RTC's year register holds the
 AmigaOS battclock encoding — years since 1900, so the tens digit runs past 9 (nibble
 0xA–0xC; 2026 = tens 12, units 6). It is the kernel's `/dev/clock` driver that encodes and
 decodes it (setclk only reads and writes a `time_t`, which the source shows). The K1 metal
@@ -4948,7 +4948,7 @@ A zone database package for later tzdata releases belongs to amix-packages.
 The IDE lane is 1.1 in full; the CF kit is not in the initial release download set. When un-parked:
 first the **slave-enabled CF kit** (K030-IDE-S, chain 98b12f76, kerntools 4da32c4: the slave appears as
 unit 5 → `c5d0`, root stays `c6d0s1`; one profile change + a cd-ide run); the **on-machine install from an
-IDE drive** (source on the slave, target on the master) only together with P-11 — it needs an answer to
+IDE drive** (source on the slave, target on the master) only together with the metal-image transport work — it needs an answer to
 which device boots the installer, since K030-IDE-S roots on the master (a slave-rooted install kernel from
 kerntools, or the roles flipped). Amiberry models the slave (`hardfile2=…,ide1`; gayle.cpp: two drives
 per channel), so both are bench-testable.
@@ -4956,7 +4956,7 @@ per channel), so both are bench-testable.
 **Owner note:** a CF card as IDE slave is often unstable on Amigas, so the **master-only CF kit is the
 product** and the slave-enabled kit is low value. K030-IDE-S stays a bench knob, not a shipped kit.
 
-## E-BIG: the on-box root ceiling (P-15 I1, 2026-10-02)
+## E-BIG: the on-box root ceiling (2026-10-02)
 
 D12's "at least 900 MB should work" is revised to **600 MB proven; larger roots after the kernel
 fix**. kerntools KT-32 bracketed on-box `mkfs` on both kernel lines: 600 MB passes, 640 MB and up
@@ -5031,7 +5031,7 @@ behaviour, outside the installer, and is not changed here.
   swap step then rightly logs "/dev/fakeswap is not in the swap table", and the cold-boot gate now accepts exactly
   that line for such a cell. Floppy kernels keep the default `fake`.
 - **`minimal-060` = `21c4e2623c34e1fae38674e8829682ae` (4859 objects).**
-  - Since Q-4.15 (75cb681, 0cf2bca) a 040/060 install lays the framed kernel as `/stand/unix` and re-registers it at
+  - Since 75cb681 and 0cf2bca a 040/060 install lays the framed kernel as `/stand/unix` and re-registers it at
     first boot, so its contents row carries the r5 kernel's size, not the 1992 one. `minimal` (`a650dd79`, measured
     on fd060-cd on 2026-10-03, before that change) can no longer match.
   - The new reference was recorded with `--attest-set`, with base-5 and base-8 containment exact. It was measured
@@ -5047,7 +5047,7 @@ behaviour, outside the installer, and is not changed here.
 - **Result:** first boot re-registers `/stand/unix` with no vector-0xF4 trap, and scan060 finds 0 hits on the
   installed `/usr/apkg/bin`.
 - **`minimal-060-eng1121`** measured `94effdf4ddebc34d6643b44dda8c3928` (4859 objects). It is recorded here, not as a gated SET_REFS row: installer-selftest audit X admits digests only for advertised sets and their CPU-line variants, so a re-run takes `--attest-set`.
-- **Not on release media:** the release media keep the r5 bytes (`minimal-060`) until the owner decides.
+- **Not on release media:** the release media keep the r5 bytes (`minimal-060`) until it is decided otherwise.
 - **Hazard:** `heirloom/build-amix-static` was rebuilt in place. Any ISO mastered without `STATIC=` now carries the
   new engine.
 
@@ -5073,7 +5073,7 @@ is KD060-ZA c1-u1 (sum -r 27291, 2 MiB slice); the donor is `tools/build-k1-dono
 
 **Installer change** (installer-selftest audit CD2 runs every case under dash):
 - **`TARGET_SCAN_IDS`** (profile key): when set, the interview's disk scan opens exactly those ids. For CD-2 it is
-  `9`, so the owner's other disks on that bus (the AmigaOS disk, an MD-1 root) are never opened.
+  `9`, so the other disks on that bus (the AmigaOS disk, an MD-1 root) are never opened.
 - **`scan_safe_ids`** (always): every scan drops, without opening it:
   - the cdfs source's own unit (`CD_SPEC` <card>,<unit> -> c<card*8+unit>). Only cdfs may talk to a CD behind an
     A4091/A4092; a 512-byte dd-layer read of it wedges that bus;
@@ -5094,7 +5094,7 @@ is KD060-ZA c1-u1 (sum -r 27291, 2 MiB slice); the donor is `tools/build-k1-dono
 Metal: the maintainer's notes (route R1: a pri-5 boot-only disk on the Z3660 SD carries the
 c1-u1 chain; the A4092 ROM boot R2 is not run).
 
-## 1.1: the generation-store disk (stage 2, amix-dlm S2-30, 2026-10-25)
+## 1.1: the generation-store disk (stage 2, 2026-10-25)
 
 `INSTALL_LAYOUT=1.1` (default `1.0`, so every 1.0 profile and medium is unchanged) lays the disk of amix-dlm spec
 40 §2.1:
@@ -5104,9 +5104,9 @@ c1-u1 chain; the A4092 ROM boot R2 is not run).
 
 The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/install/l11` with a static
 apkg 0.3 and the kernel-space FILE source. The disk is described in `docs/l11-disk.md`. (The upgrade install of a
-1.0 disk described there until 2026-10-31 is removed, P-36: 1.1 requires a fresh install.)
+1.0 disk described there until 2026-10-31 is removed: 1.1 requires a fresh install.)
 
-What a 1.1 medium carries is one tracked file, `tools/l11-set.conf` (S3-31):
+What a 1.1 medium carries is one tracked file, `tools/l11-set.conf`:
 - the amix-dlm and amix-packagemanager revisions;
 - the package staging and the APKG datastream that replaces its own;
 - one `pkg NAME VERSION` line per package: kbootset, modtools, loader-amix, the kernels and the module packages.
@@ -5128,8 +5128,8 @@ disc).
 
 Matrix cells:
 - `l11-k30`, `l11-k46`: the two lines;
-- `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk (RETIRED 2026-10-31, P-36).
-- `l11-k46-reinstall-ia`: a fresh install over a seeded r7 disk, nothing of it kept (P-36, `docs/l11-disk.md`).
+- `l11-k30-upg`, `l11-k46-upg`: the upgrade of a seeded r7 disk (RETIRED 2026-10-31).
+- `l11-k46-reinstall-ia`: a fresh install over a seeded r7 disk, nothing of it kept (`docs/l11-disk.md`).
 
 Each cell installs, halts, and is judged by the gate `bootstore` (`tools/l11-target-check.py`):
 - the store and its pristine generation;
@@ -5156,8 +5156,8 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
 - The first boot runs atdevs only for a card-0 root.
 - A kernel package's sidecar says `sdcards=4` on a four-card kernel (absent = 2). `l11.sh` reads it (FB_SDCARDS
   still drives the first boot's root-name rewrite). Core's 256 `c<N>d1s<S>` nodes have minors 128 and up, which name
-  card-2/3 disks on such a kernel. The first boot's step 4d runs `/sbin/kbootset nodes` (kbootset -22, C2-4 v12 §14;
-  S5-44 R2): kbootset reads the sidecar itself, makes the 256 `c10`–`c1f` nodes, removes the d1 nodes and registers
+  card-2/3 disks on such a kernel. The first boot's step 4d runs `/sbin/kbootset nodes` (kbootset -22, C2-4 v12 §14):
+  kbootset reads the sidecar itself, makes the 256 `c10`–`c1f` nodes, removes the d1 nodes and registers
   both to core with APKG's removef/installf, so `pkgchk core` stays quiet on /dev. On a two-card kernel it says
   core's nodes stand. Its line goes to the first boot's log; a failure is a WARNING there.
 - The first boot names the root as the running kernel does: `/etc/devnm /` maps the mounted root's device number to
@@ -5170,7 +5170,7 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   `sdcards=4`, `build-install-iso.sh` appends the names that move (TARGET_SCSI_ID, CD_SPEC, ROOTDEV) to each staged
   1.1 profile of that line; `tools/sdnames.py` derives them. A floppy-booted 1.1 disc installs under fd0unix
   (two-card), so nothing moves there. The 1.0-layout media stay on the r7 kernels.
-- The disk nodes are checked after the first boot (S5-44 R1). The install-matrix cells of the current media (RAM-disk
+- The disk nodes are checked after the first boot. The install-matrix cells of the current media (RAM-disk
   CD, floppy pair, netinstall, raw image) carry the gate `firstboot`. It boots a copy of the target once on a rig
   slot (`tools/firstboot-rig.sh`: kerntools' rig-run in the first-boot rows' shape, each dialog answer typed at a
   detected prompt, `tools/lib/conprompt.py`). On the box it reads `c1fd0s7` = c 40,255, `c10d0s0` = b 18,128, no
@@ -5179,13 +5179,13 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   their C4-1 minors, the card-2/3 nodes 0600 root root and registered to core, no d1 row in the contents file.
   A two-card kernel's root must keep core's set.
 - A root installed before step 4d existed keeps core's d1 nodes even after apkg brings a four-card kernel. The
-  A4000D root of bench J4 (M-G3, 2026-10-27) was one: the S4-55 disk (`l11-k46.hdf` 9b2edb36, installed 2026-10-26
+  A4000D root of bench J4 (M-G3, 2026-10-27) was one: the disk (`l11-k46.hdf` 9b2edb36, installed 2026-10-26
   19:22 with kern46m -61, kabi k46.1.0 and no `sdcards=`; its firstboot.sh had no 4d and its firstboot.conf no
   `FB_SDCARDS`). Copies of it later got kern46m -82 (`sdcards=4`) through apkg. The current media all lay
   `FB_SDCARDS=4` and step 4d. Such old roots get the set from `kbootset` -22's commit (C2-4 §14), not from the
   installer.
 - Since the kernel-space catalog b1f564f4 (2026-10-28: kern30m -20, kern46m -51, kbootset -23, modtools -7) the
-  kernels have no built-in ufs, and k30 none of s5 either (k46 has no s5 at all, S5-37). The kernel package carries
+  kernels have no built-in ufs, and k30 none of s5 either (k46 has no s5 at all). The kernel package carries
   them as core-tier modules in `/etc/conf/mod.d` (C2-3 v8), and kbootset composes every generation from them: the
   `rootfs` filesystem is promoted to a root record (`module ufs root … tier=core build=<cut> safe=1`), any other one
   stays boot class. An installed disk roots on the ufs module on both lines (on k30 s5 is boot class beside it). A
@@ -5195,11 +5195,11 @@ minor = slice × 16 + N mod 16, plus 128 for cards 2–3.
   their generation: `build-ramdisk-cd.sh --boot-mods DIR` (and `build-netinstall.sh --boot-mods DIR`) hand out the
   objects kbootset records (cdfs, and ufs on k30; z3660eth, and ufs on k30), and each composer gates its images
   with `tools/ramdisk-image-check.py` (every boot record's object byte for byte, a ufs image's block size at least
-  4096: the k46 ufs module refuses smaller blocks at mount, S5-13). A k46 CDBOOT cell's evidence floppy is ufs, made
+  4096: the k46 ufs module refuses smaller blocks at mount). A k46 CDBOOT cell's evidence floppy is ufs, made
   by the guest (`mkfs_ufs` on the zeroed floppy), since k46 can no longer mount s5. The `firstboot` gate also reads
   `modadmin -s` (ufs loaded as a module) and `kbootset check` (0) on the booted box.
 
-### Booting the 1.1 install CD (S3-31 part 3, amix-dlm D-3 §10)
+### Booting the 1.1 install CD
 
 A 1.1 install CD can also boot by itself through an A4091 or A4092 boot ROM that has a
 CD filesystem. The disc is a plain ISO9660 data CD with System ID `AMIGA BOOT` and Rock
@@ -5227,7 +5227,7 @@ The loaders take their DMA buffers by the boot partition's DosEnvec, as FFS does
 takes chip memory when the buffer lies beyond `de_Mask`; boot2 reads straight into any
 buffer the Mask allows. Until now every disk here said Mask `0xFFFFFFFC`. Each partition's
 Mask now says what its controller's DMA really reaches, from one table,
-`tools/lib/dmamask.py` (orchestrator decision 2026-10-28, matching the kernel's DMA reach,
+`tools/lib/dmamask.py` (decided 2026-10-28, matching the kernel's DMA reach,
 amix-dlm `DMA_REACH 0x08000000` and C4-5; C4-2 / OQ-80.5):
 
 | Controller (SD_BOARDS name) | Mask | Why |

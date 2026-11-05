@@ -5,7 +5,7 @@
 # allocates de_BufMemType memory and falls back to chip when the block's end lies
 # beyond de_Mask; boot2 reads straight into any destination the Mask allows. So
 # the Mask must say what the boot controller's DMA can really reach. The rule
-# (orchestrator decision 2026-10-28, matching the kernel's DMA reach contract,
+# (decided 2026-10-28, matching the kernel's DMA reach contract,
 # amix-dlm core/plat/k30/line.c DMA_REACH 0x08000000 and C4-5; C4-2 / OQ-80.5:
 # Zorro III DMA cannot reach the Z3660's DDR at $08000000+):
 #

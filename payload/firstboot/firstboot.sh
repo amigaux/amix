@@ -31,13 +31,13 @@
 #     future date poison account aging. We leave the clock alone.
 #
 # Some target file locations (nodename store, the Amix timezone index file) are
-# SVR4-conventional here and confirmed on-box in W5.4; each is flagged.
+# SVR4-conventional here and confirmed on-box; each is flagged.
 
 FBDIR=/var/adm/firstboot
 CONF="$FBDIR/firstboot.conf"
 MARK="$FBDIR/PENDING"
 DIALOG_DONE="$FBDIR/DIALOG-DONE"
-# The state dir is ROOT'S ALONE (P-15, 2026-10-03). Installs before that fix laid it
+# The state dir is ROOT'S ALONE (2026-10-03). Installs before that fix laid it
 # 0777 with 0666 files -- any local user could then re-create PENDING and have this
 # script, run as root by S16firstboot, source a planted firstboot.conf. Tighten it on
 # every run, so a disk minted before the fix is closed at its own first boot.
@@ -58,7 +58,7 @@ chmod 600 "$CONF" "$MARK" "$DIALOG_DONE" "$FBDIR/root.shadow" 2>/dev/null
 # ===========================================================================
 # THE FIRST-BOOT CONFIGURATION DIALOG  (entry point: `firstboot.sh --dialog`)
 # ===========================================================================
-# The Amiga UNIX first-boot configuration dialog (installer-NG W5). It is reached
+# The Amiga UNIX first-boot configuration dialog (installer-NG). It is reached
 # through the STOCK system.setup slot: /etc/sysinit runs
 # `sh /usr/amiga/bin/system.setup` iff that file is executable, on /dev/syscon
 # (inittab: `S2::sysinit:/etc/sysinit </dev/syscon >/dev/syscon 2>&1`), BEFORE run
@@ -154,9 +154,9 @@ chmod 600 "$CONF" "$MARK" "$DIALOG_DONE" "$FBDIR/root.shadow" 2>/dev/null
 # and `pkgadd` could not create that directory, on the INTERACTIVE and the
 # UNATTENDED path alike.
 # (This comment first read "11 KB ... is 78 blocks". Both figures were wrong and
-# W5.5 corrected them: the 11 KB came from a scanner that mis-delimited the body,
+# a later measurement corrected them: the 11 KB came from a scanner that mis-delimited the body,
 # and 78 divided by 512-byte blocks when the floppy's free blocks are 1 KB. The
-# arithmetic is in docs/installer.md; the here-doc law is now ZERO, because W5.5
+# arithmetic is in docs/installer.md; the here-doc law is now ZERO, because the same fix
 # moved updbootpart itself onto the medium.)
 #
 # This file is already staged on the medium and already copied onto the target
@@ -739,19 +739,12 @@ ask_repo()
 		while [ "$RIOK" = "" ]
 		do
 			readask "\nWhat is the repository's network address? [$FB_REPO_IP] "
-			# ★ W6: RETURN WITH NO DEFAULT IS AN ANSWER, and it has to be,
-			# because the distro-neutral public flavor ships a repository
-			# HOST with no address -- we know where the packages live, we
-			# cannot know what address that name has on the buyer's LAN.
-			# Before W6 this loop re-asked forever on an empty default (an
-			# empty answer became an empty $ask, valid_ip refused it, and
-			# nothing could ever satisfy it), so a public disc would have
-			# hung its own first boot. Two ways out, both stated out loud:
-			# with DNS the system's name servers resolve the name (apkg reads
-			# /etc/resolv.conf too) and no hosts line is wanted; with neither,
-			# S16 skips the bake and says so -- and `apkg update` will not
-			# resolve the repository until somebody adds it by hand. Half a resolver is worse than none, so we never pretend
-			# an address we were not given.
+			# RETURN WITH NO DEFAULT IS AN ANSWER: a mirror's address may be unknown
+			# here. With DNS the system's name servers resolve the name (apkg reads
+			# /etc/resolv.conf too) and no hosts line is wanted; with neither, S16
+			# skips the hosts line and says so, and `apkg update` will not resolve the
+			# repository until somebody adds it by hand. An empty answer must not
+			# re-ask for ever, and no address is ever invented.
 			if [ "$ask" = "" ] && [ -z "$FB_REPO_IP" ]; then
 				if [ -n "$FB_DNS1" ]; then
 					echo "\nNo address: the name servers you gave will resolve"
@@ -1200,12 +1193,12 @@ esac
 # FB_INITTAB_SYS / FB_SDCARDS / FB_L11 / FB_NET_MODE
 . "$CONF"
 
-# FB_TZ is the timezone ZONE NAME (W1). It was a literal `US/Eastern` in this
+# FB_TZ is the timezone ZONE NAME. It was a literal `US/Eastern` in this
 # script until then, so an install whose profile said otherwise silently got
 # US/Eastern anyway. Default to that same literal when the conf predates the key,
 # so an old firstboot.conf keeps its old behaviour exactly.
 [ -n "$FB_TZ" ] || FB_TZ=US/Eastern
-# W5 DEFAULTS. Each is the behaviour this script had BEFORE W5, so a firstboot.conf
+# DIALOG-KEY DEFAULTS. Each is the behaviour this script had BEFORE the dialog, so a firstboot.conf
 # written by an older driver -- or by a profile that names none of these -- produces
 # a byte-identical result:
 #   FB_ROOT_TELNET    y  -- comment CONSOLE= (root may telnet in), as always
@@ -1230,7 +1223,7 @@ case "$FB_ROOT_FSTYPE" in
 esac
 
 # ---------------------------------------------------------------------------
-# THE TWO TIERS (W5) -- and why PENDING sometimes stays
+# THE TWO TIERS -- and why PENDING sometimes stays
 # ---------------------------------------------------------------------------
 # FB_DIALOG=y means the install ARMED the first-boot configuration dialog in the
 # stock sysinit slot. sysinit runs before rc2, so on a normal boot the dialog has
@@ -1271,7 +1264,7 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${FB_SWAP_SLICE}"
 # --- 1. nodename ------------------------------------------------------------
 # SVR4 persists the nodename in /etc/nodename (read at boot) AND the running
 # kernel value is set with `uname -S`. Do both so `uname -n` resolves now and
-# after a reboot. (W5.4 confirms Amix reads /etc/nodename at boot.)
+# after a reboot. (Confirmed on the box: Amix reads /etc/nodename at boot.)
 # 1.1: no name given -> amix- and the last four hex digits of the first interface's
 # MAC (amix-base's dlpi-mac; zen0 first, the Z3660's own), which ifup replaces with the name a
 # DHCP server offers when /etc/inet/interfaces says `hostname dhcp`
@@ -1298,9 +1291,9 @@ uname -S "$FB_NAME_EFF" 2>/dev/null || true
 # --- 2. timezone (zone name from FB_TZ; US/Eastern = index 47) ---------------
 # SVR4 sources TZ from /etc/TIMEZONE at init. Amix's first-boot dialog takes the
 # numeric index 47 (US/Eastern); store both the standard TZ string and the index
-# breadcrumb. (W5.4 confirms the exact Amix timezone store + 47 mapping.)
+# breadcrumb. (Confirmed on the box: the exact Amix timezone store + 47 mapping.)
 #
-# THE LEADING COLON IS LOAD-BEARING (W6.3, proven on-box). SVR4 ctime(3)/tzset(3)
+# THE LEADING COLON IS LOAD-BEARING (proven on-box). SVR4 ctime(3)/tzset(3)
 # only reads a tzfile when TZ is `:<pathname>` -- the colon says "this is a path".
 # `TZ=:US/Eastern` maps to the tzfile /usr/lib/locale/TZ/US/Eastern (present, and
 # byte-identical to the golden's). WITHOUT the colon SVR4 tries to parse
@@ -1309,13 +1302,13 @@ uname -S "$FB_NAME_EFF" 2>/dev/null || true
 # and the crashed `who -r` cascades into the rc2 `test: unknown operator S` errors.
 # installer-selftest.py audit F enforces the colon form.
 #
-# W1 parametrizes the ZONE (FB_TZ) but NOT the colon: the colon is emitted by
+# The profile parametrizes the ZONE (FB_TZ) but NOT the colon: the colon is emitted by
 # THIS line, never taken from data, so no profile/answers file can ever produce
 # the bus-erroring colon-less form -- not by typo, not by a stripped quote. The
 # driver strips a leading colon off FB_TZ before writing firstboot.conf for the
 # same reason (`TZ=::US/Eastern` would be just as broken).
 #
-# W5: FB_TZ_KEEP=y says the first-boot DIALOG already ran the genuine stock zone
+# FB_TZ_KEEP=y says the first-boot DIALOG already ran the genuine stock zone
 # menu (/usr/amiga/etc/TZ), which writes /etc/TIMEZONE itself -- with the colon,
 # and with the /usr/lib/locale/TZ/localtime alias that only that tool creates. Do
 # not rewrite it. This is also what protects the menu's "Other (nonstandard)"
@@ -1338,7 +1331,7 @@ chmod 644 /etc/tz.index 2>/dev/null
 # Root pw hash comes from the payload root.shadow, which a bench medium carries. Replace
 # the root line of /etc/shadow, keep every other line. mode 400.
 #
-# W5: when the first-boot DIALOG is in play it runs the stock `passwd root` /
+# When the first-boot DIALOG is in play it runs the stock `passwd root` /
 # `passwdall` flow on the console BEFORE this script, and the whole point of that
 # question is that the shipped credential does not survive it. Re-stamping the
 # payload hash here would undo it silently, so the shadow write is skipped once
@@ -1367,7 +1360,7 @@ elif [ -f "$FBDIR/root.shadow" ]; then
 		chmod 400 /etc/shadow
 	fi
 fi
-# Root over the network (FB_ROOT_TELNET, W5; default y = what this always did).
+# Root over the network (FB_ROOT_TELNET; default y = what this always did).
 # `CONSOLE=` in /etc/default/login gates ROOT logins only -- ordinary users can
 # telnet in either way -- and telnet is the only remote login this system has, so
 # the default is PERMIT and turning it off is an explicit answer, never a silent
@@ -1443,7 +1436,7 @@ if [ -n "$FB_DATA_SLICE" ]; then
 fi
 echo "firstboot: wrote /etc/vfstab (root $ROOT_BLK $FB_ROOT_FSTYPE, rootdev $FB_ROOTDEV)"
 
-# --- 4b. /stand/unix in the core package (040/060 line; Q-4.15 trap ii) ---------
+# --- 4b. /stand/unix in the core package (040/060 line) ---------
 # The installer laid the kernel the boot slice frames at /stand/unix (over the core
 # package's 1992 030 kernel). Re-register it so the contents DB records what is really
 # there and pkgchk stays clean. Idempotent: installf on an existing path updates it.
@@ -1495,7 +1488,7 @@ fi
 # --- 4d. a four-card kernel (C4-1): the card-2/3 disk nodes replace core's d1 nodes ----
 # Minor bit 7 is the card's high bit on a four-card kernel, so core's 256 c<N>d1s<S>
 # nodes (minor 128 + ...) would open card-2/3 disks under names that say otherwise.
-# `kbootset nodes` (C2-4 v12 §14, S5-44 R2) owns the set: it reads the installed kernel's
+# `kbootset nodes` (C2-4 v12 §14) owns the set: it reads the installed kernel's
 # sidecar (sdcards=4 in /stand/k30/kabi or /stand/k46/kabi) itself, makes c0-c1f d0 s0-s7
 # at their C4-1 minors, removes the d1 nodes and registers the change to core with APKG's
 # removef/installf; on a two-card kernel it says core's nodes stand. Success is exit 0
@@ -1511,7 +1504,7 @@ fi
 # own IP (which is what the SHIPPED network-config's `ifconfig aen0 `uname -n``
 # needs). Do not create/edit /etc/inet/network-config.
 #
-# W5 makes this RE-RUNNABLE. The dialog can be interrupted and completed on a
+# The dialog makes this RE-RUNNABLE. The dialog can be interrupted and completed on a
 # later boot, and it can be answered with a different nodename than the profile
 # baked, so this section now guards BOTH ways round: it drops any alias of the new
 # nodename (the stray one stock's own dialog leaves on the 127.1 loopback line
@@ -1527,7 +1520,7 @@ if [ "$FB_L11" != y ] && [ -n "$FB_IP" ] && [ -f /etc/inet/hosts ]; then
 	# `s/[ TAB]$FB_NODENAME\([ TAB]\|$\)/\1/g` -- and `\|` is a GNU extension that
 	# SVR4 sed does not have. MEASURED on the box 2026-08-12: the alternation form
 	# matches NOTHING (all three fixture lines survive), so both duplicate guards
-	# in this file have been inert since W6.4c; the repo-host line was appended a
+	# in this file have been inert since the repo-host baking; the repo-host line was appended a
 	# second time on the first re-run and nobody noticed, because the resolver
 	# takes the first match. The two-expression form is the same rule, portably:
 	# one for "token at end of line", one for "token followed by whitespace".
@@ -1546,9 +1539,9 @@ fi
 # A fresh install has NO way to resolve the apkg repo's hostname: the bench LAN has
 # no DNS, and section 5 baked only THIS box's own nodename. So `apkg update` against
 # a hostname-based repo URL cannot resolve the host and fails until someone
-# hand-edits /etc/inet/hosts (exactly the manual step W6.4b's acceptance still
+# hand-edits /etc/inet/hosts (exactly the manual step the package client's acceptance still
 # needed). Bake the repo's "<ip> <host>" line here so the package manager works
-# ZERO-TOUCH out of the box (W6.4c). Same /etc/inet/hosts, same rule: NEVER touch
+# ZERO-TOUCH out of the box. Same /etc/inet/hosts, same rule: NEVER touch
 # network-config. Profile-driven: FB_REPO_HOST/FB_REPO_IP come from firstboot.conf.
 #   * Both empty/absent  -> a profile without a repo is legal; skip, but LOG it.
 #   * pkg.amigaux.org -> never a hosts line: it is reached by name only (the host may move).
@@ -1580,7 +1573,7 @@ else
 	echo "firstboot: no repo host in profile (FB_REPO_HOST/FB_REPO_IP empty) -- skipping repo hosts entry"
 fi
 
-# --- 5c. the package-repo URL -> /etc/apkg.conf (W5) -------------------------
+# --- 5c. the package-repo URL -> /etc/apkg.conf -------------------------
 # install.sh writes /etc/apkg.conf on the miniroot from the profile's FB_REPO_URL.
 # The first-boot dialog can NAME A DIFFERENT REPOSITORY HOST, and it rewrites the
 # URL's host when it does -- so if the conf's URL and the file's `repo=` line have
@@ -1596,7 +1589,7 @@ if [ -n "$FB_REPO_URL" ] && [ -f /etc/apkg.conf ]; then
 	fi
 fi
 
-# --- 5d. the address-by-card table -> /etc/inet/zen.conf (P-3) --------------
+# --- 5d. the address-by-card table -> /etc/inet/zen.conf --------------
 # One image, several Z3660 cards: /etc/rc2.d/S99zen reads zen0's MAC at every
 # boot and takes that card's address + nodename from /etc/inet/zen.conf
 # (docs/address-by-card.md). The profile carries the table as FB_ZEN_CARDS
@@ -1657,12 +1650,12 @@ case "$FB_SCSI_ID" in
 		;;
 esac
 
-# --- 7. system logging on/off (FB_SYSLOG, W5) -------------------------------
+# --- 7. system logging on/off (FB_SYSLOG) -------------------------------
 # The installer lays the complete 2.1c syslog unit down ENABLED (the vendor ships
 # /etc/init.d/syslogd dead, with a bare `exit` on line 8; the media staging
 # comments it). FB_SYSLOG=n puts that `exit` back. FB_SYSLOG=y writes NOTHING --
 # the unit is already enabled, so the default path does not touch the file at all
-# and every pre-W5 install is byte-identical.
+# and every earlier install is byte-identical.
 #
 # ★ IN PLACE, NEVER `mv`. /etc/init.d/syslogd is ONE INODE with THREE names
 # (/etc/rc2.d/S70syslogd and /etc/rc0.d/K50syslogd are hard links -- the stock
@@ -1692,9 +1685,9 @@ elif [ "$FB_SYSLOG" = n ] && [ -f /etc/init.d/syslogd ]; then
 	fi
 fi
 
-# --- 8. network EXTRAS -- only what the first-boot DIALOG configured (W5) ----
+# --- 8. network EXTRAS -- only what the first-boot DIALOG configured ----
 # Everything below is gated on FB_NET_CONFIGURED=y, which ONLY the dialog sets.
-# An unattended install therefore behaves exactly as it did before W5: its
+# An unattended install therefore behaves exactly as it did before the dialog: its
 # /etc/inet/hosts entry (section 5) and, for zen0 flavors, the installer's own
 # S99zen laydown are the whole of its networking.
 # 1.1: the dialog's answers become /etc/inet/interfaces; amix-base's ifup (S69inet,
@@ -1746,7 +1739,7 @@ elif [ "$FB_L11" != y ] && [ "$FB_NET_CONFIGURED" = y ]; then
 		# FB_GATEWAY would otherwise write `route add default  1`, which is a
 		# broken command in a boot script -- worse than the address the install
 		# baked. No gateway answered means the laydown's own route stands.
-		# P-3: the laydown carries its address as parameter LINES at the top
+		# The laydown carries its address as parameter LINES at the top
 		# (FALLBACK= NETMASK= GATEWAY= DOMAIN=); a card row in /etc/inet/zen.conf
 		# still wins over FALLBACK at boot -- the dialog's address is the one
 		# for a card the table does not list.
@@ -1906,7 +1899,7 @@ if [ "$FB_L11" = y ]; then
 	echo "firstboot: /etc/profile.d/x11.sh and opt-amix.sh (X11 and apkg PATH; /etc/profile untouched)"
 else
 # --- 8b. X11 easy-start: /usr/bin/X11 on PATH, libXol on the linker path, and a
-#         one-command `startx` (W6) -------------------------------------------
+#         one-command `startx` -------------------------------------------
 # The X packages (xcore/xbasic/olcore) install under /usr/X, with /usr/bin/X11 ->
 # /usr/X/bin, and are NOT on the stock login PATH; olwm's shared library libXol.so
 # lives in /usr/lib, which the X binaries' own linker path does not search. So a
@@ -1953,8 +1946,8 @@ fi
 #           and same rules as the X11 append -- /etc/profile ONLY: root's login shell
 #           is /bin/sh (empty passwd shell field) reading /etc/profile, /etc/default/
 #           login carries NO PATH/SUPATH, and no per-user rc exists; a console bash is
-#           a manual non-login child that INHERITS this PATH (all metal-verified by the
-#           Z3660 station on the demo disk, 2026-09-16). Independent grep guard.
+#           a manual non-login child that INHERITS this PATH (all metal-verified on the
+#           Z3660 demo disk, 2026-09-16). Independent grep guard.
 if [ -f /etc/profile ]
 then
 	if grep '/opt/amix/bin' /etc/profile > /dev/null 2>&1
@@ -1981,7 +1974,7 @@ fi
 # resolve through the PATH added just above. Owner-approved layout, 2026-09-16.
 #
 # olwsm is the SEPARATE OPEN LOOK Workspace-menu daemon: olwm alone draws window
-# frames but gives NO root menu (the "no window manager" look the owner hit). Start
+# frames but gives NO root menu (the "no window manager" look seen on the box). Start
 # BOTH. `sleep 2` lets olwm own the screen before the clients map, else they come up
 # undecorated. The final `exec xterm` is the session-controlling client -- when it
 # exits the X session ends, which is why it is exec'd rather than backgrounded.

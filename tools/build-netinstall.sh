@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-netinstall.sh -- the netinstall medium, form B (amix-dlm 50 §5; S4-53): a small
+# build-netinstall.sh -- the netinstall medium, form B (amix-dlm 50 §5): a small
 # bootable two-line ISO carrying one generation per line, each rooting on its line's
 # netinstall RAM-disk image (tools/build-ramdisk-miniroot.sh --net --install). No packages:
 # the installer reads them over HTTP (the miniroot's net_source).
@@ -14,7 +14,7 @@
 #        --stage STAGE --keep-stage --out MASTER.iso   (the installer tree and the full set)
 #   2. this tool, --boot-mods DIR: each line's boot- and demand-class module objects at DIR/<line>/<name>
 #        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
-#        (S5-33) and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
+#        and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
 #   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5632 [--fp-patch] --net
 #        (5.5 MiB: the first stage installs the base packages from the image, dropbear among them;
 #        at 5 MiB k46 had 16 % of its blocks free, under build-ramdisk-miniroot's 20 % room gate)
@@ -29,7 +29,7 @@
 # system's second stage installs (a set's own base packages, x11r63)
 #
 # The generations are build-ramdisk-cd.sh's with the netinstall module lists: the RAM disk,
-# the root controllers and z3660eth as a boot-class module (50 section 5; zen0, S5-33), no
+# the root controllers and z3660eth as a boot-class module (50 section 5; zen0), no
 # cdfs (there is no CD to read packages from). Each image is gated against its generation by
 # tools/ramdisk-image-check.py --zen0 (every boot record's path= holds its sha256=; /dev/zen0 is
 # c 51,0). The disc is mastered as tools/build-iso.sh masters a CD-boot disc (System ID

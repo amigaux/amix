@@ -242,7 +242,7 @@ def find_boot_slice(img):
 # scans 0..15, so block 0 boots everywhere block 2 does.
 #
 # The gate is positional AND exclusive: RDSK at block 0, no second RDSK anywhere
-# in 1..15 (a stale copy -- the 2026-08-25 F4-M2 workaround left one -- makes the
+# in 1..15 (a stale copy -- the 2026-08-25 workaround left one -- makes the
 # answer depend on who scans how), and a closing checksum.
 RDSK_BLOCK_DEFAULT = 0       # what we produce
 RDSK_BLOCK_LEGACY = 2        # stock `/etc/rdb -c -L 2` on a blank disk

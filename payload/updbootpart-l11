@@ -5,7 +5,7 @@
 # generations-and-composer.md): the kernel is a kernel-space package, `kbootset`
 # composes and commits generations, and nothing reframes /stand into the boot slice
 # any more. The 1.0 updbootpart would overwrite the store with a framed 1.0 chain,
-# so on this disk it is replaced by this file (spec 40 §2.2, P-28 D54). Laid at
+# so on this disk it is replaced by this file (spec 40 §2.2). Laid at
 # /usr/sbin/updbootpart by install.sh (INSTALL_LAYOUT=1.1), not a package member.
 echo "updbootpart: this disk boots from a generation store; updbootpart is retired here." >&2
 echo "updbootpart: a kernel arrives as a package (apkg install ...), and kbootset builds" >&2

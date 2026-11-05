@@ -88,7 +88,7 @@
 #   tools/build-iso.sh --self-test         # prove every constraint above FIRES
 #   tools/build-iso.sh --set full --install-src S --cd-boot TREE   # bootable CD
 #
-# CD BOOT (--cd-boot TREE, amix-dlm docs/spec/10-boot-loader.md §4.4, D-3 §10). The
+# CD BOOT (--cd-boot TREE, amix-dlm docs/spec/10-boot-loader.md §4.4). The
 # A4091/A4092 ROM mounts the disc with its CD filesystem (ODFileSystem, ROM profile:
 # ISO9660 + Rock Ridge + Joliet, RR first, names compared case-insensitively) and
 # Kickstart runs S/Startup-Sequence -> SYS:BOOT/amix-cdboot, which loads the kernel
@@ -362,7 +362,7 @@ shopt -u nullglob
   exit 1; }
 basefiles=("${selected_base[@]}")
 
-# Gate 2 — the owner publication record must be a real date, not a free-form claim.
+# Gate 2 — the publication record must be a real date, not a free-form claim.
 if [ -n "$PUBLISHED" ] && ! printf '%s' "$PUBLISHED" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
   echo "STOP (release gate): --published-by-owner wants the owner's decision date as YYYY-MM-DD, got: $PUBLISHED" >&2
   exit 2
@@ -405,13 +405,13 @@ echo "build-iso: selected $nstock stock + $nbase base package(s)"
 #   cats.conf  the authored category taxonomy -> the catalog's `category` field,
 #              replacing stock's undifferentiated CATEGORY=system on all 27
 #              factory packages. Applied at CATALOG level: no package is re-minted,
-#              so no .pkg byte and no .pkg md5 moves (W3b, plan §5.4).
+#              so no .pkg byte and no .pkg md5 moves (plan §5.4).
 #
 # --isize appends the installed-size extension block (`#ext isize 1` + one
 # `#isize <name> <bytes>` line per package) as a COMMENT trailer after the entry
 # lines. It is what the installer's package menu sizes its sets from and what the
 # free-space gate budgets against. Passing it here was blocked until tools/lib/
-# isocheck.py's parse_catalog learned to skip '#' lines (W3b item 1) -- that
+# isocheck.py's parse_catalog learned to skip '#' lines -- that
 # parser is the one this build runs over the mastered image below.
 cp -p "$DEPS_CONF" "$root/pkgs/deps.conf"
 cp -p "$CATS_CONF" "$root/pkgs/cats.conf"
