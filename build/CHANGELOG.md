@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — STOCK_PATCHED (1bbcbb8)
+
+`STOCK_PATCHED` in package.sh, `<path>=<sha256>` words: a stock amix-system file the stage hook patches. The driver checks it against system/MANIFEST.sha256 before the hook and the payload's file against the listed sha256 after it. Needs TOOLCHAIN=period, and nothing may be compiled. Every ELF of the payload must be listed. The listed files are gated (ELF, undefined symbols, 68060) and never stripped. BUILD.txt and the lock carry a `stock` line per STOCK_ETC and STOCK_PATCHED file.
+
 ## 2026-11-05 — what make tools needs (77e858e)
 
 `docs/BUILDING.md` says what `make tools` needs: a clone holding the pinned amix-system commit, and https to the Ubuntu snapshot and the toolchains' sources.
