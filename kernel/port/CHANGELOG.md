@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-04 — kern46m k46.1.4.261103-62.3 (6e48bc8)
+
+Same cut and objects: the copyright file names the amix-distfiles copy of GCC 2.7.2.3's source first and GNU's site as the original.
+
+## 2026-11-04 — kern46m k46.1.4.261103-62.2 (a189a84)
+
+Same cut and objects: the copyright file names the libgcc routines linked in (__udivdi3, __umoddi3, __lshrdi3, __clz_tab), quotes libgcc2.c's exception, carries GCC 2.7.2.3's GPL-2 text and says where the source is. DESC no longer names an internal recipe.
+
 ## 2026-11-04 — kern46m k46.1.4.261103-62.1 (63cbd04)
 
 The same cut 68060-261103-62 and objects, the copyright file reworded; the recipe ships a corrected copy of the FPE notice, third-party notices unchanged; build.sh accepts a re-mint version.

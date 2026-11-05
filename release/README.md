@@ -28,13 +28,16 @@ amix <commit>                         the amix commit built
 epoch package-version (...)           the epoch rule
 dirty <sha256>                        only when tracked files differ from the commit
 image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.sha256, or "host"
+media-tools <sha256>                  the media image's /opt/amix-media/TOOLS, when the media step ran
+previous <sha256>                     the catalog of the published tree the release is built on (RELEASE_PREVIOUS)
 
 pin <path> <URL> <commit>             every one-line .pin in the checkout
 pin <path> sha256 <sha256>            a .pin of another format, by its digest
 distfile <path> <URL> <sha256> [<URL>...]
                                       every .distfile, as written: the original
                                       site, the sha256, then our copy
-system <path> <sha256>                system/MANIFEST.sha256 and system/SYMLINKS
+system <path> <sha256>                system/MANIFEST.sha256, system/SYMLINKS, system/stock-1.1.assets,
+                                      release/carried-1.1
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
@@ -56,3 +59,12 @@ commits, so across commits the kit's `norev` digest is the one compared), amixbe
 (kept outside amix), and the installed disk and SD images (bench-built, proven by
 their contents). A release is built from a clean commit: a lock with a `dirty`
 line is not one of record.
+
+## What a release's packages are
+
+Every live package rebuilds at the release's commit. Every published version
+stays, so a repository also holds older versions, which that commit does not
+build. `carried-<release>` lists them: each file, its sha256 and the commit whose
+make dist rebuilds it, byte for byte. `make lock` refuses a tree whose older
+versions are not exactly those. The stock packages are Commodore's: they are
+checked by `userland/pkgtools/tools/repo/stock-<release>.lock`, not built.

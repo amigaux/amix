@@ -52,6 +52,11 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
+# -71.2 against -71.1 (2026-11-04): the same cut and objects, re-minted so
+# GCC-LIBGCC.txt names our copy of GCC's source first and GNU's as the original.
+# -71.1 against -71 (2026-11-04): the same cut and objects, re-minted so the
+# copyright file names the libgcc routines linked in, with the GPL-2 text, the
+# exception and where the source is (GCC-LIBGCC.txt); DESC in plain words.
 # -71 against -70 (2026-11-03): the cut 68030-261103-71 (amix kernel/k30/cuts/
 # 68030-261103-71), -70's recipe from amix c0d7df1: the stock tools that read
 # kernel tables through /dev/kmem and the namelist (sadc, so sar and timex -s,
@@ -179,7 +184,7 @@ K30M_PKG=kern30m
 K30M_BUILDID=68030-261103-71
 K30M_KABI=k30.1.4
 K30M_FSKABI=k30.1.2       # the .moddata kabi of ufs and s5 (the minor they import)
-K30M_VERSION=k30.1.4.261103-71
+K30M_VERSION=k30.1.4.261103-71.2
 
 K30M_BREL_SHA=6a010bc5c9fb1cfa600727ff92ecedffa30a06d86fdd3a430948ab4e34b87d78
 K30M_BREL_SIZE=1541700
@@ -234,6 +239,10 @@ amix-040-060-port/LICENSE  ceec1a0761d69087a733d3b04716c29baa0c0243f2c0def264565
 amix-kerntools/LICENSE     20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4 amix:kernel/k30/LICENSE
 amix-paula/LICENSE         4e0b5700f025f487cff0c46858b1e70cdf27bf99544ddac930a6421f62319f42 paula:LICENSE"
 # the module core linked in: amix-dlm's MIT and the adopted core's (kdedon)
+# The libgcc routines linked in: which, their licence and exception, where the
+# source is (the toolchain the cut names in pin=), and GCC 2.7.2.3's COPYING.
+K30M_LIBGCC_COPY=GCC-LIBGCC.txt
+K30M_LIBGCC_COPY_SHA=325b24e41076a218424efc0e5492df17d6c99059fe76097a14db0fd0c6dd1829
 K30M_DLM_LICENCES="\
 LICENSE               20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 core/upstream/LICENSE 7c74426a1d5885c08435d597fcb07c2395accef0773001fc6fbd22b2bbf8a66d"

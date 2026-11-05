@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-04 — zz9ksvc 1.0.0-4 (321d42b)
+
+The copyright file says where the corresponding source is (https://github.com/amigaux/amix, kernel/modules/zz9ksvc with the kit and build scripts, at each release's revision) and names the SDK's source (https://github.com/BlitterStudio/zz9000-firmware, commit ffaf221). The objects are -3's (k30 e6703bee, k46 656815bc).
+
 ## 2026-11-01 — zz9ksvc test stand-in can force a decompression status (4b9e371)
 
 The zz9ksvc host test's stand-in can be made to answer a decompression with a chosen status.

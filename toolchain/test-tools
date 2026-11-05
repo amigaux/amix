@@ -58,6 +58,12 @@ refused "fetch: the original, then our copy; neither reachable, both named" "   
 check "fetch: netbsd-syssrc.distfile names archive.netbsd.org first, our copy second, under the upstream's name" \
 	grep -Eqx 'https://archive\.netbsd\.org/[^ ]+/syssrc\.tgz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/netbsd-10\.1/syssrc\.tgz' "$here/netbsd-syssrc.distfile"
 
+# --- the media image ---------------------------------------------------------------
+check "media: amitools.distfile names the original first, our copy second, under its own name" \
+	grep -Eqx 'https://[^ ]+/amitools-[0-9.]+\.tar\.gz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/amitools-[0-9.]+/amitools-[0-9.]+\.tar\.gz' "$here/amitools.distfile"
+check "media: Containerfile.media is on the build container, and leaves the toolchains' directories alone" \
+	sh -c 'grep -q "^FROM \${BASE}$" "$0" && ! grep -v "^#" "$0" | grep -Eq "/opt/amix(-cross)?(/| |$)"' "$here/Containerfile.media"
+
 # --- m68k-gnu-bin -------------------------------------------------------------------
 mkdir -p "$T/g14/prefix/bin"
 for t in gcc as ld ar nm objcopy objdump readelf size; do

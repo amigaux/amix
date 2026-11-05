@@ -75,6 +75,7 @@ while read h n; do
 done
 echo "$K46M_NOTICES" | while read n h; do [ -n "$n" ] && amix_verify "$K46M_SRC/port/$n" "$h"; done
 amix_verify "$HERE/$K46M_FPE_COPY" "$K46M_FPE_COPY_SHA"
+amix_verify "$HERE/$K46M_LIBGCC_COPY" "$K46M_LIBGCC_COPY_SHA"
 amix_dlm_build "$K46M_DLM_COMMIT" axrel
 X="$AMIX_DLM_TREE"
 echo "$K46M_DLM_LICENCES" | while read n h; do [ -n "$n" ] && amix_verify "$X/$n" "$h"; done
@@ -195,7 +196,10 @@ cp "$SRC/kabi" "$DEST/stand/k46/kabi"
 	echo "not linked in: it comes as a root module package.  The stock audio"
 	echo "driver (amiga/driver/audio.c) is compiled with amix-paula's three"
 	echo "patches (MIT, below): the /dev/paula exclusion, a safe close and a"
-	echo "bounded wait in the /dev/audio open."
+	echo "bounded wait in the /dev/audio open.  The 64-bit arithmetic routines the"
+	echo "module core exports to modules come from GCC 2.7.2.3's libgcc under the"
+	echo "GPL with its linking exception: the last notice names them and says where"
+	echo "their source is."
 	echo
 	echo "This cut has no built-in ufs or s5 filesystem.  The package carries ufs"
 	echo "as a core-tier module built with the cut (/etc/conf/mod.d/ufs): the"
@@ -222,6 +226,8 @@ cp "$SRC/kabi" "$DEST/stand/k46/kabi"
 		echo; echo "======== amix-dlm $n ========"; echo
 		cat "$X/$n"
 	done
+	echo; echo "======== GCC 2.7.2.3 libgcc ========"; echo
+	cat "$HERE/$K46M_LIBGCC_COPY"
 } > "$WORK/copyright"
 
 find "$DEST" -exec touch -h -d "@$K46M_SOURCE_EPOCH" {} +

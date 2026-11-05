@@ -70,10 +70,12 @@ jobs:
       - name: the image's gcc14 is the pinned build
         run: toolchain/extract-g14.sh --check amix-toolchain:ci
       - name: make dist twice, the locks compared
-        timeout-minutes: 120
+        timeout-minutes: 180
         env:
           AMIX_IMAGE: amix-toolchain:ci
           SYSTEM: ${{ runner.temp }}/amix-system
+          # the stock packages come from release assets; the private lists stay private
+          RELEASE_PUBLIC: 1
           LOCK_OF_RECORD: ${{ inputs.lock }}
         run: |
           if [ -n "$LOCK_OF_RECORD" ]; then

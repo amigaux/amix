@@ -1,3 +1,7 @@
+## 2026-11-04 — APKGENG 1.12.8 (7f4b5d4, 58ab0cb, 9aea5e4, fe78970, bfe65f6)
+
+The package says where its source is and carries the port's MIT text (/usr/apkg/doc/SOURCE, i copyright), as CDDL asks, and every changed CDDL file names who changed it. Text only. Minted, md5 678a7808, staged, not published.
+
 ## 2026-11-04 — apkg 0.3.10; APKGENG 1.12.7 (7754325, 40aafbc, 0982dbd, 16bc693)
 
 apkg 0.3.10: pass -S to pkgadd, so no licence is printed at install. APKG 0.3.10 minted, md5 53426b21, staged, not published.

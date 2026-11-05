@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-05 — the dist workflow rebuilds as the public would (3e72129)
+
+RELEASE_PUBLIC=1, stock packages from their release assets; its limit for the two runs is 180 minutes.
+
+## 2026-11-05 — make dist runs on past a gap (d94eeb6)
+
+A step's exit 3 no longer stops it: the lock is written and the gaps are named. Each step gets only its own inputs (STOCK had broken kernel-k46). Stock packages are fetched from release assets, the sha256 decides. RELEASE_PUBLIC=1 rebuilds without the private lists, same bytes. The lock records the media tools and the assets' URL file. The top Makefile hands on `apkg` and `release` too.
+
 ## 2026-11-04 — kmodpkg's notice headings (408e557)
 
 kmodpkg heads a fork's licence in the copyright file by its component, without the build path.

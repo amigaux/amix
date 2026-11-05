@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-05 — amitools falls back to our copy (044f81f)
+
+`amitools.distfile` falls back to a release asset of amigaux/amix-distfiles; the bytes are the same.
+
+## 2026-11-05 — the media image retries the Ubuntu snapshot (9b85218)
+
+As the build image does.
+
+## 2026-11-05 — a media image (55fd20d)
+
+`Containerfile.media` and `container-media.sh` put xorriso and amitools 0.8.1 on top of the build container, in `/opt/amix-media`; the build container is not rebuilt.
+
 ## 2026-11-02 — README: SOURCE_DATE_EPOCH stays fixed across pin changes (a7a6ad1)
 
 The build image's SOURCE_DATE_EPOCH is fixed in the Containerfile and kept across toolchain pin changes, so every static archive stays byte-identical where a pin changes nothing.

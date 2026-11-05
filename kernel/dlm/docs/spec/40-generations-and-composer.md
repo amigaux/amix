@@ -82,10 +82,11 @@ program against an image file, so media and boxes cannot drift).
 | `kbootset mark-good` | called at the end of a full multi-user boot (end of run level 2): if `kinfo` names the booted generation and it is the trial, marks it good, makes it the **default** and clears the trial; also clears the loader-trial flag after a full boot through a newly installed boot2; after a boot where the loader fell back from the default, verifies the default and marks it bad when its bytes are damaged (§3.3) |
 | `kbootset retry` | called by the base system's fsck-repair reboot path: when the booted generation is the trial, its attempt does not count (at most twice per trial); writes the boot store's control block only, nothing on the root filesystem |
 | `kbootset rollback` | sets the **default** to the newest good generation older than the current default, or to the pristine generation when there is no older good one (control-block flip); the rolled-from generation stays good; a pending trial is cancelled; a later boot uses the new default |
+| `kbootset default <id>` | sets the **default** to a good or pristine generation (control-block flip); refused while another generation is on trial; the way back from `rollback` (C2-4 §19) |
 | `kbootset next --previous | --safe | --devload | <id>` | one-shot request for the next boot only (`--devload`: development load, `30-module-core.md` §2 patch 17) |
 | `kbootset mark-bad <id>` | administrator verdict |
 | `kbootset check` | recompute every member's SHA-256 in the store and in `/stand/gen` against the manifests and the package database; compare the installed packages with the default generation; never writes |
-| `kbootset collect` | remove generations outside the kept set (also done by `commit`) |
+| `kbootset collect` | remove generations outside the kept set (also done by `commit`), and the directories under `/stand/gen` of generations gone from the store, except the booted one's (C2-4 §19) |
 | `kbootset major <name>` | the majors the registry gives module `<name>`, one `c <n>` or `b <n>` line each; needs no store and no `kinfo` (C2-4 §15) |
 | `kbootset loader-install` | install a new boot2 as primary (old one becomes secondary) and, only with an explicit flag, a new boot1 |
 | `-R <root>`, `--image <file>` | operate on a mounted target (installer, repair mode) or a disk image (host media builds) |

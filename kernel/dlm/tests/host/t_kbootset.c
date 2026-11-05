@@ -404,6 +404,29 @@ test_kbootset(void)
 	T_EQ(ks_rollback(&k, &to), KS_OK);
 	T_EQ(to, 1);
 	T_EQ(ks_rollback(&k, &to), KS_EREFUSE);
+	/* the way back: a good or pristine generation by name, one write */
+	T_EQ(ks_default(&k, 99), KS_EREFUSE);
+	T_EQ(ks_default(&k, 1), KS_OK);			/* already: nothing to write */
+	T_CHECK(strstr(k.msg, "already the default") != 0);
+	writes = 0;
+	T_EQ(ks_default(&k, 5), KS_OK);
+	T_EQ(writes, 1);
+	T_EQ(k.ctl.default_gen, 5);
+	T_CHECK(ks_find(&k, 1) && ks_find(&k, 4) && ks_find(&k, 5));
+	T_CHECK(boots());
+	T_EQ(commit(&k, 8, &id), KS_OK);		/* a trial: it comes first */
+	T_EQ(ks_default(&k, id), KS_EREFUSE);
+	T_CHECK(strstr(k.msg, "power-cycle to boot it") != 0);
+	T_EQ(ks_default(&k, 4), KS_EREFUSE);
+	T_CHECK(strstr(k.msg, "first") != 0);
+	T_EQ(k.ctl.default_gen, 5);
+	T_EQ(ks_mark_bad(&k, id), KS_OK);
+	T_EQ(ks_default(&k, id), KS_EREFUSE);
+	T_EQ(ks_rollback(&k, &to), KS_OK);		/* its line names the way back */
+	T_EQ(to, 4);
+	T_CHECK(strstr(k.msg, "kbootset default 5 goes back") != 0);
+	T_EQ(ks_default(&k, 1), KS_OK);
+	T_EQ(k.ctl.default_gen, 1);
 	/* refusals */
 	T_EQ(ks_mark_bad(&k, 1), KS_EREFUSE);		/* pristine */
 	T_EQ(ks_mark_good(&k, 99, 1), KS_EREFUSE);

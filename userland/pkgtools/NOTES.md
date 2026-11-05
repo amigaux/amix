@@ -24,6 +24,33 @@ source's place as `i copyright`, so `apkg licence apkg` shows it.
 **A refused upgrade.** It stays all or nothing. A refusal now says "nothing was changed" in every form;
 a no-name upgrade refused for kernel space names the userland that can go by name; a refused catalog
 entry left out of a no-name upgrade is named. Messages cite no internal document.
+
+## 2026-11-04 — APKGENG 1.12.8 minted (STAGED, NOT PUBLISHED)
+
+`make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this entry's
+commit, `VER_ENG="1.12.8"`, `EPOCH_ENG=1793750400`; `make repro-check` there from the commit before it:
+the checkout's roll and a `git archive` copy's are the same bytes, and so is the final `make dist`:
+
+- **md5 `678a780857c50514ab534e080589fd4f`**, **sha256
+  `a8f91fc124034822d1dc9f311e70d26cdd1de19e9a3179e8588a26c5b0174fb0`**, **2326528 B**.
+- Against 1.12.7 only the new install/copyright and doc/SOURCE, pkginfo, pkgmap and two man pages' comment
+  lines (pkgmk.1, pkgtrans.1) differ. Every program is the same bytes, pkginstall included.
+- The static engine built from this tree has the same `bin/pkgadd`, `pkgchk`, `pkginfo`, `pkgtrans` and
+  `sadm-helpers/pkginstall` as one built from 1.12.7's.
+- APKG 0.3.10 rolls `53426b21…`, unchanged.
+
+On an emulated k46 box: `apkg upgrade apkgeng` from 1.12.6 prints no notice; `pkgchk -n APKGENG` clean;
+`/usr/apkg/doc/SOURCE` on disk, the saved notice in install/ and the pspool copy, the same text.
+
+## 2026-11-04 — APKGENG 1.12.8: the package says where its source is
+
+The engine is CDDL 1.0, not our own code. The package carried the licence text, and nothing said how to
+get the source, which CDDL 3.1 asks for. `/usr/apkg/doc/SOURCE` and `i copyright` now say it. Text only.
+
+CDDL 3.3 asks each modification to name who made it. Against upstream (aflat/heirloom-pkgtools `bfc8d02`),
+49 changed CDDL files; 6 had no "Portions Copyright" line, nor did the committed scanner libinst/scriptvfy.c
+and the new libpkg/ainfo.c. They all have one now.
+
 ## 2026-11-04 — APKG 0.3.10 and APKGENG 1.12.7 minted (STAGED, NOT PUBLISHED)
 
 `make dist` in the build container `amix-toolchain:dist` (its pins are this checkout's) from this

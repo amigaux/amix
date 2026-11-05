@@ -47,7 +47,7 @@ def git(*args, cwd):
 tmp = tempfile.mkdtemp(prefix="test-dist.")
 try:
     top = os.path.join(tmp, "amix")
-    for f in ("build/dist.sh", "build/pkg/layout.sh", "build/pkg/pkgmeta", "system/check-amix-system",
+    for f in ("build/dist.sh", "build/pkg/layout.sh", "build/pkg/pkgmeta", "build/pkg/common/fetch.sh", "system/check-amix-system",
               "userland/pkgtools/tools/repo/gen-catalog.py",
               "userland/pkgtools/tools/repo/deps.conf", "userland/pkgtools/tools/repo/names.conf",
               "userland/pkgtools/tools/repo/cats.conf", "userland/pkgtools/tools/repo/descs.conf",
@@ -89,8 +89,13 @@ try:
     check("an unknown step: exit 2", rc == 2 and "unknown step: frobnicate" in out, out)
     for step in ("media",):
         rc, out = run(step)
-        check("%s: not in make dist yet, exit 3" % step,
+        check("%s: no media/build.sh yet, exit 3" % step,
               rc == 3 and "[MISSING] %s: not in make dist yet\n" % step in out, out)
+    write(os.path.join(top, "media", "build.sh"), 'echo "hook $AMIX_TOP"; exit 3\n')
+    rc, out = run("media")
+    check("media: media/build.sh runs, and its exit 3 is the step's",
+          rc == 3 and "hook %s" % os.path.realpath(top) in out, out)
+    os.remove(os.path.join(top, "media", "build.sh"))
     rc, out = run("recipes/nosuch")
     check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
     # two recipes that build against each other: refused before anything builds
@@ -396,6 +401,21 @@ clean:
           rc != 0 and "=== make dist: kit" in out and "make dist: stopped at kit" in out
           and "=== make dist: kernel-k30" not in out, out)
 
+    # dist's order, through a stand-in dist.sh: a gap (exit 3) does not stop it
+    stand = os.path.join(tmp, "standin", "build", "dist.sh")
+    real = open(dist).read()
+    i, j = real.index("dist_loop() {"), real.index("# --- outside the container")
+    write(stand, 'case $1 in dist) ;; *) echo "ran $1"; case " ${GAPS:-} " in *" $1 "*) exit 3 ;; esac\n'
+          '[ "$1" != "${FAILS:-}" ] || exit 1; exit 0 ;; esac\n' + real[i:j] + 'dist_loop\n')
+    rc, out = run("dist", where=stand, GAPS="release media")
+    check("dist: a gap does not stop it; every step and the lock run, the gaps named, exit 3",
+          rc == 3 and "ran kit\n" in out and "ran release\n" in out and "ran media\n" in out and "ran lock\n" in out
+          and "make dist: done but for: release media" in out and "stopped at" not in out, out)
+    rc, out = run("dist", where=stand)
+    check("dist: no gap, exit 0", rc == 0 and "make dist: done; out/" in out, out)
+    rc, out = run("dist", where=stand, GAPS="media", FAILS="lock")
+    check("dist: a refused lock is the end, even after a gap", rc == 1 and "stopped at lock" in out, out)
+
     # inside the container: the image's pins (its /opt/amix/PINS) must be
     # the checkout's before any step runs
     home = os.path.join(tmp, "home")
@@ -467,6 +487,56 @@ clean:
     a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
     check("release: no STOCK, no --stock, and the tool's exit 3 is the step's",
           rc == 3 and "--stock" not in a and "--previous" not in a, out + " ".join(a))
+    # STOCK not given: the lock's packages from the assets' URL, into out/cache; the sha256 decides
+    assets = os.path.join(top, "system", "stock-1.1.assets")
+    lk = os.path.join(pt, "tools", "repo", "stock-1.1.lock")
+    srv = os.path.join(tmp, "assets")
+    write(os.path.join(srv, "core-2.1.pkg"), "core\n")
+    good = subprocess.run(["sha256sum", os.path.join(srv, "core-2.1.pkg")], stdout=subprocess.PIPE).stdout.decode()[:64]
+    write(lk, "# the stock packages\ncore-2.1.pkg 5 x %s\n" % good)
+    bin2 = os.path.join(tmp, "bin2")
+    write(os.path.join(bin2, "curl"), '#!/bin/sh\n'
+          'while [ $# -gt 0 ]; do case $1 in -o) o=$2; shift ;; -*) ;; *) u=$1 ;; esac; shift; done\n'
+          'case $u in */good/*) cp "%s/${u##*/}" "$o" ;; *) exit 22 ;; esac\n' % srv, 0o755)
+    path2 = bin2 + ":" + base["PATH"]
+    cache = os.path.join(o, "cache", "stock-1.1")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", PATH=path2,
+                  STOCK_URL="https://example.invalid/good")
+    a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
+    check("release: no STOCK: fetched from STOCK_URL into out/cache, and given to the tool",
+          rc == 0 and a[a.index("--stock") + 1] == cache and os.path.isfile(os.path.join(cache, "core-2.1.pkg")),
+          out + " ".join(a))
+    shutil.rmtree(cache)
+    write(assets, "https://example.invalid/none\n")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", PATH=path2)
+    check("release: the assets' URL; a package not to be had is a gap, exit 3, named",
+          rc == 3 and "[MISSING] release: stock package core-2.1.pkg" in out, out)
+    write(lk, "core-2.1.pkg 5 x %s\n" % ("0" * 64))
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", PATH=path2,
+                  STOCK_URL="https://example.invalid/good")
+    check("release: other bytes than the pin are not taken",
+          rc == 3 and not os.path.exists(os.path.join(cache, "core-2.1.pkg")), out)
+    os.remove(assets)
+    os.remove(lk)
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", RELEASE_PUBLIC="1")
+    empty = os.path.join(o, "build", "release-public-empty")
+    check("release: RELEASE_PUBLIC runs without the two files, and says so",
+          rc == 0 and "public rebuild" in out and os.path.getsize(empty) == 0, out)
+    prev = os.path.join(tmp, "published")
+    write(os.path.join(prev, "catalog"), "#apkg-catalog 1\n")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", RELEASE_PREVIOUS=prev)
+    said = open(os.path.join(o, "build", "release-previous")).read().strip() if rc == 0 else ""
+    check("release: the published tree's catalog digest is kept for the lock",
+          said == subprocess.run(["sha256sum", os.path.join(prev, "catalog")],
+                                 stdout=subprocess.PIPE).stdout.decode()[:64], out + said)
+    write(os.path.join(o, "release", "1.1", "stale"), "x")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="3")
+    check("release: an earlier tree goes first, so a gap leaves the lock no old lines",
+          rc == 3 and not os.path.exists(os.path.join(o, "release", "1.1", "stale"))
+          and not os.path.exists(os.path.join(o, "build", "release-previous")), out)
+    # one step's process: what the other steps' inputs would break (a kernel recipe's own STOCK)
+    rc, out = run("media", STOCK="/x", STOCK_URL="/y")
+    check("a release input set on this host does not stop another step", rc == 3 and "[MISSING] media" in out, out)
     rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, RELEASE_PREVIOUS=stock, ASSEMBLE_RC="1")
     a = open(argrel).read().split("\n") if os.path.exists(argrel) else []
     check("release: RELEASE_PREVIOUS is --previous, and a refusal (exit 1) is the step's",
@@ -501,6 +571,27 @@ clean:
           args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))
     check("no release input set, none mounted", not any("/release-in/" in x for x in args), " ".join(args))
+    stock0 = os.path.join(tmp, "stock0")
+    os.makedirs(stock0)
+    rc, out = run("kernel-k46", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, STOCK=stock0, STOCK_URL="https://example.invalid/s", RELEASE_PREVIOUS=stock0,
+                  RELEASE_PUBLIC="1", LOCK="nosuch", AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("a release input is the release step's: another step's container does not get it",
+          rc == 0 and not any(x.startswith(("STOCK", "RELEASE_", "LOCK")) or "/release-in/" in x for x in args),
+          out + " ".join(args))
+    rc, out = run("media", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  AMIX_IMAGE="amix-toolchain:test")
+    check("media: no media/build.sh, exit 3, no image asked for",
+          rc == 3 and "[MISSING] media: not in make dist yet" in out, out)
+    write(os.path.join(top, "media", "build.sh"), "exit 0\n")
+    rc, out = run("media", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  AMIX_IMAGE="amix-toolchain:test", AMIX_MEDIA_IMAGE="amix-toolchain:testmedia",
+                  )
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("media: its own image, not AMIX_IMAGE",
+          rc == 0 and "amix-toolchain:testmedia" in args and "amix-toolchain:test" not in args, out + " ".join(args))
+    os.remove(os.path.join(top, "media", "build.sh"))
     reg = os.path.join(tmp, "rom-register")
     write(reg, "")
     rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
@@ -514,6 +605,18 @@ clean:
           and args.index("%s:/release-in/ROM_MANIFEST:ro" % reg) < args.index("amix-toolchain:test")
           and args[args.index("amix-toolchain:test"):-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "release"],
           " ".join(args))
+    lockf = os.path.join(tmp, "lock-of-record")
+    write(lockf, "#amix-lock 1\n")
+    rc, out = run("lock", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, LOCK=lockf, AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("lock: LOCK goes in read-only, wherever it lies",
+          rc == 0 and "LOCK=/release-in/LOCK" in args and "%s:/release-in/LOCK:ro" % lockf in args, " ".join(args))
+    rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  STOCK_URL="https://example.invalid/s", RELEASE_PUBLIC="1", AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("release: STOCK_URL and RELEASE_PUBLIC go in by name",
+          rc == 0 and "STOCK_URL=https://example.invalid/s" in args and "RELEASE_PUBLIC=1" in args, " ".join(args))
     rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
                   DOCKER_ARGS=argf, PRIVACY_PATTERNS=os.path.join(tmp, "nosuch"))
     check("a release input that does not exist: refused before the container",

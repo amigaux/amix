@@ -148,7 +148,8 @@ module (`ECONFIG`).
 Each package ships `/etc/conf/mod.d/zz9ksvc`, `/etc/conf/modreg.d/zz9ksvc` (comments only),
 `/dev/zz9ksvc0` and `/dev/zz9ksvc1` (`c 55 0` and `c 55 1`, mode 0666, class `zz9ksvc`), the page
 `zz9ksvc(7)` and its whatis fragment. Its copyright file carries the GPL-3.0 text from
-`LICENSE`; it needs the zz9kbus package of its line.
+`LICENSE` and says where the source is: this repository at the release's revision, and the
+SDK's repository and commit. It needs the zz9kbus package of its line.
 
 ## Testing
 

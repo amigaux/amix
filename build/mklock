@@ -18,6 +18,7 @@ Exit status: 0 written or equal, 1 refused, 2 usage.
 
 import hashlib
 import os
+import re
 import subprocess
 import sys
 
@@ -62,6 +63,47 @@ def files(root):
     return sorted(out)
 
 
+def older_files(catalog):
+    """The file of each row in a release catalog's block of older versions."""
+    found = []
+    with open(catalog, errors="replace") as fp:
+        for line in fp:
+            if not line.startswith("#old "):
+                continue
+            row = line[5:].strip()
+            if row.startswith("#kpkg "):
+                m = re.search(r"\bfile=(\S+)", row)
+                if m:
+                    found.append(m.group(1))
+            elif not row.startswith("#"):
+                found.append(row.split("|")[3])
+    return found
+
+
+def check_carried(top, out, rel):
+    """A release tree's older versions are release/carried-REL's, byte for byte,
+    both ways: a tree built with no published tree has none, and is not checked."""
+    tree = os.path.join(out, "release", rel)
+    older = older_files(os.path.join(tree, "catalog"))
+    if not older:
+        return
+    table = {}
+    path = os.path.join(top, "release", "carried-" + rel)
+    if os.path.isfile(path):
+        with open(path) as fp:
+            for line in fp:
+                f = line.split()
+                if f and not line.startswith("#"):
+                    table[f[0]] = f[1]
+    for name in older:
+        if name not in table:
+            raise LockError("%s: an older version not in release/carried-%s" % (name, rel))
+        if sha256(os.path.join(tree, "pkgs", name)) != table[name]:
+            raise LockError("%s: not the bytes release/carried-%s names" % (name, rel))
+    for name in sorted(set(table) - set(older)):
+        raise LockError("%s: release/carried-%s names it, and the tree does not have it" % (name, rel))
+
+
 def lock(top, out):
     """The lock's lines, in order."""
     head = [FORMAT, "amix %s" % git(top, "rev-parse", "HEAD"),
@@ -71,6 +113,15 @@ def lock(top, out):
         head.append("dirty %s" % hashlib.sha256(tree.encode()).hexdigest())
     image = "/opt/amix/TOOLCHAIN.sha256"
     head.append("image %s" % (sha256(image) if os.path.isfile(image) else "host"))
+    # the media image's tools: the image line cannot see them
+    tools = os.path.join(out, "build", "media-tools")
+    if os.path.isfile(tools):
+        head.append("media-tools %s" % sha256(tools))
+    # the published tree the release was built on
+    previous = os.path.join(out, "build", "release-previous")
+    if os.path.isfile(previous):
+        with open(previous) as fp:
+            head.append("previous %s" % fp.read().strip())
     sections = []
     # inputs: every pin and distfile pin, and the system input's manifest
     pins = []
@@ -89,7 +140,8 @@ def lock(top, out):
                 pins.append("%s %s sha256 %s" % (kind, rel, sha256(os.path.join(top, rel))))
     sections.append(sorted(pins))
     sections.append(["system %s %s" % (rel, sha256(os.path.join(top, rel)))
-                     for rel in ("system/MANIFEST.sha256", "system/SYMLINKS")
+                     for rel in ("system/MANIFEST.sha256", "system/SYMLINKS", "system/stock-1.1.assets",
+                                 "release/carried-1.1")
                      if os.path.isfile(os.path.join(top, rel))])
     # outputs
     digests = os.path.join(out, "kit", "kit.digests")
@@ -114,6 +166,9 @@ def lock(top, out):
     spaces.append(("apkg", os.path.join(out, "apkg"), os.path.join(out, "apkg")))
     rels = os.path.join(out, "release")
     if os.path.isdir(rels):
+        for r in sorted(os.listdir(rels)):
+            if os.path.isfile(os.path.join(rels, r, "catalog")) and not r.endswith(".tmp"):
+                check_carried(top, out, r)
         spaces += [("release/" + r, os.path.join(rels, r), os.path.join(rels, r, "pkgs"))
                    for r in sorted(os.listdir(rels))
                    if os.path.isdir(os.path.join(rels, r)) and not r.endswith(".tmp")]

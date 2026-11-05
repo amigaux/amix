@@ -36,34 +36,45 @@
 #                out/{kspace,userland}/pkgs with their conf layers:
 #                out/{kspace,userland}/{catalog,catalog.md5}
 #   release      the 1.1 repository tree, by pkgtools' assemble-release.py
-#                over out/{userland,kspace,apkg}, the stock packages
-#                (STOCK=<dir>, which stock-1.1.lock names) and the published
-#                tree (RELEASE_PREVIOUS=<dir>, if any), checked by
+#                over out/{userland,kspace,apkg}, the stock packages and the
+#                published tree (RELEASE_PREVIOUS=<dir>, if any), checked by
 #                tools/release-check with ROM_MANIFEST=<file> and
-#                PRIVACY_PATTERNS=<file>: out/release/1.1/; without STOCK or
-#                either file, the step exits 3
-#   media        CD, netinstall, floppies                  not in make dist yet
+#                PRIVACY_PATTERNS=<file>: out/release/1.1/. The stock packages
+#                are what stock-1.1.lock names, from STOCK=<dir>, else fetched
+#                into out/cache from the release assets system/stock-1.1.assets
+#                names (STOCK_URL=<base> names others); the sha256 decides.
+#                RELEASE_PUBLIC=1 runs without the two files, on the content
+#                check's public tests. A stock package not to be had, or
+#                neither file without RELEASE_PUBLIC, exits 3
+#   media        CD, netinstall, floppies: media/build.sh in the media image
+#                (toolchain/Containerfile.media), into out/media/; it exits 3
+#                while there is no media/build.sh or no media image
 #   lock         out/lock, every input and output (release/README.md); with
 #                LOCK=<file>, refuses a build that is not that lock
 #
-# and `dist` (all of them, stopping at the first that fails or is not in
-# make dist yet), `tools` (the build container, toolchain/container-build.sh),
+# and `dist` (all of them: a step that exits 3 is a gap, named at the end, and
+# the others still run, the lock too; one that fails stops it), `tools` (the
+# build containers, toolchain/container-build.sh and container-media.sh),
 # `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
 # `drivers/<name>`.
 #
 # Every step but `tools` runs in the build container: outside it, dist.sh
-# runs itself there (AMIX_IMAGE, default amix-toolchain:dist; CONTAINER,
-# docker or podman), as the calling user, with the checkout at /src (a fixed
-# path, for the period compiler, which cannot remap one), its git directory
-# where git expects it, and SYSTEM read-only at /system. DIST_HOST=1 runs the
-# steps on this host instead, for development; a release is built in the
-# container.
+# runs itself there (AMIX_IMAGE, default amix-toolchain:dist; the media step
+# AMIX_MEDIA_IMAGE, default amix-toolchain:media; CONTAINER, docker or podman),
+# as the calling user, with the checkout at /src (a fixed path, for the period
+# compiler, which cannot remap one), its git directory where git expects it,
+# and SYSTEM read-only at /system. A step gets only its own inputs: STOCK,
+# STOCK_URL, RELEASE_PREVIOUS, ROM_MANIFEST, PRIVACY_PATTERNS and RELEASE_PUBLIC
+# reach the release step (the last three the media step too), LOCK the lock
+# step, so a name a kernel's recipe reads for itself is never set by accident.
+# DIST_HOST=1 runs the steps on this host instead, for development; a release
+# is built in the container.
 #
 # Before any step: SYSTEM (or AMIX_SYSTEM; default the amix-system checkout
 # beside the main working tree) must match system/MANIFEST.sha256, and the
 # checkout must not be shallow, since a package's epoch is its directory's
-# last commit. Exit 0 done, 1 failed, 2 usage, 3 a step that is
-# not in make dist yet.
+# last commit. Exit 0 done, 1 failed, 2 usage, 3 a gap: an input or a step that
+# is not there yet. (`make` itself reports any failure of its recipe as 2.)
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -82,16 +93,47 @@ for s; do
 	esac
 done
 
+# more than one step: each its own process, so each gets only its own inputs
+if [ $# -gt 1 ]; then
+	for s; do
+		sh "$0" "$s" || exit
+	done
+	exit 0
+fi
+
 missing() {	# missing <step>
 	echo "[MISSING] $1: not in make dist yet" >&2
 	exit 3
+}
+
+# dist: every step, each its own process (set -e holds inside it, and the media
+# step has its own image). A step's exit 3 is a gap: the rest still run, the
+# lock last, and the gaps are named at the end, exit 3.
+dist_loop() {
+	gaps=
+	for s in kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock; do
+		echo "=== make dist: $s"
+		rc=0
+		sh "$0" "$s" || rc=$?
+		case $rc in
+		0) ;;
+		3) gaps="$gaps $s" ;;
+		*) echo "make dist: stopped at $s" >&2; exit "$rc" ;;
+		esac
+	done
+	if [ -n "$gaps" ]; then
+		echo "make dist: done but for:$gaps (their [MISSING] lines above); out/lock has no lines for them" >&2
+		exit 3
+	fi
+	echo "make dist: done; out/"
 }
 
 # --- outside the container: preconditions, then run there --------------------
 if [ "${1:-}" = tools ]; then
 	sys=${SYSTEM:-${AMIX_SYSTEM:-}}
 	[ -n "$sys" ] || { AMIX_TOP=$top; . "$here/pkg/layout.sh"; sys=$AMIX_SYSTEM; }
-	exec "$top/toolchain/container-build.sh" "$sys" "${AMIX_IMAGE:-amix-toolchain:dist}"
+	"$top/toolchain/container-build.sh" "$sys" "${AMIX_IMAGE:-amix-toolchain:dist}"
+	exec "$top/toolchain/container-media.sh" "${AMIX_IMAGE:-amix-toolchain:dist}" "${AMIX_MEDIA_IMAGE:-amix-toolchain:media}"
 fi
 if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	sys=${SYSTEM:-${AMIX_SYSTEM:-}}
@@ -110,9 +152,19 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	if [ -n "${DIST_HOST:-}" ]; then
 		AMIX_SYSTEM=$sys AMIX_IN_CONTAINER=host exec sh "$0" "$@"
 	fi
+	[ "$1" != dist ] || { dist_loop; exit 0; }
+	step=$1
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
 	image=${AMIX_IMAGE:-amix-toolchain:dist}
+	if [ "$1" = media ]; then
+		[ -f "$top/media/build.sh" ] || missing media
+		image=${AMIX_MEDIA_IMAGE:-amix-toolchain:media}
+		"$tool" image inspect "$image" > /dev/null 2>&1 || {
+			echo "[MISSING] media: no image $image (make tools builds it)" >&2
+			exit 3
+		}
+	fi
 	# the calling user's uid and gid need names in the image (the host
 	# pkgtools' smoke tests ask id(1); a CI runner's uid is not the image's
 	# 1000): the image's passwd and group, plus the caller where absent
@@ -129,17 +181,29 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	if [ -n "${AMIX_DISTFILES:-}" ]; then
 		set -- -e AMIX_DISTFILES=/distfiles -v "$(cd "$AMIX_DISTFILES" && pwd):/distfiles:ro" "$@"
 	fi
-	# the release step's inputs from outside the checkout, read-only under
-	# /release-in: STOCK and RELEASE_PREVIOUS (directories), ROM_MANIFEST
-	# and PRIVACY_PATTERNS (files, never in this repository)
-	for v in STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS; do
+	# a step's inputs from outside the checkout, read-only under /release-in:
+	# STOCK and RELEASE_PREVIOUS (directories), ROM_MANIFEST and PRIVACY_PATTERNS
+	# (files, never in this repository), LOCK; its settings by name
+	inputs= settings=
+	case $step in
+	release) inputs="STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS"; settings="STOCK_URL RELEASE_PUBLIC" ;;
+	media) inputs="ROM_MANIFEST PRIVACY_PATTERNS"; settings=RELEASE_PUBLIC ;;
+	lock) inputs=LOCK ;;
+	esac
+	for v in $inputs; do
 		eval "p=\${$v:-}"
 		[ -n "$p" ] || continue
+		# LOCK is the checkout's: a relative one is from its top
+		[ "$v" != LOCK ] || case $p in /*) ;; *) p=$top/$p ;; esac
 		[ -e "$p" ] || { echo "[FAIL] make dist: $v=$p does not exist" >&2; exit 1; }
 		p=$(cd "$(dirname "$p")" && pwd)/$(basename "$p")
 		set -- -e "$v=/release-in/$v" -v "$p:/release-in/$v:ro" "$@"
 	done
-	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 -e LOCK \
+	for v in $settings; do
+		eval "p=\${$v:-}"
+		[ -z "$p" ] || set -- -e "$v=$p" "$@"
+	done
+	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi
 if [ "$AMIX_IN_CONTAINER" = 1 ]; then
@@ -149,6 +213,14 @@ if [ "$AMIX_IN_CONTAINER" = 1 ]; then
 fi
 
 # --- the steps -------------------------------------------------------------------
+# a step sees only its own inputs, on this host too (DIST_HOST)
+case $1 in
+dist) ;;
+release) unset LOCK 2>/dev/null || : ;;
+media) unset LOCK STOCK STOCK_URL RELEASE_PREVIOUS 2>/dev/null || : ;;
+lock) unset STOCK STOCK_URL RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS RELEASE_PUBLIC 2>/dev/null || : ;;
+*) unset LOCK STOCK STOCK_URL RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS RELEASE_PUBLIC 2>/dev/null || : ;;
+esac
 AMIX_TOP=$top
 . "$here/pkg/layout.sh"
 : "${GCA:?dist.sh: GCA is not set (the build container sets it)}"
@@ -497,8 +569,32 @@ step_apkg() {
 	(cd "$out/apkg" && md5sum APKG-*.pkg APKGENG-*.pkg)
 }
 
+# the stock packages stock-$release.lock names, into out/cache/stock-$release:
+# from AMIX_DISTFILES or the release assets at STOCK_URL, else at the URL in
+# system/stock-$release.assets. Prints the directory; none named: prints nothing.
+stock_fetch() {
+	_lk=$top/userland/pkgtools/tools/repo/stock-$release.lock
+	_base=${STOCK_URL:-}
+	if [ -z "$_base" ] && [ -f "$top/system/stock-$release.assets" ]; then
+		read -r _base < "$top/system/stock-$release.assets"
+	fi
+	[ -n "$_base" ] && [ -f "$_lk" ] || return 0
+	_d=$out/cache/stock-$release
+	mkdir -p "$_d"
+	. "$here/pkg/common/fetch.sh"
+	grep -v '^#' "$_lk" | while read -r _n _sz _md5 _sha; do
+		[ -n "$_n" ] || continue
+		( amix_fetch "$_base/$_n" "$_sha" "$_d/$_n" ) > /dev/null 2>&1 || {
+			echo "[MISSING] release: stock package $_n: not to be had at $_base with its pinned sha256" >&2
+			exit 3
+		}
+	done || exit
+	echo "$_d"
+}
+
 release=1.1
 step_release() {
+	rm -rf "${out:?}/release/$release" "${out:?}/build/release-previous"
 	for d in userland kspace; do
 		[ -f "$out/$d/catalog" ] || missing_input "out/$d/catalog: make $d catalogs first"
 	done
@@ -512,6 +608,22 @@ step_release() {
 		echo "[FAIL] release: no GCC 14 sysroot from $G14/prefix/bin/m68k-elf-gcc" >&2; exit 1; }
 	export AMIX_SYSROOT
 	mkdir -p "$out/build"
+	if [ -z "${STOCK:-}" ]; then
+		STOCK=$(stock_fetch) || exit
+	fi
+	# the published tree this one is built on: its catalog's digest, for the lock
+	if [ -n "${RELEASE_PREVIOUS:-}" ] && [ -f "$RELEASE_PREVIOUS/catalog" ]; then
+		sha256sum "$RELEASE_PREVIOUS/catalog" | cut -c1-64 > "$out/build/release-previous"
+	fi
+	# a public rebuild has no ROM register and no private list: empty ones, so
+	# the check's public tests run. The tree is the same bytes.
+	if [ -n "${RELEASE_PUBLIC:-}" ]; then
+		: > "$out/build/release-public-empty"
+		ROM_MANIFEST=${ROM_MANIFEST:-$out/build/release-public-empty}
+		PRIVACY_PATTERNS=${PRIVACY_PATTERNS:-$out/build/release-public-empty}
+		export ROM_MANIFEST PRIVACY_PATTERNS
+		echo "release: public rebuild: no ROM register or private list; the content check's public tests only"
+	fi
 	make -C "$top/userland/pkgtools/src/apkg" apkg > "$out/build/apkg-host.log" 2>&1 || {
 		tail -20 "$out/build/apkg-host.log" >&2
 		echo "[FAIL] release: the host apkg did not build; log out/build/apkg-host.log" >&2
@@ -530,6 +642,16 @@ step_release() {
 missing_input() {	# missing_input <what>
 	echo "[MISSING] release: $1" >&2
 	exit 3
+}
+
+# media: media/build.sh, into out/media/. The hook exits 3 for an input it lacks;
+# what the image holds goes to out/build/media-tools, for the lock
+step_media() {
+	rm -rf "${out:?}/media" "${out:?}/build/media-tools"
+	[ -f "$top/media/build.sh" ] || missing media
+	mkdir -p "$out/media" "$out/build"
+	[ ! -f /opt/amix-media/TOOLS ] || cp /opt/amix-media/TOOLS "$out/build/media-tools"
+	AMIX_TOP=$top sh "$top/media/build.sh"
 }
 
 step_userland() {
@@ -565,23 +687,14 @@ run() {
 		done
 		;;
 	catalogs) step_catalogs ;;
-	media) missing media ;;
+	media) step_media ;;
 	lock)
 		# LOCK=<lock of record>: refuse a build that differs from it
 		python3 -I "$here/mklock" "$top" "$out" ${LOCK:+--check "$LOCK"}
 		;;
-	dist)
-		# each step its own process: set -e holds inside it
-		for s in kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock; do
-			echo "=== make dist: $s"
-			sh "$0" "$s" || { rc=$?; echo "make dist: stopped at $s" >&2; exit "$rc"; }
-		done
-		echo "make dist: done; out/"
-		;;
+	dist) dist_loop ;;
 	*) echo "[FAIL] unknown step: $1" >&2; usage ;;
 	esac
 }
 
-for s; do
-	run "$s"
-done
+run "$1"

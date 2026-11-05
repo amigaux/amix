@@ -1403,12 +1403,13 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 {
 	static struct ax_manifest m;
 	struct kb_rec r;
-	char line[600], sha[65], kpath[32], *buf, *txt;
+	char line[600], sha[65], dsha[65], differs[120], kpath[32], *buf, *txt;
 	ax_u8 *data;
 	ax_u32 len;
 	DIR *d;
 	int i, j, bad = 0;
 
+	differs[0] = 0;
 	if ((d = opendir(under(root, "/var/apkg/kpkg"))) == 0) {
 		sprintf(line, "no apkg records under %.400s: the root-side checks are skipped", root);
 		say(line);
@@ -1477,10 +1478,9 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 					say(line);
 					bad++;
 				} else if (strncmp(sha, m.kernel.sha256, 64)) {
-					sprintf(line, "%s (package %s) differs from the default generation %lu: "
-						"kbootset build and commit compose it", kpath, r.name,
-						(unsigned long)g->id);
-					say(line);
+					/* said below, once it is known who holds these bytes */
+					sprintf(differs, "%s (package %.60s)", kpath, r.name);
+					memcpy(dsha, sha, sizeof(dsha));
 				} else {
 					sprintf(line, "%s is the default generation %lu's kernel", kpath,
 						(unsigned long)g->id);
@@ -1490,7 +1490,50 @@ kb_check(struct ks *k, const char *root, void (*say)(const char *line))
 		}
 		free(buf);
 	}
+	if (differs[0]) {	/* a generation that holds them, on trial or good, is no step to do */
+		ax_u32 trial = 0, good = 0;
+
+		for (i = 0; i < k->ctl.ngen; i++) {
+			const struct ax_gen *g = &k->ctl.gen[i];
+
+			if (g->id == k->ctl.default_gen || (buf = ks_manifest(k, g->id, &m)) == 0)
+				continue;
+			if (m.kernel.sha256 && !strncmp(dsha, m.kernel.sha256, 64)) {
+				if (g->id == k->ctl.trial_gen)
+					trial = g->id;
+				else if (g->state == AXG_GOOD || g->state == AXG_PRISTINE)
+					good = g->id;
+			}
+			free(buf);
+		}
+		if (trial)
+			sprintf(line, "%s is generation %lu's kernel, on trial: power-cycle to boot it",
+				differs, (unsigned long)trial);
+		else if (good)
+			sprintf(line, "%s is generation %lu's kernel, not the default: "
+				"kbootset default %lu boots it again", differs, (unsigned long)good,
+				(unsigned long)good);
+		else
+			sprintf(line, "%s differs from the default generation %lu: "
+				"kbootset build and commit compose it", differs,
+				(unsigned long)k->ctl.default_gen);
+		say(line);
+	}
 	return bad;
+}
+
+int
+kb_loader_new(struct ks *k, const char *root)
+{
+	ax_u8 *b2;
+	ax_u32 len;
+	int differs;
+
+	if ((b2 = slurp(under(root, "/stand/loader/boot2"), &len)) == 0)
+		return 0;
+	differs = len != k->hdr.boot2[0].len || ax_crc32(k->crctab, b2, len) != k->hdr.boot2[0].crc;
+	free(b2);
+	return differs;
 }
 
 void
@@ -1688,26 +1731,25 @@ same(const char *a, const char *b)
 }
 
 /*
- * Does the default generation already hold what head and this kernel
- * describe?  Both sides go through the loader's parser, so the comparison
+ * Does generation id already hold what head and this kernel (hx its
+ * SHA-256) describe?  Both sides go through the loader's parser, so the comparison
  * is of what the manifests say (line, kabi, CPUs, loader-min, root,
  * swap, filesystem, boards, arena, identity record, every member by size
  * and SHA-256, the parameters, the major table), not of their layout; the generation id
- * and created time are not compared.  Sets *dflt to the default's id.
+ * and created time are not compared.
  */
 static int
-same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen, ax_u32 bss,
-		const char *tail, ax_u32 *dflt)
+same_as_gen(struct ks *k, ax_u32 id, const char *head, const char *hx, ax_u32 klen, ax_u32 bss,
+	    const char *tail)
 {
 	static char cand[8192 + 512 + 16384];
 	static struct ax_manifest d, n;
-	char *dman, hx[65];
+	char *dman;
 	int i, errline, eq;
 	size_t l;
 
-	if (!k->ctl.default_gen || (dman = ks_manifest(k, k->ctl.default_gen, &d)) == 0)
+	if (!id || (dman = ks_manifest(k, id, &d)) == 0)
 		return 0;
-	hex(kernel, klen, hx);		/* the kernel's SHA-256 */
 	l = (size_t)sprintf(cand, "GMF1\ngeneration %lu\n%.8192s", (unsigned long)d.generation, head);
 	l += (size_t)sprintf(cand + l, "kernel unix %lu at=0x10000 crc32=00000000 sha256=%s",
 			     (unsigned long)klen, hx);
@@ -1734,16 +1776,32 @@ same_as_default(struct ks *k, const char *head, const ax_u8 *kernel, ax_u32 klen
 		eq = same(d.param[i], n.param[i]);
 	if (eq) {	/* and the major table: a default without one is not this */
 		static char dr[2048], nr[2048];
-		char *dt = ks_manifest_text(k, k->ctl.default_gen);
+		char *dt = ks_manifest_text(k, id);
 
 		majrows(dt ? dt : "", dr, sizeof dr);
 		majrows(head, nr, sizeof nr);
 		eq = dt && !strcmp(dr, nr);
 		free(dt);
 	}
-	*dflt = d.generation;
 	free(dman);
 	return eq;
+}
+
+/* what the default does not hold: another good or pristine generation that does, or 0 */
+static ax_u32
+same_as_good(struct ks *k, const char *head, const char *hx, ax_u32 klen, ax_u32 bss,
+	     const char *tail)
+{
+	int i;
+
+	for (i = 0; i < k->ctl.ngen; i++) {
+		const struct ax_gen *g = &k->ctl.gen[i];
+
+		if (g->id != k->ctl.default_gen && (g->state == AXG_GOOD || g->state == AXG_PRISTINE) &&
+		    same_as_gen(k, g->id, head, hx, klen, bss, tail))
+			return g->id;
+	}
+	return 0;
 }
 
 int
@@ -1757,6 +1815,8 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 	ax_u8 *kernel;
 	ax_u32 klen, id = ks_next_id(k), dflt = 0;
 	int rc, same_default = 0;
+	ax_u32 same_good = 0;
+	char hx[65];
 
 	k->gate = 0;
 	k->msg[0] = 0;
@@ -1780,7 +1840,10 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 		goto out;
 	}
 	head(text, f, &kk, rootfs, rootrec, swaprec, boards, created);
-	same_default = same_as_default(k, text, kernel, klen, kk.brel ? kk.bss : 0, mtail, &dflt);
+	hex(kernel, klen, hx);
+	dflt = k->ctl.default_gen;
+	same_default = same_as_gen(k, dflt, text, hx, klen, kk.brel ? kk.bss : 0, mtail);
+	same_good = same_default ? 0 : same_as_good(k, text, hx, klen, kk.brel ? kk.bss : 0, mtail);
 	free(kernel);
 	sprintf(text + strlen(text), "kernel unix /stand/k%d/unix\n%s", f->line, mtail);
 	sprintf(facts, "line=%d\nbootdev=%s\nrootdev=%s\nrootfs=%s\nmem=%lu\ncreated=%lu\n",
@@ -1795,6 +1858,10 @@ kb_build(struct ks *k, const char *root, const struct kb_facts *f, ax_u32 create
 			sprintf(k->msg + strlen(k->msg), "; it equals the default generation %lu: "
 				"kbootset commit will write nothing (commit --again writes it)",
 				(unsigned long)dflt);
+		else if (same_good)	/* after a rollback, say: no store space needed */
+			sprintf(k->msg + strlen(k->msg), "; good generation %lu already holds this: "
+				"kbootset default %lu makes it the default without a new generation",
+				(unsigned long)same_good, (unsigned long)same_good);
 	}
 out:
 	mods_free();
@@ -1887,6 +1954,57 @@ root_member(struct ks *k, const char *root, const char *line, struct ks_member *
 	return KS_OK;
 }
 
+/* the copies a build made for a generation that will not be committed */
+static void
+mods_remove(const char *root, ax_u32 id)
+{
+	char p[80], f[100];
+	struct dirent *e;
+	DIR *d;
+
+	sprintf(p, "/stand/gen/%lu/mod", (unsigned long)id);
+	if ((d = opendir(under(root, p))) == 0)
+		return;
+	while ((e = readdir(d)) != 0)
+		if (strcmp(e->d_name, ".") && strcmp(e->d_name, "..")) {
+			sprintf(f, "%s/%.15s", p, e->d_name);
+			remove(under(root, f));
+		}
+	closedir(d);
+	rmdir(under(root, p));
+}
+
+void
+kb_gen_sweep(struct ks *k, const char *root, ax_u32 booted)
+{
+	char p[80], f[80];
+	struct dirent *e, *x;
+	DIR *d, *g;
+	ax_u32 next = ks_next_id(k);
+
+	if ((d = opendir(under(root, "/stand/gen"))) == 0)
+		return;
+	while ((e = readdir(d)) != 0) {
+		char *end;
+		unsigned long o = strtoul(e->d_name, &end, 10);
+
+		if (*end != 0 || o == 0 || o >= next || o == booted || ks_find(k, (ax_u32)o))
+			continue;
+		mods_remove(root, (ax_u32)o);
+		sprintf(p, "/stand/gen/%lu", o);
+		if ((g = opendir(under(root, p))) != 0) {
+			while ((x = readdir(g)) != 0)
+				if (strcmp(x->d_name, ".") && strcmp(x->d_name, "..")) {
+					sprintf(f, "%.40s/%.32s", p, x->d_name);
+					remove(under(root, f));
+				}
+			closedir(g);
+		}
+		rmdir(under(root, p));
+	}
+	closedir(d);
+}
+
 int
 kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 {
@@ -1896,7 +2014,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 	struct kb_facts f;
 	struct kb_kernel kk;
 	struct ks_newgen g;
-	char p[80], buf[64], *text, *line, *next;
+	char p[80], buf[64], hx[65], *text, *line, *next;
 	ax_u8 *t, *kernel;
 	ax_u32 len, klen, id = ks_next_id(k), created, dflt;
 	size_t hl = 0, tl = 0, rl = 0;
@@ -2001,7 +2119,10 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 		mb[0].attrs = battr;
 	}
 	sprintf(cmp, "%s%s", rtail, tail);
-	if (!again && same_as_default(k, head, kernel, klen, kk.brel ? kk.bss : 0, cmp, &dflt)) {
+	dflt = k->ctl.default_gen;
+	if (!again)
+		hex(kernel, klen, hx);
+	if (!again && same_as_gen(k, dflt, head, hx, klen, kk.brel ? kk.bss : 0, cmp)) {
 		/* nothing new: write nothing, and drop the build so the next one
 		 * starts clean (C2-4 §3) */
 		free(kernel);
@@ -2011,6 +2132,7 @@ kb_commit(struct ks *k, const char *root, ax_u32 *idp, int again)
 		remove(under(root, p));
 		sprintf(p, "/stand/gen/%lu/facts", (unsigned long)id);
 		remove(under(root, p));
+		mods_remove(root, id);
 		sprintf(p, "/stand/gen/%lu", (unsigned long)id);
 		rmdir(under(root, p));
 		*idp = dflt;
@@ -2071,6 +2193,77 @@ modsym_one(void *c, const char *name, ax_u32 size, int type)
 	return 0;
 }
 
+/* section i of namelist n (the layout knl.c writes): 1, *addr and *size; or 0 */
+static int
+nl_sec(const ax_u8 *n, ax_u32 len, int i, ax_u32 *addr, ax_u32 *size)
+{
+	ax_u32 sh;
+
+	if (len < 52 || memcmp(n, "\177ELF", 4) || AX_GET16(n + 16) != 2 ||
+	    AX_GET16(n + 46) != 40 || AX_GET16(n + 48) < 8)
+		return 0;
+	sh = AX_GET32(n + 32) + 40 * (ax_u32)i;
+	if (sh > len || len - sh < 40)
+		return 0;
+	*addr = AX_GET32(n + sh + 12);
+	*size = AX_GET32(n + sh + 20);
+	return 1;
+}
+
+/* the same kernel at the same place, whatever modules the two list */
+static int
+nl_same_kernel(const ax_u8 *a, ax_u32 alen, const ax_u8 *b, ax_u32 blen)
+{
+	ax_u32 aa, as, ba, bs;
+	int i;
+
+	for (i = 1; i <= 4; i++)
+		if (!nl_sec(a, alen, i, &aa, &as) || !nl_sec(b, blen, i, &ba, &bs) || aa != ba || as != bs)
+			return 0;
+	return AX_GET32(a + 24) == AX_GET32(b + 24);
+}
+
+/* where the loader bound the booted kernel, by kinfo: is namelist n laid out there? */
+static int
+nl_is_booted(const ax_u8 *n, ax_u32 len, const struct kb_kinfo *ki)
+{
+	ax_u32 a, s;
+
+	return nl_sec(n, len, 1, &a, &s) && a == ki->bd_tvaddr &&
+	       (!ki->bd_rsize || (nl_sec(n, len, 2, &a, &s) && a == ki->bd_rvaddr && s == ki->bd_rsize)) &&
+	       (!ki->bd_dsize || (nl_sec(n, len, 3, &a, &s) && a == ki->bd_dvaddr && s == ki->bd_dsize));
+}
+
+/*
+ * A brel has no symbols, and the package replaces /stand/<line>/unix.sym with
+ * the kernel: so a generation keeps its own, for a boot of it once another
+ * kernel is installed (a rollback).  Written at a boot of the generation, when
+ * the installed file is known to be its.  Best effort: without one the namelist
+ * says why.
+ */
+static void
+sym_keep(const char *root, ax_u32 id, const ax_u8 *sym, ax_u32 slen)
+{
+	char p[64], np[1100];
+	FILE *f;
+
+	sprintf(p, "/stand/gen/%lu/unix.sym", (unsigned long)id);
+	if ((f = fopen(under(root, p), "rb")) != 0) {
+		fclose(f);
+		return;
+	}
+	mkdir(under(root, "/stand/gen"), 0755);
+	sprintf(p, "/stand/gen/%lu", (unsigned long)id);
+	mkdir(under(root, p), 0755);
+	sprintf(p, "/stand/gen/%lu/unix.sym", (unsigned long)id);
+	sprintf(np, "%.1000s.new", under(root, p));
+	if ((f = fopen(np, "wb")) == 0)
+		return;
+	if (fwrite(sym, 1, slen, f) != slen || fclose(f) != 0 || chmod(np, 0644) != 0 ||
+	    rename(np, under(root, p)) != 0)
+		remove(np);
+}
+
 static int
 kmem_read(void *c, ax_u32 a, ax_u8 *b, ax_u32 n)
 {
@@ -2090,7 +2283,7 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 	ax_u32 klen, slen = 0, nlen, olen = 0;
 	int i, j;
 	char *buf, why[120], path[96], text[4096], v[200], sha[65], ksha[65], lname[16], np[1100];
-	int rc = KB_NL_NONE;
+	int rc = KB_NL_NONE, fresh = 0;
 	FILE *f;
 
 	memset(&ms, 0, sizeof(ms));	/* before any goto out */
@@ -2145,9 +2338,16 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		sprintf(lname, "%.3s", m.line ? m.line : "k??");
 		sprintf(ksha, "%.64s", m.kernel.sha256 ? m.kernel.sha256 : "");
 	}
-	if (klen >= 18 && kern[16] == 0xff && kern[17] == 0) {	/* a brel: the line's unix.sym */
+	if (klen >= 18 && kern[16] == 0xff && kern[17] == 0) {	/* a brel: the generation's unix.sym */
 		const char *p;
 
+		if (buf) {
+			sprintf(path, "/stand/gen/%lu/unix.sym", (unsigned long)ki->gen_id);
+			sym = slurp(under(root, path), &slen);
+		}
+		if (sym)
+			goto have_sym;
+		/* or the line's, while the generation's kernel is the installed one */
 		sprintf(path, "/stand/%s/kabi", lname);
 		if ((f = fopen(under(root, path), "r")) == 0) {
 			sprintf(line, "no namelist: %s cannot be read", path);
@@ -2160,6 +2360,13 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 			goto out;
 		}
 		if (!value(text, "sha256", sha, sizeof(sha)) || strncmp(sha, ksha, 64)) {
+			/* what the boot wrote may still stand: a new kernel installed, not booted */
+			old = slurp(under(root, "/stand/unix"), &olen);
+			if (old && nl_is_booted(old, olen, ki)) {
+				sprintf(line, "namelist for generation %lu is current", (unsigned long)ki->gen_id);
+				rc = KB_NL_CURRENT;
+				goto out;
+			}
 			sprintf(line, "no namelist: generation %lu's kernel is not the installed one, whose "
 				"unix.sym this is", (unsigned long)ki->gen_id);
 			goto out;
@@ -2176,7 +2383,9 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 			sprintf(line, "no namelist: %s differs from its sidecar's sym=", path);
 			goto out;
 		}
+		fresh = 1;
 	}
+have_sym:
 	/* the modules loaded from this generation: their globals */
 	for (i = 0; buf && i < ki->nmods; i++)
 		for (j = 0; j < m.nmod; j++) {
@@ -2210,6 +2419,8 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		strcpy(line, "no namelist: the layout does not match kinfo");
 		goto out;
 	}
+	if (fresh && write && buf)
+		sym_keep(root, ki->gen_id, sym, slen);
 	old = slurp(under(root, "/stand/unix"), &olen);
 	if (old && olen == nlen && !memcmp(old, nl, nlen)) {
 		if (KB_MEDIUM(ki))
@@ -2220,8 +2431,12 @@ kb_namelist_run(struct ks *k, const char *root, const struct kb_kinfo *ki, int w
 		goto out;
 	}
 	if (!write) {
-		strcpy(line, old ? "namelist: /stand/unix is not the booted kernel's: run kbootset namelist"
-				 : "namelist: /stand/unix is missing: run kbootset namelist");
+		if (old && nl_same_kernel(old, olen, nl, nlen))	/* only the extras differ (C2-4 section 12) */
+			sprintf(line, "namelist: /stand/unix is the booted kernel's, bound at 0x%08lx; "
+				"kbootset namelist adds the modules loaded since", (unsigned long)ki->bd_tvaddr);
+		else
+			strcpy(line, old ? "namelist: /stand/unix is not the booted kernel's: run kbootset namelist"
+					 : "namelist: /stand/unix is missing: run kbootset namelist");
 		rc = KB_NL_STALE;
 		goto out;
 	}

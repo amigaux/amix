@@ -121,6 +121,16 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   files Amix's MSB-first layout, the server's own. The server's default font path is these three directories
   (`amix.cf`'s `DefaultFontPath`), so it starts without `-fp`. `patches/host/` applies to that copy only:
   glibc's `stdin`/`stderr` cannot initialise xkbcomp's statics.
+- **Sorted listings.** `mkfontdir` and `xkbcomp -l` walk `readdir`, so the rows of `fonts.dir` and of
+  the six XKB `.dir` files came out in the build file system's order. `stage` sorts them with
+  `LC_ALL=C`, `fonts.dir`'s count line first. The tools stay as they are: the step is a few lines,
+  where a fix in the tools would be a directory read and a sort in each of two programs.
+  The server sorts `fonts.dir` into its own tables, so exact names and font lists don't depend on the
+  rows. Scaling does, within one directory's fonts of one family: of two fonts at one pixel size the
+  earlier row is scaled, and the last 12 pt row sets the family's defaults. Only `misc` has such
+  fonts, 4 families (`misc-fixed` medium and bold, `schumacher-clean` medium and bold): on a box,
+  `schumacher-clean` asked for at 20 pixels has average width 100 in these rows, 160 with them
+  reversed. The XKB rows are the order of the server's answer when a client lists `*`, nothing more.
 - **xdm** links its greeter in (`SharedLibXdmGreet NO`): there are no shared libraries to
   `dlopen`.
 - **X** is a hard link to `Xzz9000`. `/usr/X11R6` is an absolute symlink to `/opt/amix/X11R6`.

@@ -1,0 +1,40 @@
+# The media image: the build container and the tools only the media step uses.
+#
+# Built by toolchain/container-media.sh, on the build container as it is, so
+# that image, its toolchains and every package built in it stay what they are.
+# The tools live in /opt/amix-media, outside what /opt/amix/TOOLCHAIN.sha256
+# lists; xorriso comes from the Ubuntu snapshot the build container names.
+# /opt/amix-media/TOOLS says what is here, and make dist's lock records its
+# digest (media-tools).
+
+ARG BASE=amix-toolchain:dist
+FROM ${BASE}
+# The snapshot service answers 5xx at times, for minutes: as in Containerfile,
+# each update or install is tried 4 times, 2 minutes apart.
+RUN try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
+ && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
+      cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
+ && try upd -o Acquire::Check-Valid-Until=false \
+ && try apt-get install -y --no-install-recommends xorriso \
+ && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log
+# amitools from its source archive, by toolchain/amitools.distfile: pure Python,
+# run from where it is unpacked, with no pip and no build
+COPY amitools-*.tar.gz /tmp/
+RUN mkdir -p /opt/amix-media/amitools /opt/amix-media/bin \
+ && tar -xzf /tmp/amitools-*.tar.gz --strip-components=1 -C /opt/amix-media/amitools \
+ && rm /tmp/amitools-*.tar.gz \
+ && for t in rdbtool xdftool; do \
+      printf '%s\n' '#!/usr/bin/python3' 'import sys' \
+        "from amitools.tools.$t import main" 'sys.exit(main())' > /opt/amix-media/bin/$t; \
+      chmod 755 /opt/amix-media/bin/$t; \
+    done
+ENV PATH=/opt/amix-media/bin:$PATH PYTHONPATH=/opt/amix-media/amitools PYTHONDONTWRITEBYTECODE=1
+# the tools answer, and make a disk
+RUN cd /tmp \
+ && xdftool t.adf create + format T ffs > /dev/null && test -s t.adf \
+ && rdbtool -f d.hdf create size=2Mi + init > /dev/null && test -s d.hdf \
+ && rm t.adf d.hdf
+RUN { dpkg-query -W -f '${Package} ${Version}\n' xorriso libisoburn1t64 libisofs6t64 libburn4t64 python3; \
+      (cd /opt/amix-media/amitools && find . -type f | LC_ALL=C sort | xargs sha256sum) | sha256sum | sed 's/ .*/ amitools tree/'; \
+    } > /opt/amix-media/TOOLS \
+ && chmod -R a+rX /opt/amix-media
