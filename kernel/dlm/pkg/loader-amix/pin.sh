@@ -7,6 +7,12 @@
 # outputs must equal the pins below: 124b86c reproduces amix-dlm's own
 # build/boot1.img and build/boot2.bin byte for byte (2026-10-26).
 #
+# -14 (2026-11-05): amix-dlm b1f3838 -- boot2 says when a line's memory
+# limit takes memory ("k30 kernel: using 64 MiB of the 128 MiB here"), and
+# a k46 kernel's main store is at most 128 MiB, joined banks counted.
+# boot1 as -13; boot2 28249 B 8ef1f588 (image + bss 28568 of 28672).
+# Loader version still 3.
+#
 # -13 (2026-11-04): amix-dlm 09bfe6c -- boot2 places the RAM-disk image
 # as high in the kernel's region as is free when AmigaOS keeps memory at
 # its top (a software MapROM tool's Kickstart copy, a reset-proof RAM
@@ -70,7 +76,7 @@
 # boot1 unchanged.  -2 was 1230e8b (boot2 27434 B 6897cd57, the boot2 that
 # counts a brel kernel's bss=, C2-3 v4, loader version 1).
 
-LDR_DLM_COMMIT=09bfe6c
+LDR_DLM_COMMIT=b1f3838
 
 # LOADER_VERSION in loader/boot2/b2.h at that commit (since 124b86c it is
 # AX_LOADER_VERSION of loader/common/store.h); ldrinfo version= and the
@@ -80,11 +86,11 @@ LDR_VERSION=3
 
 LDR_BOOT1_SIZE=1024
 LDR_BOOT1_SHA=765915a71834bf2a8ade2576d2115e86b6b4d178e00a8ac735c7e466bab8c669
-LDR_BOOT2_SIZE=28137
-LDR_BOOT2_SHA=d57bf011a884c00a864ff9815eadb9ae3d303db5e9a887093eb1419f1348a646
+LDR_BOOT2_SIZE=28249
+LDR_BOOT2_SHA=8ef1f588a3ea0dcd1f266cfea2359422d32848fbded1ae189c5ab1cab69cc082
 
 LDR_CATALOG_NAME=loader-amix
 LDR_PKG=ldramix
-LDR_PKG_VERSION=1.0.261104-13
+LDR_PKG_VERSION=1.0.261105-14
 
-LDR_SOURCE_EPOCH=1793750400
+LDR_SOURCE_EPOCH=1793836800
