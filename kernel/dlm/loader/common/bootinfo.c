@@ -232,28 +232,33 @@ ax_bootinfo_build(ax_u8 out[AXB_SIZE], const ax_u8 *cfgdevs, int ncfg,
 	return 0;
 }
 
-int
-ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap)
+ax_u32
+ax_memcap(ax_u8 *mems, int n, ax_u32 base, ax_u32 cap, int pool)
 {
-	ax_u8 *m, *e = mems + n * AXB_MEMSIZE;
-	ax_u32 lo = 1, l;
-	int cut = 0;
+	ax_u8 *m, *e = mems + n * AXB_MEMSIZE, *r = 0;
+	ax_u32 l, low = 0;
 
-	for (m = mems; m < e; m += AXB_MEMSIZE) {	/* the region holding base */
+	for (m = mems; m < e; m += AXB_MEMSIZE) {
+		if (AX_GET16(m + 14) & 0x2)
+			continue;
 		l = AX_GET32(m + 20) & ~0xFFUL;
-		if (!(AX_GET16(m + 14) & 0x2) && base >= l && base < AX_GET32(m + 24)) {
-			lo = l;
-			if (AX_GET32(m + 24) - l > cap)
-				AX_PUT32(m + 24, l + cap), cut = 1;
+		if (l == base)
+			r = m;
+		else if (AX_GET32(m + 24) == base) {
+			/* a 2 KiB page short: the kernel then does not join it to
+			 * its main store, and its range stays for the k30 DMA pool
+			 * (C4-5 section 5.2) */
+			if (pool || base - l > cap / 2)
+				AX_PUT32(m + 24, base - 0x800);
+			else
+				low = base - l;
 		}
 	}
-	/* one touching it from below ends a 2 KiB page short of it: the
-	 * kernel then does not join it to its main store, and its range stays
-	 * for the k30 DMA pool (C4-5 section 5.2) */
-	for (m = mems; m < e; m += AXB_MEMSIZE)
-		if (!(AX_GET16(m + 14) & 0x2) && AX_GET32(m + 24) == lo)
-			AX_PUT32(m + 24, lo - 0x800), cut = 1;
-	return cut;
+	if (r && (l = AX_GET32(r + 24) - base + low) > cap) {
+		AX_PUT32(r + 24, base + cap - low);
+		return l;
+	}
+	return 0;
 }
 
 ax_u32

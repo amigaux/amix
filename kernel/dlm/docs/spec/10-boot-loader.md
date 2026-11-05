@@ -237,7 +237,22 @@ boot2 says so on the console.
   short of the base (`ax_memcap`). The kernel's join of touching regions
   then leaves that region out of the main store with its range intact,
   where the k30 DMA pool comes from (C4-5 §5.2). A k30 kernel on a
-  128 MB box uses 64 MB of it. The k46 line takes its whole region.
+  128 MB box uses 64 MB of it.
+- **On k46 the main store is at most 128 MiB.** That is the most a k46
+  kernel has been run with: its kernel map shrinks as the memory it
+  describes grows (49 free clicks of a 4 MiB arena at 128 MiB, about 4.6
+  fewer per MiB). The limit is the joined store: a region that touches the
+  bind region from below stays joined and counts, and the bind region is
+  shortened to fit, so 16 MiB under a 128 MiB card hands over 16 + 112. A
+  region over half the limit ends a page short instead, as on k30, since
+  shortening the bind region for it might leave no room for the kernel.
+- **boot2 says when the limit takes memory**, in one line, on every medium:
+  `amix-boot: k30 kernel: using 64 MiB of the 128 MiB here`, or
+  `k46 kernel: using 128 MiB of the 144 MiB here`. The second number is
+  what the main store would have been, rounded up. There is no line when
+  nothing is taken from the main store: a k30 region that touches from
+  below and goes to the DMA pool does not count, as that happens at any
+  size.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:

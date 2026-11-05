@@ -75,8 +75,9 @@ $(B)/nlmake: tests/host/nlmake.c kbootset/knl.c $(COMMON)/rel.c $(COMMON)/*.h kb
 #   AX_KERNELS   ET_REL kernels and AX_ELF2BREL (elf2brel.py), for rel-kernels.sh
 #   AX_STOCK     the stock usr/sys tree and AX_NAMELIST (a k30 unix.sym), for carve.sh
 #   AX_UFS46     the port's fsobj-patch.py ufs object for k46, for carve.sh
-test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/axsim $(B)/nlmake $(B)/kbootset-nz
+test: $(B)/t_host $(TOOLS) $(B)/axinflate $(B)/axrel $(B)/b2medium $(B)/b2memcap $(B)/axsim $(B)/nlmake $(B)/kbootset-nz
 	$(B)/t_host
+	$(B)/b2memcap
 	B=$(B) sh tests/host/store-roundtrip.sh
 	B=$(B) sh tests/host/kbuild.sh
 	B=$(B) sh tests/host/kimports.sh
@@ -114,6 +115,11 @@ $(B)/lsstore: tools/lsstore.c $(CSRC) $(COMMON)/*.h | $(B)
 
 $(B)/axsim: tests/host/axsim.c $(CSRC) $(COMMON)/*.h | $(B)
 	$(HOSTCC) $(HOSTCFLAGS) -I$(COMMON) -o $@ tests/host/axsim.c $(CSRC)
+
+# what core_boot hands the kernel and says, per line and memory layout
+$(B)/b2memcap: tests/host/b2memcap.c loader/boot2/core.c $(CSRC) $(COMMON)/*.h | $(B)
+	$(HOSTCC) $(HOSTCFLAGS) -Wno-pedantic -Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -no-pie \
+		-I$(COMMON) -Iloader/boot2 -o $@ tests/host/b2memcap.c $(CSRC)
 
 # boot2's store medium on the host, against a simulated drive and person
 $(B)/b2medium: tests/host/b2medium.c loader/boot2/main.c $(CSRC) $(COMMON)/*.h | $(B)
