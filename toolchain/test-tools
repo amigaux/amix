@@ -10,7 +10,7 @@
 # gcc14 tools are stand-ins. Prints "N/N passed"; exits non-zero on a failure.
 
 here=$(cd "$(dirname "$0")" && pwd)
-T=$(mktemp -d "${TMPDIR:-/tmp}/test-tools.XXXXXX")
+T=$(mktemp -d "${TMPDIR:-/tmp}/test-tools.XXXXXX") && [ -n "${T:?}" ] || exit 1
 trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
 check() {	# check <what> <command...>
