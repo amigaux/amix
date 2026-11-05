@@ -716,6 +716,31 @@ out:
 	return rc;
 }
 
+/* copy i of boot2 reads back whole: 1 yes, 0 no; a read that failed or no
+ * memory says nothing of the copy: *rc is set */
+static int
+boot2_whole(struct ks *k, int i, int *rc)
+{
+	ax_u32 len = k->hdr.boot2[i].len;
+	ax_u8 *b;
+	int whole;
+
+	*rc = KS_OK;
+	if (len == 0 || len > AX_BOOT2_MAX)
+		return 0;
+	if ((b = malloc(len)) == 0) {
+		*rc = fail(k, KS_ESTORE, 0, "no memory to read the installed loader");
+		return 0;
+	}
+	if ((*rc = get(k, k->hdr.boot2[i].off, b, len)) != KS_OK) {
+		free(b);
+		return 0;
+	}
+	whole = ax_crc32(k->crctab, b, len) == k->hdr.boot2[i].crc;
+	free(b);
+	return whole;
+}
+
 /* boot1 has started the primary on trial under this header: the running
  * system may have booted before the install, by another loader */
 static int
@@ -761,8 +786,20 @@ ks_mark_good(struct ks *k, ax_u32 booted, int primary_used)
 			g->state == AXG_BAD ? "bad" : "not the trial");
 	}
 	if (k->hdr.flags & AXF_LDRTRIAL) {
-		if (!tally_started(k)) {
+		char said[sizeof k->msg];
+		int started, whole;
+
+		strcpy(said, k->msg);		/* a read that fails writes its own */
+		started = tally_started(k);
+		whole = boot2_whole(k, 0, &rc);
+		strcpy(k->msg, said);
+		if (!started) {
 			strcat(k->msg, "; the new loader has not started yet: power-cycle to boot it");
+			return KS_OK;
+		}
+		if (primary_used && !whole) {
+			strcat(k->msg, "; the new loader on the store is not whole: "
+			       "run kbootset loader-install again");
 			return KS_OK;
 		}
 		if (!primary_used) {
@@ -1030,31 +1067,6 @@ ks_collect(struct ks *k)
 	return KS_OK;
 }
 
-/* copy i of boot2 reads back whole: 1 yes, 0 no; a read that failed or no
- * memory says nothing of the copy: *rc is set */
-static int
-boot2_whole(struct ks *k, int i, int *rc)
-{
-	ax_u32 len = k->hdr.boot2[i].len;
-	ax_u8 *b;
-	int whole;
-
-	*rc = KS_OK;
-	if (len == 0 || len > AX_BOOT2_MAX)
-		return 0;
-	if ((b = malloc(len)) == 0) {
-		*rc = fail(k, KS_ESTORE, 0, "no memory to read the installed loader");
-		return 0;
-	}
-	if ((*rc = get(k, k->hdr.boot2[i].off, b, len)) != KS_OK) {
-		free(b);
-		return 0;
-	}
-	whole = ax_crc32(k->crctab, b, len) == k->hdr.boot2[i].crc;
-	free(b);
-	return whole;
-}
-
 int
 ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 		  const ax_u8 *boot1)
@@ -1062,7 +1074,7 @@ ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 	struct ax_header h;
 	ax_u8 *cur;
 	ax_u32 clen = k->hdr.boot2[0].len;
-	int rc, pwhole, swhole = 0, unproven = 0;
+	int rc, prc, pwhole, swhole = 0, unproven = 0;
 
 	k->gate = 0;
 	if ((rc = writable(k)) != KS_OK)
@@ -1075,25 +1087,29 @@ ks_loader_install(struct ks *k, const ax_u8 *boot2, ax_u32 len, ax_u32 version,
 	 * before the primary area is touched, so both copies are good.  Not when
 	 * the primary is on trial or damaged, as an install cut short leaves it:
 	 * the secondary is then the loader that last completed a boot, and
-	 * stays.  A primary that cannot be read counts as damaged, for it is
-	 * replaced anyway; a secondary that cannot be read stops the install,
-	 * as it may be the only way back */
-	pwhole = boot2_whole(k, 0, &rc);
-	if (rc == KS_EIO)
-		rc = KS_OK;
-	else if (rc != KS_OK)
-		return rc;
+	 * stays.  A read that fails says nothing of a copy, and it may be the
+	 * only way back: it stops the install, unless it is a primary on trial
+	 * with a whole secondary, where nothing that booted can be lost */
+	pwhole = boot2_whole(k, 0, &prc);
+	if (prc != KS_OK && prc != KS_EIO)
+		return prc;
 	if ((k->hdr.flags & AXF_LDRTRIAL) || !pwhole) {
 		swhole = boot2_whole(k, 1, &rc);
 		if (rc != KS_OK)
 			return rc;
 	}
+	if (prc == KS_EIO && !((k->hdr.flags & AXF_LDRTRIAL) && swhole))
+		return prc;
 	if (pwhole && !swhole) {
 		if ((cur = malloc(clen)) == 0)
 			return fail(k, KS_ESTORE, 0, "no memory to read the installed loader");
 		if ((rc = get(k, k->hdr.boot2[0].off, cur, clen)) != KS_OK) {
 			free(cur);
 			return rc;
+		}
+		if (ax_crc32(k->crctab, cur, clen) != k->hdr.boot2[0].crc) {
+			free(cur);
+			return fail(k, KS_EIO, 0, "the installed primary loader read differently the second time");
 		}
 		rc = put(k, AX_BOOT2_B_OFF, cur, clen);
 		free(cur);

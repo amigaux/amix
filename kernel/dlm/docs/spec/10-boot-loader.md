@@ -331,10 +331,11 @@ loader that last completed a boot, and the install replaces only the
 primary, so retrying after a failed trial or an interrupted install keeps
 the way back. A secondary whose CRC-32 fails is replaced by a whole primary;
 when neither copy is whole the install is the repair, and the new primary
-has no fallback. A secondary that cannot be read stops the install.
+has no fallback. A read that fails stops the install, unless it is of a
+primary on trial with a whole secondary.
 `kbootset mark-good` accepts a primary on trial only when the tally shows
-boot1 started it under this header and boot1's choice says it ran: a system
-booted before the install has not tested it.
+boot1 started it under this header, boot1's choice says it ran and it is
+still whole: a system booted before the install has not tested it.
 
 **Why the loader attempt is not in the header or the control block.** The
 header is written only by `kbootset` and changes rarely, so no boot code

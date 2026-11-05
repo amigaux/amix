@@ -1217,7 +1217,7 @@ main(int argc, char **argv)
 			/* the booted generation, and whether boot1 ran the primary boot2
 			 * (choice bit 0 set: the secondary) -- from kinfo by default */
 			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
-					  booted ? !secondary : !secondary && !SECONDARY_RAN(&ki));
+					  !secondary && !(have_kinfo && ki.has_axl1 && SECONDARY_RAN(&ki)));
 			/* the loader fell back from the default on its own, not by a
 			 * menu choice or a one-shot request: verify the default */
 			if (rc == KS_OK && have_kinfo && !booted && (ki.axl1_flags & AXLF_FALLBACK) &&

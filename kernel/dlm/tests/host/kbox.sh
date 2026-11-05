@@ -170,6 +170,45 @@ rc=0; $B/kbootset flush 4 0 2>/dev/null || rc=$?; [ $rc -eq 2 ]
 rc=0; $B/kbootset flush 0 0 2> $T/out || rc=$?; [ $rc -eq 1 ]
 grep -q "flush needs the box" $T/out
 
+# 4.3. a new loader on trial, by what boot1 did: in the tally when it started
+# it, and in its choice which copy ran (bit 0)
+cat > $T/tally.py <<'EOF2'
+import struct, sys, zlib
+with open(sys.argv[1], 'r+b') as f:
+    d = f.read(2048)
+    hs = [d[o:o + 512] for o in (0x400, 0x600)]
+    ok = [h for h in hs if h[:4] == b'AXS1' and zlib.crc32(h[:508]) == struct.unpack('>I', h[508:512])[0]]
+    h = max(ok, key=lambda h: struct.unpack('>i', h[8:12])[0])
+    seq, off = struct.unpack('>I', h[8:12])[0], struct.unpack('>I', h[68:72])[0]
+    b = bytearray(2048)
+    b[:12] = b'AXT1' + struct.pack('>II', seq, 1)
+    b[2044:] = struct.pack('>I', zlib.crc32(bytes(b[:2044])))
+    f.seek(off); f.write(b)
+EOF2
+cp $T/dev/c6d0s3 $T/s3.trial
+trial() {	# trial <choice> [mark-good's options]: its message
+	_c=$1; shift
+	python3 -I $T/disk.py kinfo $T/kinfo 2,$_c,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
+	$B/kbootset -R $R mark-good "$@" > $T/out
+}
+$B/kbootset -R $R loader-install $T/b2new > /dev/null
+trial 0; grep -q "has not started yet" $T/out		# booted before the install
+trial 0 --booted 2; grep -q "has not started yet" $T/out
+python3 -I $T/tally.py $T/dev/c6d0s3
+for c in 0x101 0x201; do
+	trial $c; grep -q "did not complete a boot" $T/out
+	trial $c --booted 2; grep -q "did not complete a boot" $T/out	# whichever way it is called
+done
+$B/kbootset -R $R status | grep -q "new loader on trial"
+trial 0x300; grep -q "the new loader is accepted" $T/out	# the primary, after a damaged secondary
+! $B/kbootset -R $R status | grep -q "new loader on trial"
+cp $T/s3.trial $T/dev/c6d0s3
+$B/kbootset -R $R loader-install $T/b2new > /dev/null
+python3 -I $T/tally.py $T/dev/c6d0s3
+trial 0; grep -q "the new loader is accepted" $T/out
+cp $T/s3.trial $T/dev/c6d0s3
+python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
+
 # 4a. the loader fell back from the default (AXL1 flag 0x04) to the
 # pristine generation: mark-good verifies the default, generation 2, and
 # its intact members keep it; a fallback the menu chose is not judged

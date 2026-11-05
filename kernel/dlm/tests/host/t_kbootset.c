@@ -359,6 +359,19 @@ boot1_starts(struct ks *k)
 	memcpy(img + k->hdr.tally_off, blk, AX_BLK);
 }
 
+/* a copy the store's header names, whole by its CRC-32, holds these bytes */
+static int
+named_whole(struct ks *k, const ax_u8 *b, ax_u32 len)
+{
+	int i;
+
+	for (i = 0; i < 2; i++)
+		if (k->hdr.boot2[i].len == len && memcmp(img + k->hdr.boot2[i].off, b, len) == 0 &&
+		    ax_crc32(k->crctab, img + k->hdr.boot2[i].off, len) == k->hdr.boot2[i].crc)
+			return 1;
+	return 0;
+}
+
 #define HAS(k, s)	T_CHECK(strstr((k).msg, (s)) != 0)
 #define GOOD2(a)	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, (a), sizeof(a)) == 0)
 
@@ -442,6 +455,32 @@ loader_trials(void)
 	rdfail = -1;
 	GOOD2(boot2a);
 
+	/* a read that fails is not damage: a first install stops, with or
+	 * without a whole secondary, as the primary may be all there is */
+	base(&k);
+	rdfail = (long)k.hdr.boot2[0].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_EIO);
+	rdfail = -1;
+	T_CHECK(!(k.hdr.flags & AXF_LDRTRIAL));
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2a, sizeof(boot2a)) == 0);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	rdfail = (long)k.hdr.boot2[0].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_EIO);
+	rdfail = -1;
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2b, sizeof(boot2b)) == 0);
+	GOOD2(boot2a);
+
+	/* the bytes of a trial's loader gone before its boot ends: not accepted */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	boot1_starts(&k);
+	img[AX_BOOT2_A_OFF] ^= 0xFF;
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	HAS(k, "not whole");
+
 	/* the power lost at each write of an install over an open trial and of
 	 * a first install: the good loader is whole, and a retry then works */
 	for (t = 0; t < 4; t++) {
@@ -466,6 +505,8 @@ loader_trials(void)
 			cut = -1;
 			setup(&k);
 			T_EQ(ks_open(&k), KS_OK);
+			/* boot1 has the good loader, named whole by the header */
+			T_CHECK(named_whole(&k, boot2a, sizeof(boot2a)));
 			T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
 			GOOD2(boot2a);
 		}
