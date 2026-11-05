@@ -19,6 +19,7 @@
 
 static ax_u8 *img;
 static long writes, cut = -1;	/* writes done; the write that loses power */
+static long rdfail = -1;		/* the next read at this offset fails */
 static int torn;		/* the cut write lands half */
 static char jrn[200];
 
@@ -28,6 +29,10 @@ mread(void *ctx, ax_u32 off, ax_u8 *buf, ax_u32 len)
 	(void)ctx;
 	if (off + len > SIZE)
 		return -1;
+	if ((long)off == rdfail) {
+		rdfail = -1;
+		return -1;
+	}
 	memcpy(buf, img + off, len);
 	return 0;
 }
@@ -64,7 +69,7 @@ setup(struct ks *k)
 	k->jrn.clear = jclear;
 }
 
-static ax_u8 kern[300000], boot2a[20000], boot2b[21000];
+static ax_u8 kern[300000], boot2a[20000], boot2b[21000], boot2c[22000];
 
 static void
 fill(ax_u8 *p, ax_u32 n, ax_u32 seed)
@@ -340,6 +345,175 @@ powercuts(void)
 	}
 }
 
+/* boot1's trial start: the attempt in the tally, under this header */
+static void
+boot1_starts(struct ks *k)
+{
+	struct ax_tally t;
+	ax_u8 blk[AX_BLK];
+
+	t.magic = AX_MAGIC_TALLY;
+	t.hdr_seq = k->hdr.seq;
+	t.attempts = 1;
+	ax_tally_write(k->crctab, &t, blk);
+	memcpy(img + k->hdr.tally_off, blk, AX_BLK);
+}
+
+/* a copy the store's header names, whole by its CRC-32, holds these bytes */
+static int
+named_whole(struct ks *k, const ax_u8 *b, ax_u32 len)
+{
+	int i;
+
+	for (i = 0; i < 2; i++)
+		if (k->hdr.boot2[i].len == len && memcmp(img + k->hdr.boot2[i].off, b, len) == 0 &&
+		    ax_crc32(k->crctab, img + k->hdr.boot2[i].off, len) == k->hdr.boot2[i].crc)
+			return 1;
+	return 0;
+}
+
+#define HAS(k, s)	T_CHECK(strstr((k).msg, (s)) != 0)
+#define GOOD2(a)	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, (a), sizeof(a)) == 0)
+
+/* which loader is left to boot, through each way an install or a trial goes */
+static void
+loader_trials(void)
+{
+	static ax_u8 before[SIZE];
+	struct ks k;
+	long total, i;
+	int t, rc;
+
+	fill(boot2a, sizeof(boot2a), 7);
+	fill(boot2b, sizeof(boot2b), 8);
+	fill(boot2c, sizeof(boot2c), 9);
+
+	/* mark-good on the boot that installed it: that loader has not run */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	HAS(k, "has not started yet");
+	/* it starts and the boot completes: accepted, once */
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	T_CHECK(!(k.hdr.flags & AXF_LDRTRIAL));
+	HAS(k, "the new loader is accepted");
+
+	/* it fails: the previous loader runs, and a retry's mark-good on that
+	 * same boot speaks of the retry, not of the failure */
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 0), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	HAS(k, "did not complete a boot");
+	T_EQ(ks_loader_install(&k, boot2a, sizeof(boot2a), 2, 0), KS_OK);
+	GOOD2(boot2b);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 0), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	HAS(k, "has not started yet");
+
+	/* a damaged primary, as an install cut short leaves it: the install is
+	 * the repair, and the good secondary stays */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	img[k.hdr.boot2[0].off] ^= 0xFF;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	GOOD2(boot2a);
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2c, sizeof(boot2c)) == 0);
+
+	/* both damaged: the install is the only repair, and says what it is */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	img[k.hdr.boot2[0].off] ^= 0xFF;
+	img[k.hdr.boot2[1].off] ^= 0xFF;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2c, sizeof(boot2c)) == 0);
+	HAS(k, "no fallback");
+
+	/* the secondary damaged on a trial: the primary moves, and it is said */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	img[k.hdr.boot2[1].off] ^= 0xFF;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	GOOD2(boot2b);
+	HAS(k, "has not completed a boot");
+
+	/* a secondary that cannot be read is not called damaged: it stays */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	rdfail = (long)k.hdr.boot2[1].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_EIO);
+	rdfail = -1;
+	GOOD2(boot2a);
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2b, sizeof(boot2b)) == 0);
+	/* a primary that cannot be read is replaced, the secondary kept */
+	rdfail = (long)k.hdr.boot2[0].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	rdfail = -1;
+	GOOD2(boot2a);
+
+	/* a read that fails is not damage: a first install stops, with or
+	 * without a whole secondary, as the primary may be all there is */
+	base(&k);
+	rdfail = (long)k.hdr.boot2[0].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_EIO);
+	rdfail = -1;
+	T_CHECK(!(k.hdr.flags & AXF_LDRTRIAL));
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2a, sizeof(boot2a)) == 0);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	rdfail = (long)k.hdr.boot2[0].off;
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_EIO);
+	rdfail = -1;
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2b, sizeof(boot2b)) == 0);
+	GOOD2(boot2a);
+
+	/* the bytes of a trial's loader gone before its boot ends: not accepted */
+	base(&k);
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	boot1_starts(&k);
+	img[AX_BOOT2_A_OFF] ^= 0xFF;
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	HAS(k, "not whole");
+
+	/* the power lost at each write of an install over an open trial and of
+	 * a first install: the good loader is whole, and a retry then works */
+	for (t = 0; t < 4; t++) {
+		base(&k);
+		if (t < 2)
+			T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+		memcpy(before, img, SIZE);
+		writes = 0;
+		T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+		total = writes;
+		T_EQ(total, t < 2 ? 2 : 4);
+		for (i = 0; i < total; i++) {
+			memcpy(img, before, SIZE);
+			setup(&k);
+			cut = -1;
+			T_EQ(ks_open(&k), KS_OK);
+			writes = 0;
+			cut = i;
+			torn = t & 1;
+			rc = ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0);
+			T_CHECK(rc != KS_OK);
+			cut = -1;
+			setup(&k);
+			T_EQ(ks_open(&k), KS_OK);
+			/* boot1 has the good loader, named whole by the header */
+			T_CHECK(named_whole(&k, boot2a, sizeof(boot2a)));
+			T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+			GOOD2(boot2a);
+		}
+	}
+	torn = 0;
+}
+
 void
 test_kbootset(void)
 {
@@ -354,6 +528,7 @@ test_kbootset(void)
 	setup(&k);
 	fill(boot2a, sizeof(boot2a), 7);
 	fill(boot2b, sizeof(boot2b), 8);
+	fill(boot2c, sizeof(boot2c), 9);
 	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_OK);
 	/* a store is not replaced by accident; --force replaces it */
 	T_EQ(ks_create(&k, SIZE, 0, boot2a, sizeof(boot2a), 1, 0), KS_EREFUSE);
@@ -459,10 +634,31 @@ test_kbootset(void)
 	T_EQ(k.hdr.boot2[0].len, sizeof(boot2b));
 	T_EQ(k.hdr.boot2[1].len, sizeof(boot2a));
 	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2a, sizeof(boot2a)) == 0);
+	boot1_starts(&k);
 	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 0), KS_OK);	/* secondary ran */
 	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	/* a second install while it is on trial, as after that failed boot:
+	 * the loader that completed a boot stays the secondary */
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	T_CHECK(k.hdr.flags & AXF_LDRTRIAL);
+	T_EQ(k.hdr.boot2[0].len, sizeof(boot2c));
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2a));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2a, sizeof(boot2a)) == 0);
+	T_CHECK(memcmp(img + AX_BOOT2_A_OFF, boot2c, sizeof(boot2c)) == 0);
+	/* and a damaged secondary is not kept: the primary replaces it */
+	img[AX_BOOT2_B_OFF] ^= 0xFF;
+	T_EQ(ks_loader_install(&k, boot2b, sizeof(boot2b), 2, 0), KS_OK);
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2c));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2c, sizeof(boot2c)) == 0);
+	boot1_starts(&k);
 	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
 	T_CHECK(!(k.hdr.flags & AXF_LDRTRIAL));
+	/* accepted: the next install moves it to the secondary */
+	T_EQ(ks_loader_install(&k, boot2c, sizeof(boot2c), 2, 0), KS_OK);
+	T_EQ(k.hdr.boot2[1].len, sizeof(boot2b));
+	T_CHECK(memcmp(img + AX_BOOT2_B_OFF, boot2b, sizeof(boot2b)) == 0);
+	boot1_starts(&k);
+	T_EQ(ks_mark_good(&k, k.ctl.default_gen, 1), KS_OK);
 	/* the journal: an interrupted commit is reported and cleared */
 	strcpy(jrn, "commit 42");
 	T_EQ(ks_open(&k), KS_OK);
@@ -471,5 +667,6 @@ test_kbootset(void)
 	retries();
 	refusals();
 	powercuts();
+	loader_trials();
 	free(img);
 }

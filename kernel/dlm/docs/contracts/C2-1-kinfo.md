@@ -81,7 +81,7 @@ the AXL1 fields at record offsets 84 + 28 and 84 + 32 (`10-boot-loader.md`
 
 | Reader | Fields |
 |---|---|
-| `kbootset mark-good` | AXL1 generation id; AXL1 boot1 choice (bit 9 set: the secondary boot2 ran, so the loader trial is not accepted) |
+| `kbootset mark-good` | AXL1 generation id; AXL1 boot1 choice (bit 0 set: the secondary boot2 ran, so the loader trial is not accepted) |
 | `kbootset` boot-disk finding (40 §5) | AXL1 boot device + the sd card table → card and unit → the slice whose start is the AXL1 partition start; RTH1 boot fields when there is no AXL1 |
 | `kbootset` gates 3, 6, 10 | the card table and the board set (closure); the fast memory (memory gate); the line (line gate) |
 | `kbootset` namelist (40 §4.2) | the bootdata block: text vaddr is the bind address; rodata and data vaddr check the layout the namelist computes |

@@ -450,7 +450,7 @@ grep -q "^module monsw demand .* majors=c:52$" $R/stand/gen/$id/build
 rm -rf "${R:?}/stand/gen/${id:?}"
 three; echo "safe" > $R/etc/conf/modreg.d/z3660eth
 refused 2 $KB build $FACTS			# the vendor's file may not mark it
-grep -q "safe is the owner's mark for a boot-class module, in /etc/conf/modreg.local.d only" $T/out
+grep -q "safe is the administrator's mark for a boot-class module, in /etc/conf/modreg.local.d only" $T/out
 three; echo "safe" > $R/etc/conf/modreg.local.d/monsw
 refused 2 $KB build $FACTS			# a demand module never loads in safe mode
 three; modpkg monsw class=demand majors=c:52 param=base:hex:0x10:0:0xff param=tag:str:mon

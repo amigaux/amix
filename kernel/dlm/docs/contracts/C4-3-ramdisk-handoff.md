@@ -1,4 +1,4 @@
-# C4-3 — the RAM-disk hand-off, version 5
+# C4-3 — the RAM-disk hand-off, version 6
 
 - **Status:** agreed 2026-10-26; in force from commit 4003c9f (2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
@@ -9,7 +9,8 @@
   `media --disk --ramdisk` writes the netinstall raw image, and an image
   serves one generation id (§1); version 5 (2026-11-04): the image goes
   as high in the region as is free, below memory AmigaOS keeps at its
-  top, and an L4 says which of "too big" and "in use" it was (§2). Other repositories build against
+  top, and an L4 says which of "too big" and "in use" it was (§2); version 6
+  (2026-11-05): on k46 the image stays within 128 MiB of the bind base (§2). Other repositories build against
   this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
@@ -62,8 +63,8 @@ rootfs <s5 or ufs>
 After the kernel is relocated and before the hand-off copy:
 1. it decompresses the image (CRC-32 checked, L3 on a mismatch, as any
    member) to **the top of the largest fast-memory region the kernel can
-   use**: below 0x40000000, and on k30 within the 64 MiB the kernel can
-   describe (`AX_K30_MEMCAP`). The image starts on a 64 KiB
+   use**: below 0x40000000, and within the line's limit above the bind
+   base (`AX_K30_MEMCAP`, 64 MiB; `AX_K46_MEMCAP`, 128 MiB). The image starts on a 64 KiB
    boundary. It is claimed with AllocAbs while AmigaOS still runs; when
    the top is in use (a software MapROM tool's Kickstart copy, a
    reset-proof RAM disk), it goes at the highest free 64 KiB boundary

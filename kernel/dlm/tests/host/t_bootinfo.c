@@ -243,7 +243,7 @@ test_bootinfo(void)
 				AX_PUT32(m + i * AXB_MEMSIZE + 24, r[i][2]);
 				AX_PUT32(m + i * AXB_MEMSIZE + 28, r[i][2] - r[i][1]);
 			}
-			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP), 1);
+			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP, 1), 0x08000000UL);	/* what it had */
 			T_EQ(AX_GET32(m + 2 * AXB_MEMSIZE + 24), 0x0C000000UL);	/* capped */
 			T_EQ(AX_GET32(m + 1 * AXB_MEMSIZE + 24), 0x07FFF800UL);	/* a page short */
 			T_EQ(AX_GET32(m + 3 * AXB_MEMSIZE + 24), 0x48000000UL);	/* Z3 untouched */
@@ -251,7 +251,7 @@ test_bootinfo(void)
 			/* a 64 MB bank: nothing to cut */
 			AX_PUT32(m + 2 * AXB_MEMSIZE + 24, 0x0C000000UL);
 			AX_PUT32(m + 1 * AXB_MEMSIZE + 24, 0x07000020UL);
-			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP), 0);
+			T_EQ(ax_memcap(m, 4, 0x08000000UL, AX_K30_MEMCAP, 1), 0);
 		}
 	}
 }

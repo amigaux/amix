@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 27
+# C2-4 — `kbootset` as a called program, version 28
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17); version 23 (2026-11-02): `kbootset inquiry CARD UNIT` and `kbootset cards --probe`, one read-only SCSI INQUIRY per unit through `/dev/scsi`, so an installer knows a unit's type before anything reads it (§18). version 24 (2026-11-02): the A3000 onboard WD (`mobo:a3000-wd`) as a known limit of §18. Version 25 (2026-11-02): the limit is lifted for k30 -70 on (§18). Version 26 (2026-11-03): the namelist carries `crash_sync`'s word and the loaded modules' globals, and `modadmin` rewrites it after a load or an unload (§12). Version 27 (2026-11-04): `kbootset default`, and what `build`, `commit`, `check` and `status` say after an upgrade (§3, §19); a `brel` generation keeps its own `unix.sym`, and `status` tells a namelist that lacks a loaded module from another kernel's (§12); nothing to commit also removes the build's module copies (§10); the directory of a generation gone from the store is removed (§19). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17); version 23 (2026-11-02): `kbootset inquiry CARD UNIT` and `kbootset cards --probe`, one read-only SCSI INQUIRY per unit through `/dev/scsi`, so an installer knows a unit's type before anything reads it (§18). version 24 (2026-11-02): the A3000 onboard WD (`mobo:a3000-wd`) as a known limit of §18. Version 25 (2026-11-02): the limit is lifted for k30 -70 on (§18). Version 26 (2026-11-03): the namelist carries `crash_sync`'s word and the loaded modules' globals, and `modadmin` rewrites it after a load or an unload (§12). Version 27 (2026-11-04): `kbootset default`, and what `build`, `commit`, `check` and `status` say after an upgrade (§3, §19); a `brel` generation keeps its own `unix.sym`, and `status` tells a namelist that lacks a loaded module from another kernel's (§12); nothing to commit also removes the build's module copies (§10); the directory of a generation gone from the store is removed (§19); version 28 (2026-11-05): the order of store writes, and the cache flush on gayle, `kbootset flush` (§20). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -571,8 +571,8 @@ read-only, before anything opens it.
 - **The command** is one INQUIRY (6-byte CDB `12 00 00 00 24 00`: LUN 0,
   36 bytes back) through the stock raw passthrough `/dev/scsi` (char major
   11, `scsi.c` `gsioctl`: `ioctl` `'GSIO'` with a `struct sdcom` carrying
-  the card, the unit and the CDB). No other command is sent, nothing is
-  written, and no disk node is opened, so `sd` and `dd` never see the unit.
+  the card, the unit and the CDB). No other command is sent by these two
+  forms, nothing is written, and no disk node is opened, so `sd` and `dd` never see the unit.
   Neither form reads the store or the root; `-R` and `--image` change
   nothing.
 - **`kbootset inquiry CARD UNIT`**: `CARD` is the card number `cards`
@@ -699,3 +699,40 @@ store holds. These commands say which is which.
   nothing.
 - **The host tests** are `tests/host/kupgrade.sh`, and `knamelist.sh` for the
   directories.
+
+## 20. The order of store writes, and what a power cut can do (version 28)
+
+What keeps a box bootable through a power cut is that each write of the store
+is on the medium before the next starts: a header names only what is already
+written, and only the header copy not in use is written.
+
+- **After each store write**, before the next, kbootset:
+  - calls `fsync` on the store, which is what a file or a block node needs. A
+    raw node's write has already been completed by the disk, with no kernel
+    cache in between. Only an EIO from it fails the write;
+  - when the store's card is `mobo:gayle` by kinfo, sends the unit one
+    SYNCHRONIZE CACHE (10) through `/dev/scsi`, which gayle turns into the ATA
+    FLUSH CACHE on a drive that has it. A command not taken and a missing
+    `/dev/scsi` are no failure.
+- **What can be stated.** Each store write has completed at the disk, and the
+  next has not started, for every controller. On IDE and CF the drive's cache
+  is also flushed between writes, on drives that have FLUSH CACHE. A SCSI disk
+  with its own write cache enabled could still reorder writes in a power cut;
+  if that left neither loader intact, the media rescue is the way back.
+  Emulation cannot show data reached a medium.
+- **Other controllers get no flush.** a4091, a4kt710 and the A3000 WD would pass
+  the command to the disk, but it has not been measured there: a slow flush on
+  those paths may meet the driver's own limits, and the WD's queue is safe from
+  the passthrough only from k30 -70 and k46 -60. z3660scsi does not take it.
+  boot1's tally write is not flushed, and needs not be: a lost attempt means one
+  more start of the loader on trial.
+- **`kbootset flush CARD UNIT`** sends that command alone, on any controller,
+  and needs no store. It prints `card <c> unit <u>: flushed` and exits 0 when
+  the unit took it with status 0, or a line on standard error, `kbootset: card
+  <c> unit <u>: <why>`, and exits 1. It exits 2 for arguments outside card 0-3
+  and unit 0-7. It tells whether a unit takes the command, not whether it has a
+  cache. It is a measuring tool: §18's "one at a time" and its known limit for
+  a first command on the A3000 WD apply to it.
+- **The host test** is in `tests/host/kbox.sh`: `KBOOTSET_SYNCLOG` names a file
+  that gets one line per store write with the unit flushed or -1, in the host
+  build only.

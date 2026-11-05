@@ -135,7 +135,7 @@ program against an image file, so media and boxes cannot drift).
    kernel was bound in, the only memory either line's kernel uses. Zorro
    III RAM is never kernel memory, and on k30 the region is at most
    64 MiB (10 §3). boot2's L4 stays the binding check, against the largest
-   region below 0x40000000 (64 MiB at most on k30).
+   region below 0x40000000 (64 MiB at most on k30, 128 MiB on k46).
 7. **Loader:** the installed loader's version is below the generation's
    `loader-min`. A generation with a root-class record has `loader-min` 3
    at least, so a store whose loader cannot place root-class modules

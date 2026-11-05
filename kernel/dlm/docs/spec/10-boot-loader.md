@@ -224,8 +224,9 @@ boot2 says so on the console.
   with L4 and says which of the two it was (`no fast memory below
   0x40000000 to run the kernel in`).
 - **Neither line uses any memory but the region it is bound in.** The
-  kernel's main store is the region its end lies in, joined with regions
-  that touch it (the stock `support.c`). kinfo's fast memory is that
+  kernel's main store is the region its end lies in; the k30 kernel also
+  joins regions that touch it (the stock `support.c`), the k46 kernel
+  does not. kinfo's fast memory is that
   region alone, and Zorro III RAM beside it is never kernel memory
   (measured 2026-10-26).
 - **On k30 that region is at most 64 MiB.** The 2 KiB-page kernel stops
@@ -237,7 +238,18 @@ boot2 says so on the console.
   short of the base (`ax_memcap`). The kernel's join of touching regions
   then leaves that region out of the main store with its range intact,
   where the k30 DMA pool comes from (C4-5 §5.2). A k30 kernel on a
-  128 MB box uses 64 MB of it. The k46 line takes its whole region.
+  128 MB box uses 64 MB of it.
+- **On k46 that region is at most 128 MiB.** `kvm_init` sizes the segmap
+  window from the memory, and at about 128 MiB the window reaches `kvsegu`
+  (read from the code). With 8 or 64 MiB touching a 128 MiB card from
+  below, and 16 under 32 or 64, Total Unix memory is the bind region's alone
+  (emulator rows, 2026-11-05). So on k46 a region that touches from below
+  is left as it is, and it neither counts against the limit nor is printed.
+- **boot2 says when the limit takes memory**, in one line, on every medium:
+  `amix-boot: k30 kernel: using 64 MiB of the 128 MiB here`, or
+  `k46 kernel: using 128 MiB of the 256 MiB here`. The second number is
+  the bind region's size, rounded up. There is no line when the bind region
+  is within the limit, at any size of a region that touches it.
 - The hand-off code is copied to chip memory as before (step 10).
 
 boot2 does, in order:
@@ -298,7 +310,7 @@ One boot slice per disk (release decision 6). The whole `UNI\0` partition is the
 | 0x0400 | 512 B | store header A | `kbootset` |
 | 0x0600 | 512 B | store header B | `kbootset` |
 | 0x0800 | 28 KiB | boot2, primary copy | `kbootset` |
-| 0x7800 | 2 KiB | loader tally block (`AXT1`): header sequence number it refers to, attempt count, CRC-32 | boot1 (attempt), `kbootset` (reset) |
+| 0x7800 | 2 KiB | loader tally block (`AXT1`): header sequence number it refers to, attempt count, CRC-32 | boot1 (attempt), `kbootset create` (reset) |
 | 0x8000 | 28 KiB | boot2, secondary copy (the previous loader) | `kbootset` |
 | 0xF000 | 2 KiB | control block A | `kbootset`, boot2 |
 | 0xF800 | 2 KiB | control block B | `kbootset`, boot2 |
@@ -312,6 +324,18 @@ the loader-trial flag (set by `kbootset loader-install`, cleared by
 `kbootset mark-good` after a full boot through the new primary), control
 block and tally block extents, CRC-32 of the header. boot1 takes the valid
 copy with the higher sequence number.
+
+`kbootset loader-install` moves the primary to the secondary only when the
+primary is whole and not on trial. On trial or damaged, the secondary is the
+loader that last completed a boot, and the install replaces only the
+primary, so retrying after a failed trial or an interrupted install keeps
+the way back. A secondary whose CRC-32 fails is replaced by a whole primary;
+when neither copy is whole the install is the repair, and the new primary
+has no fallback. A read that fails stops the install, unless it is of a
+primary on trial with a whole secondary.
+`kbootset mark-good` accepts a primary on trial only when the tally shows
+boot1 started it under this header, boot1's choice says it ran and it is
+still whole: a system booted before the install has not tested it.
 
 **Why the loader attempt is not in the header or the control block.** The
 header is written only by `kbootset` and changes rarely, so no boot code
