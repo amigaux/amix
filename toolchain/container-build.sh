@@ -4,8 +4,9 @@
 # MIT licence, see LICENSE at the top of the repository.
 #
 # Usage: toolchain/container-build.sh AMIX_SYSTEM [TAG]
-#   AMIX_SYSTEM  a checkout of amigaux/amix-system (its AMIX root under usr/),
-#                checked against system/MANIFEST.sha256 and system/SYMLINKS
+#   AMIX_SYSTEM  a clone of amigaux/amix-system holding system/amix-system.pin's
+#                commit (its AMIX root under usr/); that commit's tree is checked
+#                against system/MANIFEST.sha256 and system/SYMLINKS
 #   TAG          image tag (default amix-toolchain:<short gcc14 pin>)
 # Environment:
 #   CONTAINER    docker (default) or podman
@@ -15,20 +16,19 @@
 #   NO_CACHE     1: build every stage again, using no cached layer (to
 #                compare two builds' TOOLCHAIN.sha256)
 #
-# Each toolchain's source is exported with `git archive` at the pinned commit
-# into a scratch directory, so nothing but the tree at that commit reaches
-# the build: no .git, no local edits, no build products.  The .pin files go
-# into the image as /opt/amix/PINS, which make dist checks (check-image).
+# Each toolchain's source and the system input are exported with `git archive`
+# at the pinned commit into a scratch directory, so nothing but the tree at that
+# commit reaches the build: no .git, no local edits, no build products, no empty
+# directory a working copy happens to hold.  The fixed umask keeps the host's out
+# of the image's modes.  The .pin files go into the image as /opt/amix/PINS, which
+# make dist checks (check-image).
 set -eu
+umask 022
 
 here=$(cd "$(dirname "$0")" && pwd)
 sys=${1:?usage: container-build.sh AMIX_SYSTEM [TAG]}
 tool=${CONTAINER:-docker}
-
-# The system input is checked against system/MANIFEST.sha256 and
-# system/SYMLINKS before anything is built.
 top=$(dirname "$here")
-"$top/system/check-amix-system" "$sys"
 
 work=$(mktemp -d)
 trap 'rm -rf "${work:?}"' EXIT INT TERM
@@ -51,6 +51,9 @@ export_pin() {
 
 export_pin gca "$here/gcc-cross-amix.pin" "${GCA_REPO:-}"
 export_pin g14 "$here/gcc14-cross-amix.pin" "${G14_REPO:-}"
+export_pin sys "$top/system/amix-system.pin" "$sys"
+# what is checked is what is built, before anything is
+"$top/system/check-amix-system" "$work/sys"
 read -r _ g14 < "$here/gcc14-cross-amix.pin"
 tag=${2:-amix-toolchain:$(printf %.7s "$g14")}
 
@@ -59,6 +62,6 @@ set --
 "$tool" build "$@" -f "$here/Containerfile" \
 	--build-context gca-src="$work/gca" \
 	--build-context g14-src="$work/g14" \
-	--build-context amix-system="$sys" \
+	--build-context amix-system="$work/sys" \
 	-t "$tag" "$here"
 echo "built $tag"

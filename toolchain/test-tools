@@ -1,6 +1,6 @@
 #!/bin/sh
-# test-tools: host test of toolchain/fetch-distfile, toolchain/m68k-gnu-bin and
-# toolchain/sysroot-links.
+# test-tools: host test of toolchain/fetch-distfile, toolchain/m68k-gnu-bin,
+# toolchain/sysroot-links, image-manifest and container-build.sh.
 #
 # MIT licence, see LICENSE at the top of the repository.
 #
@@ -172,6 +172,69 @@ check "image-manifest: a file's time is not compared" cmp "$T/im/1" "$T/im/2"
 printf 'other\n' > "$T/im/one/usr/bin/a"
 im "$T/im/one" > "$T/im/3"
 check "image-manifest: a file's content is" sh -c "! cmp -s '$T/im/1' '$T/im/3'"
+
+# --- container-build.sh --------------------------------------------------------
+cb=$T/cb
+mkdir -p "$cb/toolchain" "$cb/system" "$cb/bin" "$cb/src"
+cp "$here/container-build.sh" "$cb/toolchain/"
+pinned() {	# pinned <name> <pin file>: a repository, its one commit pinned
+	r=$cb/src/$1
+	git init -q "$r"
+	mkdir -p "$r/usr/bin" "$r/usr/lib"
+	printf 'tool\n' > "$r/usr/bin/tool"; chmod 755 "$r/usr/bin/tool"
+	printf 'data\n' > "$r/usr/lib/data"
+	git -C "$r" add usr
+	git -C "$r" -c user.name=t -c user.email=t@example.invalid commit -q -m one
+	echo "https://example.invalid/$1.git $(git -C "$r" rev-parse HEAD)" > "$2"
+}
+pinned gca "$cb/toolchain/gcc-cross-amix.pin"
+pinned g14 "$cb/toolchain/gcc14-cross-amix.pin"
+pinned sys "$cb/system/amix-system.pin"
+# a checkout with what git does not hold, and a commit past its pin
+sys=$cb/src/sys
+printf 'later\n' > "$sys/usr/lib/later"
+git -C "$sys" add usr/lib/later
+git -C "$sys" -c user.name=t -c user.email=t@example.invalid commit -q -m two
+mkdir "$sys/usr/lib/empty"
+printf 'loose\n' > "$sys/usr/lib/loose"
+printf 'edited\n' > "$sys/usr/lib/data"
+cat > "$cb/system/check-amix-system" <<CHECK
+#!/bin/sh
+echo "\$1" > "$cb/checked"
+[ "\$(cat "\$1/usr/lib/data")" = data ]
+CHECK
+chmod 755 "$cb/system/check-amix-system"
+cat > "$cb/bin/docker" <<DOCKER
+#!/bin/sh
+for a in "\$@"; do
+	case \$a in
+	gca-src=*|g14-src=*|amix-system=*)
+		(cd "\${a#*=}" && find . -printf '%m %p\n') > "$cb/context-\${a%%=*}" ;;
+	esac
+done
+DOCKER
+chmod 755 "$cb/bin/docker"
+build() {	# build <system checkout>, under a umask that writes group bits
+	( umask 002; CONTAINER=$cb/bin/docker GCA_REPO=$cb/src/gca G14_REPO=$cb/src/g14 \
+		sh "$cb/toolchain/container-build.sh" "$1" amix-toolchain:test )
+}
+check "container-build: runs on a checkout past its pin, with untracked files" build "$sys"
+check "container-build: the system tree is the pin's, not a later commit's" \
+	sh -c "[ -s '$cb/context-amix-system' ] && ! grep -q later '$cb/context-amix-system'"
+check "container-build: an untracked file does not reach the image" \
+	sh -c "[ -s '$cb/context-amix-system' ] && ! grep -q loose '$cb/context-amix-system'"
+check "container-build: nor an empty directory" \
+	sh -c "[ -s '$cb/context-amix-system' ] && ! grep -q empty '$cb/context-amix-system'"
+check "container-build: the tree that is checked is the tree that is built" \
+	sh -c "[ -s '$cb/checked' ] && [ \"\$(cat '$cb/checked')\" != '$sys' ]"
+for c in gca-src g14-src amix-system; do
+	check "container-build: $c: the host's umask is not in its modes" \
+		sh -c "[ -s '$cb/context-$c' ] && ! grep -qE '^(775|664) ' '$cb/context-$c'"
+	check "container-build: $c: an executable stays executable" grep -q '^755 ./usr/bin/tool$' "$cb/context-$c"
+	check "container-build: $c: a file is 644" grep -q '^644 ./usr/lib/data$' "$cb/context-$c"
+done
+git init -q "$cb/src/other"
+refused "container-build: a checkout without the pinned commit" "is not in" build "$cb/src/other"
 
 echo "$pass/$((pass + fail)) passed"
 [ "$fail" -eq 0 ]
