@@ -71,6 +71,10 @@ def lock(top, out):
         head.append("dirty %s" % hashlib.sha256(tree.encode()).hexdigest())
     image = "/opt/amix/TOOLCHAIN.sha256"
     head.append("image %s" % (sha256(image) if os.path.isfile(image) else "host"))
+    # the media image's tools: the image line cannot see them
+    tools = os.path.join(out, "build", "media-tools")
+    if os.path.isfile(tools):
+        head.append("media-tools %s" % sha256(tools))
     sections = []
     # inputs: every pin and distfile pin, and the system input's manifest
     pins = []
@@ -89,7 +93,7 @@ def lock(top, out):
                 pins.append("%s %s sha256 %s" % (kind, rel, sha256(os.path.join(top, rel))))
     sections.append(sorted(pins))
     sections.append(["system %s %s" % (rel, sha256(os.path.join(top, rel)))
-                     for rel in ("system/MANIFEST.sha256", "system/SYMLINKS")
+                     for rel in ("system/MANIFEST.sha256", "system/SYMLINKS", "system/stock-1.1.assets")
                      if os.path.isfile(os.path.join(top, rel))])
     # outputs
     digests = os.path.join(out, "kit", "kit.digests")

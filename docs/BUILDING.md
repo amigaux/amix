@@ -3,7 +3,9 @@
 `make dist` builds the release from this checkout and one closed input, the
 Commodore system files: the ABI kits, the kernels, the modules and drivers,
 both package catalogs and the media, all under `out/`. This page is how it
-works today. Steps that are not in make dist yet say so and stop it (exit 3).
+works today. A step that lacks an input, or is not in make dist yet, says so with
+a `[MISSING]` line: that is a gap (its exit status is 3), the other steps still
+run, and make dist ends by naming its gaps and exits 3.
 
 ## What you need
 
@@ -49,11 +51,15 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, one version per name, each after the packages its `BUILD_DEPENDS` names (`recipes/<name>` builds those first); a cycle or a name that is no package is refused | `out/userland/pkgs/` | builds |
 | `apkg` | APKG and APKGENG, by pkgtools' `make dist` | `out/apkg/*.pkg` | builds |
 | `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py` over each space's packages, with tools/repo's confs as the staging layer and the space's own: `userland/packages/conf`, and `kernel/conf` for kernel space (its `names.conf` names each kernel package; kernel packages without it are refused); no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` | builds |
-| `release` | the 1.1 package repository, by pkgtools' `assemble-release.py`: the userland and kernel-space catalogs and packages, APKG, the stock packages `stock-1.1.lock` names (`STOCK=<dir>`) and the published tree (`RELEASE_PREVIOUS=<dir>`, if there is one); `tools/release-check` checks it with `ROM_MANIFEST=<file>` and `PRIVACY_PATTERNS=<file>`, which never enter this repository and go into the container read-only. Without STOCK or either file the step exits 3 | `out/release/1.1/{catalog,catalog.md5,pkgs/}` | builds |
-| `media` | the CD, netinstall and floppy media | `out/media/` | not yet |
-| `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | builds |
+| `release` | the 1.1 package repository, by pkgtools' `assemble-release.py`: the userland and kernel-space catalogs and packages, APKG, the stock packages `stock-1.1.lock` names and the published tree (`RELEASE_PREVIOUS=<dir>`, if there is one); `tools/release-check` checks it with `ROM_MANIFEST=<file>` and `PRIVACY_PATTERNS=<file>`, which never enter this repository and go into the container read-only. The stock packages are fetched (see below). A stock package not to be had, or either file missing without `RELEASE_PUBLIC=1`, is a gap | `out/release/1.1/{catalog,catalog.md5,pkgs/}` | builds |
+| `media` | the CD, netinstall and floppy media, by `media/build.sh` in the media image (`toolchain/Containerfile.media`); no such script, or no such image, is a gap | `out/media/` | not yet |
+| `lock` | every input and output of the build (`release/README.md`), gaps or not; with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | builds |
 
-`make tools` builds the container (`toolchain/container-build.sh`).
+`make tools` builds both containers (`toolchain/container-build.sh`, then
+`toolchain/container-media.sh` on top of it). A step gets only its own inputs:
+`STOCK`, `STOCK_URL`, `RELEASE_PREVIOUS`, `ROM_MANIFEST`, `PRIVACY_PATTERNS` and
+`RELEASE_PUBLIC` reach `release`, the last three `media` too, and `LOCK` reaches
+`lock`, so a name a kernel's recipe reads for itself is never set by accident.
 
 A kernel directory's recipes plug into `kspace` as `kernel/<dir>/pkg/build.sh`:
 with no arguments it rolls all its recipes, with names those; it reads
@@ -70,12 +76,37 @@ each recipe (in `pkg/`, or one subdirectory per package) from the objects the
 
 A release is proven against its lock: `make dist SYSTEM=… LOCK=release/amix-<version>.lock`
 rebuilds everything and refuses the result if any line of its lock differs
-(`release/README.md`).
+(`release/README.md`). A gap leaves lines of the lock unbuilt, so it is refused
+too, and the check prints them. Scripts should call `sh build/dist.sh dist`:
+`make` turns any failure of its recipe, a gap included, into its own exit 2.
+
+### The stock packages
+
+The `release` step takes the Commodore datastreams `stock-1.1.lock` names by
+size, md5 and sha256. By default it fetches them into `out/cache/stock-1.1/` from
+the release assets at the URL in `system/stock-1.1.assets`. `STOCK_URL=<base>`
+names another place, `STOCK=<dir>` a directory that already holds them, and
+`AMIX_DISTFILES` is looked in first as for any distfile. The sha256 decides every
+time; other bytes are not taken. They are not under this repository's licence.
+
+### A public rebuild
+
+The ROM register and the private list are the maintainers' and never enter this
+repository. Anyone else builds with
+
+```sh
+make dist SYSTEM=../amix-system RELEASE_PUBLIC=1
+```
+
+The content check then runs its public tests: Kickstart headers, known-bad
+modules, private addresses, credentials. The two lists only stop a release, and
+never change what is built, so the tree and the lock are the same bytes. A release
+of record is built with both lists.
 
 `build/dist-proof WORKDIR [COMMIT]` is the proof itself: it clones
 the commit twice, at two different paths under WORKDIR, runs every step in
 each, and compares the two locks; with `LOCK=` each run is also checked
-against the lock of record. A step that exits 3 is a known gap and the run
+against the lock of record. A step that exits 3 is a gap and the run
 goes on; any other failure stops it. `WORKDIR/summary` says what each step
 did. CI runs it by hand as the dist workflow (`docs/ci.md`).
 
@@ -89,7 +120,7 @@ out/kspace/{catalog,catalog.md5,pkgs/}
 out/userland/{catalog,catalog.md5,pkgs/}
 out/media/{cd,netinstall,floppies}/
 out/lock
-out/cache/                    distfiles and the port at its pin
+out/cache/                    distfiles, the stock packages and the port at its pin
 out/build/                    work trees and logs
 out/build/pkgtools-host/      make dist's own host pkgmk and pkgtrans, built from a
                               copy of userland/pkgtools (never the checkout's build-host/)

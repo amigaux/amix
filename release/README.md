@@ -28,13 +28,14 @@ amix <commit>                         the amix commit built
 epoch package-version (...)           the epoch rule
 dirty <sha256>                        only when tracked files differ from the commit
 image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.sha256, or "host"
+media-tools <sha256>                  the media image's /opt/amix-media/TOOLS, when the media step ran
 
 pin <path> <URL> <commit>             every one-line .pin in the checkout
 pin <path> sha256 <sha256>            a .pin of another format, by its digest
 distfile <path> <URL> <sha256> [<URL>...]
                                       every .distfile, as written: the original
                                       site, the sha256, then our copy
-system <path> <sha256>                system/MANIFEST.sha256 and system/SYMLINKS
+system <path> <sha256>                system/MANIFEST.sha256, system/SYMLINKS and system/stock-1.1.assets
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
