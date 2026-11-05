@@ -1,0 +1,32 @@
+#
+# prototype -- amix-benchmark (PKG amixbench), authored.
+#
+# The kit finds itself: runbench.sh looks for its binaries beside itself, and
+# the entry command execs it by its absolute path.  Nothing lands outside
+# /opt/amix.  Every basename is <= 14 bytes (s5 dirents).  whet is not built.
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/amix-bench 0755 root bin
+d none /opt/amix/lib 0755 root sys
+d none /opt/amix/lib/amix-bench 0755 root sys
+f none /opt/amix/lib/amix-bench/runbench.sh 0755 root bin
+f none /opt/amix/lib/amix-bench/dhry 0755 root bin
+f none /opt/amix/lib/amix-bench/iobench 0755 root bin
+f none /opt/amix/lib/amix-bench/fpbench 0755 root bin
+f none /opt/amix/lib/amix-bench/membench 0755 root bin
+f none /opt/amix/lib/amix-bench/vmbench 0755 root bin
+f none /opt/amix/lib/amix-bench/BUILD-INFO 0644 root bin
+f none /opt/amix/lib/amix-bench/PROVENANCE 0644 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/amix-benchmark 0755 root sys
+f none /opt/amix/doc/amix-benchmark/README.txt 0644 root bin
+f none /opt/amix/doc/amix-benchmark/LICENSE.amix 0644 root bin
+f none /opt/amix/doc/amix-benchmark/NOTICE 0644 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/amix-bench 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/amixbench 0644 root bin

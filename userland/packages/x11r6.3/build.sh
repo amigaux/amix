@@ -160,6 +160,19 @@ stage() {
 		xinst i-font-$f.log fonts/bdf/$f install FONTC="$BUILD/hostxc/programs/bdftopcf/bdftopcf" \
 			MKFONTDIR="$BUILD/hostxc/programs/mkfontdir/mkfontdir"
 	done
+	# mkfontdir and xkbcomp -l walk readdir, so the rows of their listings show the
+	# build's file system: sorted, fonts.dir's count line first (README.md, Build notes)
+	for f in misc 75dpi 100dpi; do
+		_fd=$DEST$PREFIX/lib/X11/fonts/$f/fonts.dir
+		[ "$(sed 1q "$_fd")" = "$(($(wc -l < "$_fd") - 1))" ] || {
+			echo "[FAIL] $_fd: its count line is not its number of fonts" >&2; exit 1; }
+		{ sed 1q "$_fd"; sed 1d "$_fd" | LC_ALL=C sort; } > "$BUILD/fonts.dir.sorted" &&
+		chmod u+w "$_fd" && cp "$BUILD/fonts.dir.sorted" "$_fd" && chmod 0444 "$_fd" || exit 1
+	done
+	for f in compat geometry keycodes keymap symbols types; do
+		_fd=$DEST$PREFIX/lib/X11/xkb/$f.dir
+		chmod u+w "$_fd" && LC_ALL=C sort -o "$_fd" "$_fd" && chmod 0444 "$_fd" || exit 1
+	done
 	mkdir -p "$DEST$PREFIX/lib/X11"
 	cp programs/rgb/rgb.txt "$DEST$PREFIX/lib/X11/rgb.txt"
 	# the system profile drop-in and the /usr/X11R6 link (prototype)
