@@ -15,8 +15,13 @@ run, and make dist ends by naming its gaps and exits 3.
 - **The system input**: a checkout of
   [amigaux/amix-system](https://github.com/amigaux/amix-system) at the pin
   (`system/fetch-amix-system DIR` makes one). It is checked against
-  `system/MANIFEST.sha256` and `system/SYMLINKS` before any step.
+  `system/MANIFEST.sha256` and `system/SYMLINKS` before any step. `make tools`
+  builds from the pinned commit's tree, whatever else the checkout holds, and stops
+  if the clone does not hold that commit.
 - **docker** or **podman**, for the build container (`toolchain/`).
+- **https, for `make tools`**: from the host to `snapshot.ubuntu.com`, for the two
+  packages `toolchain/base-*.distfile` pins (or have them in `AMIX_DISTFILES`), and
+  from the build to that snapshot and to the toolchains' sources.
 
 ```sh
 system/fetch-amix-system ../amix-system
