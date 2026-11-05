@@ -22,6 +22,18 @@ What an interrupted install leaves, on the old engine, the hangup at points thro
   `apkg recover`, which finishes the install: rc 0, complete, `pkgchk` clean. So apkg needed no change.
 - **A leak:** a killed run can leave a `/var/tmp/dstream*` directory; nothing removes it.
 
+Under `nohup`, the login closed at once or at points through the run, 1.12.8 then 1.12.9, emulated:
+
+| run | 68060 1.12.8 | 68060 1.12.9 | 68030 1.12.9 |
+|---|---|---|---|
+| `pkgadd`, the loop above, closed / held | 9/40, 0/40 failed | 0/40, 0/40 | 0/40, 0/40 |
+| `pkgrm`, 6 points | 6 of 6 partially removed, `!R-Lock!` | 0 | 0 |
+| `apkg install`, 12 points | 1 of 12 not installed | 0 | 0 |
+| `apkg -f install` of a kernel, 4 points | 0 | 0 | 0 |
+
+A kernel install that is not under `nohup` and loses its login is finished by `apkg recover` (4 of 4
+on both lines, with 1.12.8 and 1.12.9), and `kbootset status` is whole after it.
+
 ## 2026-11-05 — assemble-release.py: a published row gains the #fstype it lacks
 
 A published catalog older than the mark has no `#fstype` lines, and keeping its row dropped the mark:
