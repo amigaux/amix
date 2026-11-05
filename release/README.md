@@ -47,6 +47,9 @@ module <line>/<name> <sha256>         out/modules
 pkg kspace|userland|apkg|release/<rel> <file> <size> <sha256>
                                       out/{kspace,userland}/pkgs, out/apkg, and
                                       out/release/<rel>/pkgs (base/, stock/ below it)
+beside kspace|apkg <path> <size> <sha256>
+                                      out/<space>/beside: what a recipe builds beside
+                                      its packages, for the media
 catalog kspace|userland|release/<rel> md5 <md5> sha256 <sha256>
                                       the catalog (its md5 names it); catalog.md5 must agree
 media <path> <size> <sha256>          out/media

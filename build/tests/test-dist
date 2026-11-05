@@ -201,6 +201,8 @@ PY
           rc == 3 and "[MISSING] kspace: kernel/k30 has no pkg/build.sh yet\n" in out
           and "kernel/port has no pkg/build.sh" in out and "kernel/modules/monsw has no pkg/build.sh" in out
           and "kernel/dlm has no" not in out and "kernel/drivers/a4091 has no" not in out, out)
+    check("kspace: nothing built beside the packages, no directory for it",
+          not os.path.exists(os.path.join(top, "out", "kspace", "beside")), out)
     check("kspace: their packages land in out/kspace/pkgs, through the one-version guard",
           sorted(os.listdir(kp)) == ["a4091k30-1.0.0-6.pkg", "kbootset-1.1.0-28.pkg"]
           and "one version per name: 2 package(s)" in out, out)
@@ -213,6 +215,19 @@ PY
           and subprocess.run(["git", "-C", os.path.join(rt, "cache", "port-repo"), "cat-file", "-t", portc],
                              stdout=subprocess.PIPE).stdout.decode().strip() == "commit",
           "\n".join(log))
+    # a recipe's file beside its package reaches out/kspace/beside, and stops when it does
+    a4 = os.path.join(top, "kernel/drivers/a4091/pkg/build.sh")
+    a4text, ordertext = open(a4).read(), open(order).read()
+    with open(a4, "a") as fp:
+        fp.write('mkdir -p "$AMIX_BUILD_ROOT/kspace/beside"\necho boot > "$AMIX_BUILD_ROOT/kspace/beside/amix-cdboot"\n')
+    rc3, out3 = run("kspace")
+    beside = os.path.join(top, "out", "kspace", "beside", "amix-cdboot")
+    check("kspace: a file built beside a package lands in out/kspace/beside",
+          rc3 == 3 and os.path.isfile(beside), out3)
+    write(a4, a4text)
+    rc3, out3 = run("kspace")
+    check("kspace: and is gone when no recipe builds it", rc3 == 3 and not os.path.exists(beside), out3)
+    write(order, ordertext)
     for d, p in (("kernel/k30", "kern30m"), ("kernel/port", "kern46m"), ("kernel/modules/monsw", "monsw30")):
         recipe(d, p, "1.0-1")
     os.remove(order)

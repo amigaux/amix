@@ -543,6 +543,12 @@ step_kspace() {
 	for p in "$out/build/kspace/kspace/pkg/"*.pkg; do
 		[ -f "$p" ] && cp "$p" "$out/kspace/pkgs/"
 	done
+	# what a recipe builds beside its package, for the media; the lock names it
+	for p in "$out/build/kspace/kspace/beside/"*; do
+		[ -f "$p" ] || continue
+		mkdir -p "$out/kspace/beside"
+		cp "$p" "$out/kspace/beside/"
+	done
 	if [ -n "$(ls "$out/kspace/pkgs")" ]; then
 		python3 -I "$here/pkg/pkgmeta" guard "$out/kspace/pkgs"
 	fi

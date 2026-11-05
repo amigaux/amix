@@ -131,6 +131,14 @@ try:
     check("the exceptions last", [l.split()[1] for l in lock[4 + len(want):]]
           == ["kit-revision-lines", "installed-images"], "\n".join(lock))
     check("nothing from out/build", not any("zlib.log" in l for l in lock))
+    # a file a recipe builds beside its package has its own line
+    d = os.path.join(tmp, "out-beside")
+    shutil.copytree(out, d)
+    write(os.path.join(d, "kspace/beside/amix-cdboot"), "boot")
+    rc, o, e = run(top, d)
+    got = open(os.path.join(d, "lock")).read().splitlines()
+    check("a file beside the packages: its line, with its size and sha256",
+          rc == 0 and "beside kspace amix-cdboot 4 %s" % sha("boot") in got, e)
     # a lock with nothing behind it is refused
     nothing = os.path.join(tmp, "out-nothing")
     os.makedirs(os.path.join(nothing, "build"))

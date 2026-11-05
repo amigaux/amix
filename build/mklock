@@ -193,6 +193,11 @@ def lock(top, out):
             lines += ["pkg %s %s %d %s" % (space, rel, os.path.getsize(os.path.join(pkgs, rel)),
                                            sha256(os.path.join(pkgs, rel)))
                       for rel in files(pkgs) if rel.endswith(".pkg")]
+        beside = os.path.join(d, "beside")
+        if os.path.isdir(beside):
+            lines += ["beside %s %s %d %s" % (space, rel, os.path.getsize(os.path.join(beside, rel)),
+                                              sha256(os.path.join(beside, rel)))
+                      for rel in files(beside)]
         cat = os.path.join(d, "catalog")
         if os.path.isfile(cat):
             with open(cat, "rb") as fp:

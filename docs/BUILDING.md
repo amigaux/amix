@@ -65,7 +65,8 @@ A kernel directory's recipes plug into `kspace` as `kernel/<dir>/pkg/build.sh`:
 with no arguments it rolls all its recipes, with names those; it reads
 `AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
 `$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
-and exits non-zero on a failure. It exits 3 when an input outside the recipe
+and exits non-zero on a failure. A file the media need that is no package goes to
+`$AMIX_BUILD_ROOT/kspace/beside/`, which reaches `out/kspace/beside/` and the lock. It exits 3 when an input outside the recipe
 is absent, with a `[MISSING]` line naming the input (a kernel
 cut's output, for one); the step then runs the other directories and ends
 with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from
@@ -119,7 +120,7 @@ the dist workflow (`docs/ci.md`).
 out/kit/{k30,k46}/            the ABI kits
 out/kit/kit.digests           one line per kit (kernel/dlm/tools/kitdigest.sh)
 out/modules/<line>/<name>     the generic module objects
-out/kspace/{catalog,catalog.md5,pkgs/}
+out/kspace/{catalog,catalog.md5,pkgs/,beside/}
 out/userland/{catalog,catalog.md5,pkgs/}
 out/media/{cd,netinstall,floppies}/
 out/lock
