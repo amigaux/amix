@@ -53,9 +53,17 @@ in an image, what the build box left: files in `/tmp` or `/var/tmp`, login
 records that are not empty, shell histories. The ROM register
 and the private patterns are never in this repository: they are given by
 path (`--rom-register`, `--private-patterns`, or `ROM_MANIFEST` and
-`PRIVACY_PATTERNS`), and without them it refuses to run. Exemptions for what
+`PRIVACY_PATTERNS`), and without them, or with a list that names nothing, it
+refuses to run. `--public` or `RELEASE_PUBLIC` declares a public rebuild, where
+a list not given or empty is left out and the output says so. Exemptions for what
 upstream software ships are in `release-allow.txt`, each with its reason.
-It exits 0 clean, 1 on hits and 2 on any failure. The media build and the
+It exits 0 clean, 1 on hits and 2 on any failure. A path it read nothing from is
+a failure: an empty file, a directory or ISO with nothing in it, a slice past the
+end of an image, an ISO shorter than its volume, an image whose ufs slices give the
+privacy scan no file. What is in a tree does not change what is searched: a
+`.gitignore` or a `.git` of its own hides nothing, and the check fails if the
+privacy check searched fewer files than it was given. The verdict names what was
+read: files, raw slices, bytes, and the text files searched. The media build and the
 package repository's assembly call it. `test-release-check` builds trees that
 hold one thing each, as directories, datastreams and ISOs, and passes only
 when each is refused or passed as it should be; it needs xorriso. Its two

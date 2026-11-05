@@ -59,6 +59,12 @@ def newc(members):
     return out
 
 
+def _empty_dir(tmp, name="empty-dir"):
+    d = os.path.join(tmp, name)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def datastream(pkg, members, tail=b""):
     """a package datastream: the header, then its archives padded to 512"""
     out = b"# PaCkAgE DaTaStReAm\n%s 1 1\n# end of header\n" % pkg.encode()
@@ -191,7 +197,7 @@ try:
     write(tmp, "MANIFEST.sha256", "%s  test-rom.bin\n" % hashlib.sha256(ROMBYTES).hexdigest())
     pat = os.path.join(tmp, "patterns.txt")
     write(tmp, "patterns.txt", "secretbox\n")
-    env = {k: v for k, v in os.environ.items() if k not in ("ROM_MANIFEST", "PRIVACY_PATTERNS")}
+    env = {k: v for k, v in os.environ.items() if k not in ("ROM_MANIFEST", "PRIVACY_PATTERNS", "RELEASE_PUBLIC")}
     flags = ["--rom-register", reg, "--private-patterns", pat]
 
     for name, extra, want, iso in CASES:
@@ -229,7 +235,7 @@ try:
         rc, out = run(flags + [img], env)
         if want is None:
             check("%s: clean, both slices read raw" % name,
-                  rc == 0 and "0 files, CLEAN" in out and "2 raw slice(s)" in out, out)
+                  rc == 0 and "0 files, 2 raw slice(s), " in out and "CLEAN" in out and " 0 bytes" not in out, out)
         else:
             check("%s: refused, %s" % (name, want), rc == 1 and ("HIT  %s" % want) in out, out)
 
@@ -263,14 +269,23 @@ try:
     write(tmp, "fake.img", b"\0" * 512)
     real_rdb, real_files = rc_mod.is_rdb_image, rc_mod.image_files
     rc_mod.is_rdb_image = lambda p: True
-    rc_mod.image_files = lambda p, raw: iter([(4, "/usr/bin/x", b"\0/srv/secretbox/x.c\0"),
+    rc_mod.image_files = lambda p, raw: iter([(1, "/etc/motd", b"welcome\n"),
+                                              (4, "/usr/bin/x", b"\0/srv/secretbox/x.c\0"),
                                               (4, "/usr/bin/y", b"\0nothing here\0"),
                                               (4, "/usr/doc/z", b"plain secretbox text\n")])
     got = io.StringIO()
     with contextlib.redirect_stdout(got):
         verdict = rc_mod.check(fake, {}, pat, [], rc_mod.LocalNames(pat))
-    rc_mod.is_rdb_image, rc_mod.image_files = real_rdb, real_files
     got = got.getvalue()
+    rc_mod.image_files = lambda p, raw: iter([(4, "/usr/doc/z", b"plain text\n")])
+    try:
+        rc_mod.check(fake, {}, pat, [], rc_mod.LocalNames(pat))
+        nothing = "no failure"
+    except rc_mod.Failure as e:
+        nothing = str(e)
+    check("image: ufs files, and no /etc in slice 1 for the privacy scan: a failure",
+          "no text file in slice 1" in nothing, nothing)
+    rc_mod.is_rdb_image, rc_mod.image_files = real_rdb, real_files
     check("image: a binary file outside /etc is searched, a text file there is not",
           not verdict and got.count("HIT") == 2
           and "HIT  privacy s4 /usr/bin/x: local pattern #1 in a binary file at offset 6" in got, got)
@@ -303,10 +318,99 @@ try:
         rc, out = run(flags + [img], env)
         if want is None:
             check("ufs fixture clean: CLEAN, its 4 files and both raw slices read",
-                  rc == 0 and "4 files, CLEAN" in out and "2 raw slice(s)" in out, out)
+                  rc == 0 and "4 files, 2 raw slice(s), " in out and "CLEAN" in out, out)
         else:
             check("ufs fixture planted: exactly the shadow hash and the address",
                   rc == 1 and "3 HIT(s)" in out and all(w in out for w in want), out)
+
+    # nothing read is never clean
+    rc, out = run(flags + [_empty_dir(tmp)], env)
+    check("an empty directory: a failure, nothing read", rc == 2 and "nothing read" in out and "CLEAN" not in out, out)
+    write(tmp, "nothing/only-empty", b"")
+    rc, out = run(flags + [os.path.join(tmp, "nothing")], env)
+    check("a directory of empty files: a failure, nothing read", rc == 2 and "nothing read" in out, out)
+    write(tmp, "zero.iso", b"")
+    rc, out = run(flags + [os.path.join(tmp, "zero.iso")], env)
+    check("a 0-byte .iso: a failure", rc == 2 and "CLEAN" not in out, out)
+    write(tmp, "zero.bin", b"")
+    rc, out = run(flags + [os.path.join(tmp, "zero.bin")], env)
+    check("a 0-byte file: a failure, nothing read", rc == 2 and "nothing read" in out, out)
+    write(tmp, "cut.img", rdb_image(b"\0" * 65536, b"store " * 4096)[:64 * 1024])
+    rc, out = run(flags + [os.path.join(tmp, "cut.img")], env)
+    check("an image cut short: a failure, the slice past its end named",
+          rc == 2 and "past the end of the image" in out and "CLEAN" not in out, out)
+    if shutil.which("xorriso"):
+        src = os.path.join(tmp, "t", "clean")
+        whole = os.path.join(tmp, "whole.iso")
+        subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-o", whole, src],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        data = open(whole, "rb").read()
+        write(tmp, "cut.iso", data[:len(data) // 2])
+        rc, out = run(flags + [os.path.join(tmp, "cut.iso")], env)
+        check("an ISO cut short: a failure, shorter than its volume", rc == 2 and "the volume is" in out, out)
+        write(tmp, "nopvd.iso", b"x" * 65536)
+        rc, out = run(flags + [os.path.join(tmp, "nopvd.iso")], env)
+        check("a .iso that is none: a failure", rc == 2 and "no ISO 9660 volume" in out, out)
+        none = os.path.join(tmp, "none.iso")
+        os.makedirs(os.path.join(tmp, "empty-iso", "sub"))
+        subprocess.run(["xorriso", "-as", "mkisofs", "-quiet", "-o", none, os.path.join(tmp, "empty-iso")],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        rc, out = run(flags + [none], env)
+        check("an ISO with no file: a failure, nothing read", rc == 2 and "nothing read" in out, out)
+    # an unreadable directory is not an empty one
+    if os.geteuid() != 0:
+        write(tmp, "shut/ok", "text\n")
+        write(tmp, "shut/in/secret", "text\n")
+        os.chmod(os.path.join(tmp, "shut", "in"), 0)
+        rc, out = run(flags + [os.path.join(tmp, "shut")], env)
+        os.chmod(os.path.join(tmp, "shut", "in"), 0o755)
+        check("a directory it cannot read: a failure", rc == 2 and "cannot read" in out, out)
+    # what is in a tree does not decide what the scan looks at
+    addr = ".".join(("10", "1", "2", "3"))
+    for name, files in (("a .gitignore of *", {".gitignore": "*\n", "conf/leak": "host %s\n" % addr}),
+                        ("a .git directory of its own", {".git/config": "url = %s\n" % addr, "ok": "text\n"}),
+                        ("a .git inside a subdirectory", {"sub/.git/config": "url = %s\n" % addr, "ok": "text\n"}),
+                        ("a .git file of its own", {".git": "gitdir: %s\n" % addr})):
+        d = os.path.join(tmp, "ignored-" + str(abs(hash(name)) % 100000))
+        for rel, data in files.items():
+            write(d, rel, data)
+        rc, out = run(flags + [d], env)
+        check("%s: the address is still found" % name, rc == 1 and "HIT  privacy" in out and "CLEAN" not in out, out)
+    # privacy-check that searched less than it was given
+    short = os.path.join(tmp, "short-privacy-check")
+    write(tmp, "short-privacy-check", "import sys\nsys.stderr.write('privacy-check: 0 file(s), 0 hit(s)\\n')\n")
+    rc, out = run(["--no-rom-register", "--no-private-patterns", os.path.join(tmp, "t", "clean")],
+                  dict(env, PRIVACY_CHECK=short))
+    check("a privacy-check that searched fewer files: a failure", rc == 2 and "searched 0 of" in out, out)
+
+    # a list with nothing in it is no list
+    blank = os.path.join(tmp, "blank")
+    write(tmp, "blank", "# a comment\n\n")
+    clean0 = os.path.join(tmp, "t", "clean")
+    rc, out = run(["--rom-register", blank, "--private-patterns", pat, clean0], env)
+    check("a ROM register that lists nothing: a failure", rc == 2 and "lists nothing" in out, out)
+    rc, out = run(["--rom-register", reg, "--private-patterns", blank, clean0], env)
+    check("private patterns that list nothing: a failure", rc == 2 and "list nothing" in out, out)
+    write(tmp, "bad-register", "not-a-sha  kick.rom\n")
+    rc, out = run(["--rom-register", os.path.join(tmp, "bad-register"), "--private-patterns", pat, clean0], env)
+    check("a ROM register line that is no sha256: a failure", rc == 2 and "not a sha256 line" in out, out)
+    write(tmp, "no-modules", "# none\n")
+    rc, out = run(flags + ["--known-bad", os.path.join(tmp, "no-modules"), clean0], env)
+    check("a known-bad list with no module: a failure", rc == 2 and "lists no module" in out, out)
+    rc, out = run(["--public", "--rom-register", blank, "--private-patterns", blank, clean0], env)
+    check("--public: empty lists run, and the output says they were not used",
+          rc == 0 and "the ROM register and the private patterns: not used (public rebuild)" in out and "CLEAN" in out, out)
+    rc, out = run(["--rom-register", blank, "--private-patterns", blank, clean0], dict(env, RELEASE_PUBLIC="1"))
+    check("RELEASE_PUBLIC stands for --public", rc == 0 and "not used (public rebuild)" in out, out)
+    rc, out = run(["--public", clean0], env)
+    check("--public: no lists given at all, the same", rc == 0 and "not used (public rebuild)" in out, out)
+    rc, out = run(["--public", "--rom-register", reg, "--private-patterns", blank, clean0], env)
+    check("--public: a list it has is used, and only the other is named",
+          rc == 0 and "the private patterns: not used" in out and "ROM register" not in out, out)
+    rc, out = run(["--public", "--rom-register", reg, "--private-patterns", pat, os.path.join(tmp, "t", "pattern")], env)
+    check("--public: a list it has still finds what it lists", rc == 1 and "HIT" in out, out)
+    rc, out = run(["--no-rom-register", "--no-private-patterns", clean0], env)
+    check("the opt-outs: the output says what was not used", rc == 0 and "not used (as asked)" in out, out)
 
     # the register and the patterns come by environment as well
     rc, out = run([os.path.join(tmp, "t", "register")], dict(env, ROM_MANIFEST=reg, PRIVACY_PATTERNS=pat))
@@ -452,7 +556,7 @@ try:
     check("a floppy image holding the module: refused, read as a file",
           rc == 1 and "HIT  known-bad kb-floppy.adf: carries zbad" in out, out)
     rc, out = run(kbflags + [os.path.join(tmp, "kb-clean.adf")], env)
-    check("a floppy image without it: clean, the file read raw", rc == 0 and "1 files, CLEAN" in out
+    check("a floppy image without it: clean, the file read raw", rc == 0 and "1 files, 1 raw slice(s), " in out and "CLEAN" in out
           and "in the file" in out, out)
     write(tmp, "kb/bad-list", "module zbad " + "0" * 64 + " 14006 why\npiece 100 0 00 " + "0" * 64 + "\n")
     rc, out = run(flags + ["--known-bad", os.path.join(tmp, "kb", "bad-list"), clean], env)

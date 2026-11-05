@@ -61,9 +61,16 @@ For each PATH:
 
 The ROM register and the private patterns are never part of this repository;
 each is given by path (the flag, or $ROM_MANIFEST and $PRIVACY_PATTERNS).
-Without one, release-check refuses to run; --no-rom-register and
---no-private-patterns run without it, for tests.  PRIVACY_CHECK names another
-privacy-check.
+Without one, or with one that lists nothing, release-check refuses to run;
+--no-rom-register and --no-private-patterns run without it, for tests, and
+--public (or $RELEASE_PUBLIC) declares a public rebuild, where a list not given
+or empty is left out.  The output says which were not used.  PRIVACY_CHECK names
+another privacy-check.
+
+A PATH it read nothing from is a failure, never clean: an empty file, a directory
+or ISO with nothing in it, a slice past the end of an image, an ISO shorter than
+its volume, an image whose ufs slices give the privacy scan nothing.  The verdict
+says what was read: files, raw slices, bytes, and text files the privacy scan saw.
 
 --known-bad-entry prints the list lines of a module file: its "module" line
 with WHY, then its "piece" lines.
@@ -96,6 +103,7 @@ KNOWN_BAD = os.path.join(HERE, "known-bad-modules.txt")
 KS_MAGIC = (0x11114EF9, 0x11144EF9)
 ROM_SIZES = (262144, 524288)
 TEXT_PROBE = 8192
+ISO_PVD = 16 * 2048             # the primary volume descriptor's offset
 DATASTREAM = b"# PaCkAgE DaTaStReAm"
 CRYPT_LINE = re.compile(rb'(?m)^[a-z_][a-z0-9_.-]{0,31}:(\$[0-9a-z]{1,2}\$[./0-9A-Za-z]{1,16}\$[./0-9A-Za-z]{10,}|[./0-9A-Za-z]{13}):')
 PRIVKEY = re.compile(rb'-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----')
@@ -153,10 +161,13 @@ def load_register(path):
         lines = open(path, encoding="latin-1").read().splitlines()
     except OSError as e:
         raise Failure("cannot read the ROM register %s: %s" % (path, e.strerror))
-    for line in lines:
+    for n, line in enumerate(lines, 1):
         w = line.split(None, 1)
-        if w and re.fullmatch(r"[0-9a-f]{64}", w[0]):
-            out[w[0]] = w[1].strip() if len(w) > 1 else ""
+        if not w or w[0].startswith("#"):
+            continue
+        if not re.fullmatch(r"[0-9a-f]{64}", w[0]):
+            raise Failure("%s:%d: not a sha256 line" % (path, n))
+        out[w[0]] = w[1].strip() if len(w) > 1 else ""
     return out
 
 
@@ -219,6 +230,8 @@ def load_known_bad(path):
         except ValueError:
             pass
         raise Failure("%s:%d: not a module or piece line" % (path, n))
+    if not out:
+        raise Failure("the known-bad list %s lists no module" % path)
     return out
 
 
@@ -306,6 +319,9 @@ def image_files(path, raw):
         img = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         _, sl = rdb.read_rdb(img[:1 << 20])
         for s in sl:
+            if s.byte_offset + s.byte_size > len(img):
+                raise Failure("slice %d ends at byte %d, past the end of the image (%d bytes)"
+                              % (s.slot, s.byte_offset + s.byte_size, len(img)))
             part = img[s.byte_offset:s.byte_offset + s.byte_size]
             try:
                 sb = ufs.parse_super(img, s.byte_offset)
@@ -357,6 +373,14 @@ def raw_hits(slot, swap, part, tree):
 
 
 def iso_files(path, scratch):
+    with open(path, "rb") as f:
+        f.seek(ISO_PVD)
+        pvd = f.read(2048)
+    if pvd[:6] != b"\x01CD001":
+        raise Failure("no ISO 9660 volume descriptor")
+    want = struct.unpack("<I", pvd[80:84])[0] * struct.unpack("<H", pvd[128:130])[0]
+    if want > os.path.getsize(path):
+        raise Failure("the volume is %d bytes and the file %d" % (want, os.path.getsize(path)))
     out = os.path.join(scratch, "iso")
     try:
         r = subprocess.run(["xorriso", "-indev", path, "-osirrox", "on", "-extract", "/", out],
@@ -371,7 +395,9 @@ def iso_files(path, scratch):
 def dir_files(path):
     """(0, path, bytes) of every regular file under a directory; symbolic
     links are not followed (a mirror's link points into its own tree)"""
-    for base, dirs, files in os.walk(path):
+    def unread(e):
+        raise Failure("cannot read %s: %s" % (e.filename, e.strerror))
+    for base, dirs, files in os.walk(path, onerror=unread):
         dirs.sort()
         for fn in sorted(files):
             full = os.path.join(base, fn)
@@ -380,8 +406,18 @@ def dir_files(path):
                     yield 0, "/" + os.path.relpath(full, path), fp.read()
 
 
+def tree_path(p):
+    """where a file goes in the privacy scan's tree: a .git of the file's own
+    would be the scratch repository's, and never searched"""
+    return "/".join("dot-git" if c.lower() == ".git" else c for c in p.lstrip("/").replace("!", "/").split("/"))
+
+
 def privacy(tree, scratch, patterns):
-    """privacy-check --tree over a directory, classes 1 and 3: [line]"""
+    """privacy-check --tree over a directory, classes 1 and 3: [line]; every
+    file of the directory was searched, or it is a failure"""
+    want = sum(len(fs) for _, _, fs in os.walk(tree))
+    if not want:
+        return []
     repo = os.path.join(scratch, "repo")
     shutil.copytree(tree, repo, symlinks=False)
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
@@ -391,7 +427,8 @@ def privacy(tree, scratch, patterns):
     env.pop("PRIVACY_PATTERNS", None)
     if patterns:
         env["PRIVACY_PATTERNS"] = patterns
-    for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
+    # -f: a .gitignore in the tree is the tree's, not a reason not to look
+    for cmd in (["git", "init", "-q"], ["git", "add", "-A", "-f"],
                 ["git", "commit", "-q", "--allow-empty", "-m", "tree"]):
         r = subprocess.run(cmd, cwd=repo, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         if r.returncode != 0:
@@ -405,6 +442,9 @@ def privacy(tree, scratch, patterns):
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if r.returncode not in (0, 1):
         raise Failure("privacy-check failed: %s" % r.stdout.strip()[-300:])
+    m = re.search(r"^privacy-check: (\d+) file\(s\),", r.stdout, re.M)
+    if not m or int(m.group(1)) != want:
+        raise Failure("privacy-check searched %s of the %d text files" % (m.group(1) if m else "none", want))
     hits = []
     for line in r.stdout.splitlines():
         # "<sha> <class> <path> <detail>"; not the summary line, whose
@@ -454,7 +494,7 @@ def mapped(path):
 
 def check(path, register, patterns, bad, local=None):
     scratch = tempfile.mkdtemp(prefix="release-check.")
-    hits, n, raws = [], 0, []
+    hits, n, raws, size, texts, searched = [], 0, [], 0, 0, 0
     isdir = os.path.isdir(path)
     mode = "dir" if isdir else "iso" if path.lower().endswith(".iso") else \
         "image" if is_rdb_image(path) else "file"
@@ -464,7 +504,9 @@ def check(path, register, patterns, bad, local=None):
         os.makedirs(tree)
 
         def raw(slot, swap, part):
+            nonlocal size
             raws.append(slot)
+            size += len(part)
             hits.extend(raw_hits(slot, swap, part, tree))
             if local and mode == "image":
                 hits.extend(local.hits("s%d raw" % slot, "raw/s%d" % slot, part))
@@ -485,6 +527,7 @@ def check(path, register, patterns, bad, local=None):
             # first-boot payload; every text file of an ISO or a directory
             scan = whole or (slot == 1 and p0.startswith(("/etc/", "/var/adm/firstboot/")))
             here = set()
+            size += len(data0)
             for p, data in expand(p0, data0):
                 n += 1
                 why = rom_hit(data, register)
@@ -499,26 +542,35 @@ def check(path, register, patterns, bad, local=None):
                     hits += trace_hits(slot, p, data)
                 if local and not is_text(data) and data[:len(DATASTREAM)] != DATASTREAM:
                     hits += local.hits("s%d %s" % (slot, p) if slot else p,
-                                       p.lstrip("/").replace("!", "/"), data)
+                                       tree_path(p), data)
                 if scan and is_text(data):
-                    dst = os.path.join(tree, p.lstrip("/").replace("!", "/"))
+                    texts += 1
+                    dst = os.path.join(tree, tree_path(p))
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     with open(dst, "wb") as o:
                         o.write(data)
             named |= here
             if isdir:               # a directory: each file's own bytes
                 hits += bad_bytes_hits("s%d %s" % (slot, p0), data0, bad, here)
+        if not size:
+            raise Failure("nothing read: %d files, %d raw slice(s), 0 bytes" % (n, len(raws)))
+        if mode == "image" and n and not texts:
+            raise Failure("%d files in its ufs slices, and no text file in slice 1's /etc or "
+                          "first-boot payload for the privacy scan" % n)
         if not isdir:               # anything else: the bytes of PATH itself
             hits += bad_bytes_hits(os.path.basename(path), mapped(path), bad, named)
         hits += ["privacy " + h for h in privacy(tree, scratch, patterns)]
+        searched = sum(len(fs) for _, _, fs in os.walk(tree))
     finally:
         subprocess.run(["chmod", "-R", "u+w", scratch], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         shutil.rmtree(scratch, ignore_errors=True)
     for h in hits:
         print("  HIT  %s" % h)
     where = "the file" if mode == "file" else "the tree" if whole else \
-        "/etc, the first-boot payload, the binary files and %d raw slice(s)" % len(raws)
-    print("release-check: %s: %d files, %s" % (os.path.basename(os.path.normpath(path)), n,
+        "/etc, the first-boot payload, the binary files and the raw slices"
+    print("release-check: %s: %d files, %s%d bytes, %d text files for the privacy scan, %s" % (
+          os.path.basename(os.path.normpath(path)), n,
+          "%d raw slice(s), " % len(raws) if raws else "", size, searched,
           "CLEAN (no Kickstart ROM, no known-bad module, no private address, name or secret in %s)" % where
           if not hits else "%d HIT(s)" % len(hits)))
     return not hits
@@ -531,6 +583,7 @@ def main(argv):
     ap.add_argument("--private-patterns", metavar="FILE", default=os.environ.get("PRIVACY_PATTERNS"))
     ap.add_argument("--no-rom-register", action="store_true")
     ap.add_argument("--no-private-patterns", action="store_true")
+    ap.add_argument("--public", action="store_true", default=bool(os.environ.get("RELEASE_PUBLIC")))
     ap.add_argument("--known-bad", metavar="FILE", default=KNOWN_BAD)
     ap.add_argument("--known-bad-entry", nargs=3, metavar=("NAME", "MODULE", "WHY"))
     ap.add_argument("paths", nargs="*", metavar="PATH")
@@ -554,6 +607,9 @@ def main(argv):
     if not a.paths:
         ap.print_usage(sys.stderr)
         return 2
+    if a.public:
+        a.no_rom_register = a.no_rom_register or not a.rom_register
+        a.no_private_patterns = a.no_private_patterns or not a.private_patterns
     if not a.no_rom_register and not a.rom_register:
         sys.stderr.write("release-check: no ROM register: --rom-register FILE or ROM_MANIFEST "
                          "(--no-rom-register checks Kickstart headers only)\n")
@@ -572,11 +628,22 @@ def main(argv):
     ok = True
     try:
         register = {} if a.no_rom_register else load_register(a.rom_register)
+        if not a.no_rom_register and not register:
+            if not a.public:
+                raise Failure("the ROM register %s lists nothing (--public declares a public rebuild)" % a.rom_register)
+            a.no_rom_register = True
         bad = load_known_bad(a.known_bad)
         try:
             local = LocalNames(patterns) if patterns else None
         except Exception as e:          # a tool failure is never a clean verdict
             raise Failure("privacy-check's search: %s" % e)
+        if local and not local.names:
+            if not a.public:
+                raise Failure("the private patterns %s list nothing (--public declares a public rebuild)" % patterns)
+            local, patterns = None, None
+        unused = (["the ROM register"] if a.no_rom_register else []) + (["the private patterns"] if not patterns else [])
+        if unused:
+            print("release-check: %s: not used (%s)" % (" and ".join(unused), "public rebuild" if a.public else "as asked"))
         for p in a.paths:
             if not os.path.exists(p):
                 raise Failure("%s: no such file or directory" % p)
