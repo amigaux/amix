@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — what make tools needs (77e858e)
+
+`docs/BUILDING.md` says what `make tools` needs: a clone holding the pinned amix-system commit, and https to the Ubuntu snapshot and the toolchains' sources.
+
 ## 2026-11-05 — what the proof has shown (b644803)
 
 `docs/BUILDING.md` and `release/README.md` say exactly what the proof has shown, on which machines and commits, and what it hasn't; the claim of the same bytes on every machine is gone.
