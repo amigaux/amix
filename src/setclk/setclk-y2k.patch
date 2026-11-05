@@ -27,6 +27,10 @@
 # evidence this is the source they patched. The wiki's prebuilt binary (8564 B,
 # sha256 6022274f128c54d1e5e4e240a5451990bb5add9cc4e1a17634b6c5dd5438af82) is kept
 # only as the behavioural reference; tools/build-setclk.sh builds ours from this.
+#
+#   amix-installng (2026-11-05): setclk -p prints the year in two digits, the form the
+#     command takes (mmddHHMMYY). The year field stays three digits inside, for read_clock's scan.
+#
 --- a/setclk.c
 +++ b/setclk.c
 @@ -5,6 +5,7 @@
@@ -126,7 +130,7 @@
  	struct tm *tm;
  	time_t thetime;
  
-@@ -175,7 +227,7 @@
+@@ -175,12 +227,12 @@
  
      if (display_clock)
      {
@@ -135,6 +139,12 @@
  
  	retval = read_clock(buffer);
  
+ 	if (retval)
+-	    (void) puts(buffer);
++	    (void) printf("%.8s%02d\n", buffer, atoi(buffer + 8) % 100);
+     }
+ 
+     return !retval;
 @@ -299,7 +351,7 @@
  	return FALSE;
      }

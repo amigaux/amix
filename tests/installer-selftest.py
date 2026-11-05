@@ -191,7 +191,6 @@ ZENHOOK = os.path.join(REPO, "payload", "S99zen")
 PROTO = os.path.join(REPO, "miniroot", "miniroot.proto")
 PROFILES_DIR = os.path.join(REPO, "profiles")
 ISO_BUILDER = os.path.join(HERE, "build-install-iso.sh")
-EXTRACT_21C = os.path.join(HERE, "extract-21c-payload.sh")
 STAGE_DIR = os.environ.get("INSTALLSEL_STAGE",
                            os.path.join(REPO, "work", "install-tree"))
 RAW_BUILDER = os.path.join(HERE, "build-raw-source.sh")
@@ -4558,46 +4557,20 @@ def audit_framing_tools():
             fail("driver no longer overwrites /stand/boot2.boot -- gate 5a's framing set "
                  "is not fully driver-guaranteed")
 
-    # Q4: the media staging pins the bytes fail-closed and pulls makeiblk from the
-    # gated 2.1c extraction.
+    # Q4: these are the 1.0 path's: a medium stages neither, and the 1.1 path reads neither
     if not os.path.isfile(ISO_BUILDER):
-        fail("build-install-iso.sh missing -- cannot check the staging pins")
+        fail("build-install-iso.sh missing -- cannot check the staging")
     else:
         bsrc = open(ISO_BUILDER, encoding="utf-8").read()
-        for pat, desc in [
-            (r'sum_gate\s+"\$STAGE/stand/boot1\.boot"\s+41892\s+1024',
-             "staging pins boot1.boot 41892/1024 (fail-closed sum_gate)"),
-            (r'sum_gate\s+"\$STAGE/stand/makeiblk"\s+58483\s+14924',
-             "staging pins makeiblk 58483/14924 (fail-closed sum_gate)"),
-            (r'extract-21c-payload\.sh', "staging runs the gated 2.1c extractor"),
-            (r'cp\s+"\$CORE_T/stand/boot1\.boot"',
-             "boot1.boot sourced from the extracted core tree (the 2.1 original)"),
-            (r'cp\s+"\$repo/payload/21c/stand/makeiblk"',
-             "makeiblk sourced from payload/21c (the 2.1c patched build)"),
-        ]:
-            if re.search(pat, bsrc):
-                ok(desc)
-            else:
-                fail("build-install-iso.sh does NOT: %s" % desc)
-    if os.path.isfile(EXTRACT_21C):
-        esrc = open(EXTRACT_21C, encoding="utf-8").read()
-        if re.search(r'\[stand/makeiblk\]=58483', esrc) and \
-                re.search(r'\[stand/makeiblk\]=14924', esrc):
-            ok("extract-21c-payload.sh pins makeiblk 58483/14924")
+        if re.search(r'\$STAGE/(stand|syslog)\b|payload/21c|extract-21c-payload', bsrc):
+            fail("build-install-iso.sh stages the 1.0 path's /install/stand or /install/syslog, or still reads payload/21c")
         else:
-            fail("extract-21c-payload.sh does not pin makeiblk 58483/14924")
+            ok("the medium stages no /install/stand or /install/syslog, and needs no 2.1c extraction")
+    l11src = open(os.path.join(os.path.dirname(DRIVER), "l11.sh"), encoding="utf-8").read()
+    if re.search(r'\$INST/(stand|syslog)\b', l11src):
+        fail("l11.sh reads /install/stand or /install/syslog, which a medium no longer stages")
     else:
-        fail("tools/extract-21c-payload.sh missing (the gated 2.1c extraction)")
-
-    # Q5: LIVE staged bytes (when a staged /install tree exists). SKIP, never a
-    # silent pass, when there is no staged tree on this host.
-    if os.path.isdir(os.path.join(STAGE_DIR, "stand")):
-        for rel, (ws, wz) in sorted(FT_PINS.items()):
-            _staged_pin_check(rel, ws, wz)
-    else:
-        skip("no staged /install tree at %s -- staged framing-tool bytes not "
-             "verified here (build-install-iso.sh --stage-only produces one)"
-             % os.path.relpath(STAGE_DIR, REPO))
+        ok("l11.sh reads neither /install/stand nor /install/syslog")
 
     # NEGATIVE FIXTURE -- a driver stripped of the laydown is flagged.
     neg = re.sub(r'\n[^\n]*cp\s+"\$INST/stand/boot1\.boot"[^\n]*', "", code)
@@ -4717,50 +4690,6 @@ def audit_syslog_unit():
         fail("syslog laydown sits inside the zen0 guard -- bench installs would ship silent")
     else:
         fail("could not locate the zen0 guard block to prove the syslog laydown is unconditional")
-
-    # R4: the STAGING transform + pins in build-install-iso.sh -- one vendor
-    # `exit` pre-gated, transformed to `#exit`, verified, the pid file trusted only when
-    # `ps -p` shows a syslogd (stale-pid fix), and pinned 28819/967;
-    # conf + daemon pinned too.
-    if not os.path.isfile(ISO_BUILDER):
-        fail("build-install-iso.sh missing -- cannot check the syslog staging")
-    else:
-        bsrc = open(ISO_BUILDER, encoding="utf-8").read()
-        for pat, desc in [
-            (r"grep -c '\^exit\$'", "pre-gates the vendor copy (exactly ONE bare `exit`)"),
-            (r"sed 's/\^exit\$/#exit/'", "comments the vendor `exit` (the §5 enablement) host-side"),
-            (r"grep -q '\^exit\$' \"\$STAGE/syslog/syslogd\.init\"",
-             "verifies NO live `exit` survives the transform"),
-            (r'sum_gate\s+"\$STAGE/syslog/syslogd\.init"\s+28819\s+967',
-             "pins the ENABLED init 28819/967"),
-            (r"s=`ps -p \$pid 2> /dev/null \| grep syslogd`",
-             "trusts /etc/syslog.pid only when ps shows a syslogd (an earlier boot's pid can be any process)"),
-            (r'sum_gate\s+"\$STAGE/syslog/syslog\.conf"\s+63870\s+1928',
-             "pins syslog.conf 63870/1928"),
-            (r'sum_gate\s+"\$STAGE/syslog/syslogd"\s+53154\s+22728',
-             "pins the 2.1c syslogd 53154/22728"),
-        ]:
-            if re.search(pat, bsrc):
-                ok("staging %s" % desc)
-            else:
-                fail("build-install-iso.sh staging does NOT: %s" % desc)
-
-    # R5: LIVE staged bytes (when a staged /install tree exists): pins + the
-    # enabled-copy property. SKIP, never a silent pass, otherwise.
-    if os.path.isdir(os.path.join(STAGE_DIR, "syslog")):
-        for rel, (ws, wz) in sorted(SYSLOG_PINS.items()):
-            _staged_pin_check(rel, ws, wz)
-        sp = os.path.join(STAGE_DIR, "syslog", "syslogd.init")
-        if os.path.isfile(sp):
-            if _live_exit_check(open(sp, encoding="utf-8").read()):
-                ok("staged syslogd.init is the ENABLED copy (no live `exit`, one `#exit`)")
-            else:
-                fail("staged syslogd.init still carries a live `exit` (or a bad transform) "
-                     "-- fresh installs would ship a DEAD syslog unit")
-    else:
-        skip("no staged /install tree at %s -- staged syslog bytes not verified "
-             "here (build-install-iso.sh --stage-only produces one)"
-             % os.path.relpath(STAGE_DIR, REPO))
 
     # NEGATIVE FIXTURES -- the link-topology and live-exit checks must fire.
     neg = re.sub(r'\n[^\n]*ln\s+"\$TARGET/etc/init\.d/syslogd"\s+"\$TARGET/etc/rc2\.d/S70syslogd"[^\n]*',

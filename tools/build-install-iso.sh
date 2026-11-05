@@ -25,10 +25,6 @@
 #   /install/profiles/BASE                        the base profile this medium was
 #                                                 mastered for (setup.sh reads it
 #                                                 when launched with no argument)
-#   /install/stand/{boot1.boot,makeiblk}          /stand framing tools the driver lays
-#                                                 down for updbootpart
-#   /install/syslog/{syslog.conf,syslogd.init,syslogd}  the 2.1c syslog unit, init
-#                                                 ENABLED (vendor exit commented, §5)
 #
 # Sources (read-only): ../amix-packagemanager heirloom/build-amix-static (engine),
 # the stock core tree build/core/root (tools/build-core-tree.sh: sum, the 183-B
@@ -202,17 +198,12 @@ need_file "$STATIC/sadm-helpers/pkginstall" "static pkginstall"
 [ -d "$CORE_T" ] || { echo "STOP: no stock core tree at $CORE_T -- run tools/build-core-tree.sh" >&2; exit 1; }
 need_file "$CORE_T/usr/bin/sum" "core /usr/bin/sum (on-target verifier)"
 need_file "$CORE_T/var/sadm/install/admin/default" "core 183-B admin default"
-need_file "$CORE_T/stand/boot1.boot" "core /stand/boot1.boot (framing source)"
 need_file "$DEPS" "deps.conf (install order)"
 need_file "$SETS_CONF" "sets.conf (the named install sets)"
 need_file "$SETS_PY" "sets.py (the sets.conf reference resolver)"
 need_file "$repo/src/installer/install.sh" "the installer driver"
 need_file "$repo/src/installer/setup.sh" "the interactive interview"
 
-# vendor pieces from the user-supplied 2.1c patch media (payload/21c, gitignored):
-# stand/makeiblk + the syslog unit. The extractor is idempotent and verifies its
-# own pinned fingerprints -- a bad/missing archive is a hard STOP here.
-"$here/extract-21c-payload.sh" || { echo "STOP: payload/21c extraction/verification failed" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
 # SET RESOLUTION -- sets.conf, through the packagemanager's own resolver
@@ -621,29 +612,18 @@ chmod 0644 "$STAGE"/LICENSES/*
 # The zen0 MAC reader install.sh lays down at /usr/amiga/bin/zenmac on a zen0
 # flavor; S99zen runs it at every boot to pick the card's address out of
 # /etc/inet/zen.conf (docs/address-by-card.md). A build artefact (vendor crt bytes,
-# gitignored), rebuilt from src/zenmac by tools/build-zenmac.sh when missing or
-# older than its source. REQUIRED when any requested profile is a zen0 flavor
-# (without it every boot falls back to the default row, loudly); otherwise staged
-# when it can be built and skipped with a note when it cannot.
-_want_zenmac=
-for _p in "${PROFILES[@]}"; do
-  grep -q '^FB_ETHER_IF=zen0' "$PROFILE_DIR/$_p.profile" 2>/dev/null && _want_zenmac=y
-done
-if [ ! -f "$repo/payload/zenmac" ] || [ "$repo/src/zenmac/zenmac.c" -nt "$repo/payload/zenmac" ]; then
-  if ! "$here/build-zenmac.sh"; then
-    if [ -n "$_want_zenmac" ]; then
-      echo "STOP: a zen0 profile was requested and payload/zenmac cannot be built (tools/build-zenmac.sh)" >&2; exit 1
-    fi
-    echo "build-install-iso: NOTE: payload/zenmac could not be built -- /install/zenmac not staged (no zen0 profile requested)"
-  fi
-fi
-if [ -f "$repo/payload/zenmac" ]; then
-  cp -p "$repo/payload/zenmac" "$STAGE/zenmac"
-  chmod 0755 "$STAGE/zenmac"
-  cmp -s "$repo/payload/zenmac" "$STAGE/zenmac" || {
-    echo "STOP: staged /install/zenmac is not byte-identical to payload/zenmac" >&2; exit 1; }
-  echo "build-install-iso: staged /install/zenmac ($(wc -c <"$STAGE/zenmac") B, sha256 $(sha256sum "$STAGE/zenmac" | cut -c1-16)...)"
-fi
+# gitignored), built from src/zenmac by tools/build-zenmac.sh when missing. Always staged.
+# The tool is built by the toolchain in the media image; another compiler's bytes are refused, not shipped.
+ZENMAC_SHA=2275dfcc0f1d95f00465936bdcba3a13d7d89b129a9250b2576dd48b8b71e37e
+[ -f "$repo/payload/zenmac" ] || "$here/build-zenmac.sh" || { echo "STOP: payload/zenmac cannot be built (tools/build-zenmac.sh)" >&2; exit 1; }
+_zm_got="$(sha256sum "$repo/payload/zenmac" | cut -c1-64)"
+[ "$_zm_got" = "$ZENMAC_SHA" ] || {
+  echo "STOP: payload/zenmac sha256 $_zm_got != pinned $ZENMAC_SHA (build it in the media image with tools/build-zenmac.sh, or re-pin deliberately)" >&2; exit 1; }
+cp -p "$repo/payload/zenmac" "$STAGE/zenmac"
+chmod 0755 "$STAGE/zenmac"
+cmp -s "$repo/payload/zenmac" "$STAGE/zenmac" || {
+  echo "STOP: staged /install/zenmac is not byte-identical to payload/zenmac" >&2; exit 1; }
+echo "build-install-iso: staged /install/zenmac (${ZENMAC_SHA:0:16}... == pin)"
 
 # --- MONSW (the monitor switch) ------------------------------------------------
 # On 1.1 the kernel-space set's monsw package carries monswctl, its boot step and
@@ -739,7 +719,7 @@ fi
 # pinned HERE by sha256 -- a different binary is a different product, re-pin
 # deliberately. Staged when any requested profile leaves RTC at its default or
 # sets RTC=setclk; RTC=none profiles alone stage nothing.
-SETCLK_SHA=02e1a8835bdbf6306dd54af5ca9936edbb82ae11c104ddb861137f0cda35e0ce
+SETCLK_SHA=9e8df3d70ec85e33e550bc022c3358d83a0df28be1a7be4b5772471cded2b05c
 _want_setclk=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^RTC=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
@@ -755,7 +735,7 @@ if [ -n "$_want_setclk" ]; then
   fi
   _sc_got="$(sha256sum "$repo/payload/setclk" | cut -c1-64)"
   [ "$_sc_got" = "$SETCLK_SHA" ] || {
-    echo "STOP: payload/setclk sha256 $_sc_got != pinned $SETCLK_SHA (rebuild with tools/build-setclk.sh, or re-pin deliberately)" >&2; exit 1; }
+    echo "STOP: payload/setclk sha256 $_sc_got != pinned $SETCLK_SHA (build it in the media image with tools/build-setclk.sh, or re-pin deliberately)" >&2; exit 1; }
   cp "$repo/payload/setclk" "$STAGE/setclk"; chmod 0755 "$STAGE/setclk"
   cmp -s "$repo/payload/setclk" "$STAGE/setclk" || { echo "STOP: staged /install/setclk is not byte-identical to payload/setclk" >&2; exit 1; }
   echo "build-install-iso: staged /install/setclk (${SETCLK_SHA:0:16}... == pin) for${_want_setclk}"
@@ -943,89 +923,6 @@ if [ -n "$_want_l11" ]; then
 else
   echo "build-install-iso: no requested profile sets INSTALL_LAYOUT=1.1 -- /install/l11 not staged"
 fi
-
-# --- /stand framing tools + the syslog unit -------------
-# Every staged byte is fingerprint-gated: `sum -r` checksum AND byte size must
-# match the pin or the build STOPS -- the installer's laydown must be the
-# golden-proven bytes or nothing.
-sum_gate() { # sum_gate FILE WANT_SUM WANT_SIZE DESC
-  local got size
-  got="$(sum -r "$1" | awk '{print $1}')"; size="$(wc -c <"$1")"
-  if [ "$((10#$got))" -ne "$((10#$2))" ] || [ "$size" -ne "$3" ]; then
-    echo "STOP: $4: sum -r $got/$size bytes, expected $2/$3 ($1)" >&2; exit 1
-  fi
-}
-
-# /install/stand -- the updbootpart framing sources install.sh lays down at
-# /stand (on a metal run the KERN handoff fail-closed without them).
-#   boot1.boot : the 2.1 original (NOT touched by the 2.1c patch, so core's
-#                extracted copy IS the golden's copy) -- 1,024 B, sum -r 41892.
-#   makeiblk   : the 2.1c PATCHED build the goldens run and the metal reframe
-#                was proven with -- 14,924 B, sum -r 58483 (payload/21c).
-mkdir -p "$STAGE/stand"
-cp "$CORE_T/stand/boot1.boot" "$STAGE/stand/boot1.boot"
-cp "$repo/payload/21c/stand/makeiblk" "$STAGE/stand/makeiblk"
-chmod 0644 "$STAGE/stand/boot1.boot"; chmod 0755 "$STAGE/stand/makeiblk"
-sum_gate "$STAGE/stand/boot1.boot" 41892 1024  "staged boot1.boot is not the 2.1 original"
-sum_gate "$STAGE/stand/makeiblk"  58483 14924 "staged makeiblk is not the 2.1c patched build"
-
-# /install/syslog -- the 2.1c syslog unit install.sh lays down (base-8 ships
-# core's syslogd BINARY but no unit: no init script, no rc links, no conf, no
-# /var/log). The staged init script is the ENABLED copy: the vendor disable
-# (a single bare `exit`, kerntools docs/inetd-telnet-throttle.md §4/§5) is
-# commented HERE, host-side -- the miniroot driver has no sed, so the transform
-# cannot happen at laydown. Gated three ways: the vendor copy must carry exactly
-# ONE bare `exit` line, the enabled copy NONE (and one `#exit`), and the enabled
-# bytes must match the pin.
-mkdir -p "$STAGE/syslog"
-cp "$repo/payload/21c/etc/syslog.conf"  "$STAGE/syslog/syslog.conf"
-cp "$repo/payload/21c/usr/sbin/syslogd" "$STAGE/syslog/syslogd"
-chmod 0644 "$STAGE/syslog/syslog.conf" "$STAGE/syslog/syslogd"
-sum_gate "$STAGE/syslog/syslog.conf" 63870 1928  "staged syslog.conf is not the 2.1c conf 1.1"
-sum_gate "$STAGE/syslog/syslogd"     53154 22728 "staged syslogd is not the 2.1c daemon"
-nexit="$(grep -c '^exit$' "$repo/payload/21c/etc/init.d/syslogd" || true)"
-[ "$nexit" = 1 ] || { echo "STOP: vendor init.d/syslogd carries $nexit bare 'exit' line(s), expected exactly 1 -- refusing to transform" >&2; exit 1; }
-sed 's/^exit$/#exit/' "$repo/payload/21c/etc/init.d/syslogd" > "$STAGE/syslog/syslogd.init"
-# The vendor start branch trusts /etc/syslog.pid with `kill -0`, and nothing removes the
-# file at boot: when an earlier boot's syslogd pid belongs to another live process on
-# this boot (the dlm sysinit line and S01kbnamelist move the numbering; per disk it then
-# collides on every boot), syslogd never starts and no kernel message is kept. start
-# and stop trust the pid only when `ps -p` shows a syslogd, and drop a stale file. The
-# 1991 sh and grep: no grep -q, no read loop.
-python3 - "$STAGE/syslog/syslogd.init" <<'PY' || { echo "STOP: syslogd.init pid-file transform failed" >&2; exit 1; }
-import sys
-p = sys.argv[1]
-s = open(p).read()
-start = (
-    "\t    #\n\t    #\tTest for the presense of a running syslogd\n\t    #\n"
-    "\t    kill -0 $pid 2> /dev/null\n"
-    "\t    #\n\t    #\tIf there wasn't a pid to kill, or the process\n\t    #\tdid not exists, start syslogd\n\t    #\n"
-    "\t    if [ -z \"$pid\" -o $? -ne 0 ]\n\t    then\n\t\t/usr/sbin/syslogd\n\t    fi\n")
-start_new = (
-    "\t    #\n\t    #\tTest for the presense of a running syslogd. The pid file\n"
-    "\t    #\toutlives the boot: trust it only when ps shows that pid is a\n"
-    "\t    #\tsyslogd (an earlier boot's pid can be any process now)\n\t    #\n"
-    "\t    s=\n\t    if [ -n \"$pid\" ]\n\t    then\n"
-    "\t\ts=`ps -p $pid 2> /dev/null | grep syslogd`\n\t    fi\n"
-    "\t    if [ -z \"$s\" ]\n\t    then\n"
-    "\t\trm -f /etc/syslog.pid\n\t\t/usr/sbin/syslogd\n\t    fi\n")
-stop = "'stop')\n\tkill $pid 2> /dev/null\n\t;;\n"
-stop_new = ("'stop')\n\ts=\n\tif [ -n \"$pid\" ]\n\tthen\n"
-            "\t\ts=`ps -p $pid 2> /dev/null | grep syslogd`\n\tfi\n"
-            "\tif [ -n \"$s\" ]\n\tthen\n\t\tkill $pid 2> /dev/null\n\tfi\n"
-            "\trm -f /etc/syslog.pid\n\t;;\n")
-if s.count(start) != 1 or s.count(stop) != 1:
-    sys.exit("syslogd.init: the vendor start/stop text is not as pinned")
-open(p, "w").write(s.replace(start, start_new).replace(stop, stop_new))
-PY
-chmod 0644 "$STAGE/syslog/syslogd.init"
-if grep -q '^exit$' "$STAGE/syslog/syslogd.init" || \
-   [ "$(grep -c '^#exit$' "$STAGE/syslog/syslogd.init")" != 1 ]; then
-  echo "STOP: syslogd.init enablement transform failed (a live 'exit' remains or '#exit' count != 1)" >&2; exit 1
-fi
-sum_gate "$STAGE/syslog/syslogd.init" 28819 967 "enabled syslogd.init does not match the pinned transform"
-echo "build-install-iso: staged /install/stand (boot1.boot 41892, makeiblk 58483) +"
-echo "  /install/syslog (conf 63870, syslogd 53154, init ENABLED 28819 -- vendor exit commented, pid file checked by ps)"
 
 # admin(4): the permissive install-time policy + the 183-B stock default
 cat >"$STAGE/admin/pkgadd" <<'EOF'

@@ -29,12 +29,15 @@ die() { echo "build-setclk: STOP: $*" >&2; exit 1; }
 [ -f "$PKG" ] || die "no stock amigasrc package at $PKG (user-supplied; pass --pkg)"
 [ "$(sha256sum "$PKG" | cut -c1-64)" = "$PKG_SHA" ] || die "$PKG sha256 != $PKG_SHA"
 
-envsh="${AMIX_CROSS_ENV:-$repo/../../gcc-cross-amix/build/env.sh}"
-if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
-  [ -f "$envsh" ] || die "no m68k-cbm-sysv4-gcc on PATH and no $envsh"
+# the toolchain's env.sh: the compiler and AMIX_USER_CFLAGS. $GCA is the media image's; a compiler on PATH alone
+# would build without the target's defines
+envsh="${AMIX_CROSS_ENV:-${GCA:-$repo/../../gcc-cross-amix/build}/env.sh}"
+if [ -z "${AMIX_USER_CFLAGS:-}" ]; then
+  [ -f "$envsh" ] || die "no AMIX_USER_CFLAGS and no $envsh"
   # shellcheck disable=SC1090
   . "$envsh"
 fi
+[ -n "${AMIX_USER_CFLAGS:-}" ] || die "$envsh set no AMIX_USER_CFLAGS"
 command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1 || die "m68k-cbm-sysv4-gcc not found after sourcing $envsh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/setclk.XXXXXX")"; trap 'rm -rf "${tmp:?}"' EXIT
@@ -58,7 +61,7 @@ PY
 # The stock Makefile builds with plain gcc; build the same way the fieldkit tools
 # are: AMIX_USER_CFLAGS (its defines, -m68020) from gcc-cross-amix's env.
 # shellcheck disable=SC2086
-m68k-cbm-sysv4-gcc ${AMIX_USER_CFLAGS:--O -m68020} -o "$tmp/setclk" "$tmp/setclk.c" \
+m68k-cbm-sysv4-gcc $AMIX_USER_CFLAGS -o "$tmp/setclk" "$tmp/setclk.c" \
   || die "cross build failed"
 
 hdr="$(od -An -tx1 -N20 "$tmp/setclk" | tr -d ' \n')"
