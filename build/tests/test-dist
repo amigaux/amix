@@ -522,10 +522,18 @@ clean:
     empty = os.path.join(o, "build", "release-public-empty")
     check("release: RELEASE_PUBLIC runs without the two files, and says so",
           rc == 0 and "public rebuild" in out and os.path.getsize(empty) == 0, out)
+    prev = os.path.join(tmp, "published")
+    write(os.path.join(prev, "catalog"), "#apkg-catalog 1\n")
+    rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="0", RELEASE_PREVIOUS=prev)
+    said = open(os.path.join(o, "build", "release-previous")).read().strip() if rc == 0 else ""
+    check("release: the published tree's catalog digest is kept for the lock",
+          said == subprocess.run(["sha256sum", os.path.join(prev, "catalog")],
+                                 stdout=subprocess.PIPE).stdout.decode()[:64], out + said)
     write(os.path.join(o, "release", "1.1", "stale"), "x")
     rc, out = run("release", G14=g14, ASSEMBLE_ARGS=argrel, ASSEMBLE_RC="3")
     check("release: an earlier tree goes first, so a gap leaves the lock no old lines",
-          rc == 3 and not os.path.exists(os.path.join(o, "release", "1.1", "stale")), out)
+          rc == 3 and not os.path.exists(os.path.join(o, "release", "1.1", "stale"))
+          and not os.path.exists(os.path.join(o, "build", "release-previous")), out)
     # one step's process: what the other steps' inputs would break (a kernel recipe's own STOCK)
     rc, out = run("media", STOCK="/x", STOCK_URL="/y")
     check("a release input set on this host does not stop another step", rc == 3 and "[MISSING] media" in out, out)

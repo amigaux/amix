@@ -594,7 +594,7 @@ stock_fetch() {
 
 release=1.1
 step_release() {
-	rm -rf "${out:?}/release/$release"
+	rm -rf "${out:?}/release/$release" "${out:?}/build/release-previous"
 	for d in userland kspace; do
 		[ -f "$out/$d/catalog" ] || missing_input "out/$d/catalog: make $d catalogs first"
 	done
@@ -610,6 +610,10 @@ step_release() {
 	mkdir -p "$out/build"
 	if [ -z "${STOCK:-}" ]; then
 		STOCK=$(stock_fetch) || exit
+	fi
+	# the published tree this one is built on: its catalog's digest, for the lock
+	if [ -n "${RELEASE_PREVIOUS:-}" ] && [ -f "$RELEASE_PREVIOUS/catalog" ]; then
+		sha256sum "$RELEASE_PREVIOUS/catalog" | cut -c1-64 > "$out/build/release-previous"
 	fi
 	# a public rebuild has no ROM register and no private list: empty ones, so
 	# the check's public tests run. The tree is the same bytes.

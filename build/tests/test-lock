@@ -161,6 +161,33 @@ try:
     check("a catalog.md5 that is not its catalog's md5 is refused",
           rc == 1 and "userland/catalog.md5 does not say the catalog's md5" in e, e)
     write(os.path.join(out, "userland/catalog.md5"), hashlib.md5(b"cat").hexdigest() + "  catalog\n")
+    # a release built on a published tree: the older versions are the carried table's
+    write(os.path.join(out, "release/1.1/pkgs/old-1-1.pkg"), "old")
+    write(os.path.join(out, "release/1.1/pkgs/kold-1.pkg"), "kold")
+    good = "\n".join(["#apkg-catalog 1", "#ext older 1", "#old old|1-1|old|old-1-1.pkg|x|3|none|utility|text",
+                      "#old #isize old 5", "#old #kpkg kold 1 role=kernel file=kold-1.pkg sha256=x", "#end older", ""])
+    write(os.path.join(out, "release/1.1/catalog"), good)
+    write(os.path.join(out, "release/1.1/catalog.md5"), hashlib.md5(good.encode()).hexdigest() + "  catalog\n")
+    rc, o, e = run(top, out)
+    check("an older version not in the carried table is refused, named",
+          rc == 1 and "old-1-1.pkg: an older version not in release/carried-1.1" in e, e)
+    carried = os.path.join(top, "release/carried-1.1")
+    write(carried, "# a table\nkold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("old")))
+    write(os.path.join(out, "build/release-previous"), "9" * 64 + "\n")
+    rc, o, e = run(top, out)
+    lock = open(os.path.join(out, "lock")).read().splitlines()
+    check("the older versions match the table: the lock names the table and the published tree's digest",
+          rc == 0 and "system release/carried-1.1 " + sha("# a table\nkold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("old"))) in lock
+          and "previous " + "9" * 64 in lock[:7], e + "\n".join(lock[:7]))
+    write(carried, "kold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("other")))
+    rc, o, e = run(top, out)
+    check("an older version with other bytes than the table's is refused",
+          rc == 1 and "old-1-1.pkg: not the bytes release/carried-1.1 names" in e, e)
+    write(carried, "kold-1.pkg %s c\nold-1-1.pkg %s c\ngone-1.pkg %s c\n" % (sha("kold"), sha("old"), sha("gone")))
+    rc, o, e = run(top, out)
+    check("a table row the tree no longer has is refused: nothing goes missing",
+          rc == 1 and "gone-1.pkg: release/carried-1.1 names it, and the tree does not have it" in e, e)
+    write(carried, "kold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("old")))
     write(rec, "not a lock\n")
     rc, o, e = run(top, out, "--check", rec)
     check("--check: a file that is not a lock is refused", rc == 1 and "is not an #amix-lock 1 file" in e, e)
