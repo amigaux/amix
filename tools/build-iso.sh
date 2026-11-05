@@ -205,7 +205,7 @@ for f in "$SETS_PY" "$SETS_CONF" "$CATS_CONF" "$DEPS_CONF"; do
 done
 SET_NAME="$SET"
 case "$SET" in base) SET_NAME="$SET_ALIAS_base" ;; esac
-mapfile -t SET_MEMBERS < <(python3 "$SETS_PY" -f "$SETS_CONF" "$SET_NAME" 2>&1) || true
+SET_MEMBERS=(); _o=$(python3 "$SETS_PY" -f "$SETS_CONF" "$SET_NAME" 2>&1) && [ -n "$_o" ] && mapfile -t SET_MEMBERS <<< "$_o"
 # BI_L11_PROVIDES (build-install-iso.sh): the names a 1.1 medium's base packages provide (make dist's
 # cdfs); they are no stock members of the set here either, and a staged file of that name stays off
 # the disc's pkgs/ (l11_base installs make dist's from /install/l11/base)

@@ -3,8 +3,10 @@
 # inputs give the same bytes. dlm's kbootset (media: the set id, the created times) and mkstore honour it;
 # the ISOs pin every file and volume date to it (xorriso --set_all_file_dates); the boot disk's FFS dates
 # come from tools/lib/xdftool-epoch.py. A caller's own SOURCE_DATE_EPOCH wins; without either the build
-# stamps the clock as before (not a medium of record).
+# stamps the clock as before (not a medium of record). The locale and zone are fixed too: `sort` orders a
+# stage by LC_ALL and the boot disk's FFS dates are local time (measured: both moved its bytes).
 media_epoch() {
+	export LC_ALL=C TZ=UTC
 	if [ -z "${SOURCE_DATE_EPOCH:-}" ] && [ -n "${L11_IN:-}" ] && [ -s "$L11_IN/EPOCH" ]; then
 		SOURCE_DATE_EPOCH="$(tr -d ' \n' < "$L11_IN/EPOCH")"
 	fi

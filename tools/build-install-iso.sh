@@ -279,7 +279,7 @@ if sorted(got) != ref:
 sys.stdout.write("".join(p + "\n" for p in got))
 PYEOF
 }
-set_tokens() {    # set_tokens NAME... -> order-file tokens; STOPs on a package
+set_tokens() {    # set_tokens NAME... -> order-file tokens; fails, saying which, on a package
                   # the staging tree does not hold
   local name key out=() miss=()
   for name in "$@"; do
@@ -288,13 +288,13 @@ set_tokens() {    # set_tokens NAME... -> order-file tokens; STOPs on a package
     else miss+=("$name"); fi
   done
   [ "${#miss[@]}" -eq 0 ] || {
-    echo "STOP: package(s) not in $STAGING: ${miss[*]}" >&2; return 1; }
+    echo "package(s) not in $STAGING: ${miss[*]}" >&2; return 1; }
   printf '%s\n' ${out[@]+"${out[@]}"}
 }
 
 SET_NAME="$SET"
 case "$SET" in base) SET_NAME="$SET_ALIAS_base" ;; esac
-mapfile -t SET_MEMBERS < <(resolve_set "$SET_NAME") || true
+SET_MEMBERS=(); _o=$(resolve_set "$SET_NAME") && [ -n "$_o" ] && mapfile -t SET_MEMBERS <<< "$_o"
 [ "${#SET_MEMBERS[@]}" -gt 0 ] || {
   {
     echo "STOP: --set '$SET' does not resolve against $SETS_CONF"
@@ -341,7 +341,8 @@ for _p in "${PROFILES[@]}"; do
   esac
 done
 
-mapfile -t SELECTED < <(set_tokens "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}) || exit 1
+_o=$(set_tokens "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}) || { echo "STOP: set '$SET_NAME': see above" >&2; exit 1; }
+mapfile -t SELECTED <<< "$_o"
 [ "${#SELECTED[@]}" -gt 0 ] || { echo "STOP: set '$SET_NAME' resolved to nothing" >&2; exit 1; }
 
 # The medium's inventory, as catalog names -- the set of packages that will be ON
@@ -392,16 +393,13 @@ done
 # stamps the authored target's partitions with its controller's row (TARGET_HBA)
 python3 "$here/dmamask.py" medium --out "$STAGE/dmamask" || { echo "STOP: cannot write /install/dmamask" >&2; exit 1; }
 
-# optional static apkg (built separately)
+# the static apkg (built separately): the disc's client for the repository, never a disc without it
 if [ -f "$STATIC/bin/apkg" ]; then
   cp -p "$STATIC/bin/apkg" "$STAGE/bin/apkg"; chmod 0755 "$STAGE/bin/apkg"
   echo "build-install-iso: included static apkg (present)"
   APKG_NOTE="apkg: present"
 else
-  echo "build-install-iso: NOTE static apkg not present -- shipping without it"
-  echo "  (the driver does NOT depend on apkg; it is the remote client, not in"
-  echo "   the pkgadd -R loop). Re-run once static apkg is built to include it."
-  APKG_NOTE="apkg: absent (not required)"
+  echo "STOP: no static apkg at $STATIC/bin/apkg" >&2; exit 1
 fi
 
 # the driver + the interview + first-boot payload
@@ -1144,7 +1142,11 @@ for s in $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}'); do
   # NB: set_tokens ends in `printf '%s\n' <array>`, and printf applies its format
   # ONCE even with no arguments -- so an empty set comes back as one EMPTY line,
   # i.e. an array of length 1, not 0. Count real tokens, and pass only those on.
-  mapfile -t _raw < <(set_tokens $(l11_filter $(resolve_set "$s"))) || exit 1
+  # (a process substitution's status is lost: a set with a package missing used to read as an empty one)
+  _rawout=$(set_tokens $(l11_filter $(resolve_set "$s")) 2>"${STAGE:?}/.set_tokens.err") \
+    || { echo "build-install-iso: set '$s' NOT offered ($(cat "$STAGE/.set_tokens.err"))"; rm -f "${STAGE:?}/.set_tokens.err"; continue; }
+  rm -f "${STAGE:?}/.set_tokens.err"
+  mapfile -t _raw <<< "$_rawout"
   stoks=()
   for _t in ${_raw[@]+"${_raw[@]}"}; do [ -n "$_t" ] && stoks+=("$_t"); done
   if [ "${#stoks[@]}" -eq 0 ]; then
