@@ -46,6 +46,14 @@ toolchain/container-build.sh /path/to/amix-system            # docker
 CONTAINER=podman toolchain/container-build.sh /path/to/amix-system
 ```
 
+The media step's tools are in an image of their own, `Containerfile.media`,
+layered on the build container by `container-media.sh`: xorriso from the same
+Ubuntu snapshot, and amitools from its source archive (`amitools.distfile`), run
+from where it is unpacked. Nothing below them is rebuilt, so the build container
+keeps its digest and no package can see these tools; `container-media.sh` refuses
+an image whose toolchains differ from the build container's. They live in
+`/opt/amix-media`, and `TOOLS` there lists them for the lock's `media-tools` line.
+
 It exports each toolchain's tree at the pinned commit with `git archive`,
 fetched from the pin's URL, or from a local clone named by `GCA_REPO` or
 `G14_REPO`. The GNU source tarballs are fetched by the build and checked
