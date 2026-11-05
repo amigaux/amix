@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — image-manifest (535f3f6, eef9048)
+
+New tool `toolchain/image-manifest`, every file of an image. `test-tools` stops if it has no scratch directory.
+
 ## 2026-11-05 — amitools falls back to our copy (044f81f)
 
 `amitools.distfile` falls back to a release asset of amigaux/amix-distfiles; the bytes are the same.

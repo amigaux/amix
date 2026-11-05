@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-05 — release-check and privacy-check never pass without having looked (50e6735, 120f2b2)
+
+`tools/release-check` no longer passes a 0-byte or truncated image, an empty directory, a file hidden by `.gitignore`, or empty lists, except a declared public rebuild, which says the lists were not used. Its verdict names what it read. `privacy-check` stops when it looked at nothing, and has `--empty-ok`.
+
+## 2026-11-05 — a check that looked at nothing fails (5a0d731, 120f2b2, 4daeb6c, da55dbe)
+
+dist-proof can put its second clone on another filesystem (`ELSEWHERE=`), which exposes directory-order faults; the summary names the machine, each filesystem and any step not compared. An exit 3 with no `[MISSING]` line now fails, and a lock of record works. `dist.yml` prints the runner's CPU, memory and disk, puts the second clone on its own filesystem, and has a `cold_image` input that rebuilds the image and lists every file against the cached one. `mklock`, `check-packages`, `pkgmeta` and the 68060 scan stop when they looked at nothing. A file a recipe builds beside its package reaches `out/<space>/beside/` and gets a `beside` lock line.
+
 ## 2026-11-05 — the dist workflow rebuilds as the public would (3e72129)
 
 RELEASE_PUBLIC=1, stock packages from their release assets; its limit for the two runs is 180 minutes.

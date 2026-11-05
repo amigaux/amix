@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — x11r63-6.3-7 carried (f077a89)
+
+`release/carried-1.1` gains x11r63-6.3-7 (21 rows), and the amixbench-1.3 lock exception is gone.
+
 ## 2026-11-05 — carried-1.1 (3e72129)
 
 `carried-1.1` lists the older versions the 1.1 repository keeps, each with the commit that rebuilds it; `make lock` refuses a tree whose older versions are not exactly those, and records the published tree's catalog digest.
