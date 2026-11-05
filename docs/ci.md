@@ -120,9 +120,10 @@ on the order a directory lists in fails here. Given a lock of record (`release/a
 dispatch's `lock` input), each run is also checked against it. The release step
 runs as a public rebuild (`RELEASE_PUBLIC=1`, `docs/BUILDING.md`), with the stock
 packages from their release assets and no published tree, so its tree has no older
-versions. A step that is not in make dist yet, or a recipe still `[MISSING]`, is a
-known gap; any other failure fails the run. The summary lists each step and the lock's sha256; the
-locks, the step logs and the catalogs are kept as the run's `dist-proof`
+versions. Only `media`, not in make dist yet, may be a known gap; a gap in any other
+step, or any other failure, fails the run. The summary lists each step and the lock's
+sha256, and after the proof the free space of both clones' filesystems, whatever the
+result. The locks, the step logs and the catalogs are kept as the run's `dist-proof`
 artifact. A cold image build reports its time in the summary. The job's
 limit is 345 minutes (the image build 210, the two make dist runs 180).
 

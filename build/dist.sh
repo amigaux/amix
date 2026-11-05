@@ -578,6 +578,7 @@ step_apkg() {
 # the stock packages stock-$release.lock names, into out/cache/stock-$release:
 # from AMIX_DISTFILES or the release assets at STOCK_URL, else at the URL in
 # system/stock-$release.assets. Prints the directory; none named: prints nothing.
+# What each fetch said is in out/build/stock-fetch.log; a failure prints its end.
 stock_fetch() {
 	_lk=$top/userland/pkgtools/tools/repo/stock-$release.lock
 	_base=${STOCK_URL:-}
@@ -587,10 +588,13 @@ stock_fetch() {
 	[ -n "$_base" ] && [ -f "$_lk" ] || return 0
 	_d=$out/cache/stock-$release
 	mkdir -p "$_d"
+	_log=$out/build/stock-fetch.log
+	: > "$_log"
 	. "$here/pkg/common/fetch.sh"
 	grep -v '^#' "$_lk" | while read -r _n _sz _md5 _sha; do
 		[ -n "$_n" ] || continue
-		( amix_fetch "$_base/$_n" "$_sha" "$_d/$_n" ) > /dev/null 2>&1 || {
+		( amix_fetch "$_base/$_n" "$_sha" "$_d/$_n" ) >> "$_log" 2>&1 || {
+			tail -6 "$_log" >&2
 			echo "[MISSING] release: stock package $_n: not to be had at $_base with its pinned sha256" >&2
 			exit 3
 		}

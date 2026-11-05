@@ -126,6 +126,13 @@ jobs:
           sh build/dist-proof "$RUNNER_TEMP/proof" || rc=$?
           { echo '### make dist twice'; echo '```'; cat "$RUNNER_TEMP/proof/summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit $rc
+      # A failed run's trees are still there: this says whether either disk filled.
+      - name: the disks after the proof
+        if: always()
+        run: |
+          { echo '### the disks after the proof'; echo '```'
+            df -hT "$RUNNER_TEMP" "$RUNNER_TEMP/elsewhere" || true
+            echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: the locks, the step logs, the catalogs and the image's files
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

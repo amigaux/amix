@@ -122,11 +122,12 @@ amix_fetch() {
 	exit 1
 }
 
-# amix_fetch_one <url> <file> -- one download, curl or wget; a failure says so
+# amix_fetch_one <url> <file> -- one download, curl or wget; a failure says so.
+# --retry alone takes a dropped connection as final; the sha256 still gates the bytes.
 amix_fetch_one() {
 	echo "  fetch   $1"
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL --retry 3 -o "$2" "$1" && return 0
+		curl -fsSL --retry 3 --retry-all-errors -o "$2" "$1" && return 0
 	elif command -v wget >/dev/null 2>&1; then
 		wget -q -O "$2" "$1" && return 0
 	else

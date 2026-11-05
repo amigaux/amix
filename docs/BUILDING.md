@@ -107,9 +107,9 @@ of record is built with both lists.
 `build/dist-proof WORKDIR [COMMIT]` is the proof itself: it clones
 the commit twice, at two different paths under WORKDIR, runs every step in
 each, and compares the two locks; with `LOCK=` each run is also checked
-against the lock of record. A step that exits 3 with a `[MISSING]` line is a gap,
-the run goes on and the summary names it as not compared; any other failure
-stops it. `WORKDIR/summary` says what each step
+against the lock of record. Only `media`, not in make dist yet, may be a gap: the
+run goes on and the summary names it as not compared. A gap in any other step,
+or any other failure, stops it. `WORKDIR/summary` says what each step
 did, and on which machine. `ELSEWHERE=<empty directory on another filesystem>`
 puts the second clone there, which also compares the order directories list in;
 without it the summary says that order was not compared. CI runs it by hand as
