@@ -294,7 +294,7 @@ from the root, except the running generation's, which goes after the next boot.
 .BI loader-install " boot2" " \fR[\fP\fB\-\-version\fP \fIn\fP\fR] [\fP\fB\-\-boot1\fP \fIfile\fP\fR]\fP"
 Installs a new boot loader as the primary one; the old primary becomes the
 secondary, which boot1 runs when the new one does not complete a boot.
-While a new loader is on trial, a second install replaces only it: the
+While a new loader is on trial or damaged, an install replaces only it: the
 secondary stays the loader that last completed a boot.
 boot1 is replaced only with
 .BR \-\-boot1 .

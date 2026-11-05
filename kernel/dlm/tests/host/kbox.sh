@@ -144,6 +144,16 @@ $B/kbootset -R $R commit --again 2>/dev/null | grep -q "generation 2 committed"
 python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
 $B/kbootset -R $R mark-good | grep -q "generation 2 is good and the default"
 
+# 4.1. which loader ran, from boot1's choice: the primary after a damaged
+# secondary (0x300), the secondary after a damaged primary (0x101) or a
+# spent trial (0x201)
+for c in 0:primary 0x101:secondary 0x201:secondary 0x300:primary; do
+	python3 -I $T/disk.py kinfo $T/kinfo 2,${c%:*},6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
+	$B/kbootset -R $R status | grep -q "by the ${c#*:} loader" ||
+		{ echo "kbox: boot1 choice ${c%:*} is not the ${c#*:} loader" >&2; exit 1; }
+done
+python3 -I $T/disk.py kinfo $T/kinfo 2,0,6,$START,0x40000000,$A4091,$A4091 0,$A4091,0x40000000,0
+
 # 4a. the loader fell back from the default (AXL1 flag 0x04) to the
 # pristine generation: mark-good verifies the default, generation 2, and
 # its intact members keep it; a fallback the menu chose is not judged

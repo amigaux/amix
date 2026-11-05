@@ -310,7 +310,7 @@ One boot slice per disk (release decision 6). The whole `UNI\0` partition is the
 | 0x0400 | 512 B | store header A | `kbootset` |
 | 0x0600 | 512 B | store header B | `kbootset` |
 | 0x0800 | 28 KiB | boot2, primary copy | `kbootset` |
-| 0x7800 | 2 KiB | loader tally block (`AXT1`): header sequence number it refers to, attempt count, CRC-32 | boot1 (attempt), `kbootset` (reset) |
+| 0x7800 | 2 KiB | loader tally block (`AXT1`): header sequence number it refers to, attempt count, CRC-32 | boot1 (attempt), `kbootset create` (reset) |
 | 0x8000 | 28 KiB | boot2, secondary copy (the previous loader) | `kbootset` |
 | 0xF000 | 2 KiB | control block A | `kbootset`, boot2 |
 | 0xF800 | 2 KiB | control block B | `kbootset`, boot2 |
@@ -326,10 +326,15 @@ block and tally block extents, CRC-32 of the header. boot1 takes the valid
 copy with the higher sequence number.
 
 `kbootset loader-install` moves the primary to the secondary only when the
-primary is not on trial. While it is, the secondary is the loader that last
-completed a boot, and a second install replaces only the primary, so
-retrying after a failed trial keeps the way back. A secondary whose CRC-32
-fails is replaced by the primary, as the only copy left.
+primary is whole and not on trial. On trial or damaged, the secondary is the
+loader that last completed a boot, and the install replaces only the
+primary, so retrying after a failed trial or an interrupted install keeps
+the way back. A secondary whose CRC-32 fails is replaced by a whole primary;
+when neither copy is whole the install is the repair, and the new primary
+has no fallback. A secondary that cannot be read stops the install.
+`kbootset mark-good` accepts a primary on trial only when the tally shows
+boot1 started it under this header and boot1's choice says it ran: a system
+booted before the install has not tested it.
 
 **Why the loader attempt is not in the header or the control block.** The
 header is written only by `kbootset` and changes rarely, so no boot code

@@ -110,6 +110,9 @@
 #endif
 
 #define SECTOR	512UL
+/* boot1's choice: bit 0 the copy that ran, 0x100 the other was damaged, 0x200
+ * the trial's start was spent; 0x300 is the primary, after a damaged secondary */
+#define SECONDARY_RAN(ki)	((ki)->boot1_choice & 1)
 
 static void usage(void);
 
@@ -1036,7 +1039,7 @@ main(int argc, char **argv)
 			} else if (have_kinfo && ki.has_axl1) {
 				printf("booted: generation %lu, by the %s loader; kernel %s, 680%lu, %lu bytes "
 				       "of fast memory\n", (unsigned long)ki.gen_id,
-				       (ki.boot1_choice & 0x200) ? "secondary" : "primary", ki.build,
+				       SECONDARY_RAN(&ki) ? "secondary" : "primary", ki.build,
 				       (unsigned long)ki.cpu, (unsigned long)ki.fast);
 				status_modules(&k, &ki);
 			} else if (have_kinfo)
@@ -1108,9 +1111,9 @@ main(int argc, char **argv)
 			return 0;
 		} else if (!strcmp(cmd[0], "mark-good") && (booted || (have_kinfo && ki.has_axl1))) {
 			/* the booted generation, and whether boot1 ran the primary boot2
-			 * (choice bit 9 set: the secondary, B4) -- from kinfo by default */
+			 * (choice bit 0 set: the secondary) -- from kinfo by default */
 			rc = ks_mark_good(&k, booted ? (ax_u32)strtoul(booted, 0, 0) : ki.gen_id,
-					  booted ? !secondary : !secondary && !(ki.boot1_choice & 0x200));
+					  booted ? !secondary : !secondary && !SECONDARY_RAN(&ki));
 			/* the loader fell back from the default on its own, not by a
 			 * menu choice or a one-shot request: verify the default */
 			if (rc == KS_OK && have_kinfo && !booted && (ki.axl1_flags & AXLF_FALLBACK) &&
