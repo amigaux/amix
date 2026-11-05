@@ -7,7 +7,7 @@
 #     make kit | kernel-k30 | kernel-k46 | modules | drivers | kspace | userland
 #     make catalogs | media | lock | tools | recipes/<name> | drivers/<name>
 
-STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland catalogs media lock
+STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release media lock
 
 .PHONY: $(STEPS)
 

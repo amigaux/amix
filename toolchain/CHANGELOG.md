@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — a media image (55fd20d)
+
+`Containerfile.media` and `container-media.sh` put xorriso and amitools 0.8.1 on top of the build container, in `/opt/amix-media`; the build container is not rebuilt.
+
 ## 2026-11-02 — README: SOURCE_DATE_EPOCH stays fixed across pin changes (a7a6ad1)
 
 The build image's SOURCE_DATE_EPOCH is fixed in the Containerfile and kept across toolchain pin changes, so every static archive stays byte-identical where a pin changes nothing.
