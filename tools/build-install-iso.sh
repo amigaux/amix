@@ -48,8 +48,9 @@
 
 set -euo pipefail
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
+PROFILE_DIR="${MEDIA_PROFILE_DIR:-$repo/profiles}"   # a rig run names its bench profiles
 LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench's real addresses
 
 # amix userland/pkgtools at the set's revision, built by tools/build-l11-inputs.sh
@@ -309,7 +310,7 @@ L11_PROVIDES=" "
 _l11b="${L11_IN:-$repo/work/l11}/base/sets"
 if [ -f "$_l11b" ]; then
   for _p in "${PROFILES[@]}"; do
-    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" = 1.1 ] || continue
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" = 1.1 ] || continue
     L11_PROVIDES=" $(awk 'NF == 1 { printf "%s ", tolower($1) }' "$_l11b")"; break
   done
 fi
@@ -330,7 +331,7 @@ fi
 # /usr/ccs/bin/m4 (the m4 package; Cdev ships the same file) and files nothing without
 # it. install.sh refuses a 1.1 order with neither.
 for _p in "${PROFILES[@]}"; do
-  case "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" in
+  case "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" in
     1.1)
       case " $(printf '%s ' "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"} | tr 'A-Z' 'a-z')" in
         *" m4 "*|*" cdev "*) ;;
@@ -426,7 +427,7 @@ fi
 # the load-bearing one being an INDEPENDENT `shlex` token-stream comparison. A
 # refusal or a failed gate is fatal here: never ship a half-stripped installer.
 STRIP_COMMENTS=""
-_base_profile_file="$repo/profiles/${PROFILES[0]}.profile"
+_base_profile_file="$PROFILE_DIR/${PROFILES[0]}.profile"
 if [ -f "$_base_profile_file" ]; then
   STRIP_COMMENTS="$(python3 -c '
 import sys
@@ -628,7 +629,7 @@ chmod 0644 "$STAGE"/LICENSES/*
 # when it can be built and skipped with a note when it cannot.
 _want_zenmac=
 for _p in "${PROFILES[@]}"; do
-  grep -q '^FB_ETHER_IF=zen0' "$repo/profiles/$_p.profile" 2>/dev/null && _want_zenmac=y
+  grep -q '^FB_ETHER_IF=zen0' "$PROFILE_DIR/$_p.profile" 2>/dev/null && _want_zenmac=y
 done
 if [ ! -f "$repo/payload/zenmac" ] || [ "$repo/src/zenmac/zenmac.c" -nt "$repo/payload/zenmac" ]; then
   if ! "$here/build-zenmac.sh"; then
@@ -652,8 +653,8 @@ fi
 # Nothing is staged for it. A 1.0 profile can no longer set it: its files came from
 # amix-kerntools' 1.0 pipeline, which is retired.
 for _p in "${PROFILES[@]}"; do
-  _v="$(sed -n 's/^MONSW=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
-  _l="$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _v="$(sed -n 's/^MONSW=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _l="$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     ''|none) ;;
     0|1|2|3|16|17|18|19|32|33|34|35|48|49|50|51)
@@ -670,7 +671,7 @@ done
 # deliberate re-pin. zz9k_monsw (the P-7 fallback switch) is not in the kit and keeps
 # its own pin. A missing file or any mismatch STOPS the build. Staged only when a
 # requested profile sets X11KIT=rtg, so every other medium is unchanged.
-X11KIT_RTG="$repo/../amix-z3660rtg"
+X11KIT_RTG="$repo/../../amix-z3660rtg"
 X11KIT_KIT="$X11KIT_RTG/x11/KIT.sha256"
 X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d   # the published kit (s14rt04)
 # The 1.0 media carry kit 8beaa7bf (startx-rtg e948dbf4, xinitrc-rtg 69f6b68c); the published kit
@@ -684,7 +685,7 @@ X11KIT_L11_STARTX="$X11KIT_RTG/x11/1.1/startx-rtg"
 X11KIT_L11_STARTX_SHA=4c0173a3c001f68a9bbdaa122171e672da725a3fd4b99e3323918ee4aadf61a4
 _want_x11kit=
 for _p in "${PROFILES[@]}"; do
-  _v="$(sed -n 's/^X11KIT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _v="$(sed -n 's/^X11KIT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     ''|none) ;;
     rtg) _want_x11kit="$_want_x11kit $_p" ;;
@@ -721,7 +722,7 @@ if [ -n "$_want_x11kit" ]; then
   chmod 0644 "$STAGE/x11kit/xinitrc-rtg"
   echo "build-install-iso: staged /install/x11kit for${_want_x11kit}: KIT.sha256 ${X11KIT_KIT_SHA:0:16}... ==${_kit_list}, zz9k_monsw=${X11KIT_MONSW_SHA:0:8} (all == pins)"
   for _p in $_want_x11kit; do
-    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" | tail -1 | tr -d '"')" = 1.1 ] || continue
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" | tail -1 | tr -d '"')" = 1.1 ] || continue
     [ -f "$X11KIT_L11_STARTX" ] && [ "$(sha256sum "$X11KIT_L11_STARTX" | cut -c1-64)" = "$X11KIT_L11_STARTX_SHA" ] \
       || { echo "STOP: $X11KIT_L11_STARTX is missing or not the pinned ${X11KIT_L11_STARTX_SHA:0:16}..." >&2; exit 1; }
     mkdir -p "$STAGE/x11kit/1.1"
@@ -743,7 +744,7 @@ fi
 SETCLK_SHA=02e1a8835bdbf6306dd54af5ca9936edbb82ae11c104ddb861137f0cda35e0ce
 _want_setclk=
 for _p in "${PROFILES[@]}"; do
-  _v="$(sed -n 's/^RTC=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _v="$(sed -n 's/^RTC=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     ''|setclk) _want_setclk="$_want_setclk $_p" ;;
     none) ;;
@@ -772,7 +773,7 @@ fi
 TZSET_SHA=07a54a87dfdfff81d6f48fcf89f0305b1daa4800d4015a83394606b9fc309d06
 _want_tz=
 for _p in "${PROFILES[@]}"; do
-  _v="$(sed -n 's/^TZFILES=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _v="$(sed -n 's/^TZFILES=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     ''|tzdata) _want_tz="$_want_tz $_p" ;;
     stock) ;;
@@ -804,7 +805,7 @@ fi
 L11_IN="${L11_IN:-$repo/work/l11}"
 _want_l11=
 for _p in "${PROFILES[@]}"; do
-  _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
     1.1) _want_l11="$_want_l11 $_p" ;;
     *) echo "STOP: profile $_p: INSTALL_LAYOUT='$_v': this builder makes 1.1 media only" >&2; exit 1 ;;
@@ -822,7 +823,7 @@ if [ -n "$_want_l11" ]; then
   # rows of the medium's catalog, of the kernel's line
   _kkey() { grep -m1 "^#kpkg $1 " "$L11_IN/kpkg/catalog" | tr ' ' '\n' | sed -n "s/^$2=//p"; }
   for _p in $_want_l11; do
-    _pf="$repo/profiles/$_p.profile"
+    _pf="$PROFILE_DIR/$_p.profile"
     _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_pf" | tail -1 | tr -d '"')"
     _km="$(sed -n 's/^KERNEL_MODPKGS=//p' "$_pf" | tail -1 | tr -d '"')"
     [ "$(_kkey "$_kk" role)" = kernel ] \
@@ -855,10 +856,10 @@ if [ -n "$_want_l11" ]; then
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
   # the medium's copy names every input relative to the workspace: the build host's own paths
   # (its user and directories) are no business of a published disc
-  sed "s|$(dirname "$repo")/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
+  sed "s|$(dirname "$(dirname "$repo")")/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
   # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
   if [ -n "$CDBOOT" ]; then
-    echo "cd-boot ${CDBOOT#$(dirname "$repo")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
+    echo "cd-boot ${CDBOOT#$(dirname "$(dirname "$repo")")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
   else
     echo "# cd-boot: none -- the install kernel boots from the floppy pair; amix-dlm D-3 §10 (option B) adds the CD boot tree (S3-31 part 3)" >> "$STAGE/l11/INPUTS"
   fi
@@ -1050,13 +1051,13 @@ cp -p "$CORE_T/var/sadm/install/admin/default" "$STAGE/admin/default"
 #   requested     -- ONLY the --profile names. A public disc must not carry the
 #                    LAN profiles beside its own: they name the bench's addresses,
 #                    zone and card MACs, and they would grep straight off the disc.
-_mp="$(sed -n 's/^MEDIUM_PROFILES=//p' "$repo/profiles/${PROFILES[0]}.profile" 2>/dev/null | tail -1 | tr -d '"')"
+_mp="$(sed -n 's/^MEDIUM_PROFILES=//p' "$PROFILE_DIR/${PROFILES[0]}.profile" 2>/dev/null | tail -1 | tr -d '"')"
 case "$_mp" in
-  ''|all)    for _f in "$repo"/profiles/*.profile; do
+  ''|all)    for _f in "$PROFILE_DIR"/*.profile; do
                lab_localize < "$_f" > "$STAGE/profiles/${_f##*/}" && touch -r "$_f" "$STAGE/profiles/${_f##*/}"; done ;;
   requested) for _p in "${PROFILES[@]}"; do
-               lab_localize < "$repo/profiles/$_p.profile" > "$STAGE/profiles/$_p.profile" \
-                 && touch -r "$repo/profiles/$_p.profile" "$STAGE/profiles/$_p.profile"; done
+               lab_localize < "$PROFILE_DIR/$_p.profile" > "$STAGE/profiles/$_p.profile" \
+                 && touch -r "$PROFILE_DIR/$_p.profile" "$STAGE/profiles/$_p.profile"; done
              echo "build-install-iso: MEDIUM_PROFILES=requested -> /install/profiles carries only: ${PROFILES[*]}" ;;
   *) echo "STOP: profile ${PROFILES[0]}: MEDIUM_PROFILES='$_mp' is not 'all' or 'requested'" >&2; exit 1 ;;
 esac
@@ -1103,7 +1104,7 @@ echo "build-install-iso: /install/profiles/BASE -> ${PROFILES[0]} (setup.sh's de
 # line) and falls back to BASE. The first --profile of each line wins; the line is the
 # profile's INSTALL_CPU (030 -> k30, 040/060 -> k46).
 for _p in "${PROFILES[@]}"; do
-  _cpu="$(sed -n 's/^INSTALL_CPU=//p' "$repo/profiles/$_p.profile" | tail -1 | tr -d '"')"
+  _cpu="$(sed -n 's/^INSTALL_CPU=//p' "$PROFILE_DIR/$_p.profile" | tail -1 | tr -d '"')"
   case "${_cpu:-030}" in 030) _ln=k30 ;; *) _ln=k46 ;; esac
   [ -f "$STAGE/profiles/BASE.$_ln" ] && continue
   printf '%s\n' "$_p" > "$STAGE/profiles/BASE.$_ln"

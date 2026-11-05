@@ -52,7 +52,7 @@
 # so absent: the conservative 0x07FFFFFE, with a warning.
 # Publication: unpublished; publishing it is a per-artefact owner decision.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-netinstall: STOP: $*" >&2; exit 1; }
 
@@ -79,7 +79,7 @@ export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660
 export K30_MODS="ramdisk-k30 a4091-k30 z3660scsi-k30 a4kt710-k30 gayle-k30 z3660eth-k30"
 if [ -n "$BMODS" ]; then
   # step 2: stage each line as its generation will be, and hand out the boot- and demand-class objects
-  ws="$(dirname "$repo")"
+  ws="$(dirname "$(dirname "$repo")")"
   . "$here/lib/ramdisk-media.sh"
   mkdir -p "$W"; rd_init "$W/cd"   # rd_init makes W the staging dir
   for l in k46 k30; do

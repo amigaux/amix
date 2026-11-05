@@ -11,7 +11,7 @@
 #
 # Usage: tools/build-setclk.sh [--pkg amigasrc-2.1.pkg] [--out FILE] [--keep-src DIR]
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 PKG="$repo/build/pins/staging/stock/amigasrc-2.1.pkg"
 PKG_SHA=01de21f232828acb8e4bf4e266e6c069ab3db81ac3240fb03868c1b132626ed0
 SRC_SHA=03a00a434cff9137eaca276dab073cacd1003c0a0e2eff9493c058086b104901
@@ -29,7 +29,7 @@ die() { echo "build-setclk: STOP: $*" >&2; exit 1; }
 [ -f "$PKG" ] || die "no stock amigasrc package at $PKG (user-supplied; pass --pkg)"
 [ "$(sha256sum "$PKG" | cut -c1-64)" = "$PKG_SHA" ] || die "$PKG sha256 != $PKG_SHA"
 
-envsh="${AMIX_CROSS_ENV:-$repo/../gcc-cross-amix/build/env.sh}"
+envsh="${AMIX_CROSS_ENV:-$repo/../../gcc-cross-amix/build/env.sh}"
 if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
   [ -f "$envsh" ] || die "no m68k-cbm-sysv4-gcc on PATH and no $envsh"
   # shellcheck disable=SC1090

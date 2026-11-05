@@ -8164,7 +8164,7 @@ def _audit_public_flavor(profiles):
     else:
         ok("every public CD flavor carries only its own profile (MEDIUM_PROFILES=requested)")
     iso_src = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
-    if re.search(r'requested\)\s+for _p in "\$\{PROFILES\[@\]\}"; do\s+lab_localize < "\$repo/profiles/\$_p\.profile"', iso_src):
+    if re.search(r'requested\)\s+for _p in "\$\{PROFILES\[@\]\}"; do\s+lab_localize < "\$PROFILE_DIR/\$_p\.profile"', iso_src):
         ok("build-install-iso honours MEDIUM_PROFILES=requested (only the --profile names staged)")
     else:
         fail("build-install-iso does not implement MEDIUM_PROFILES=requested")

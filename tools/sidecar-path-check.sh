@@ -8,8 +8,8 @@
 # A path here is an absolute one under a home, a mount or a scratch directory, or under this
 # workspace. Paths on the installed system (/opt/amix, /var/sadm ...) are not machine paths.
 set -u
-here="$(cd "$(dirname "$0")" && pwd)"
-ws="$(cd "$here/../.." && pwd)"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+ws="$(cd "$here/../../.." && pwd)"
 check() {
 	local n=0 hits
 	for f in "$@"; do

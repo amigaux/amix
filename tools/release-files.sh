@@ -13,7 +13,7 @@
 # tools/known-bad-scan.py over the same files (no module of tools/known-bad-modules.txt).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # the workspace: the directory holding this repository's git directory (a worktree's too); amix's
 # tools/release-check is the one content check every release file passes
 ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"

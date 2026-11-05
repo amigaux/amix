@@ -20,7 +20,7 @@
 # byte -- on k30 since catalog b1f564f4 also the kernel package's ufs). The used and free bytes of volume 2 are
 # printed: the image may grow into them (S4-53).
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$(dirname "$repo")")"
 die() { echo "build-ramdisk-floppy: STOP: $*" >&2; exit 1; }
 . "$here/lib/ramdisk-media.sh"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1

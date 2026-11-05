@@ -27,7 +27,7 @@
 # The master stage is kept at --out/stage (netinstall's --install takes it). Publication of any of
 # these files is a separate, per-artefact decision. Exit 0 all built and clean, 1 not, 2 usage.
 set -uo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 # the workspace: the directory holding this repository's git directory (a worktree's too); amix's
 # tools/release-check is the one content check every release file passes

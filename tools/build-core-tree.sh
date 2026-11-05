@@ -17,9 +17,9 @@
 
 set -euo pipefail
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
-ws="$(cd "$repo/.." && pwd)"
+ws="$(cd "$repo/../.." && pwd)"
 
 CORE_SHA256=12cfa10323048a2149959932d4444f656a5881d1d198e1f35bf22ed0d28610f1
 PKG="$repo/build/pins/staging/stock/core-2.1.pkg"

@@ -18,7 +18,7 @@
 # The tree passes amix's tools/release-check and apkg's own reading of it (the inputs' host apkg). Then the userland datastreams in the tree are checked against the CD's base/
 # ones, byte for byte. Needs $PRIVACY_PATTERNS (the bench's local names). Exit 0 written, 1 refused, 2 usage.
 set -uo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 # the workspace: the directory holding this repository's git directory (a worktree's too)
 ws="$(cd "$(dirname "$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
 OUT= REL=1.1

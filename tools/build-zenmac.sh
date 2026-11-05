@@ -18,13 +18,13 @@
 # Usage: tools/build-zenmac.sh [--out FILE]      (default payload/zenmac)
 set -euo pipefail
 
-here="$(cd "$(dirname "$0")" && pwd)"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 repo="$(dirname "$here")"
 src="$repo/src/zenmac/zenmac.c"
 out="$repo/payload/zenmac"
 if [ "${1:-}" = --out ]; then out="$2"; fi
 
-envsh="${AMIX_CROSS_ENV:-$repo/../gcc-cross-amix/build/env.sh}"
+envsh="${AMIX_CROSS_ENV:-$repo/../../gcc-cross-amix/build/env.sh}"
 if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
   [ -f "$envsh" ] || { echo "build-zenmac: STOP: no m68k-cbm-sysv4-gcc on PATH and no $envsh" >&2; exit 1; }
   # shellcheck disable=SC1090

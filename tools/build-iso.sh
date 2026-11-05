@@ -100,7 +100,7 @@
 
 set -euo pipefail
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 repo="$(cd "$here/.." && pwd)"
 

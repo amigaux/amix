@@ -23,7 +23,7 @@
 # against its generation (tools/ramdisk-image-check.py: every boot- and demand-class record's
 # object in the image byte for byte, a ufs image's block size at least 4096).
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$repo")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$(dirname "$repo")")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-ramdisk-cd: STOP: $*" >&2; exit 1; }
 . "$here/lib/ramdisk-media.sh"

@@ -20,7 +20,7 @@
 # Beside the image: <HDF>.MANIFEST (sha256, crc32, bytes, the partition, each file's sha256).
 # The image is a build artefact: never committed.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; repo="$(dirname "$here")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 TREE= OUT= PRI=5 HBA=z3660scsi
 while [ $# -gt 0 ]; do
