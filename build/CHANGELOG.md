@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-05 — what the proof has shown (b644803)
+
+`docs/BUILDING.md` and `release/README.md` say exactly what the proof has shown, on which machines and commits, and what it hasn't; the claim of the same bytes on every machine is gone.
+
 ## 2026-11-05 — a failed download says why and retries; only media may be a gap (f585f48, 6d21a89)
 
 A stock package that can't be downloaded now says why: the fetch's output goes to `out/build/stock-fetch.log` and a failure prints its end. Downloads retry a dropped connection (`--retry-all-errors`); the sha256 still gates the bytes. `dist-proof` allows a gap only in `media`, which isn't in make dist yet; a gap in any other step stops the proof and the summary names its `[MISSING]` line. `dist.yml` prints `df` for both clones' filesystems after the proof, whatever its result. `tools/privacy-allow.txt` no longer exempts `root.shadow` under `media/`; any root hash in the tree is a hit.
