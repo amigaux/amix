@@ -170,6 +170,7 @@ if [ -f "$K46" ]; then
 	# another bind: a new namelist
 	nlmade "$K46" 0x07f00000 $T/n46b > $T/lay46b
 	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46b
+	$KB status | grep -q "^namelist: /stand/unix is not the booted kernel's: run kbootset namelist$"
 	$KB namelist | grep -q "bound at 0x07f00000$" && cmp -s $R/stand/unix $T/n46b
 	echo "knamelist: k46 (written over a link to 2.1_unix, current, stale, missing, mark-good, refusals) ok"
 	# a CD boot (C2-4 section 13): the store did not boot; the namelist comes
@@ -236,11 +237,43 @@ if [ -f "$K46" ]; then
 	grep -q "^modx_ops absent$" $T/q && grep -q "^modx_hook absent$" $T/q
 	cmp -s $R/stand/unix $T/n46				# the kernel's own again
 	KINFO_MODS="modx:0x40500000:0x1000" python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
+	# a module loaded since: the file is still the booted kernel's
+	$KB status | grep -q "^namelist: /stand/unix is the booted kernel's, bound at 0x08000000; kbootset namelist adds the modules loaded since$"
 	$KB namelist | grep -q "written for generation 1"	# loaded again
 	python3 -I $T/nlq.py $R/stand/unix modx_ops > $T/q
 	grep -q "^modx_ops value 40500010 global 1$" $T/q
 	unset KBOOTSET_KSYMS
 	echo "knamelist: k46 module symbols (in while loaded, kept to the module's run, out once unloaded, rewritten) ok"
+
+	# a generation gone from the store leaves the root too, except the one
+	# running, whose demand modules still load from there, and a build not
+	# yet committed (C2-4 section 19)
+	gendir() {
+		mkdir -p $R/stand/gen/$1/mod
+		for f in build facts unix.sym mod/x; do echo x > $R/stand/gen/$1/$f; done
+	}
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
+	$KB commit --spec $T/spec > /dev/null 2>&1		# generation 2, the trial
+	gendir 2; gendir 3
+	python3 -I $T/kinfo.py $T/kinfo 3 2 $T/lay46		# it runs
+	$KB commit --spec $T/spec > /dev/null 2>&1		# 3 replaces it in the store
+	[ -f $R/stand/gen/2/mod/x ]				# running: stays
+	gendir 4						# the next id: a build
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46 0 cd	# a medium: no running generation of this store
+	$KB collect > /dev/null
+	[ -f $R/stand/gen/2/mod/x ]
+	python3 -I $T/kinfo.py $T/kinfo 3 1 $T/lay46
+	$KB status > /dev/null					# a reader does not
+	$KB next none > /dev/null				# nor what collects nothing
+	[ -f $R/stand/gen/2/mod/x ]
+	$KB collect > /dev/null
+	[ ! -e $R/stand/gen/2 ]
+	[ -f $R/stand/gen/1/mod/modx ] && [ -f $R/stand/gen/3/mod/x ] && [ -f $R/stand/gen/4/mod/x ]
+	gendir 2
+	$KB mark-good > /dev/null				# each boot finishes what a cut left
+	[ ! -e $R/stand/gen/2 ]
+	[ -f $R/stand/gen/1/mod/modx ] && [ -f $R/stand/gen/3/mod/x ] && [ -f $R/stand/gen/4/mod/x ]
+	echo "knamelist: k46 collected generations' directories (removed; the running one, the store's and a build stay) ok"
 	rm -rf "${R:?}"
 else
 	echo "knamelist: no k46 kernel, skipped"
@@ -270,6 +303,38 @@ if [ -f "$K30E" ] && [ -f "$K30B" ]; then
 	$KB namelist | grep -q "^kbootset: namelist /stand/unix written for generation 1, bound at 0x00200000$"
 	cmp -s $R/stand/unix $T/n30
 	echo "knamelist: k30 brel through unix.sym (written; no sym=, another kernel, a changed unix.sym refused) ok"
+	# the generation keeps its symbols: a rollback's boot of it, once the
+	# package has replaced the kernel and unix.sym, still has a namelist
+	cmp -s $R/stand/gen/1/unix.sym $R/stand/k30/unix.sym
+	[ "$(stat -c %a $R/stand/gen/1/unix.sym)" = 644 ]
+	[ ! -e $R/stand/gen/1/unix.sym.new ]
+	cp $R/stand/k30/unix.sym $T/sym1
+	{ cat "$K30B"; printf x; } > $R/stand/k30/unix
+	printf other > $R/stand/k30/unix.sym
+	sidecar "" "sym=unix.sym $(size $R/stand/k30/unix.sym) $(sha $R/stand/k30/unix.sym)"
+	$KB namelist | grep -q "^kbootset: namelist for generation 1 is current$"
+	$KB status | grep -q "^namelist: /stand/unix is generation 1's, bound at 0x00200000$"
+	rm "${R:?}"/stand/unix
+	$KB status | grep -q "^namelist: /stand/unix is missing: run kbootset namelist$"
+	$KB namelist | grep -q "^kbootset: namelist /stand/unix written for generation 1, bound at 0x00200000$"
+	cmp -s $R/stand/unix $T/n30
+	cmp -s $R/stand/gen/1/unix.sym $T/sym1			# not replaced by the new package's
+	# none kept (it last booted under an older kbootset): what the boot wrote
+	# still stands while it matches kinfo; without it the reason is said
+	rm "${R:?}"/stand/gen/1/unix.sym
+	$KB namelist | grep -q "^kbootset: namelist for generation 1 is current$"
+	$KB status | grep -q "^namelist: /stand/unix is generation 1's, bound at 0x00200000$"
+	[ ! -e $R/stand/gen/1/unix.sym ]			# the package's is another kernel's
+	rm "${R:?}"/stand/unix
+	no 3 "generation 1's kernel is not the installed one" $KB namelist
+	$KB status | grep -q "^namelist: none (generation 1's kernel is not the installed one"
+	# the kernel installed again: kept again
+	cp "$K30B" $R/stand/k30/unix
+	cp $T/sym1 $R/stand/k30/unix.sym
+	sidecar "" "$SYM"
+	$KB namelist | grep -q "written for generation 1"
+	cmp -s $R/stand/gen/1/unix.sym $T/sym1
+	echo "knamelist: k30 a generation's own unix.sym (kept at its boot, used after the package changed) ok"
 else
 	echo "knamelist: no k30 kernels, skipped"
 fi

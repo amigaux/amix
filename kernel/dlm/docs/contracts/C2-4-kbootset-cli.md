@@ -1,6 +1,6 @@
-# C2-4 — `kbootset` as a called program, version 26
+# C2-4 — `kbootset` as a called program, version 27
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17); version 23 (2026-11-02): `kbootset inquiry CARD UNIT` and `kbootset cards --probe`, one read-only SCSI INQUIRY per unit through `/dev/scsi`, so an installer knows a unit's type before anything reads it (§18). version 24 (2026-11-02): the A3000 onboard WD (`mobo:a3000-wd`) as a known limit of §18. Version 25 (2026-11-02): the limit is lifted for k30 -70 on (§18). Version 26 (2026-11-03): the namelist carries `crash_sync`'s word and the loaded modules' globals, and `modadmin` rewrites it after a load or an unload (§12). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): where `bootset=` is read (§3); version 3 (2026-10-26): the box form and the default journal exist (§2), `/etc/default/bootset` (§6); version 4 (2026-10-26): `/dev/kinfo` made when missing (§2); version 5 (2026-10-26): `kbootset retry` for the base system's fsck-repair reboot (§7); version 6 (2026-10-26): `create` zeroes and refuses an occupied slice, `status` prints the set id (§8). version 7 (2026-10-26): `commit` writes nothing when the generation equals the default, and `commit --again` (§3, §10). version 8 (2026-10-26): module members in `build`, `commit`, `media` and `status` (§11). version 9 (2026-10-26): the booted kernel's namelist, `kbootset namelist` and `mark-good` (§9, §12). version 10 (2026-10-26): a boot from a read-only medium, a CD or a floppy pair (§13). version 11 (2026-10-26): a read-only medium's gate 3 checks only the root controller (§13). version 12 (2026-10-27): `kbootset nodes`, the sd disk nodes of a four-card kernel, run by `commit` and reported by `check` (§14). version 13 (2026-10-27): `media --disk --ramdisk`, the netinstall raw image (§13). version 14 (2026-10-27, from a bench run): `status` in a safe boot names the safe set and says why the others did not load (§11). version 15 (2026-10-28, from a loader fallback in a bench run): `mark-good` after a boot where the loader fell back from the default verifies the default and marks it bad when its bytes are damaged (§9). version 16 (2026-10-30): `kbootset major`, a module's majors from the registry, for the base system's boot scripts (§15). version 17 (2026-10-31): the kbootset package ships the two boot scripts that call `namelist` and `mark-good`; the installer no longer writes them (§9, §12, §16). version 18 (2026-10-31): `kbootset major -l`, the whole registry (§15). version 19 (2026-10-31): the kbootset package owns `/dev/kinfo` (§2). version 20 (2026-10-31): a demand member may load at the first mount of its filesystem type, and `status` says so (§11). version 21 (2026-11-01): `kbootset cards`, the running kernel's sd cards with their controllers' match keys, and one disk's key, for an installer that takes the controller from the disk the user picks (§17); version 22 (2026-11-02): `cards` reads and prints the controller number `N` in hex, as the stock names write it (§17); version 23 (2026-11-02): `kbootset inquiry CARD UNIT` and `kbootset cards --probe`, one read-only SCSI INQUIRY per unit through `/dev/scsi`, so an installer knows a unit's type before anything reads it (§18). version 24 (2026-11-02): the A3000 onboard WD (`mobo:a3000-wd`) as a known limit of §18. Version 25 (2026-11-02): the limit is lifted for k30 -70 on (§18). Version 26 (2026-11-03): the namelist carries `crash_sync`'s word and the loaded modules' globals, and `modadmin` rewrites it after a load or an unload (§12). Version 27 (2026-11-04): `kbootset default`, and what `build`, `commit`, `check` and `status` say after an upgrade (§3, §19); a `brel` generation keeps its own `unix.sym`, and `status` tells a namelist that lacks a loaded module from another kernel's (§12); nothing to commit also removes the build's module copies (§10); the directory of a generation gone from the store is removed (§19). Other repositories build against this text; a change from here is a contract change with a version bump. The exit codes and messages are implemented (`kbootset/kbootset.c`).
 - **Implements:** `docs/spec/40-generations-and-composer.md` §3, §6 (the apkg trigger), §7 (the installer)
 - **Called by:** apkg 0.3 (the trigger), the installer (`-R`), the media builders (`--image`)
 
@@ -47,7 +47,9 @@ command otherwise. apkg reads `bootset=` from
 transaction changed nothing the default generation holds (a loader-only
 or kbootset-only transaction, say),
 `the default generation M already has these members; nothing to commit`
-(§10). apkg never passes `--again`.
+(§10). Either may end in `; the loader in /stand/loader is not on the boot
+store yet: kbootset loader-install /stand/loader/boot2` (§19), and no
+`kbootset: ` line follows it. apkg never passes `--again`.
 
 ## 4. Power-cut rows
 
@@ -190,8 +192,8 @@ say, through the loader's parser:
 The generation id and the `created` time are not compared.
 
 - **When they are equal,** commit writes nothing: no journal, no member,
-  no control block. It removes the build from `/stand/gen/<id>`, so the
-  next build starts clean with the same id, and exits 0. Its last line is
+  no control block. It removes the build and its module copies from
+  `/stand/gen/<id>`, and the directory, so the next build starts clean with the same id, and exits 0. Its last line is
   `kbootset: the default generation M already has these members; nothing to commit`.
   apkg's trigger repeats it and finishes its transaction as after any
   commit.
@@ -276,9 +278,18 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
   3); the kernel from that generation's manifest, read from the boot
   store. An ET_REL kernel gives its own symbols, laid out by the loader's
   relocator at kinfo's text vaddr. A `brel` gives none, so the symbols
-  come from the line's `unix.sym` (C2-3 §2.1), when its SHA-256 matches
-  the sidecar's `sym=` and the generation's kernel is the installed
-  `unix`.
+  come from the generation's own `/stand/gen/<id>/unix.sym` when it has
+  one, else from the line's `unix.sym` (C2-3 §2.1), when its SHA-256
+  matches the sidecar's `sym=` and the generation's kernel is the
+  installed `unix`.
+- **A generation's own `unix.sym`** (version 27): a package upgrade replaces
+  the line's file, so a rollback's boot would have no symbols. A namelist
+  made from the line's file saves a copy there, about 180 KB on k30; it
+  goes with the generation's directory (§19). A generation
+  that never booted under this version before its kernel was replaced has
+  none: while the `/stand/unix` of its boot still matches kinfo's layout that
+  counts as current; otherwise the line is `no namelist: generation N's
+  kernel is not the installed one, whose unix.sym this is`.
 - **The check:** the layout's text, rodata and data addresses must equal
   kinfo's bootdata block. Otherwise nothing is written.
 - **What it carries beyond the kernel's symbols** (version 26), for stock
@@ -322,8 +333,11 @@ it) loses only its name; `/stand/2.1_unix` is untouched.
 - **`status`** adds one line:
   - `namelist: /stand/unix is generation N's, bound at 0x<addr>` when it
     matches the booted kernel;
+  - `namelist: /stand/unix is the booted kernel's, bound at 0x<addr>;
+    kbootset namelist adds the modules loaded since` when only the module
+    symbols differ, as after a demand load (version 27);
   - `namelist: /stand/unix is not the booted kernel's: run kbootset
-    namelist` when it differs, or is another kernel (a link to
+    namelist` when it is another kernel or bind (a link to
     `/stand/2.1_unix`);
   - `namelist: /stand/unix is missing: run kbootset namelist`;
   - `namelist: none (<reason>)` when none can be made, with the reasons
@@ -628,3 +642,60 @@ read-only, before anything opens it.
 - **The host test** is `tests/host/kinq.sh`: `KBOOTSET_SCSIDIR` names a
   directory whose file `<card>.<unit>` is the answer (no file, no unit), in
   place of `/dev/scsi`.
+
+## 19. After an upgrade: the default, and what kbootset says (version 27)
+
+A package upgrade puts files under the root; what boots stays what the
+store holds. These commands say which is which.
+
+- **`kbootset default ID`** makes a good or pristine generation the
+  default, one control-block write and no new generation. It is the way
+  back from `rollback`, whose line now ends
+  `; kbootset default N goes back` while N is still in the kept set.
+  - It prints `the default is generation N (was M); power-cycle to boot
+    it`, or `generation N is already the default` and writes nothing.
+  - Status 3, nothing written: `no such generation`; `generation N is on
+    trial: power-cycle to boot it`; `only a good or pristine generation
+    can be the default`; `generation T is on trial: boot it, or kbootset
+    mark-bad T, first`, for a trial other than N.
+- **`build`**, when another good or pristine generation already holds the
+  built members (§10's comparison), ends its line
+  `; good generation N already holds this: kbootset default N makes it
+  the default without a new generation`. `commit` still composes a new
+  generation: apkg's trigger never leaves the older default in silence.
+- **`check`** compares the installed kernel package with the default, and
+  says one of:
+  - `<path> is the default generation N's kernel`;
+  - `<path> (package P) is generation N's kernel, on trial: power-cycle
+    to boot it`;
+  - `<path> (package P) is generation N's kernel, not the default:
+    kbootset default N boots it again`;
+  - `<path> (package P) differs from the default generation N: kbootset
+    build and commit compose it`, when no generation holds it.
+
+  None of these counts as a problem.
+- **A loader the store does not hold.** Upgrading the loader package
+  changes `/stand/loader/boot2` and not the store. When the file differs
+  from the store's primary boot2 (the length and CRC-32 in the store
+  header, so no store read), with this clause:
+  `the loader in /stand/loader is not on the boot store yet: kbootset
+  loader-install /stand/loader/boot2`
+  - `commit` appends it to its last line, after `; `, also when there is
+    nothing to commit (§3);
+  - `status` prints it as a `note:` line and `check` as a line of its own,
+    not counted as a problem.
+
+  kbootset never installs a loader unasked. No file, or an equal one, says
+  nothing.
+- **`/stand/gen/<id>` of a generation gone from the store** is removed:
+  its module copies, `unix.sym`, build record and the directory. `commit`,
+  `mark-good`, `collect`, `rollback`, `default` and `mark-bad` do it after
+  they succeed, silently, so `mark-good` finishes at each boot what a power
+  cut left. Three stay: the booted generation's, whose demand modules the
+  running kernel still loads from there, until the next boot; one at or
+  above the next id, a build not yet committed; and everything when the
+  booted generation is unknown or a read-only medium (§13). `--image` or
+  `--dev` without `-R` names a store that is not this root's, and removes
+  nothing.
+- **The host tests** are `tests/host/kupgrade.sh`, and `knamelist.sh` for the
+  directories.

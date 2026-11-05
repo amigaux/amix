@@ -399,6 +399,15 @@ $KB build $FACTS > $T/out && id3=$(sed -n 's/^kbootset: generation \([0-9]*\) bu
 $KB commit 2>/dev/null | grep -q "committed"
 $KB check > $T/out
 grep -q "generation $id3: major table ok" $T/out
+# nothing to commit leaves nothing: the build's module copies go too
+cp $T/disk.img $T/keep.img
+$KB mark-good --booted $id3 > /dev/null
+$KB build $FACTS > $T/out && idn=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
+[ -f $R/stand/gen/$idn/mod/monsw ] || { echo "kbuild: the build copied no modules" >&2; exit 1; }
+$KB commit 2>/dev/null | grep -q "nothing to commit"
+[ ! -e $R/stand/gen/$idn ] || { echo "kbuild: the unchanged build's modules were left behind" >&2; ls -R $R/stand/gen/$idn >&2; exit 1; }
+[ -f $R/stand/gen/$id3/mod/monsw ] || { echo "kbuild: the default's modules went too" >&2; exit 1; }
+cp $T/keep.img $T/disk.img
 echo "param intr=6" > $R/etc/conf/modreg.d/z3660eth
 $KB rollback > $T/out 2>&1		# the default back to what the sections below expect
 # what build refuses
@@ -740,7 +749,7 @@ echo "kbuild: root-class modules (gate 3 closure and rules, records, store membe
 $KB check > $T/out
 grep -q "generation 1 kernel unix: .* CRC-32 and SHA-256 ok" $T/out
 grep -q "check: 0 problem(s)" $T/out
-grep -q "differs from the default generation 1" $T/out
+grep -q "is generation [0-9]*'s kernel, not the default: kbootset default [0-9]* boots it again" $T/out
 cp $T/disk.img $T/before.img
 flip $T/disk.img $((65536 + 65536 + 5000))
 set +e

@@ -867,7 +867,7 @@ ks_retry(struct ks *k, ax_u32 booted)
 int
 ks_rollback(struct ks *k, ax_u32 *to)
 {
-	ax_u32 best = 0;
+	ax_u32 best = 0, was;
 	struct ax_ctl c;
 	char m[120];
 	int i, rc;
@@ -892,11 +892,52 @@ ks_rollback(struct ks *k, ax_u32 *to)
 	c.trial_gen = 0;
 	sprintf(m, "the default is generation %lu (was %lu)", (unsigned long)best,
 		(unsigned long)c.default_gen);
+	was = c.default_gen;
 	c.default_gen = best;
 	keep(&c);
+	if (present(&c, was))
+		sprintf(m + strlen(m), "; kbootset default %lu goes back", (unsigned long)was);
 	if ((rc = write_ctl(k, &c)) != KS_OK)
 		return rc;
 	*to = best;
+	return fail(k, KS_OK, 0, m);
+}
+
+int
+ks_default(struct ks *k, ax_u32 id)
+{
+	const struct ax_gen *g = ks_find(k, id);
+	struct ax_ctl c;
+	char m[120];
+	int rc;
+
+	k->gate = 0;
+	if ((rc = writable(k)) != KS_OK)
+		return rc;
+	if (!g)
+		return fail(k, KS_EREFUSE, 0, "no such generation");
+	if (id == k->ctl.default_gen) {
+		sprintf(m, "generation %lu is already the default", (unsigned long)id);
+		return fail(k, KS_OK, 0, m);
+	}
+	if (k->ctl.trial_gen == id) {
+		sprintf(m, "generation %lu is on trial: power-cycle to boot it", (unsigned long)id);
+		return fail(k, KS_EREFUSE, 0, m);
+	}
+	if (g->state != AXG_GOOD && g->state != AXG_PRISTINE)
+		return fail(k, KS_EREFUSE, 0, "only a good or pristine generation can be the default");
+	if (k->ctl.trial_gen) {
+		sprintf(m, "generation %lu is on trial: boot it, or kbootset mark-bad %lu, first",
+			(unsigned long)k->ctl.trial_gen, (unsigned long)k->ctl.trial_gen);
+		return fail(k, KS_EREFUSE, 0, m);
+	}
+	c = k->ctl;
+	sprintf(m, "the default is generation %lu (was %lu); power-cycle to boot it",
+		(unsigned long)id, (unsigned long)c.default_gen);
+	c.default_gen = id;
+	keep(&c);
+	if ((rc = write_ctl(k, &c)) != KS_OK)
+		return rc;
 	return fail(k, KS_OK, 0, m);
 }
 
