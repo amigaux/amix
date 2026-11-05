@@ -9861,9 +9861,6 @@ def audit_pick_at_install():
         ("firstboot re-registers /stand/unix with APKG's installf (from /tmp), never the stock one", re.search(
             r'FB_STANDUNIX_REG" = y \].*?cd /tmp && /usr/apkg/bin/installf core /stand/unix f 0644 root root.*?'
             r'/usr/apkg/bin/installf -f core', fb, re.S) and not re.search(r'/usr/sbin/installf (core|-f)', fb)),
-        ("build-install-iso stages one chain per unit (--expect-sumr --write-kernel) + boot/<p>/units",
-         "--expect-sumr" in biso and '>> "$outdir/units"' in biso),
-        ("build-install-iso ships boot/<p>/unix for every 040/060 chain", "040|060) BSARGS+=(--write-kernel)" in biso),
     ]
     for what, good in checks:
         (ok if good else fail)(what)

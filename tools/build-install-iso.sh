@@ -806,9 +806,8 @@ _want_l11=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$repo/profiles/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
   case "$_v" in
-    ''|1.0) ;;
     1.1) _want_l11="$_want_l11 $_p" ;;
-    *) echo "STOP: profile $_p: INSTALL_LAYOUT='$_v' is not 1.0 or 1.1" >&2; exit 1 ;;
+    *) echo "STOP: profile $_p: INSTALL_LAYOUT='$_v': this builder makes 1.1 media only" >&2; exit 1 ;;
   esac
 done
 if [ -n "$_want_l11" ]; then
@@ -1237,101 +1236,8 @@ echo "build-install-iso: per-set order files: ${OFFERED_SETS[*]}"
 # 2. per-profile boot slice (extract + gate + manifest)
 # ---------------------------------------------------------------------------
 for p in "${PROFILES[@]}"; do
-  pf="$repo/profiles/$p.profile"
-  [ -f "$pf" ] || { echo "STOP: unknown profile '$p' ($pf)" >&2; exit 1; }
-  # a 1.1 profile carries no framed chain: kbootset composes its store from the
-  # kernel package in /install/l11 (staged above)
-  if [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$pf" | tail -1 | tr -d '"')" = 1.1 ]; then
-    echo; echo "build-install-iso: profile '$p' is INSTALL_LAYOUT=1.1 -- no boot slice; the store comes from /install/l11"
-    continue
-  fi
-  outdir="$STAGE/boot/$(basename "$p")"
-  # the profile's BOOTSLICE_IMG names boot/<name>/...; keep that <name> as the dir.
-  name="$(sed -n 's/^BOOTSLICE_IMG=boot\/\([^/]*\)\/.*/\1/p' "$pf" | head -1)"
-  [ -n "$name" ] || name="$p"
-  outdir="$STAGE/boot/$name"
-  BSARGS=(--profile "$pf" --outdir "$outdir")
-  [ "$REQUIRE_GATE" -eq 1 ] && BSARGS+=(--require-gate)
-  [ -n "${SRC_OVERRIDE[$p]:-}" ] && BSARGS+=(--source "${SRC_OVERRIDE[$p]}")
-  # 040/060: install.sh 8b lays the framed kernel as /stand/unix -> ship it as boot/<p>/unix.
-  case "$(sed -n 's/^INSTALL_CPU=//p' "$pf" | tail -1)" in 040|060) BSARGS+=(--write-kernel);; esac
-  echo
-  echo "build-install-iso: boot slice for profile '$p' -> boot/$name/"
-  python3 "$here/build-bootslice.py" "${BSARGS[@]}"
-
-  # Q-4.15 pick-at-install (RUN_UNIT=install): one pre-framed chain per installable unit,
-  # boot/<name>/u<N>/{bootslice.img,bootslice.manifest,boot2.boot,unix}, and boot/<name>/units
-  # (<id> <rootdev> <kernel sum -r> per row) -- install.sh picks the row of the chosen target id.
-  run_unit="$(sed -n 's/^RUN_UNIT=//p' "$pf" | tail -1)"
-  if [ "$run_unit" = install ]; then
-    utab="$(sed -n 's/^UNIT_TABLE=//p' "$pf" | tail -1)"
-    uids="$(sed -n 's/^INSTALLABLE_IDS=//p' "$pf" | tail -1 | tr -d '"')"
-    [ -n "$utab" ] && [ -f "$repo/$utab" ] || { echo "STOP: profile $p RUN_UNIT=install but UNIT_TABLE '$utab' is missing" >&2; exit 1; }
-    [ -n "$uids" ] || { echo "STOP: profile $p RUN_UNIT=install but INSTALLABLE_IDS is empty" >&2; exit 1; }
-    ufam="$(sed -n 's/^FAMILY=//p' "$repo/$utab")"
-    bash "$here/build-unit-donors.sh" "$repo/$utab" "$uids"
-    : > "$outdir/units"
-    for n in $uids; do
-      set -- $(sed -n "s/^UNIT=$n //p" "$repo/$utab")
-      [ "$#" -ge 4 ] || { echo "STOP: unit $n missing from $utab" >&2; exit 1; }
-      echo "build-install-iso: unit $n ($1, sum -r $3, rootdev $4) -> boot/$name/u$n/"
-      UBS=(--profile "$pf" --outdir "$outdir/u$n" --source "$repo/work/bootslice-donor/units/$ufam-c0-u$n.hdf"
-           --expect-sumr "$3" --write-kernel)
-      [ "$REQUIRE_GATE" -eq 1 ] && UBS+=(--require-gate)
-      python3 "$here/build-bootslice.py" "${UBS[@]}"
-      echo "$n $4 $3" >> "$outdir/units"
-    done
-    echo "build-install-iso: boot/$name/units:"; sed 's/^/    /' "$outdir/units"
-  fi
-
-  # D-2 (r6) fallback B, RUN_UNIT=stamp: ONE family chain on the medium + per-unit patch rows.
-  # The per-unit chains are built and gated exactly as above, but in a scratch dir; only their
-  # manifests, the patch rows (tools/rth1-media.py stamp: refused unless the rows reproduce the
-  # unit chain byte for byte) and boot/<name>/stamp/units ("<id> <rootdev> <sum -r> <kernel bytes>")
-  # are shipped.
-  if [ "$run_unit" = stamp ]; then
-    utab="$(sed -n 's/^UNIT_TABLE=//p' "$pf" | tail -1)"
-    uids="$(sed -n 's/^INSTALLABLE_IDS=//p' "$pf" | tail -1 | tr -d '"')"
-    [ -n "$utab" ] && [ -f "$repo/$utab" ] || { echo "STOP: profile $p RUN_UNIT=stamp but UNIT_TABLE '$utab' is missing" >&2; exit 1; }
-    [ -n "$uids" ] || { echo "STOP: profile $p RUN_UNIT=stamp but INSTALLABLE_IDS is empty" >&2; exit 1; }
-    ufam="$(sed -n 's/^FAMILY=//p' "$repo/$utab")"
-    bash "$here/build-unit-donors.sh" "$repo/$utab" "$uids"
-    ustage="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-stamp.XXXXXX")"
-    mkdir -p "$outdir/stamp"
-    : > "$outdir/stamp/units"
-    UNITARGS=()
-    for n in $uids; do
-      set -- $(sed -n "s/^UNIT=$n //p" "$repo/$utab")
-      [ "$#" -ge 4 ] || { echo "STOP: unit $n missing from $utab" >&2; exit 1; }
-      UBS=(--profile "$pf" --outdir "$ustage/u$n" --source "$repo/work/bootslice-donor/units/$ufam-c0-u$n.hdf"
-           --expect-sumr "$3" --write-kernel)
-      [ "$REQUIRE_GATE" -eq 1 ] && UBS+=(--require-gate)
-      python3 "$here/build-bootslice.py" "${UBS[@]}"
-      man="$ustage/u$n/bootslice.manifest"; [ -f "$man" ] || man="$ustage/u$n/bootslice.man"
-      cp "$man" "$outdir/stamp/u$n.manifest"
-      echo "$n $4 $3 $(stat -c%s "$ustage/u$n/unix")" >> "$outdir/stamp/units"
-      UNITARGS+=(--unit "$n:$ustage/u$n/bootslice.img")
-    done
-    python3 "$here/rth1-media.py" stamp --family "$outdir/bootslice.img" "${UNITARGS[@]}" --out "$outdir/stamp"
-    rm -rf "${ustage:?}"
-    echo "build-install-iso: boot/$name/stamp/units:"; sed 's/^/    /' "$outdir/stamp/units"
-  fi
-
-  # D-2 (r6): the RTO1 root-record table, when the profile names a separate boot disk
-  # (ROOT_RECORD_DISK) -- one 28-byte record per installable id, the controller identity per
-  # card from ROOT_RECORD_CARD<c>="<base> <id> <flags>" (RTH1 spec, amix-040-060-port 09d5c4d).
-  rrd="$(sed -n 's/^ROOT_RECORD_DISK=//p' "$pf" | tail -1)"
-  if [ -n "$rrd" ]; then
-    rids="$(sed -n 's/^INSTALLABLE_IDS=//p' "$pf" | tail -1 | tr -d '"')"
-    [ -n "$rids" ] || rids="$(sed -n 's/^TARGET_SCSI_ID=//p' "$pf" | tail -1)"
-    CARDARGS=()
-    for c in 0 1; do
-      cv="$(sed -n "s/^ROOT_RECORD_CARD$c=//p" "$pf" | tail -1 | tr -d '"')"
-      [ -n "$cv" ] && CARDARGS+=(--card "$c" $cv)
-    done
-    [ "${#CARDARGS[@]}" -gt 0 ] || { echo "STOP: profile $p sets ROOT_RECORD_DISK but no ROOT_RECORD_CARD0/1 identity" >&2; exit 1; }
-    python3 "$here/rth1-media.py" rto1 --chain "$outdir/bootslice.img" --ids "$rids" "${CARDARGS[@]}" --out "$outdir/rto1"
-  fi
+  # a 1.1 profile carries no framed chain: kbootset composes its store from the kernel package in /install/l11
+  echo; echo "build-install-iso: profile '$p' is INSTALL_LAYOUT=1.1 -- no boot slice; the store comes from /install/l11"
 done
 
 echo
