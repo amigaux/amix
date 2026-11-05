@@ -10795,6 +10795,21 @@ def audit_universal_cards():
 
 
 def audit_root_lock():
+    head("RD. the default repository is reached by name: its first boot never asks for an address")
+    fb = open(FIRSTBOOT, encoding="latin-1").read()
+    ar = _extract_func(fb, "ask_repo")
+    def repo_dialog(host, dns, mode):
+        # RETURN at every question, as a person accepting the defaults
+        sh = ('readask() { echo "PROMPT: $*"; ask=; }\nvalid_ip() { return 1; }\n'
+              'FB_REPO_HOST=%s FB_REPO_URL=http://%s/1.1 FB_REPO_IP= FB_REPO_IP_TYPED= FB_DNS1=%s FB_NET_MODE=%s\n%s\nask_repo\n'
+              'echo "FB_REPO_IP=$FB_REPO_IP"\n' % (host, host, dns, mode, ar))
+        return subprocess.run(["/usr/bin/dash", "-c", sh], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20, text=True).stdout
+    for what, dns, mode in (("a name server", "192.0.2.53", "static"), ("no name server", "", "static"), ("DHCP", "", "dhcp")):
+        o = repo_dialog("pkg.amigaux.org", dns, mode)
+        (ok if "package repository host" in o and "network address" not in o and "FB_REPO_IP=\n" in o else fail)(
+            "the default repository, %s: asked its host, no address question, no address kept" % what)
+    o = repo_dialog("mirror.example", "192.0.2.53", "static")
+    (ok if "network address" in o else fail)("another repository's name does get the address question (RETURN: none)")
     head("RL. a published medium carries no root password hash (FB_ROOT_SHADOW=none): the first boot "
          "LOCKS root until the dialog sets one (stock 2.1's /etc/shadow gives root an EMPTY password)")
     fb = open(FIRSTBOOT, encoding="latin-1").read()
