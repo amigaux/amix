@@ -66,10 +66,19 @@ Reproducibility: every path inside the image is fixed (`/opt/amix-cross`,
 that builds it reaches the toolchains; `SOURCE_DATE_EPOCH` (fixed in
 `Containerfile`, kept across pin changes) sets the dates, and the members of
 every static archive are normalised to it. `/opt/amix/TOOLCHAIN.sha256` lists the sha256 of every
-installed file, so two builds are compared by that one file:
+file under `/opt/amix-cross` and `/opt/amix`, so two builds' toolchains are compared by that one file:
 
 ```sh
 docker run --rm amix-toolchain:<tag> cat /opt/amix/TOOLCHAIN.sha256 > a.sha256
+```
+
+That list leaves out the rest of the image: the Ubuntu base, the host compilers and
+tools. `toolchain/image-manifest` covers all of it, one line per path with its
+sha256, mode, owner and link target and without times, so `diff` compares two
+images whatever their ids:
+
+```sh
+python3 -I toolchain/image-manifest amix-toolchain:<tag> > a.manifest
 ```
 
 The image holds the AMIX sysroot, so it is built locally from a checkout of

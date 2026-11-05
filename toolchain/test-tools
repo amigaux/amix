@@ -139,5 +139,39 @@ check "check-image IMAGE: runs itself in the image, the toolchain directory read
 	sh -c 'PATH=$1/bin:$PATH sh "$1/tc/check-image" amix-toolchain:test &&
 		[ "$(tr "\n" " " < "$1/args")" = "run --rm -v $1/tc:/check:ro amix-toolchain:test sh /check/check-image " ]' sh "$T/ck"
 
+# --- image-manifest -------------------------------------------------------------
+mkdir -p "$T/im/one/usr/bin" "$T/im/one/etc" "$T/bin"
+printf 'tool\n' > "$T/im/one/usr/bin/a"
+ln "$T/im/one/usr/bin/a" "$T/im/one/usr/bin/z"
+ln -s a "$T/im/one/usr/bin/s"
+printf 'runtime\n' > "$T/im/one/etc/hostname"
+touch "$T/im/one/.dockerenv"
+chmod 0755 "$T/im/one/usr/bin/a"
+cat > "$T/bin/stand-in" <<'STANDIN'
+#!/bin/sh
+case $1 in
+image) echo '["PATH=/bin"] null null "/src" ""' ;;
+create) echo cid ;;
+export) tar -C "$IMAGE_DIR" --sort=name -cf - . ;;
+rm) echo "$2" > "$IMAGE_DIR.removed" ;;
+esac
+STANDIN
+chmod 755 "$T/bin/stand-in"
+im() { IMAGE_DIR=$1 CONTAINER=$T/bin/stand-in python3 -I "$here/image-manifest" any; }
+im "$T/im/one" > "$T/im/1"
+sha=$(sha256sum < "$T/im/one/usr/bin/a" | cut -c1-64)
+check "image-manifest: the config comes first" sh -c "head -1 '$T/im/1' | grep -qF 'config [\"PATH=/bin\"]'"
+check "image-manifest: a file's sha256 and mode" grep -qE "^$sha 0755 [0-9]+:[0-9]+ f usr/bin/a\$" "$T/im/1"
+check "image-manifest: a hard link reads as its file" grep -qE "^$sha 0755 [0-9]+:[0-9]+ f usr/bin/z\$" "$T/im/1"
+check "image-manifest: a symbolic link names its target" grep -qE " l usr/bin/s -> a\$" "$T/im/1"
+check "image-manifest: the runtime's files are left out" sh -c "! grep -qE 'etc/hostname|dockerenv' '$T/im/1'"
+check "image-manifest: the container is removed" grep -q cid "$T/im/one.removed"
+touch -d 2001-01-01 "$T/im/one/usr/bin/a"
+im "$T/im/one" > "$T/im/2"
+check "image-manifest: a file's time is not compared" cmp "$T/im/1" "$T/im/2"
+printf 'other\n' > "$T/im/one/usr/bin/a"
+im "$T/im/one" > "$T/im/3"
+check "image-manifest: a file's content is" sh -c "! cmp -s '$T/im/1' '$T/im/3'"
+
 echo "$pass/$((pass + fail)) passed"
 [ "$fail" -eq 0 ]

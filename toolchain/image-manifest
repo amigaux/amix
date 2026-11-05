@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+# image-manifest: every file of a container image, one line each, to compare
+# two builds of it.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     toolchain/image-manifest IMAGE > MANIFEST
+#
+# /opt/amix/TOOLCHAIN.sha256 lists the toolchains under /opt, and the lock's
+# image line digests that list. This also covers the rest of the image: the
+# Ubuntu base, the host compilers and tools. The first line is the image's
+# config, then one line per path, sorted, so `diff` compares two manifests:
+#
+#     <sha256 or -> <mode> <uid>:<gid> <type> <path>[ -> <link target>]
+#
+# Times are left out, since a layer's own build sets them. A hard link reads as
+# the file it links to: which name of the pair comes first in the export depends
+# on the build. The files a container gets from its runtime are left out.
+#
+# Environment: CONTAINER, docker (default) or podman.
+import hashlib
+import os
+import subprocess
+import sys
+import tarfile
+
+RUNTIME = {".dockerenv", "etc/hostname", "etc/hosts", "etc/resolv.conf",
+           "dev/console", "dev/pts", "dev/shm"}
+TYPES = {tarfile.REGTYPE: "f", tarfile.AREGTYPE: "f", tarfile.DIRTYPE: "d",
+         tarfile.SYMTYPE: "l", tarfile.CHRTYPE: "c", tarfile.BLKTYPE: "b",
+         tarfile.FIFOTYPE: "p"}
+
+
+def out(text):
+    sys.stdout.buffer.write(os.fsencode(text.replace("\n", "\\n")) + b"\n")
+
+
+def digest(fp):
+    h = hashlib.sha256()
+    for chunk in iter(lambda: fp.read(1 << 20), b""):
+        h.update(chunk)
+    return h.hexdigest()
+
+
+def manifest(stream):
+    rows, seen = {}, {}
+    with tarfile.open(fileobj=stream, mode="r|") as tar:
+        for m in tar:
+            path = m.name.removeprefix("./").rstrip("/")
+            if not path or path in RUNTIME:
+                continue
+            what, target, sha = TYPES.get(m.type, "?"), "", "-"
+            if m.islnk():
+                what, sha = "f", seen[m.linkname.removeprefix("./")]
+            elif m.isreg():
+                sha = seen[path] = digest(tar.extractfile(m))
+            elif m.issym():
+                target = " -> " + m.linkname
+            rows[path] = "%s %04o %d:%d %s %s%s" % (sha, m.mode, m.uid, m.gid, what, path, target)
+    return rows
+
+
+def main():
+    if len(sys.argv) != 2:
+        sys.exit("usage: image-manifest IMAGE")
+    tool, image = os.environ.get("CONTAINER", "docker"), sys.argv[1]
+    config = subprocess.run([tool, "image", "inspect", "--format",
+                             "{{json .Config.Env}} {{json .Config.Entrypoint}} {{json .Config.Cmd}} "
+                             "{{json .Config.WorkingDir}} {{json .Config.User}}", image],
+                            check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+    name = subprocess.run([tool, "create", image, "/bin/true"], check=True,
+                          stdout=subprocess.PIPE, text=True).stdout.strip()
+    try:
+        proc = subprocess.Popen([tool, "export", name], stdout=subprocess.PIPE)
+        rows = manifest(proc.stdout)
+        if proc.wait() != 0:
+            sys.exit("image-manifest: %s export failed" % tool)
+    finally:
+        subprocess.run([tool, "rm", name], check=True, stdout=subprocess.DEVNULL)
+    out("config " + config)
+    for path in sorted(rows, key=os.fsencode):
+        out(rows[path])
+
+
+main()
