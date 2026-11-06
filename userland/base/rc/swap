@@ -17,17 +17,22 @@
 #               and rc.conf's swap_add (default 30) how far it reaches: a
 #               list of sizes, each "all" (the slice's end) or MiB counted
 #               from the slice's start, the kernel's area included. The
-#               first size that adds 2048 blocks (1 MB) or more is tried;
-#               when the kernel refuses it for want of memory (ENOMEM), the
-#               next, each size at most once; any other failure ends it.
-#               swap -a needs an array for the area in one piece of the
-#               kernel's kvseg, and a kernel without the ENOMEM guard waits
-#               forever on one that does not fit, so the list must suit the
-#               kernel.
+#               first size that adds 2048 blocks (1 MB) or more is asked.
 # and, as the stock script did, /SWAPFILE and /usr/src/SWAPFILE when they
 # exist. This folds the 030 installer's S89rootswap: its kernel swaps only
-# the first 20476 blocks of slice 2. "swap -s" reads 0 whatever is set up;
-# "swap -l" is the evidence.
+# the first 20476 blocks of slice 2.
+#
+# When the kernel refuses an area for want of memory (ENOMEM: its array must
+# fit in kernel memory), the step steps down: to the largest size below the
+# refused one among the rest of swap_add and the kernel's own limit (68040/
+# 68060: maxmem/8 MiB, maxmem read with adb), else to half the refused size
+# in whole MiB, not under 8 MiB; SWAP_TRIES (8) tries an area at most. Any
+# other failure ends it. A kernel without the ENOMEM guard waits forever on
+# an area that does not fit, so swap_add must suit such a kernel. An area
+# added smaller than asked, or not at all, is one line on the console and in
+# rc.log, with the limit when it is known.
+# "swap -l" and "swap -s" count 2 KiB pages: half the real figures on a
+# 68040/68060 kernel.
 # stop: as the stock script: the files go, then every area after the first.
 #
 # Each area added is said on the console and in /var/adm/rc.log. The package
@@ -47,8 +52,14 @@ SWAP_FILES=${SWAP_FILES:-"/SWAPFILE /usr/src/SWAPFILE"}
 # output: "SC_ADD failed", then "swap: Not enough space"; exit status 2,
 # which other failures share)
 SWAP_NOMEM=${SWAP_NOMEM:-"Not enough space"}
+SWAP_TRIES=${SWAP_TRIES:-8}
+# the smallest half tried: 8 MiB
+SWAP_MIN=${SWAP_MIN:-16384}
+SWAP_ADB=${SWAP_ADB:-/usr/bin/adb}
+SWAP_UNIX=${SWAP_UNIX:-/stand/unix}
+SWAP_KMEM=${SWAP_KMEM:-/dev/kmem}
 
-# add <path> <swaplo> <blocks> <what> [<size>]: 0 when added; on a failure, nomem
+# add <path> <swaplo> <blocks> <what> [<how>]: 0 when added; on a failure, nomem
 # says whether the kernel ran out of memory for it
 add() {
 	_e=$RC_RUN/swap.$$
@@ -56,8 +67,8 @@ add() {
 	if "$SWAP" -a $1 $2 $3 > $_e 2>&1
 	then
 		rm -f "${_e:?}"
-		echo "Added swap $4 $1, $3 blocks at $2${5:+ (swap_add $5)}."
-		rc_log swap "added $1 $2 $3 ($4${5:+, swap_add $5})"
+		echo "Added swap $4 $1, $3 blocks at $2${5:+ ($5)}."
+		rc_log swap "added $1 $2 $3 ($4${5:+, $5})"
 		return 0
 	fi
 	grep "$SWAP_NOMEM" $_e > /dev/null 2>&1 && nomem=yes
@@ -70,14 +81,93 @@ add() {
 	return 1
 }
 
+# limit: the kernel's own limit for one area, read once, at the first
+# refusal: lim_n blocks, lim_m MiB, mem_m MiB of pageable memory; empty when
+# not known. Only the 68040/68060 kernel's rule is known: an area of M MiB
+# when M <= maxmem/8 (maxmem in 4 KiB pages). A maxmem over physmem is a
+# namelist without symbols: no limit.
+limit() {
+	[ -n "$lim_read" ] && return
+	lim_read=1
+	[ $SWAP_PGX -eq 2 ] && [ -x "$SWAP_ADB" ] && [ -r "$SWAP_UNIX" ] || return
+	_r=`(echo maxmem/D; echo physmem/D) | "$SWAP_ADB" -k "$SWAP_UNIX" "$SWAP_KMEM" 2>/dev/null |
+		awk '$1 == "maxmem:" { m = $2 } $1 == "physmem:" { p = $2 }
+		END { if (m > 0 && m <= p) print int(m / 8), int(m / 256) }'`
+	case "$_r" in
+	[0-9]*" "[0-9]*) ;;
+	*) return ;;
+	esac
+	lim_m=`expr "$_r" : '\([0-9]*\)'`
+	mem_m=`expr "$_r" : '[0-9]* \([0-9]*\)'`
+	lim_n=`expr $lim_m \* 2048`
+}
+
+# fit <path> <swaplo> <what> <blocks>:<size> ...: add the first; on ENOMEM,
+# step down (above); an area smaller than the first, said
+fit() {
+	_p=$1
+	_o=$2
+	_w=$3
+	shift 3
+	_q="$*"
+	_want=`expr "$1" : '\([0-9]*\)'`
+	_n=$_want
+	_l=`expr "$1" : '[0-9]*:\(.*\)'`
+	_got=0
+	_t=0
+	_short=no
+	while :
+	do
+		case "$_l" in
+		"") _h= ;;
+		limit) _h="the kernel's limit" ;;
+		half) _h="stepped down" ;;
+		*) _h="swap_add $_l" ;;
+		esac
+		_t=`expr $_t + 1`
+		if add $_p $_o $_n "$_w" "$_h"
+		then
+			_got=$_n
+			break
+		fi
+		[ $nomem = yes ] || break
+		_short=yes
+		[ $_t -lt $SWAP_TRIES ] || break
+		limit
+		# the next: the largest size below this one, else its half
+		_x=0
+		for _c in $_q ${lim_n:+$lim_n:limit}
+		do
+			_cn=`expr "$_c" : '\([0-9]*\)'`
+			if [ $_cn -lt $_n ] && [ $_cn -gt $_x ]
+			then
+				_x=$_cn
+				_l=`expr "$_c" : '[0-9]*:\(.*\)'`
+			fi
+		done
+		if [ $_x -eq 0 ]
+		then
+			_x=`expr $_n / 4096 \* 2048`
+			[ $_x -ge $SWAP_MIN ] || break
+			_l=half
+		fi
+		_n=$_x
+	done
+	[ $_short = yes ] || return 0
+	_s="$_p: `expr $_got / 2048` of `expr $_want / 2048` MiB added; the kernel refused more for want of memory"
+	[ -n "$lim_m" ] && _s="$_s (it takes at most $lim_m MiB per area with $mem_m MiB of pageable memory)"
+	echo "swap: $_s"
+	rc_log swap "$_s"
+}
+
 # file <path>: the whole file
 file() {
 	set -- $1 `ls -l $1`
-	add $1 0 `expr $6 / 512` file
+	fit $1 0 file `expr $6 / 512`:
 }
 
 # slice <path>: from block 0, or past the kernel's boot area, to the first
-# size of swap_add the kernel takes
+# size of swap_add, then down as the kernel takes
 slice() {
 	_d=`echo $1 | sed -n 's:^/dev/dsk/\(c[0-9a-f]*d[0-9]*\)s\([0-9]*\)$:\1 \2:p'`
 	if [ -z "$_d" ]
@@ -110,8 +200,9 @@ slice() {
 		_lo=`expr \( $4 \* $SWAP_PGX + 15 \) / 16 \* 16`
 		_w="slice tail"
 	fi
-	# each size once; one that ends where a tried one did is the same try
-	_tried=
+	# the sizes in blocks, each once: one that ends where another did is the
+	# same size
+	_q=
 	for _s in $SWAP_SIZES
 	do
 		if [ "$_s" = all ]
@@ -127,19 +218,22 @@ slice() {
 		fi
 		_n=`expr $_end - $_lo`
 		[ $_n -ge 2048 ] || continue
-		case " $_tried " in
-		*" $_n "*) continue ;;
+		case " $_q " in
+		*" $_n:"*) continue ;;
 		esac
-		_tried="$_tried $_n"
-		add $1 $_lo $_n "$_w" $_s && return
-		[ $nomem = yes ] || return
+		_q="$_q $_n:$_s"
 	done
+	[ -n "$_q" ] && fit $1 $_lo "$_w" $_q
 }
 
 case "$1" in
 start)
 	. "$RC_SUBR"
 	SWAP_SIZES=`rc_conf swap add 30`
+	lim_read=
+	lim_m=
+	lim_n=
+	mem_m=
 	# swap -l's blocks to the kernel's: 2 on a 4 KiB-page kernel
 	SWAP_PGX=1
 	"$UNAME" -a 2>/dev/null | grep ' 680[46]0-' > /dev/null && SWAP_PGX=2

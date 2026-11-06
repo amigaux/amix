@@ -20,6 +20,9 @@ same() { # same <name> <want> <got>
 expect() { # expect <name> <want-substring> <got>
 	case "$3" in *"$2"*) ok ;; *) bad "$1: want [$2] got [$3]" ;; esac
 }
+refuse() { # refuse <name> <unwanted-substring> <got>
+	case "$3" in *"$2"*) bad "$1: did not want [$2] in [$3]" ;; *) ok ;; esac
+}
 
 mkdir -p "$T/bin"
 # swap -l | -a <path> <lo> <n> | -d <path> <lo>; the areas are $T/areas,
@@ -50,14 +53,28 @@ case "\$1" in
 	;;
 esac
 EOF
-# rdb <raw s0>: the partitions of disk c6d0 (s1 root, s2 swap, s3 home)
+# rdb <raw s0>: the partitions of disk c6d0 (s1 root, s2 swap, s3 home), and
+# of c7d0, whose s2 is 8 GiB
 cat > "$T/bin/rdb" <<'EOF'
 #!/bin/sh
 case "$1" in
 /dev/rdsk/c6d0s0) printf 'root 2 204800\nswap 204802 102400\nhome 307202 40000\n' ;;
+/dev/rdsk/c7d0s0) printf 'root 2 204800\nswap 204802 16777216\n' ;;
 *) exit 1 ;;
 esac
 EOF
+# adb -k <namelist> <kmem>: "<sym>/D" lines in, "<sym>:  <value>" out, the
+# values from $T/adb.<sym>
+cat > "$T/bin/adb" <<EOF
+#!/bin/sh
+[ "\$1" = -k ] || exit 1
+while read q
+do
+	s=\`echo \$q | sed 's:/D\$::'\`
+	[ -f $T/adb.\$s ] && echo "\$s:        \`cat $T/adb.\$s\`"
+done
+EOF
+: > "$T/unix"
 # sed as the box's: a last line without a newline is dropped, whole (in a
 # pipe; a file operand goes to the real sed as it is)
 REALSED=$(command -v sed)
@@ -83,7 +100,7 @@ run() { # run start|stop: the step, its output; the calls in calls
 	: > "$T/calls"
 	: > "$T/rc.log"
 	env RC_SUBR="$here/rc.subr" RC_LOG="$T/rc.log" RC_CONF="$T/rc.conf" RC_RUN="$T" \
-	    SWAP="$T/bin/swap" RDB="$T/bin/rdb" \
+	    SWAP="$T/bin/swap" RDB="$T/bin/rdb" SWAP_ADB="${ADB:-$T/bin/adb}" SWAP_UNIX="$T/unix" SWAP_KMEM=/dev/null \
 	    SWAP_VFSTAB="$T/vfstab" SWAP_FILES="$T/SWAPFILE $T/SRCSWAP" PATH="$T/bin:$PATH" \
 	    $SH "$here/swap" "$@" 2>&1
 }
@@ -226,6 +243,9 @@ same "all 48 30: stepped down" "-a /dev/dsk/c6d0s2 20480 81920
 expect "all 48 30: the refusal logged" "swap: swap -a /dev/dsk/c6d0s2 20480 81920 failed: SC_ADD failed swap: Not enough space" "$(cat "$T/rc.log")"
 expect "all 48 30: the size used logged" "swap: added /dev/dsk/c6d0s2 20480 40960 (slice tail, swap_add 30)" "$(cat "$T/rc.log")"
 expect "all 48 30: the refusal said" "failed: SC_ADD failed swap: Not enough space" "$o"
+expect "all 48 30: less than asked said" "swap: /dev/dsk/c6d0s2: 20 of 40 MiB added; the kernel refused more for want of memory" "$o"
+expect "all 48 30: less than asked logged" "swap: /dev/dsk/c6d0s2: 20 of 40 MiB added; the kernel refused more for want of memory" "$(cat "$T/rc.log")"
+refuse "68030: no figure" "at most" "$o"
 # the refusal's text on standard output alone still steps down
 cp "$T/bin/swap" "$T/swap.real"
 printf '#!/bin/sh\ncase "$1" in -a) if [ "$4" -gt 50000 ]; then echo "-a $2 $3 $4" >> %s/calls; echo "swap: Not enough space"; exit 2; fi ;; esac\nexec %s/swap.real "$@"\n' "$T" "$T" > "$T/bin/swap"
@@ -242,16 +262,98 @@ rm -f "${T:?}/max"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 run start > /dev/null
 same "all fits: one try" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
-# every size refused: each tried once, then nothing more
+# every size refused: each tried once, then halves of the last down to 8 MiB
 echo 1000 > "$T/max"
 echo "swap_add=all 48 30 30 all" > "$T/rc.conf"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
-run start > /dev/null
-same "all refused: each size once" "-a /dev/dsk/c6d0s2 20480 81920
+o=$(run start)
+same "all refused: each size once, then halves" "-a /dev/dsk/c6d0s2 20480 81920
 -a /dev/dsk/c6d0s2 20480 77824
--a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+-a /dev/dsk/c6d0s2 20480 40960
+-a /dev/dsk/c6d0s2 20480 20480" "$(cat "$T/calls")"
 same "all refused: nothing added" "/dev/dsk/c6d0s2 0 20476" "$(cat "$T/areas")"
+expect "all refused: said" "swap: /dev/dsk/c6d0s2: 0 of 40 MiB added; the kernel refused more for want of memory" "$o"
+expect "all refused: logged" "swap: /dev/dsk/c6d0s2: 0 of 40 MiB added" "$(cat "$T/rc.log")"
+# no list below the refused size: halves, whole MiB
+echo 50000 > "$T/max"
+echo "swap_add=all" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+o=$(run start)
+same "halved: the half taken" "-a /dev/dsk/c6d0s2 20480 81920
+-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+expect "halved: said how" "Added swap slice tail /dev/dsk/c6d0s2, 40960 blocks at 20480 (stepped down)." "$o"
+expect "halved: less said" "swap: /dev/dsk/c6d0s2: 20 of 40 MiB added" "$o"
+# a size not below the last refused is not tried
+echo "swap_add=48 all 30" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+run start > /dev/null
+same "larger after a refusal: skipped" "-a /dev/dsk/c6d0s2 20480 77824
+-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+# the tries are bounded: 8 at most (an 8 GiB slice, nothing taken)
+printf '/dev/dsk/c7d0s2\t-\t-\tswap\t-\tno\t-\n' | vfstab
+echo "swap_add=all" > "$T/rc.conf"
+echo "/dev/dsk/c7d0s2 0 20476" | areas
+echo 1 > "$T/max"
+o=$(run start)
+same "bounded: 8 tries, halving" "-a /dev/dsk/c7d0s2 20480 16756736
+-a /dev/dsk/c7d0s2 20480 8378368
+-a /dev/dsk/c7d0s2 20480 4188160
+-a /dev/dsk/c7d0s2 20480 2093056
+-a /dev/dsk/c7d0s2 20480 1046528
+-a /dev/dsk/c7d0s2 20480 522240
+-a /dev/dsk/c7d0s2 20480 260096
+-a /dev/dsk/c7d0s2 20480 129024" "$(cat "$T/calls")"
+expect "bounded: said" "swap: /dev/dsk/c7d0s2: 0 of 8182 MiB added" "$o"
+# a 68060 kernel: its limit read with adb (maxmem/8 MiB) is the next try,
+# and the line says it, with the pageable memory (maxmem 4 KiB pages)
+touch "$T/k46"
+echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) 68060-261031-94 m68k" > "$T/uname"
+echo 3562 > "$T/adb.maxmem"; echo 4096 > "$T/adb.physmem"
+echo 1000000 > "$T/max"
+echo "/dev/dsk/c7d0s2 0 40960" | areas
+o=$(run start)
+same "68060 limit: tried next" "-a /dev/dsk/c7d0s2 40960 16736256
+-a /dev/dsk/c7d0s2 40960 911360" "$(cat "$T/calls")"
+expect "68060 limit: added as" "Added swap slice tail /dev/dsk/c7d0s2, 911360 blocks at 40960 (the kernel's limit)." "$o"
+expect "68060 limit: said" "swap: /dev/dsk/c7d0s2: 445 of 8172 MiB added; the kernel refused more for want of memory (it takes at most 445 MiB per area with 13 MiB of pageable memory)" "$o"
+expect "68060 limit: logged" "swap: /dev/dsk/c7d0s2: 445 of 8172 MiB added; the kernel refused more for want of memory (it takes at most 445 MiB per area with 13 MiB of pageable memory)" "$(cat "$T/rc.log")"
+# the limit refused too (another limit bit first): halves of it
+echo 500000 > "$T/max"
+echo "/dev/dsk/c7d0s2 0 40960" | areas
+run start > /dev/null
+same "68060 limit refused: its half" "-a /dev/dsk/c7d0s2 40960 16736256
+-a /dev/dsk/c7d0s2 40960 911360
+-a /dev/dsk/c7d0s2 40960 454656" "$(cat "$T/calls")"
+# adb gives nonsense (maxmem over physmem: no symbol table): no figure
+echo 999999 > "$T/adb.maxmem"
+echo 9000000 > "$T/max"
+echo "/dev/dsk/c7d0s2 0 40960" | areas
+o=$(run start)
+expect "nonsense maxmem: still said" "swap: /dev/dsk/c7d0s2: 4086 of 8172 MiB added; the kernel refused more for want of memory" "$o"
+refuse "nonsense maxmem: no figure" "at most" "$o"
+# no adb: no figure, the line still said
+echo 3562 > "$T/adb.maxmem"
+echo "/dev/dsk/c7d0s2 0 40960" | areas
+o=$(ADB="$T/noadb" run start)
+expect "no adb: still said" "swap: /dev/dsk/c7d0s2: 4086 of 8172 MiB added" "$o"
+refuse "no adb: no figure" "at most" "$o"
+# what fits whole: no line
 rm -f "${T:?}/max"
+echo "/dev/dsk/c7d0s2 0 40960" | areas
+o=$(run start)
+refuse "fits: no line" "MiB added" "$o"
+rm -f "${T:?}/k46" "${T:?}/uname" "${T:?}/adb.maxmem" "${T:?}/adb.physmem"
+# a file refused: halves of it
+dd if=/dev/zero of="$T/SWAPFILE" bs=512 count=1 seek=65535 2> /dev/null
+: > "$T/vfstab"
+: | areas
+echo 40000 > "$T/max"
+o=$(run start)
+same "file refused: halves" "-a $T/SWAPFILE 0 65536
+-a $T/SWAPFILE 0 32768" "$(cat "$T/calls")"
+expect "file refused: said" "swap: $T/SWAPFILE: 16 of 32 MiB added" "$o"
+rm -f "${T:?}/max" "${T:?}/SWAPFILE"
+printf '%s\n' "$STOCK" | vfstab
 # a 48 that ends where all does (a 40 MiB slice) is not tried again
 printf '/dev/dsk/c6d0s3\t-\t-\tswap\t-\tno\t-\n' | vfstab
 echo 1000 > "$T/max"
