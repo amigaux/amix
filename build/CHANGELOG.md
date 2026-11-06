@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — pkginfo lists the prototype's own classes after conffile (ca687f1)
+
+pkginfo's CLASSES is `none`, then `conffile` when CONFFILES is set, then every other class the prototype names, in the order it first names them, so a device node whose group a conffile creates can be made after that file. The roll accepts classes after `none conffile`. pkgmeta refuses a class name other than 1-12 of a-z and 0-9 starting with a letter, and an object in class conffile that CONFFILES doesn't list.
+
 ## 2026-11-06 — kspace stops when a file built beside the packages is missing (9ca599c)
 
 kspace stops with exit 1 when a kernel directory's recipes all roll (exit 0) but leave out a file it must build beside its packages, or leave a symlink there. `kspace_beside` in `build/dist.sh` lists them: kernel/dlm, `amix-cdboot`. An exit 3 stays a gap.
