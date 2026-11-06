@@ -82,8 +82,13 @@ static void parent(int me, long mb, long secs, int nch)
 				cbad++;
 		}
 	}
-	while (live > 0 && wait(&st) > 0)
+	while (live > 0 && wait(&st) > 0) {	/* the children still alive at the time limit count as well */
 		live--;
+		if (WIFSIGNALED(st))
+			sig++;
+		else if (WEXITSTATUS(st))
+			cbad++;
+	}
 	own = check(0, (long *)0);
 	printf("parent %d: %ld forks, %ld children saw a wrong page, %ld killed, own pages wrong %ld\n", me, forks, cbad, sig,
 	    own);

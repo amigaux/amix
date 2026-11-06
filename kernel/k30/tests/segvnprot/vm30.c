@@ -24,7 +24,8 @@
 #include <setjmp.h>
 
 #define PG 2048
-#define SKIP 125		/* a case's exit status when it could not run (run() reports SKIP, never PASS) */
+#define SKIP (-1)		/* what a case returns when it could not run: run() reports SKIP, never PASS */
+#define SKIPST 254		/* the child's exit status for it, above every case's failure code (they stop at 100) */
 #define N 64
 #define TF tfname
 static char *tfname = "/tmp/vm30.dat";	/* VM30_TF: another file system */
@@ -520,7 +521,8 @@ static int shared_denied(void)
 	if (w[0] != 3)
 		bad |= 16;
 	{
-		char c = 0;	/* and in the file: read through the descriptor, not the mapping */
+		char c = 0;	/* read back through the descriptor: the same page cache, so it shows the file holds the byte, not that
+				 * a block was allocated on the disk */
 
 		lseek(fd, (off_t)(32 * PG), 0);
 		if (read(fd, &c, 1) != 1 || c != 3)
@@ -750,12 +752,12 @@ static void run(const char *name, int (*f)(void))
 		alarm(60);
 		r = f();
 		fflush(stdout);
-		_exit(r == SKIP ? SKIP : r ? (r > 100 ? 100 : r) : 0);
+		_exit(r == SKIP ? SKIPST : r ? (r > 100 ? 100 : r) : 0);
 	}
 	waitpid(c, &st, 0);
 	if (WIFSIGNALED(st))
 		printf("FAIL %-16s signal %d\n", name, WTERMSIG(st) & 0177);
-	else if (WEXITSTATUS(st) == SKIP)
+	else if (WEXITSTATUS(st) == SKIPST)
 		printf("SKIP %-16s not run\n", name);
 	else
 		printf("%s %-16s %d\n", WEXITSTATUS(st) ? "FAIL" : "PASS", name, WEXITSTATUS(st));
