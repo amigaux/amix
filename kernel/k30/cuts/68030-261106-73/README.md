@@ -33,6 +33,6 @@ Inputs (`cut.sh` names each by an environment variable):
 
 `unix.brel` (1543028 bytes) is the shipped form (as `/stand/k30/unix`), `kabi` is its sidecar, `unix.sym` holds its
 symbols, and `unix` is the ET_REL it was made from. `mod.d/ufs` and `mod.d/s5` are the carved core-tier modules
-bound to this build. 
+bound to this build.
 Its sums were reproduced by `../build.sh` on the host (gcc-cross-amix `33ebadc`) and in the build container
-(`amix-toolchain:dist`), and by `cut.sh` on the host.
+(`amix-toolchain:dist`), and by `cut.sh` twice on the host with the host's own m68k binutils.
