@@ -1537,9 +1537,9 @@ if [ "$SWAP_GUARD" = 1 ]; then
   ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/swapguard030.c" -o "$BUILD/swapguard030.o" ) \
     || { echo "--swap-guard: swapguard030.c did not compile" >&2; exit 1; }
   GOT="$("$NM" "$BUILD/swapguard030.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOT" = "bzero delay kmem_alloc kmem_free kmem_zalloc maxmem sleep spl7 splx wakeup" ] || { echo "--swap-guard: swapguard030.o imports '$GOT'" >&2; exit 1; }
+  [ "$GOT" = "bzero common_specvp delay kmem_alloc kmem_free kmem_zalloc maxmem sleep spl7 splx sptmap strcmp swapinfo wakeup" ] || { echo "--swap-guard: swapguard030.o imports '$GOT'" >&2; exit 1; }
   GOTX="$("$NM" "$BUILD/swapguard030.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOTX" = "swapadd_guarded swapguard_swapadd swapguard_take swg_calls swg_last swg_magic swg_nomem swg_resized swg_retries swg_swapadd" ] \
+  [ "$GOTX" = "swapadd_guarded swapguard_swapadd swapguard_take swg_calls swg_keep swg_last swg_magic swg_noarray swg_nomem swg_resized swg_retries swg_swapadd" ] \
     || { echo "--swap-guard: swapguard030.o exports '$GOTX'" >&2; exit 1; }
   echo "  swapguard030.o $(sha256sum "$BUILD/swapguard030.o" | cut -c1-16): imports/exports exact"
   SWG_OBJ="swapguard030.o"
