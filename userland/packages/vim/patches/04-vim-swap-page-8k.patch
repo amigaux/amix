@@ -1,0 +1,26 @@
+Out of memory, Vim's swap file came back with wrong lines: "E317: Pointer block
+id wrong", then lines lost or a wrong file written.  Amix's UFS, stock 2.1c as
+well, mishandles a 4 Kbyte write to the second half of an 8 Kbyte block: it sets
+up the page of the block's first half instead, without reading it, so that page
+can hold old memory, not the file's data.  The disk stays right.  Pages of a
+whole 8 Kbyte block never write to a block's second half on their own, so the
+swap file's pages are now 8 Kbyte on Amix.
+
+--- a/src/memfile.c
++++ b/src/memfile.c
+@@ -61,7 +61,14 @@
+ # endif
+ #endif
+ 
+-#define MEMFILE_PAGE_SIZE 4096		// default page size
++#ifdef __amix__
++// Amix's UFS (stock 2.1c as well) mishandles a 4 Kbyte write to the second
++// half of an 8 Kbyte block: the cached first half can then hold old memory.
++// The swap file rewrites single pages, so give it whole 8 Kbyte blocks.
++# define MEMFILE_PAGE_SIZE 8192
++#else
++# define MEMFILE_PAGE_SIZE 4096		// default page size
++#endif
+ 
+ static long_u	total_mem_used = 0;	// total memory used for memfiles
+ 
