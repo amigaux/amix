@@ -303,10 +303,11 @@ fi
 
 echo "== 8. the revision binding, end to end through stub runner/pusher =="
 # Stubs stand in for the box: the runner runs each command with /usr/sys redirected into a
-# fixture root and -- like the real telnet command runner -- ALWAYS EXITS 0.
+# fixture root and exits 0, as the real telnet command runner does when every command finished (it exits 1 on
+# one that never finished and 2 on one it refused to send: the stub's silence stands for those).
 #
 # The stub also models the box's CANONICAL TTY, because that is what broke the verify: the
-# runner sends each command as one telnet line with its own 16-byte `; echo D''ONE_$?`
+# runner sends each command as one telnet line with its own 21-byte `; echo D''ONE_nnnn_$?`
 # appended, and SVR4 caps a canonical line at MAX_CANON = 256 bytes.
 #
 # WHAT PAST THE CAP LOOKS LIKE.  Measured on a real box with a padding ladder: 229 bytes on
@@ -328,7 +329,7 @@ root = os.environ["STUBROOT"]
 MAXCANON = int(os.environ.get("STUBMAXCANON", "256"))
 wedged = False
 for cmd in sys.argv[1:]:
-    wire = cmd + "; echo D''ONE_$?"          # exactly what the runner puts on the tty
+    wire = cmd + "; echo D''ONE_0000_$?"     # what the runner puts on the tty (its nonce is 4 digits)
     if wedged or len(wire) > MAXCANON:
         # measured: no output whatsoever, and the session stays wedged from here on
         wedged = True
@@ -468,7 +469,7 @@ ok "kernel-patches.conf: the aen row still carries exp=amiga/driver/aen/exp"
 
 echo "== 12. every on-box line fits MAX_CANON, for every record in the real conf =="
 # WHY THIS SECTION EXISTS.  The runner sends each command as ONE telnet tty line plus its
-# own 16-byte "; echo D''ONE_$?"; SVR4 caps a canonical line at MAX_CANON = 256 bytes, so
+# own 21-byte "; echo D''ONE_nnnn_$?"; SVR4 caps a canonical line at MAX_CANON = 256 bytes, so
 # an over-long command never runs and answers nothing at all.  The post-push verify -- once
 # a single `if <marker grep> && <stamp grep> && test ! -f <exp>` chain -- came to 260 bytes
 # on the wire for the aen record and failed closed over a box that was in fact correctly
