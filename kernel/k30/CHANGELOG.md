@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — cut 68030-261106-75, kern30m k30.1.4.261106-75 (84ea5ae..a6ed061)
+
+hat_growsdt gives a shrunk segment table's tail back at table + units*64; the stock code used units*512, and hat_sdtfree then cleared another page's mapping-chain head or freed a page in use, so machines short of memory, 16 MB installs in particular, hung in hat_unload or hat_swapout (tools/growsdt030.py, 2 bytes). A new ufs block never shows old disk data: rwip's ufs_bmap call goes to ufs_bmap_hf (src/ufs_bmap_hf.c, tools/bmaphf030.py), which looks the block up first; a hole is allocated zero-filled, an allocated block is rewritten as stock, so rewrites keep their speed (each new block costs an in-memory zero-fill). The build refuses the hole fix without the rwip fix. sparsehole gains last, eof, keep and rewrite modes; tests/wcost holds the cost test. 16 MiB netinstall and CD/floppy install pass on the cut itself. Cut -74 (an earlier hole rule) was not released.
+
 ## 2026-11-06 — cut 68030-261106-73, kern30m k30.1.4.261106-73 (38ee0a2, ccab306)
 
 ufs rwip gives segmap_pagecreate the address the write starts at (base + mapon, as SVR4's source does) instead of the 8 KiB window's base. A write of whole pages that does not start at an 8 KiB offset of the file no longer leaves the pages before it in that 8 KiB reading old memory contents (the disk was always right). tools/rwippc030.py, 4 bytes in the ufs module, pinned to the stock rwip by digest; on by default, --no-ufs-rwip-fix builds the stock module. KNOWN-ISSUES lists the open mid-file hole case among a file's first 12 blocks (tests/sparsehole) and the 16 MiB install hangs.
