@@ -1091,6 +1091,9 @@ if [ -d "$STAGE/l11/base" ] && [ -f "$L11_IN/base/sets" ] && awk 'NF > 1 { f = 1
       grep -qx "$_bi" "$STAGE/l11/base/o.$_s" 2>/dev/null || echo "$_bi" >> "$STAGE/l11/base/o.$_s"
       echo "build-install-iso: l11/base/o.$_s: $_bn $_bv ($_bi)"
     done
+    # every offered set has its list, empty when it takes nothing of its own: a reader (netset-check, the
+    # netinstall's second stage) then never has to tell "no extras" from "the file is missing"
+    [ -f "$STAGE/l11/base/o.$_s" ] || { > "$STAGE/l11/base/o.$_s"; echo "build-install-iso: l11/base/o.$_s: none of its own"; }
   done
   rm -rf "${_bw:?}"
 fi
