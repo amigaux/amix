@@ -147,6 +147,10 @@ def source_tree(recipe, m):
 # the path; l and s paths are "link=target".
 OBJECT_TYPES = "fevdxlspcb"
 
+# A class name: pkgroll.sh accepts these after `none conffile', and a class
+# action script i.<class> or r.<class> fits s5's 14-byte names.
+CLASS_RE = re.compile(r"^[a-z][a-z0-9]{0,11}$")
+
 # The run-level link bands: S01-S09 stock mounts and
 # kbootset's namelist, S10-S19 first boot and upgrade (the installer's, never
 # a package's), S20-S29 devices and modules, S69 network, S70-S89 daemons,
@@ -471,9 +475,18 @@ def prototype_problems(recipe, m):
     out += layout_problems(m, objs or ())
     out += stock_problems(m, objs or ())
     out += stock_patched_problems(m, objs or ())
-    for ftype, _, path, _ in objs or ():
+    named = []
+    for ftype, cls, path, _ in objs or ():
         if ftype == "e" and path not in conf:
             out.append("prototype: e %s is not in CONFFILES" % path)
+        elif cls == "conffile" and path not in conf:
+            out.append("prototype: %s is in class conffile, but not in CONFFILES; "
+                       "the roll gives that class to CONFFILES' paths" % path)
+        if cls not in named:
+            named.append(cls)
+            if not CLASS_RE.match(cls):
+                out.append("prototype: class %s is not 1-12 of a-z and 0-9, the "
+                           "first a letter (its i.<class> fits s5's 14 bytes)" % cls)
         rc = RC_LINK_RE.match(path)
         if rc:
             why = rc_link_problem(rc.group(1))
@@ -775,12 +788,24 @@ def pkgversion(m):
     return "%s-%s" % (m["VERSION"], m["PKGREV"])
 
 
-def pkginfo(m):
+def classes(m, objs):
+    """pkginfo's CLASSES, in the order pkgadd installs them: none, conffile
+    when CONFFILES is set, then every other class the prototype names, in
+    the order it first names them (a device node whose group comes from a
+    conffile goes in a class of its own, laid after conffile)."""
+    out = ["none"] + (["conffile"] if m["CONFFILES"] else [])
+    for _, c, _, _ in objs or ():
+        if c not in out and c != "conffile":
+            out.append(c)
+    return out
+
+
+def pkginfo(m, recipe):
     v = pkgversion(m)
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
             "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%s%sDESC=%s\n"
             % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"],
-               "none conffile" if m["CONFFILES"] else "none", VENDOR,
+               " ".join(classes(m, prototype_objects(recipe))), VENDOR,
                VENDOR, m["PKG"], v, m["TOOLCHAIN"],
                "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
                "APKG_ESSENTIAL=yes\n" if m["ESSENTIAL"] == "yes" else "",
@@ -807,11 +832,11 @@ def clean_field(value):
     return " ".join(value.replace("|", "/").split())
 
 
-def catalog_line(m, filename, md5, size):
+def catalog_line(m, recipe, filename, md5, size):
     """name|version|pkginst|filename|md5|size|deps|category|description,
     each field derived as gen-catalog.py derives it from the rolled
     package's pkginfo and our conf lines."""
-    p = parse_pkginfo(pkginfo(m))
+    p = parse_pkginfo(pkginfo(m, recipe))
     deps = ",".join(words(m["DEPENDS"])) or "none"
     return "|".join((m["NAME"], clean_field(p["VERSION"]), p["PKG"],
                      filename, md5, str(size), deps,
@@ -1025,7 +1050,7 @@ def main(argv):
                 sys.stderr.write("pkgmeta: warning: %s: no man page for %s\n"
                                  % (m["NAME"], " ".join(miss)))
     elif a.cmd == "pkginfo":
-        sys.stdout.write(pkginfo(load(a.recipe)))
+        sys.stdout.write(pkginfo(load(a.recipe), a.recipe))
     elif a.cmd == "catalog":
         m = load(a.recipe)
         if a.pkg:
@@ -1044,7 +1069,7 @@ def main(argv):
             filename = a.filename or "%s-%s.pkg" % (m["PKG"], pkgversion(m))
         if "|" in filename or "\n" in filename:
             ap.error("--filename holds '|' or a newline")
-        sys.stdout.write(catalog_line(m, filename, md5, size))
+        sys.stdout.write(catalog_line(m, a.recipe, filename, md5, size))
     elif a.cmd == "fragments":
         frags = fragments([m for _, m in load_roots(a.roots)])
         if a.check:

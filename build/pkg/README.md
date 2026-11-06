@@ -55,7 +55,7 @@ so each fact about a package is written in one place.
 | `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `PREBUILT=""` | payload paths of ELFs the package ships ready-made from the pinned GCC 14 prefix (libamixrt.so.1); each must have the sha256 of a file `common/gcc14-pin.sh` pins and is not stripped. A build that then compiles nothing skips the flags gate, and any other ELF in its payload is refused |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools, P-36 W2). For the base packages a machine cannot boot without |
-| `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
+| `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, followed by any other class the prototype names, in its order (a device node whose group a conffile creates goes in a class of its own, so pkgadd makes it after that file), and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
@@ -211,7 +211,10 @@ container. `tests/repro-selftest.sh` proves all of it in CI.
 Before pkgmk the roll refuses a pkginfo without `PSTAMP` (pkgmk would write
 the build host's name and the date) and an object whose class pkginfo's
 `CLASSES` does not list: stock pkgadd installs only the listed classes and
-skips the others without a word. A kernel-space package's device nodes are
+skips the others without a word. pkgmeta lists `none`, `conffile` with `CONFFILES`, then
+the prototype's other classes in the order it first names them, and refuses
+a class name other than 1-12 of a-z and 0-9 starting with a letter (its
+`i.<class>` fits s5's 14 bytes) and a `conffile` line `CONFFILES` does not list. A kernel-space package's device nodes are
 in their module's class, its file name in `/etc/conf/mod.d` (amix-dlm C3-5
 v18 section 1.2), or in `none` for a package minted before v18.
 

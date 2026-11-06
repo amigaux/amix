@@ -106,6 +106,14 @@ def main():
         rc, out, work = roll(tmp, "/etc/foo.conf", pkginfo="PKG=foo\nCLASSES=none\nDESC=t\n")
         check("refused: pkginfo without CLASSES=none conffile",
               rc != 0 and "CLASSES=none conffile" in out, out)
+        rc, out, work = roll(tmp, "/etc/foo.conf", PROTO + "c audio /dev/audio 46 0 0660 root audio\n",
+                             pkginfo="PKG=foo\nCLASSES=none conffile audio mix2\nDESC=t\n")
+        check("other classes after none conffile pass, their lines untouched", rc == 0 and
+              "c audio /dev/audio 46 0 0660 root audio\n" in read(os.path.join(work, "prototype"))
+              and "e conffile /etc/foo.conf 0644" in read(os.path.join(work, "prototype")), out)
+        rc, out, work = roll(tmp, "/etc/foo.conf", pkginfo="PKG=foo\nCLASSES=none audio conffile\nDESC=t\n")
+        check("refused: a class between none and conffile",
+              rc != 0 and "does not say CLASSES=none conffile" in out, out)
         rc, out, work = roll(tmp, "/etc/bar.conf")
         check("refused: a path the prototype does not hold",
               rc != 0 and "/etc/bar.conf is on 0 prototype line(s)" in out
