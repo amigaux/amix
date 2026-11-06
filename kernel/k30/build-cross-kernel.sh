@@ -1723,6 +1723,7 @@ kzero_check() {
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
+case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/iolockufs030.py" --check-linked "$BUILD/unix" || exit 1; fi ;; esac
 if [ "$FPU_GATE" = 1 ]; then
   echo "--- fpu gate: sendsig's jsr fpu_setup -> fpu_setup_gated (tools/fpugate-sendsig.py) ---"
   python3 "$KT/tools/fpugate-sendsig.py" "$BUILD/unix"
@@ -1868,6 +1869,10 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
   if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   if [ "$FREEQ_GUARD" = 1 ]; then python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"; fi
+  if [ "$GROWSDT_FIX" = 1 ]; then python3 "$KT/tools/growsdt030.py" --check "$BUILD/unix" || exit 1; fi
+  case ",$CARVE_FS," in *,ufs,*) ;; *)
+    if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi
+    if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/iolockufs030.py" --check-linked "$BUILD/unix" || exit 1; fi ;; esac
   if [ "$SWAP_GUARD" = 1 ]; then python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"; fi
   if [ "$ARENA8M" = 1 ]; then python3 "$KT/tools/arena8m030.py" --check "$BUILD/unix"; fi
   if [ "$KMEM_WAKE" = 1 ]; then python3 "$KT/tools/kmemwake030.py" --check "$BUILD/unix"; fi

@@ -148,16 +148,16 @@ def main(args=None, known=KNOWN):
                                                                                            FIXED.hex(), off))
 
 
-def synth(path, gmut=None, fmut=None, relocs=None):
+def synth(path, gmut=None, fmut=None, relocs=None, glen=0xe0):
     """a minimal ET_REL: hat_growsdt (0xe0 bytes, the stock bytes at the checked offsets, the call relocated to
     hat_sdtfree) and hat_sdtfree (the unit sequence)"""
-    g = bytearray(0xe0)
+    g = bytearray(glen)
     g[0:4] = bytes.fromhex('4e56ffd0')
     g[UNITS[0]:UNITS[0] + len(UNITS[1])] = UNITS[1]
     g[CONTEXT[0]:CONTEXT[0] + len(CONTEXT[1])] = CONTEXT[1]
     g[SITE:SITE + 2] = STOCK
     g[CONTEXT[2]:CONTEXT[2] + len(CONTEXT[3])] = CONTEXT[3]
-    g[0xdc:0xe0] = bytes.fromhex('4e5e4e75')
+    g[glen - 4:glen] = bytes.fromhex('4e5e4e75')
     f = bytearray.fromhex('4e56fff8202e0008' + SDTFREE.hex() + '4e5e4e75')
     if gmut:
         gmut(g)
@@ -194,6 +194,14 @@ def selftest():
     import contextlib, io, os, tempfile
     want = bytes.fromhex('4e71')               # nop, written here independently of FIXED
 
+    def runm(args, known):
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                main(args, known)
+            return ''
+        except SystemExit as e:
+            return str(e.code or '')
+
     def run(args, known):
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -226,12 +234,15 @@ def selftest():
             synth(p, gmut=m if which == 'g' else None, fmut=m if which == 'f' else None)
             before = open(p, 'rb').read()
             assert run([p], None) != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
-        rcases = (('no relocation at the call', ((0xc4, 2, 1, 0),)), ('the call relocated to hat_growsdt', ((0xc8, 1, 1, 0),)),
-                  ('an addend on the call', ((0xc8, 2, 1, 4),)))
-        for what, relocs in rcases:
-            synth(p, relocs=relocs)
+        rcases = (('no relocation at the call', dict(relocs=((0xc4, 2, 1, 0),))), ('the call relocated to hat_growsdt', dict(relocs=((0xc8, 1, 1, 0),))),
+                  ('an addend on the call', dict(relocs=((0xc8, 2, 1, 4),))), ('a PC-relative call', dict(relocs=((0xc8, 2, 5, 0),))),
+                  ('a hat_growsdt too short to be the stock one', dict(glen=0xd0)))
+        for what, kw in rcases:
+            synth(p, **kw)
             before = open(p, 'rb').read()
-            assert run([p], None) != 0 and open(p, 'rb').read() == before, 'a hat_growsdt with %s was not refused' % what
+            r = runm([p], None)
+            want = 'too short' if 'glen' in kw else 'is not jsr hat_sdtfree'
+            assert want in r and open(p, 'rb').read() == before, 'a hat_growsdt with %s was not refused (%r)' % (what, r)
         synth(p, gmut=lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('ffc0')))
         before = open(p, 'rb').read()
         assert run([p], None) == 0, 'the frame change alone tripped a context check'

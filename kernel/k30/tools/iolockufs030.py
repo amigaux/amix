@@ -3,7 +3,10 @@
 
   iolockufs030.py OBJ           retarget, in the ufs object linked with as_iolock_ufs.o (ELF32 big-endian ET_REL), in
                                 place; refuses unless rwip is the stock code and the call is exactly the stock one
-  iolockufs030.py --check OBJ   verify, write nothing; exit 1 unless retargeted
+  iolockufs030.py --check OBJ   verify, write nothing; exit 1 unless retargeted and as_iolock is called from
+                                as_iolock_ufs alone (the ufs object or the carved module)
+  iolockufs030.py --check-linked UNIX   the same in a linked kernel, where nfs's rwvp calls as_iolock too: rwip must
+                                not call it, and as_iolock_ufs must be called from rwip alone
   iolockufs030.py --selftest    retarget a synthetic object: stock -> retargeted, idempotent, refusals proved
 
 src/as_iolock_ufs.c says why: pagecreate is kept only for writes that start at the 8 KiB window and cover it or run
@@ -98,7 +101,8 @@ def main(args=None, known=rw.KNOWN_RWIP):
     args = sys.argv[1:] if args is None else args
     if args == ['--selftest']:
         return selftest()
-    check = args[:1] == ['--check']
+    check = args[:1] in (['--check'], ['--check-linked'])
+    linked = args[:1] == ['--check-linked']
     if check:
         args = args[1:]
     if len(args) != 1:
@@ -109,10 +113,11 @@ def main(args=None, known=rw.KNOWN_RWIP):
         if not done:
             fail('%s: rwip still calls the stock as_iolock' % args[0])
         a, u = callers(b, sh, syms, 'as_iolock'), callers(b, sh, syms, 'as_iolock_ufs')
-        if a != {'as_iolock_ufs'} or u != {'rwip'}:
-            fail('%s: as_iolock is called from %s and as_iolock_ufs from %s (want as_iolock_ufs, rwip)'
-                 % (args[0], sorted(a), sorted(u)))
-        print('iolockufs030: %s: rwip calls as_iolock_ufs, and only as_iolock_ufs calls as_iolock' % args[0])
+        if u != {'rwip'}:
+            fail('%s: as_iolock_ufs is called from %s (want rwip alone)' % (args[0], sorted(u)))
+        if 'as_iolock_ufs' not in a or 'rwip' in a or (not linked and a != {'as_iolock_ufs'}):
+            fail('%s: as_iolock is called from %s (want as_iolock_ufs%s)' % (args[0], sorted(a), ', and others not rwip' if linked else ' alone'))
+        print('iolockufs030: %s: rwip calls as_iolock_ufs%s' % (args[0], ', which rwip alone calls' if linked else ', and only as_iolock_ufs calls as_iolock'))
         return
     if done:
         print('iolockufs030: %s: already retargeted' % args[0])
@@ -123,14 +128,18 @@ def main(args=None, known=rw.KNOWN_RWIP):
     print('iolockufs030: %s: rwip\'s as_iolock relocation now names as_iolock_ufs' % args[0])
 
 
-def synth(path, mutate=None, call=('as_iolock', 1, 0), defs=('as_iolock_ufs', 'ufs_pc_magic'), wcall=2):
-    """a minimal ET_REL: rwip (the stock call of as_iolock and the rwip fix's pushes) and as_iolock_ufs"""
-    t = bytearray(bytes.fromhex('4e560000') + BEFORE + bytes(4) + AFTER + RWSITE + bytes.fromhex('2f2eff94') +
+def synth(path, mutate=None, call=('as_iolock', 1, 0), defs=('as_iolock_ufs', 'ufs_pc_magic'), wcall=2, other=None,
+          dup_rwip=False, rwip_calls=1, rwsite=1):
+    """a minimal ET_REL: rwip (the stock call of as_iolock and the rwip fix's pushes) and as_iolock_ufs; optionally a
+    function rwvp calling OTHER, a second definition of rwip, a second as_iolock relocation in rwip, or the rwip fix's
+    pushes RWSITE times"""
+    t = bytearray(bytes.fromhex('4e560000') + BEFORE + bytes(4) + AFTER + RWSITE * rwsite + bytes.fromhex('2f2eff94') +
                   bytes.fromhex('4e5e4e75'))
     if mutate:
         mutate(t)
     g = bytes.fromhex('4eb900000000' + '4e75' + '55504321')   # as_iolock_ufs: jsr as_iolock; rts; then ufs_pc_magic
-    names = ['rwip', 'as_iolock', 'as_iolock_ufs', 'ufs_pc_magic']
+    o = bytes.fromhex('4eb900000000' + '4e75')                 # rwvp: jsr OTHER; rts
+    names = ['rwip', 'as_iolock', 'as_iolock_ufs', 'ufs_pc_magic', 'rwvp']
     strtab = b'\0' + b''.join(n.encode() + b'\0' for n in names)
     off = [1]
     for n in names[:-1]:
@@ -139,10 +148,16 @@ def synth(path, mutate=None, call=('as_iolock', 1, 0), defs=('as_iolock_ufs', 'u
     sym += struct.pack('>IIIBBH', off[1], 0, 0, 0x10, 0, 0)
     sym += struct.pack('>IIIBBH', off[2], len(t), 8, 0x12, 0, 1 if 'as_iolock_ufs' in defs else 0)
     sym += struct.pack('>IIIBBH', off[3], len(t) + 8, 4, 0x11, 0, 1 if 'ufs_pc_magic' in defs else 0)
-    cs = {'as_iolock': 2, 'as_iolock_ufs': 3}[call[0]]
-    rela = struct.pack('>IIi', 4 + len(BEFORE), (cs << 8) | call[1], call[2]) + struct.pack('>IIi', len(t) + 2, (wcall << 8) | 1, 0)
+    sym += struct.pack('>IIIBBH', off[0] if dup_rwip else off[4], len(t) + 12, len(o), 0x12, 0, 1)
+    cs = {'as_iolock': 2, 'as_iolock_ufs': 3}
+    rela = struct.pack('>IIi', 4 + len(BEFORE), (cs[call[0]] << 8) | call[1], call[2])
+    rela += struct.pack('>IIi', len(t) + 2, (wcall << 8) | 1, 0)
+    if other:
+        rela += struct.pack('>IIi', len(t) + 14, (cs[other] << 8) | 1, 0)
+    if rwip_calls > 1:
+        rela += struct.pack('>IIi', len(t) - 8, (2 << 8) | 1, 0)
     shstr = b'\0.text\0.rela.text\0.symtab\0.strtab\0.shstrtab\0'
-    body = [bytes(t) + g, rela, sym, strtab, shstr]
+    body = [bytes(t) + g + o, rela, sym, strtab, shstr]
     pos, offs = 52, []
     for x in body:
         offs.append(pos)
@@ -163,54 +178,71 @@ SYNTH = {'4099c352ac277edef3865773bc7fdc6417877a892d2580ba242a6d34967be0a6'}   #
 
 
 def selftest():
+    """each check is shown to refuse on its own: every case asserts the refusal's own message"""
     import contextlib, io, tempfile
 
     def run(args, known):
         try:
             with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 main(args, known)
-            return 0
+            return ''
         except SystemExit as e:
-            return 1 if e.code else 0
+            return str(e.code or '')
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, 'ufs.exp')
         synth(p)
         stock = open(p, 'rb').read()
-        assert run(['--check', p], SYNTH) == 1, 'the stock object passed --check'
-        assert run([p], set()) == 1 and open(p, 'rb').read() == stock, 'an unknown rwip was retargeted'
-        assert run([p], SYNTH) == 0, 'the stock object was not retargeted'
+        assert 'still calls the stock as_iolock' in run(['--check', p], SYNTH), 'the stock object passed --check'
+        assert 'not the stock code' in run([p], set()) and open(p, 'rb').read() == stock, 'an unknown rwip was retargeted'
+        assert run([p], SYNTH) == '', 'the stock object was not retargeted'
         new = open(p, 'rb').read()
         diff = [i for i in range(len(stock)) if stock[i] != new[i]]
         b, sh, syms = rw.load(p)
         info, = struct.unpack_from('>I', b, sh[2][4] + 4)     # the first entry, rwip's call
         assert syms[info >> 8][0] == 'as_iolock_ufs' and len(diff) == 1, 'the relocation does not name as_iolock_ufs alone'
-        assert run(['--check', p], SYNTH) == 0, 'the retargeted object failed --check'
-        assert run([p], SYNTH) == 0 and open(p, 'rb').read() == new, 'a second run changed the object'
-        cases = (('the pagecreate argument', 4 + 2, 'ffe0'), ('the uio argument', 4 + 18, '0010'),
-                 ('the store of n', 4 + len(BEFORE) + 4, '2d41ff8c'), ('the vp argument', 4 + 6, '2f06'))
-        for what, at, hexb in cases:
-            v = bytes.fromhex(hexb)
-            synth(p, lambda t: t.__setitem__(slice(at, at + len(v)), v))
-            before = open(p, 'rb').read()
-            assert run([p], None) != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
-        rcases = (('an addend on the call', dict(call=('as_iolock', 1, 4))), ('a PC-relative call', dict(call=('as_iolock', 5, 0))),
-                  ('no as_iolock_ufs in the object', dict(defs=('ufs_pc_magic',))), ('no ufs_pc_magic', dict(defs=('as_iolock_ufs',))))
-        for what, kw in rcases:
+        assert run(['--check', p], SYNTH) == '' and run(['--check-linked', p], SYNTH) == '', 'the retargeted object failed --check'
+        assert run([p], SYNTH) == '' and open(p, 'rb').read() == new, 'a second run changed the object'
+        n = 0
+        for what, kw, args, msg in (
+                ('the pagecreate argument', dict(mutate=lambda t: t.__setitem__(slice(6, 8), bytes.fromhex('ffe0'))), [], 'differs from stock'),
+                ('the uio argument', dict(mutate=lambda t: t.__setitem__(slice(22, 24), bytes.fromhex('0010'))), [], 'differs from stock'),
+                ('the store of n', dict(mutate=lambda t: t.__setitem__(slice(30, 34), bytes.fromhex('2d41ff8c'))), [], 'differs from stock'),
+                ('the vp argument', dict(mutate=lambda t: t.__setitem__(slice(10, 12), bytes.fromhex('2f06'))), [], 'differs from stock'),
+                ('an addend on the call', dict(call=('as_iolock', 1, 4)), [], 'no addend'),
+                ('a PC-relative call', dict(call=('as_iolock', 5, 0)), [], 'no addend'),
+                ('no as_iolock_ufs in the object', dict(defs=('ufs_pc_magic',)), [], 'as_iolock_ufs is defined 0 times'),
+                ('no ufs_pc_magic', dict(defs=('as_iolock_ufs',)), [], 'ufs_pc_magic is not defined'),
+                ('two definitions of rwip', dict(dup_rwip=True), [], '2 definitions of rwip'),
+                ('rwip naming as_iolock twice', dict(rwip_calls=2), [], 'names as_iolock 2 times'),
+                ('the rwip fix\'s pushes twice', dict(rwsite=2), [], 'not there once'),
+                ('the rwip fix\'s pushes missing', dict(rwsite=0), [], 'not there once')):
             synth(p, **kw)
             before = open(p, 'rb').read()
-            assert run([p], None) != 0 and open(p, 'rb').read() == before, 'an object with %s was not refused' % what
-        synth(p, wcall=3)
-        assert run([p], SYNTH) == 0 and run(['--check', p], SYNTH) != 0, \
-            'a wrapper that does not call as_iolock passed --check'
-        synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
+            r = run(args + [p], None)
+            assert msg in r and open(p, 'rb').read() == before, 'a changed %s was not refused (%r)' % (what, r)
+            n += 1
+        m = 0
+        for what, kw, args, msg in (
+                ('a wrapper that does not call as_iolock', dict(wcall=1), ['--check'], 'as_iolock is called from'),
+                ('as_iolock_ufs called from a second function', dict(other='as_iolock_ufs'), ['--check'], 'as_iolock_ufs is called from'),
+                ('another caller of as_iolock in the ufs object', dict(other='as_iolock'), ['--check'], 'as_iolock is called from'),
+                ('as_iolock_ufs called twice, linked', dict(other='as_iolock_ufs'), ['--check-linked'], 'as_iolock_ufs is called from')):
+            synth(p, **kw)
+            assert run([p], SYNTH) == '', 'could not retarget for the %s case' % what
+            r = run(args + [p], SYNTH)
+            assert msg in r, 'the check passed %s (%r)' % (what, r)
+            m += 1
+        synth(p, other='as_iolock')
+        run([p], SYNTH)
+        assert run(['--check-linked', p], SYNTH) == '', 'a linked kernel\'s other caller of as_iolock was refused'
+        synth(p, mutate=lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
         before = open(p, 'rb').read()
-        assert run([p], None) == 0, 'the frame change alone tripped a context check'
-        synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
-        assert run([p], SYNTH) != 0 and open(p, 'rb').read() == before, 'a change only the digest sees was not refused'
-    print('iolockufs030 selftest: the stock call retargeted (one relocation), idempotent, --check both ways, an unknown '
-          'rwip, %d changed contexts, %d bad relocations or objects, a wrapper not calling as_iolock and a change only the '
-          'digest sees refused'
-          % (len(cases), len(rcases)))
+        assert run([p], None) == '', 'the frame change alone tripped a context check'
+        synth(p, mutate=lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
+        assert 'not the stock code' in run([p], SYNTH) and open(p, 'rb').read() == before, 'a change only the digest sees was not refused'
+    print('iolockufs030 selftest: the stock call retargeted (one relocation), idempotent, --check and --check-linked both '
+          'ways, an unknown rwip, %d bad objects and %d bad call graphs refused, each by its own check, a linked '
+          'kernel\'s other caller allowed, and a change only the digest sees refused' % (n, m))
 
 
 if __name__ == '__main__':
