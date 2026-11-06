@@ -154,6 +154,13 @@
 #                port's order so both lines compile the same audio.c, applied to the work copy's
 #                amiga/driver/audio.c, which section 4b recompiles before section 5 relinks amiga/driver. Each
 #                script finds its places by fingerprint and refuses a mismatch.
+#   --no-audio-replies  with --audio-paula, build WITHOUT tools/patch_audio_replies.py (on by default;
+#                AUDIO_REPLIES=0 does the same), which runs after paula's three, as the port's k46 build does: in the
+#                stock audioioctl each AUDIO_VOLUME and AUDIO_PERIOD reply is sent twice, the second time as M_IOCACK
+#                with error 0 (a refusal arrives as success), and audiointr's refill copies part of a message too
+#                long for the 8 KiB buffer without advancing b_rptr, so a long write replays stretches of itself.
+#                It takes only the audio.c paula's three make (pinned) and gives a pinned result.  Without
+#                --audio-paula, audio.c is the stock one and this does nothing.
 #   --ttcompat-fix <patch_ttcompat_init.py>  (opt-in) the port's DRIVER-LINE-7 fix: clear the three
 #                ttcompat state fields the stock ttcompatopen leaves uninitialised -- a same-length byte patch
 #                on the linked ET_REL, located by symbol, after the rth1 hook and before elf2brel; --check after.
@@ -291,6 +298,7 @@ FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq ungu
 ARENA8M="${ARENA8M:-1}"           # --no-arena8m (ARENA8M=0): kvseg 4 MiB, as stock
 SEGVN_PROT="${SEGVN_PROT:-1}"     # --no-segvn-prot (SEGVN_PROT=0): a denied access restarts for ever, as stock
 RMW_FAULT="${RMW_FAULT:-1}"       # --no-rmw-fault (RMW_FAULT=0): a tas or cas fault decided as a read, as stock
+AUDIO_REPLIES="${AUDIO_REPLIES:-1}"  # --no-audio-replies (AUDIO_REPLIES=0): with --audio-paula, the stock ioctl replies and refill
 KMEM_WAKE="${KMEM_WAKE:-1}"       # --no-kmem-wake (KMEM_WAKE=0): oversize sleepers woken as stock
 IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the opt-in IP lower read queue fix
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
@@ -344,6 +352,7 @@ while [ "$#" -gt 0 ]; do
     --no-ufs-hole-fix) UFS_HOLE_FIX=0; shift ;;
     --ufs-hole-fix) UFS_HOLE_FIX=1; shift ;;
     --growsdt-fix) GROWSDT_FIX=1; shift ;;
+    --no-audio-replies) AUDIO_REPLIES=0; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
     --no-arena8m) ARENA8M=0; shift ;;
     --no-kmem-wake) KMEM_WAKE=0; shift ;;
@@ -394,6 +403,7 @@ KABI_MINOR="${KABI##*.}"   # the claim's minor: list lines whose since is above 
 # k30.1.3 lists paula_busy and audio_nopen, which only the patched audio.c defines: refuse the claim without the patch
 # here, before a long build, rather than at ksymgate
 if [ "$KABI_MINOR" -ge 3 ] && [ -z "$AUDIO_PAULA" ]; then
+case "$AUDIO_REPLIES" in 0|1) ;; *) echo "AUDIO_REPLIES='$AUDIO_REPLIES' (want 0 or 1)" >&2; exit 2 ;; esac
   echo "--kabi $KABI claims DDI minor 3 (paula_busy, audio_nopen), which needs --audio-paula <amix-paula dir>" >&2; exit 2
 fi
 if [ -n "$AUDIO_PAULA" ]; then
@@ -778,6 +788,11 @@ if [ -n "$AUDIO_PAULA" ]; then
 fi
 
 # === 2c. --sd-cards 4: the four-card sd layer (kernel/dlm C4-1 section 2) ==============
+  if [ "$AUDIO_REPLIES" = 1 ]; then	# one reply per volume/period ioctl, refills move on (both lines, after paula's three)
+    python3 "$KT/tools/patch_audio_replies.py" --selftest "$AUD" >/dev/null \
+      || { echo "FATAL: patch_audio_replies.py --selftest failed on audio.c" >&2; exit 1; }
+    python3 "$KT/tools/patch_audio_replies.py" "$AUD" || { echo "FATAL: patch_audio_replies.py refused audio.c" >&2; exit 1; }
+  fi
 # sd.h is a header, which the patch harness above does not take, so the two stock edits are made
 # here, each anchored on the exact stock line and refused when the line is not there exactly once:
 #   sd.h  SDCARDS 2 -> 4; sdcard( dev) = card low bit 3 | card high bit 7 (C4-1 section 2.1)
