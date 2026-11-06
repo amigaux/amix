@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — cut 68030-261106-73, kern30m k30.1.4.261106-73 (38ee0a2, ccab306)
+
+ufs rwip gives segmap_pagecreate the address the write starts at (base + mapon, as SVR4's source does) instead of the 8 KiB window's base. A write of whole pages that does not start at an 8 KiB offset of the file no longer leaves the pages before it in that 8 KiB reading old memory contents (the disk was always right). tools/rwippc030.py, 4 bytes in the ufs module, pinned to the stock rwip by digest; on by default, --no-ufs-rwip-fix builds the stock module. KNOWN-ISSUES lists the open mid-file hole case among a file's first 12 blocks (tests/sparsehole) and the 16 MiB install hangs.
+
 ## 2026-11-06 — cut 68030-261106-72, kern30m k30.1.4.261106-72 (9c00380, f8878fa)
 
 kvseg (the kernel's map space) is 8 MiB instead of 4. kmem_freepool and kmem_free wake large requests that had to wait. The swap guard limits an area to 16 x maxmem pages, keeps 1 MiB of kvseg free in one run, exempts the boot area, and lets swapadd answer re-adds, duplicates and overlaps itself. A denied access gives a signal or EFAULT instead of a fault taken for ever; tas and cas on a read-only page give SIGSEGV; a core dump leaves pages with no access as holes. IP's lower read queue mark is 0x10000, so the A2065 no longer drops frames under receive load. kabi k30.1.4 and abi unchanged. KNOWN-ISSUES.md (including a large file written at random offsets reading back wrong blocks once it outgrows the page cache; under investigation) and docs/swap-areas.md added.
