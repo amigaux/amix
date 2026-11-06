@@ -9,15 +9,17 @@ The k30 module kernel, kabi k30.1.4 (abi 18c0a1c9), cut from amix `fb39fec` with
   hat_unload and hat_swapout never ended, and a page left with no bits was freed while still mapped.
   `tools/growsdt030.py` checks hat_growsdt and hat_sdtfree against the stock code and makes the second shift a nop
   (2 bytes in `unix`; `build-cross-kernel.sh`, on by default from `84ea5ae`, `--no-growsdt-fix` without).  In
-  emulation the 16 MiB netinstall, which stopped for good in 5 of 5 runs on builds from -71 to -73's code, passed 3
-  of 3 with the fix, and the segment-table units allocated equalled those in use at every sample at 16 and 64 MiB.
+  emulation the 16 MiB netinstall, which stopped for good in 5 of 5 runs on builds from -71 to -73's code, completed 3
+  of 3 on a build with -73's ufs and this fix, and an install under a watch on every store to a page's chain head
+  logged none bad (the same watch on the unfixed kernel named hat_sdtfree).
 - **A new ufs block never shows old disk data.** For a write of whole pages as_iolock granted pagecreate, and
   ufs_bmap then allocated a new block without reading or zeroing it, so the pages the write left alone read the disk
   block's former contents.  `src/as_iolock_ufs.c` keeps pagecreate only for a write that starts at its 8 KiB window
   and covers it or runs to the end of the file, as Solaris's ufs_wrip does; `tools/iolockufs030.py` retargets rwip's
   one call of as_iolock to it in the ufs object (on by default from `56f7845`, `--no-ufs-hole-fix` without).  In
-  emulation `tests/sparsehole` found 40 to 242 of 288 pages wrong on -73 and none with the fix, in each of its modes;
-  random 4 KiB rewrites of pages not in the cache take about 28% longer (they now read the page first).
+  emulation `tests/sparsehole`'s hole modes found 40 to 242 of 288 pages wrong on -73 and none with the fix; its
+  `eof` and `keep` modes found 0 on both (regression cases).  Random 4 KiB rewrites of pages not in the cache took
+  28% and 50% longer in the two rows measured (they now read the page first); appends and copies cost the same.
 
 Against -73 the shipped files differ only there: `unix` and `unix.brel` in the build id (one byte) and the 2 bytes of
 the growsdt fix, `kabi` in its `build=` and `sha256=` lines, `mod.d/s5` in its `build=` (one byte), `mod.d/ufs` in its

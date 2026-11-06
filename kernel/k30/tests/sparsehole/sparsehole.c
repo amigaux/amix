@@ -22,8 +22,11 @@
  * page, so ufs_bmap skips the read for indirect blocks too and both kinds are expected wrong.  With "eof" each file
  * instead gets its 2 KiB written 2 KiB past its end into a new block, once a direct one (block 0 of an empty file)
  * and once an indirect one (block 15, after 8 KiB at block 14), then 8 KiB at block 40, so the rest of both blocks
- * lies inside the file and must read zero.  Exit 1 when a direct or an indirect page is wrong.  It assumes 8 KiB
- * blocks (the 1.1 filesystems).
+ * lies inside the file and must read zero (a regression case: rwip's own zeroing of a gap past the end covers it).
+ * With "keep" the 2 KiB goes at the start of a new block and reaches the end of the file (block 1 after 8 KiB at
+ * block 0, block 15 after 8 KiB at block 14): the one write shorter than a window that still allocates alloc-only,
+ * whose block's rest must read zero once the file is extended past it.  Exit 1 when a direct or an indirect page is
+ * wrong.  It assumes 8 KiB blocks (the 1.1 filesystems).
  *
  * sparsehole DIR [NF [MB [WHERE]]]
  *
@@ -78,9 +81,10 @@ int main(int ac, char **av)
 {
 	char *dir = ac > 1 ? av[1] : "/tmp", f[256], g[256], h[256];
 	long nf = ac > 2 ? atol(av[2]) : 16, mb = ac > 3 ? atol(av[3]) : 24, bad[2], stale[2], n[2], page, off;
-	int eof = ac > 4 && strcmp(av[4], "eof") == 0;
-	int wp = ac > 4 && strcmp(av[4], "last") == 0 ? 3 : 1;	/* the page written in each block */
-	static int eofblocks[] = { 0, 15 };
+	int keep = ac > 4 && strcmp(av[4], "keep") == 0;
+	int eof = keep || (ac > 4 && strcmp(av[4], "eof") == 0);
+	int wp = ac > 4 && strcmp(av[4], "last") == 0 ? 3 : keep ? 0 : 1;	/* the page written in each block */
+	static int eofblocks[] = { 0, 15 }, keepblocks[] = { 1, 15 };
 	int fd, i, j, k, want, ind, shown = 0;
 
 	sprintf(g, "%s/sh.fill", dir);
@@ -92,6 +96,17 @@ int main(int ac, char **av)
 	}
 	for (i = 0; i < nf; i++) {
 		sprintf(f, "%s/sh.%d", dir, i);
+		if (keep) {
+			if ((fd = open(f, O_RDWR | O_CREAT | O_TRUNC, 0600)) < 0 || wr(fd, 0L, 0x11, BLK) < 0
+			    || wr(fd, BLK, 0x22, 2048L) < 0 || wr(fd, 14 * BLK, 0x11, BLK) < 0 || wr(fd, 15 * BLK, 0x22, 2048L) < 0
+			    || wr(fd, 40 * BLK, 0x11, BLK) < 0) {
+				perror(f);
+				return 2;
+			}
+			fsync(fd);
+			close(fd);
+			continue;
+		}
 		if (eof) {
 			if ((fd = open(f, O_RDWR | O_CREAT | O_TRUNC, 0600)) < 0 || wr(fd, 2048L, 0x22, 2048L) < 0
 			    || wr(fd, 14 * BLK, 0x11, BLK) < 0 || wr(fd, 15 * BLK + 2048, 0x22, 2048L) < 0
@@ -129,8 +144,8 @@ int main(int ac, char **av)
 			return 2;
 		}
 		for (k = 0; k < (eof ? 2 : (int)(sizeof blocks / sizeof blocks[0])); k++) {
-			ind = (eof ? eofblocks[k] : blocks[k]) > 11;
-			off = (eof ? eofblocks[k] : blocks[k]) * BLK;
+			ind = (keep ? keepblocks[k] : eof ? eofblocks[k] : blocks[k]) > 11;
+			off = (keep ? keepblocks[k] : eof ? eofblocks[k] : blocks[k]) * BLK;
 			lseek(fd, off, SEEK_SET);
 			if (read(fd, buf, (int)BLK) != (int)BLK) {
 				perror("read");
@@ -158,6 +173,6 @@ int main(int ac, char **av)
 		unlink(f);
 	}
 	printf("RES sparsehole: %s write at page %d: direct %ld of %ld pages wrong (%ld the filler's 0x5a); indirect %ld of %ld "
-	    "wrong (%ld 0x5a); %ld files\n", eof ? "past-EOF" : "hole", wp, bad[0], n[0], stale[0], bad[1], n[1], stale[1], nf);
+	    "wrong (%ld 0x5a); %ld files\n", keep ? "window-start-to-EOF" : eof ? "past-EOF" : "hole", wp, bad[0], n[0], stale[0], bad[1], n[1], stale[1], nf);
 	return bad[0] || bad[1] ? 1 : 0;
 }

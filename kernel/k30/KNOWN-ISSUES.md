@@ -52,13 +52,21 @@ known about it, and what to do. Measurements are from emulation unless the entry
   write landed; past them only when the write reached the block's last page. From cut -74 rwip keeps pagecreate only
   for a write that starts at its 8 KiB window and covers it or runs to the end of the file, as Solaris's ufs_wrip does
   (`src/as_iolock_ufs.c`, `tools/iolockufs030.py`; `ufs_pc_cleared` counts the grants taken back); any other write
-  reads or zero-fills its window's pages first, and a new block is zeroed. `tests/sparsehole` in emulation, 16 files
-  with six 2 KiB writes into direct holes and six into indirect ones after a removed filler file of 0x5a: stock 2.1c
-  188 and 206 of 288 direct pages wrong with the writes 2 KiB into each block, 176 of 288 indirect ones with them on
-  the last page; -73 40 and 122 of 288 direct and 205 (16 MiB) and 242 (64 MiB) of 288 indirect; -74's fix 0 in every
-  mode. The cost, measured at 64 MiB: random 4 KiB rewrites of pages not in the cache take about 28% longer (20000 in
-  a 96 MB file, 23 s against 30 s), as they now read the page first; appending and copying cost the same. On -73 and
-  earlier, fill holes in the middle of a file with whole 8 KiB blocks, or write such files from start to end.
+  reads or zero-fills its window's pages first, so ufs_bmap zeroes a block it allocates for it. A write that starts at
+  the window and runs to the end of the file still allocates without zeroing, as before: ufs allocates only the
+  fragments it covers there, and zeroes the rest when the block grows. Not changed: `swap -a` on a sparse regular file
+  (ufs_allocstore) still allocates its holes without zeroing them, so the swap file holds old disk data until swapping
+  overwrites it. `tests/sparsehole` in emulation, 16 files after a removed filler file of 0x5a: with 2 KiB written 2
+  KiB into each of six direct and six indirect holes, stock 2.1c had 188 and 206 of 288 direct pages wrong, -73 40,
+  and 0 indirect on both; with the writes on each block's last page, stock had 176 of 288 indirect pages wrong, -73
+  122 direct and 205 (16 MiB) or 242 (64 MiB) indirect; -74's fix 0 in both. Its `eof` mode (a write 2 KiB past the
+  end into a new block) and `keep` mode (a write from a new block's start to the end) found 0 of 48 on -73 and on -74
+  alike: they are regression cases, and a 0 there cannot show that the new blocks landed on the filler's. The cost,
+  measured at 64 MiB with time() in seconds, one boot of each kernel, two passes: random 4 KiB rewrites of pages not
+  in the cache took 4 and 6 s on -73 against 7 and 8 s with the fix for 4000 of them in a 96 MB file, and 23 and 23 s
+  against 30 and 29 s for 20000 (about 50% and 28% longer: they now read the page first); 64 MB written by 4 KiB pages
+  and copied cost the same. On -73 and earlier, fill holes in the middle of a file with whole 8 KiB blocks, or write
+  such files from start to end.
 
 ## Faults and memory protection
 
@@ -80,8 +88,9 @@ known about it, and what to do. Measurements are from emulation unless the entry
   page's chain head watched (the watch named hat_sdtfree, called from hat_growsdt). No 68k hat source exists to
   compare with: the unit is the one hat_sdtalloc and hat_sdtfree themselves use (64 bytes: bit << 6, (address & 2047)
   >> 6), and hat_growsdt counts its new size in those units (entries * 8 + 63 >> 6) and clears entries up to that many
-  units. From cut -74 the second shift is gone (`tools/growsdt030.py`, 2 bytes). With it the 16 MiB netinstall passes
-  (3 of 3), and the segment-table units allocated equal those in use at every sample, at 16 and 64 MiB.
+  units. From cut -74 the second shift is gone (`tools/growsdt030.py`, 2 bytes). With the fix the 16 MiB netinstall
+  completed 3 times of 3 (a build with -73's ufs and this fix), and an install under the same watch logged no bad
+  store to a chain head.
 
 ## Networking
 
