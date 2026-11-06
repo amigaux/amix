@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-06 — pth 2.0.7-3, python3 3.11.18-4 (f60a783..926b67d)
+
+pth 2.0.7-3: on Amix, connect finishes before it returns, and a refused one gives ECONNREFUSED. recv and send no longer hit libsocket's NULL-address fault. send goes through write(2), so data that did not fit is no longer counted as sent and lost. poll no longer peeks at listening sockets, which broke accept with EINVAL.
+
+python3 3.11.18-4: the socket, resource and unicodedata modules. Needs pth 2.0.7-3; net.py tests sockets on the box.
+
 ## 2026-11-06 — vim 9.1.0000-4 (277c90b, 6dcebe1)
 
 When a line can't be read back, the write now stops instead of writing "???" lines; under vim -es, errors also go to stderr; the undo save refuses an impossible line length; the swap file uses 8 Kbyte pages on Amix, so it no longer reads back wrong (E317, a crash or a wrong file) on a kernel without the ufs rwip fix.
