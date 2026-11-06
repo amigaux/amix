@@ -39,8 +39,20 @@ wipe_earlier() {
 	rm -f "${1:?}"/amix-1.1-*.iso "${1:?}"/amix-1.1-*.adf "${1:?}"/amix-1.1-*.hdf "${1:?}"/amix-1.1-*.sha256 \
 		"${1:?}"/amix-1.1-*.MANIFEST "${1:?}/SHA256SUMS" "${1:?}/MEDIA.txt" "${1:?}/RELEASE-CHECK.txt"
 }
+# cdboot_same WANT NAME FILE -- FILE (the cd-tree's, or one read back off a disc) must be WANT byte for byte
+cdboot_same() {
+	[ -f "$3" ] && cmp -s "$1" "$3" && return 0
+	echo "build-release-media: $2's BOOT/amix-cdboot is not make dist's (sha256 $(sha256sum < "$1" | cut -c1-16)," \
+		"this one $( [ -f "$3" ] && sha256sum < "$3" | cut -c1-16 || echo missing))" >&2
+	return 1
+}
 if [ "${1:-}" = --selftest ]; then
 	d=$(mktemp -d) || exit 1; rc=0
+	printf 'cdboot-a' > "$d/w"; printf 'cdboot-a' > "$d/same"; printf 'cdboot-b' > "$d/other"
+	cdboot_same "$d/w" t "$d/same" || { echo "  FAIL cdboot_same refuses the same bytes"; rc=1; }
+	cdboot_same "$d/w" t "$d/other" 2>/dev/null && { echo "  FAIL cdboot_same takes other bytes"; rc=1; }
+	cdboot_same "$d/w" t "$d/none" 2>/dev/null && { echo "  FAIL cdboot_same takes a missing file"; rc=1; }
+	rm -f "${d:?}/w" "${d:?}/same" "${d:?}/other"
 	for f in amix-1.1-install.iso amix-1.1-netinstall.iso amix-1.1-netinstall.iso.sha256 amix-1.1-boot-k46-1.adf amix-1.1-boot-z3660.hdf \
 		amix-1.1-install.iso.MANIFEST SHA256SUMS MEDIA.txt RELEASE-CHECK.txt keep.txt; do : > "$d/$f"; done
 	mkdir "$d/work"
@@ -95,6 +107,18 @@ for _b in bin/pkgadd:bin/pkgadd bin/pkgtrans:bin/pkgtrans bin/pkginfo:bin/pkginf
 	cmp -s "$_st/${_b%%:*}" "$_rb/${_b#*:}" || die "the disc's /install/${_b#*:} is not the inputs' ${_b%%:*}"
 done
 cmp -s "$L11_IN/apkg/apkg" "$_rb/l11/apkg" || die "the disc's /install/l11/bin/apkg is not the inputs' apkg"
+# the CD boot program is make dist's (the inputs' kspace beside/amix-cdboot, tools/build-l11-inputs.sh): the
+# cd-tree's, and every disc's read back; inputs without one make a trial only, with MEDIA_CDBOOT_ANY=1
+CDB="$L11_IN/kspace-beside/amix-cdboot" CDB_NOTE=
+if [ -f "$CDB" ]; then
+	xorriso -osirrox on -indev "$ISO" -extract /BOOT/amix-cdboot "$_rb/amix-cdboot" > /dev/null 2>&1
+	cdboot_same "$CDB" "the cd-tree" "$TREE/BOOT/amix-cdboot" && cdboot_same "$CDB" "$(basename "$ISO")" "$_rb/amix-cdboot" \
+		|| die "the media must carry make dist's amix-cdboot"
+	CDB_NOTE="amix-cdboot sha256 $(sha256sum < "$CDB" | cut -c1-64), make dist's (kspace beside/)"
+else
+	[ "${MEDIA_CDBOOT_ANY:-0}" = 1 ] || die "the inputs carry no amix-cdboot from make dist's kspace (beside/): MEDIA_CDBOOT_ANY=1 for a trial"
+	CDB_NOTE="amix-cdboot sha256 $(sha256sum < "$TREE/BOOT/amix-cdboot" | cut -c1-64), NOT make dist's: a trial (MEDIA_CDBOOT_ANY=1)"
+fi
 # 2. the floppy pairs
 for L in k46 k30; do
 	img="$R46"; [ $L = k30 ] && img="$R30"
@@ -118,6 +142,10 @@ if [ -n "$N46" ]; then
 	rm -f "${NI:?}"
 	bash "$here/build-netinstall.sh" --k46 "$N46" --k30 "$N30" --iso "$NI" --work "$W/ni" --volid AMIX_1_1_NETINSTALL > "$W/ni.log" 2>&1 \
 		|| { tail -5 "$W/ni.log" >&2; die "build-netinstall.sh failed"; }
+	if [ -f "$CDB" ]; then
+		xorriso -osirrox on -indev "$NI" -extract /BOOT/amix-cdboot "$_rb/ni-amix-cdboot" > /dev/null 2>&1
+		cdboot_same "$CDB" "$(basename "$NI")" "$_rb/ni-amix-cdboot" || die "the media must carry make dist's amix-cdboot"
+	fi
 	rel "$NI"
 fi
 # 5. the record and the content check
@@ -127,6 +155,7 @@ fi
 	# published with the media: the inputs by their record's hash and the candidate by name, no machine path
 	echo "# inputs: INPUTS sha256 $(sha256sum < "$L11_IN/INPUTS" | cut -c1-64)"
 	grep -E '^#   (dlm|kspace|dist) ' "$L11_IN/INPUTS" | sed -e 's|^#   kspace .*/|#   kspace |'
+	echo "# $CDB_NOTE"
 	for f in "$OUT"/amix-1.1-*.iso "$OUT"/amix-1.1-*.adf "$OUT"/amix-1.1-*.hdf; do
 		echo "$(basename "$f")  $(stat -c %s "$f") bytes  sha256 $(cut -c1-64 "$f.sha256")"
 	done
