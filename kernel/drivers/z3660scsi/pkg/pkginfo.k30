@@ -1,17 +1,16 @@
 PKG=zscsi30
-NAME=z3660scsi-k30 1.0.0-8 - Z3660 SCSI driver module (root class), k30 line
+NAME=z3660scsi-k30 1.0.0-9 - Z3660 SCSI driver module (root class), k30 line
 ARCH=Amiga
-VERSION=1.0.0-8
+VERSION=1.0.0-9
 CATEGORY=system
 CLASSES=none
 VENDOR=amix
-PSTAMP=amix-zscsi30-1.0.0-8
+PSTAMP=amix-zscsi30-1.0.0-9
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1, C4-2): a role=module entry of
 # the #ext kpkg block (line=k30, kabi=k30.1.2), class root, never an ordinary
 # entry.  Catalog name z3660scsi-k30, pkginst zscsi30; VERSION is the module's
 # own release (kernel/drivers/z3660scsi/module/VERSION), the same on both
-# lines.  1.0.0-8 is a package revision for the module's 1.0.0-5 (no
-# diagnostics in the shipped object; the empty units on one console line),
-# on the 33ebadc kit.
+# lines.  1.0.0-9 is a package revision for the module's 1.0.0-6 (a READ/WRITE
+# whose 32-bit LBA range wraps past zero is refused), on the 33ebadc kit.
 APKG_DESC=Z3660 SCSI (PiStorm piscsi mailbox) as a root-class kernel module for the 68030 root-class module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/z3660scsi.
 DESC=The kernel/drivers/z3660scsi driver built as an amix-dlm kernel module for the 68030 line (kabi k30.1.2): root class, loaded by the module core's root pass before the root filesystem is mounted when a Z3660 is present (match zorro:144b:01, mobo:z3660-window), registered with sd at rank z3660; never unloaded.  No major and no device nodes of its own: sd owns the disk majors and nodes.  The data-cache arm is set at load from the CPU type (always none on the 68030 line); `param cache=` in /etc/conf/modreg.local.d/z3660scsi overrides it.  /etc/conf/modreg.d/z3660scsi holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  MIT.

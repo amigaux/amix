@@ -26,7 +26,7 @@ later; 1.0.0-2 was built with KIT_REV 230a1e8, which stamps `k30.1.2` /
 `mod_miscops`, `printf`, `sd_register`, `sptalloc`) is a kabi 1.0 name. The
 pinned cross tools (`m68k-cbm-sysv4-*`) and `python3` must be on `PATH`.
 
-`make static`'s k30 sum is the static object's (`47e128e8…`, module 1.0.0-5
+`make static`'s k30 sum is the static object's (`4ef07475…`, module 1.0.0-6
 on the 33ebadc kit). The 040/060 static object is built by the driver-line
 relink with its own flags and 4 KiB-page source rewrite, so the kit's k46
 compile is not that object; its pin (`b43e36e7…`) is checked by that relink.

@@ -27,22 +27,24 @@
 # INQUIRY as no device (peripheral qualifier 3, type 0x1F).
 # 1.0.0-8 (2026-11-02): the module's 1.0.0-5, the page-cross ring and the
 # fault knob only with -DZ3660_DIAG; the empty units on one console line.
+# 1.0.0-9 (2026-11-06): the module's 1.0.0-6, a READ/WRITE whose 32-bit
+# LBA range wraps past zero is refused.
 
 KM_NAME=z3660scsi
 KM_SHORT=zscsi
 KM_REPO=kernel/drivers/z3660scsi
-KM_VERSION=1.0.0-5
-KM_PKG_VERSION=1.0.0-8
+KM_VERSION=1.0.0-6
+KM_PKG_VERSION=1.0.0-9
 
-KM_K30_SHA=365782774127d58d43b20ff8c96ecaa665efed326852a42c6be018ddf066b798
-KM_K46_SHA=2e6f0e6befb42ac459328ed657ae30c2e266ea5c471a2d7cf0fdbb4c4f503d1c
+KM_K30_SHA=152e1d8ea90a37e07a75a071d810e5f2bfed9d49dae47e84f214dd93cbe4b07c
+KM_K46_SHA=751d52a53ca1066e93aaeddad5e60d113ed505b5e99c3794f9acf937c0fcb812
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=94f1f0449b03ac4ec3c94833313639cd6d11e358
+KM_KIT_COMMIT=78bf011ff00c1dc8dbf0cce6419f81d5ec603774
 
 KM_LICENCES="\
 kernel/drivers/z3660scsi/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 kernel/drivers/z3660scsi/NOTICE 54f12c73d44fbb45c3e6da53006b58463633711add15f9ba4ea162d91c459cc2"
 
-KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
+KM_SOURCE_EPOCH=1793923200	# 2026-11-06 00:00 UTC
