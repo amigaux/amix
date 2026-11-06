@@ -50,8 +50,8 @@
 #     tty line, and SVR4 caps a canonical line at MAX_CANON = 256 bytes.  A single
 #     `if <marker grep> && <stamp grep> && test ! -f <exp>; then ...` verify chain came to
 #     244 bytes on the aen record -- the only one with the extra exp= leg, and the longest
-#     target path -- and 260 on the wire once the runner appends its own 16-byte
-#     `; echo D''ONE_$?`.  The line never ran and the verify, seeing neither token, failed
+#     target path -- and 260 on the wire once the runner appended its 16-byte
+#     `; echo D''ONE_$?` of the time (21 bytes with today's nonce).  The line never ran and the verify, seeing neither token, failed
 #     closed over a box whose state was actually CORRECT.  Fail-closed is the right
 #     behaviour; the bug was generating a line the transport cannot carry.
 #
@@ -83,13 +83,13 @@
 #                         cap there is no partial result to salvage and no error to catch:
 #                         see the MAX_CANON note above.
 #   KPATCH_WIRE_SUFFIX_LEN  what the telnet command runner appends to EVERY command:
-#                         `; echo D''ONE_$?` = 16.
+#                         `; echo D''ONE_nnnn_$?` = 21, with a four-digit nonce.
 #   KPATCH_LINE_BUDGET    what we allow on the wire (command + suffix).  16 bytes below
 #                         MAX_CANON on purpose: markers and target paths come from
 #                         kernel-patches.conf, which is data, and a budget with no headroom
 #                         is a budget that fails on the next record somebody adds.
 KPATCH_MAX_CANON=256
-KPATCH_WIRE_SUFFIX_LEN=16
+KPATCH_WIRE_SUFFIX_LEN=21
 KPATCH_LINE_BUDGET=240
 
 # kpatch_wire_len <command> -- bytes this command occupies as a tty line once the runner has
@@ -456,7 +456,7 @@ kpatch_apply_host() {
 # kpatch_ensure_onbox <cmd-runner> <file-pusher> <work-dir> <kt-root> <conf> <driver-dir>...
 # The on-box half (its callers, the on-box kernel builders, are not part of kernel/k30 yet).
 # <cmd-runner> is the telnet command runner: `python3 <cmd-runner> <cmd>...` runs each
-# command on the box in one login, appending `; echo D''ONE_$?` to each, and always exits 0.
+# command on the box in one login, appending `; echo D''ONE_nnnn_$?` to each; it exits 0 when every command finished.
 # <file-pusher> is run as `python3 <file-pusher> push <local> <remote>`.
 # For every kernel-patches.conf record whose <driver-repo> resolves for this build (a
 # passed driver dir, OR kernel/k30 itself -- see kpatch_repo_dir), ensure
