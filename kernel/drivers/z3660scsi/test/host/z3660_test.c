@@ -799,6 +799,61 @@ static void test_disk_write10_frozen()
 	CHECK( memcmp( back + 10 * 512, src, 512) == 0, "DISK WRITE(10) lands in backing[10*512..]");
 }
 
+/*
+ * READ/WRITE bounds against the unit's block count.  The last block reads;
+ * a request that starts at or runs past the end is refused before any
+ * doorbell.  The LBA is a 32-bit CDB field: an LBA near 2^32 whose end
+ * wraps past zero (0xFFFFFFFF + 2 == 1 in 32 bits) must be refused too,
+ * not sent to the firmware.  Run under qemu-m68k (`make check-m68k`) the
+ * driver's ulong is 32 bits, as on the target, and the wrap is real.
+ */
+static void bounds_case( name, op, lba, n, expect_ok)
+char		*name;
+int		op;
+unsigned long	lba, n;
+int		expect_ok;
+{
+	static uchar	buf[256 * 512];	/* the largest case: a wrong pass must not overrun */
+	uchar		cdb[10];
+	unsigned long	db;
+	char		msg[160];
+
+	memset( cdb, 0, sizeof cdb);
+	cdb[0] = (uchar)op;
+	cdb[2] = (uchar)(lba >> 24); cdb[3] = (uchar)(lba >> 16);
+	cdb[4] = (uchar)(lba >> 8);  cdb[5] = (uchar)lba;
+	cdb[7] = (uchar)(n >> 8);    cdb[8] = (uchar)n;
+	memset( buf, 0x5A, sizeof buf);
+	db = mock_doorbells[U_DISK];
+	run_cmd( U_DISK, cdb, 10, buf, (int)(n * DK_BS));
+	printf("       %-40s okay=%d status=0x%02X doorbells=+%lu\n",
+	       name, g_okay, g_status, mock_doorbells[U_DISK] - db);
+	if (expect_ok)
+		sprintf( msg, "bounds %s: GOOD, one doorbell", name);
+	else
+		sprintf( msg, "bounds %s: refused, no doorbell", name);
+	CHECK( expect_ok ? (g_okay && g_status == 0 && mock_doorbells[U_DISK] == db + 1)
+	                 : (!g_okay && g_status == 0xff && mock_doorbells[U_DISK] == db), msg);
+}
+
+static void test_disk_bounds()
+{
+	unsigned char	*back = mock_backing( U_DISK);
+	uchar		lba0[512];
+
+	printf("[GATE] DISK READ/WRITE bounds (last block, past the end, 32-bit LBA wrap)\n");
+	memcpy( lba0, back, 512);
+	bounds_case( "READ last block", 0x28, DK_NBLK - 1, 1UL, 1);
+	bounds_case( "READ at the block count", 0x28, DK_NBLK, 1UL, 0);
+	bounds_case( "READ straddling the end", 0x28, DK_NBLK - 1, 2UL, 0);
+	bounds_case( "READ far past the end", 0x28, 0x00800000UL, 1UL, 0);
+	bounds_case( "READ LBA 0xFFFFFFFF x2 (end wraps to 1)", 0x28, 0xFFFFFFFFUL, 2UL, 0);
+	bounds_case( "READ LBA 0xFFFFFF00 x256 (end wraps to 0)", 0x28, 0xFFFFFF00UL, 256UL, 0);
+	bounds_case( "WRITE LBA 0xFFFFFFFF x1 (end wraps to 0)", 0x2A, 0xFFFFFFFFUL, 1UL, 0);
+	bounds_case( "WRITE LBA 0xFFFFFFFE x4 (end wraps to 2)", 0x2A, 0xFFFFFFFEUL, 4UL, 0);
+	CHECK( memcmp( back, lba0, 512) == 0, "bounds: LBA 0 untouched by the refused WRITEs");
+}
+
 static void test_tur_both()
 {
 	uchar	cdb[6];
@@ -2017,6 +2072,7 @@ int main()
 	test_disk_read_capacity_frozen();
 	test_disk_read10_frozen();
 	test_disk_write10_frozen();
+	test_disk_bounds();
 
 	test_tur_both();
 

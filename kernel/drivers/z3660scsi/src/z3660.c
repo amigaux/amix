@@ -2005,8 +2005,11 @@ struct sdcom	*cp;
 		nb = g->nblocks;
 		z3660_blocks0 = nb;
 		/* nb == 0 means the firmware has no drive mapped at this unit --
-		 * it would silently no-op the I/O and we must NOT report GOOD. */
-		if (blocks == 0 || nb == 0 || !g->valid || (block + blocks) > nb) {
+		 * it would silently no-op the I/O and we must NOT report GOOD.
+		 * The range test never forms block + blocks: with a 32-bit LBA
+		 * near 2^32 that sum wraps past zero and would pass. */
+		if (blocks == 0 || nb == 0 || !g->valid
+		    || block >= nb || blocks > nb - block) {
 			cp->status = 0xff; cp->okay = FALSE;
 			break;
 		}
@@ -2035,7 +2038,7 @@ struct sdcom	*cp;
 			z3660_fault_n++;
 			to = (long)block + z3660_fault_shift;
 			if (z3660_fault_mode == 1 && to >= 0
-			    && (ulong)to + blocks <= nb) {
+			    && (ulong)to < nb && blocks <= nb - (ulong)to) {
 				if (z3660_rw( unit, write, (ulong)to, blocks, bs, data)) {
 					cp->status = 0xff; cp->okay = FALSE;
 				}
