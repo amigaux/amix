@@ -1,4 +1,4 @@
-.TH DHCPC 1M "31 October 2026" "dhcp-client"
+.TH DHCPC 1M "6 November 2026" "dhcp-client"
 .SH NAME
 dhcpc \- get and keep a network address from a DHCP server
 .SH SYNOPSIS
@@ -44,6 +44,9 @@ its end; when it ends anyway, or a server refuses it, the address is taken
 off and
 .B dhcpc
 starts looking again, and goes on trying for as long as it runs.
+These times are counted from the system's start, not by the clock, so a
+clock set after the lease was bound (as the time step at boot sets it,
+by hours or by years) moves none of them.
 .PP
 .B dhcpc
 changes nothing itself: every address, route, host name and name-server
