@@ -29,6 +29,10 @@
  *   - no client identifier (option 61): replies are matched by xid and
  *     chaddr.
  *
+ * The lease's times run on a clock no one sets (mono(), times()'s ticks
+ * since boot): the time sync at boot sets the wall clock after the lease it
+ * needs is bound, by hours or years.
+ *
  * Files: /var/inet/dhcpc/<if>.lease (the hook's DHCP_* lines; its time of
  * writing is when the lease was obtained), /var/inet/dhcpc/<if>.pid, the log
  * /var/adm/dhcpc.log. The DLPI node is found in /etc/inet/link.d.
@@ -44,6 +48,7 @@
 #include <sys/dlpi.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/times.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -56,7 +61,7 @@
 
 /* the stock headers declare none of these */
 extern int errno;
-extern long time(), lseek();
+extern long time(), lseek(), sysconf();
 extern int getpid(), getppid(), fork(), execve(), wait(), pipe(), read();
 extern int write(), close(), unlink(), rename(), kill(), alarm(), dup2();
 extern int setpgrp(), getopt(), getmsg(), putmsg(), mkdir();
@@ -64,6 +69,10 @@ extern void _exit();
 extern int socket(), bind(), sendto(), recvfrom(), setsockopt(), select();
 extern char *optarg;
 extern int optind;
+
+#ifndef _SC_CLK_TCK
+#define _SC_CLK_TCK	3		/* sysconf(): clock ticks a second */
+#endif
 
 #define LINKD		"/etc/inet/link.d"
 #define STATEDIR	"/var/inet/dhcpc"
@@ -105,6 +114,7 @@ struct lease {
 	char		host[64];
 	unsigned long	secs, t1, t2;
 	long		got;		/* when it was obtained (time()) */
+	long		since;		/* the same, by mono() */
 };
 
 static char *ifname;
@@ -119,6 +129,7 @@ static int tellfd = -1;		/* the foreground parent's pipe, until bound */
 static char leasefile[80], pidfile[80];
 
 static void sleepuntil();
+static long mono();
 
 /* --- small helpers ------------------------------------------------------- */
 
@@ -743,7 +754,7 @@ struct lease *l;
 	say("%s is in use by %s; declined", ipstr(l->addr), macstr(by), 0, 0);
 	xid = rand() ^ ((unsigned long)rand() << 16);
 	dlsend(fd, DHCPDECLINE, l->addr, l->server);
-	sleepuntil(time((long *)0) + 10);
+	sleepuntil(mono() + 10);
 	return 1;
 }
 
@@ -797,11 +808,11 @@ struct lease *l;
 	struct sockaddr_in from;
 	struct timeval tv;
 	fd_set fds;
-	long until = time((long *)0) + secs;
+	long until = mono() + secs;
 	int n, fromlen, type;
 
 	while (!stop) {
-		n = until - time((long *)0);
+		n = until - mono();
 		if (n <= 0)
 			break;
 		FD_ZERO(&fds);
@@ -821,7 +832,32 @@ struct lease *l;
 	return 0;
 }
 
-/* sleep until a time, or until stopped */
+/*
+ * seconds on a clock no one sets: times()'s ticks since boot, summed so that
+ * its wrap (2^32 ticks, 828 days at 60 Hz) is crossed; it must be read once
+ * in that time, and sleepuntil() reads it at least daily
+ */
+static long
+mono()
+{
+	static unsigned long last, ticks;
+	static long secs, hz;
+	struct tms tm;
+	unsigned long t = (unsigned long)times(&tm);
+
+	if (hz == 0) {
+		if ((hz = sysconf(_SC_CLK_TCK)) <= 0)
+			hz = 60;
+		last = t;
+	}
+	ticks += t - last;
+	last = t;
+	secs += ticks / hz;
+	ticks %= hz;
+	return secs;
+}
+
+/* sleep until a time of mono(), or until stopped */
 static void
 sleepuntil(t)
 long t;
@@ -829,7 +865,7 @@ long t;
 	struct timeval tv;
 	long n;
 
-	while (!stop && (n = t - time((long *)0)) > 0) {
+	while (!stop && (n = t - mono()) > 0) {
 		tv.tv_sec = n < 86400 ? n : 86400;
 		tv.tv_usec = 0;
 		select(0, (fd_set *)0, (fd_set *)0, (fd_set *)0, &tv);
@@ -1042,7 +1078,7 @@ unsigned long last;
 			return 0;
 		}
 		say("REQUEST for %s: %s", ipstr(offer.addr), type == DHCPNAK ? "NAK" : "no answer", 0, 0);
-		sleepuntil(time((long *)0) + backoff(try));
+		sleepuntil(mono() + backoff(try));
 	}
 	close(fd);
 	return -1;
@@ -1063,10 +1099,10 @@ struct lease *l;
 	/* port 68 may be held for a moment (a dhcpc that is ending): retry */
 	while ((s = udpopen()) < 0) {
 		say("cannot bind UDP port 68 (errno %d); retrying", (char *)errno, 0, 0, 0);
-		sleepuntil(time((long *)0) + 10);
+		sleepuntil(mono() + 10);
 		if (stop)
 			return -1;
-		if (l->secs != INFINITE && time((long *)0) >= l->got + (long)l->secs) {
+		if (l->secs != INFINITE && mono() >= l->since + (long)l->secs) {
 			hook("EXPIRE", l, 0L);
 			unlink(leasefile);
 			return 0;
@@ -1078,26 +1114,26 @@ struct lease *l;
 			close(s);
 			return -1;
 		}
-		t1 = l->got + l->t1;
-		t2 = l->got + l->t2;
-		end = l->got + l->secs;
+		t1 = l->since + l->t1;
+		t2 = l->since + l->t2;
+		end = l->since + l->secs;
 		sleepuntil(t1);
 		type = 0;
 		/* RENEWING: unicast to the server, retried at half the time left */
-		while (!stop && type == 0 && time((long *)0) < t2) {
+		while (!stop && type == 0 && mono() < t2) {
 			xid = rand() ^ ((unsigned long)rand() << 16);
 			udpsend(s, DHCPREQUEST, l->addr, l->server, 0L);
-			wait = (t2 - time((long *)0)) / 2;
-			type = udprecv(s, wait < 60 ? (int)(t2 - time((long *)0)) : (int)wait, &n);
+			wait = (t2 - mono()) / 2;
+			type = udprecv(s, wait < 60 ? (int)(t2 - mono()) : (int)wait, &n);
 		}
 		if (type == 0 && !stop)
 			say("RENEW: no answer from %s; rebinding", ipstr(l->server), 0, 0, 0);
 		/* REBINDING: broadcast from the socket (it leaves as the subnet's) */
-		while (!stop && type == 0 && time((long *)0) < end) {
+		while (!stop && type == 0 && mono() < end) {
 			xid = rand() ^ ((unsigned long)rand() << 16);
 			udpsend(s, DHCPREQUEST, l->addr, 0xffffffffUL, 0L);
-			wait = (end - time((long *)0)) / 2;
-			type = udprecv(s, wait < 60 ? (int)(end - time((long *)0)) : (int)wait, &n);
+			wait = (end - mono()) / 2;
+			type = udprecv(s, wait < 60 ? (int)(end - mono()) : (int)wait, &n);
 		}
 		if (stop) {
 			close(s);
@@ -1105,13 +1141,14 @@ struct lease *l;
 		}
 		if (type == DHCPACK && n.addr == l->addr) {
 			n.got = time((long *)0);
+			n.since = mono();
 			if (!n.server)
 				n.server = l->server;
-			say("%s: %s extended for %lu s", time((long *)0) < t2 ? "RENEW" : "REBIND",
+			say("%s: %s extended for %lu s", n.since < t2 ? "RENEW" : "REBIND",
 			    ipstr(n.addr), (char *)n.secs, 0);
 			*l = n;
 			writelease(l);
-			hook(time((long *)0) < t2 ? "RENEW" : "REBIND", l, 0L);
+			hook(l->since < t2 ? "RENEW" : "REBIND", l, 0L);
 			continue;
 		}
 		say("lease %s %s", ipstr(l->addr), type == DHCPNAK ? "refused (NAK)" : "ended", 0, 0);
@@ -1141,6 +1178,7 @@ daemon_main()
 			break;
 		}
 		l.got = time((long *)0);
+		l.since = mono();
 		srand((unsigned)(l.got ^ getpid() ^ get32(mac + 2)));
 		writelease(&l);
 		hook("BOUND", &l, prev);
@@ -1188,9 +1226,9 @@ query()
 	while (fgets(line, sizeof(line), f))
 		fputs(line, stdout);
 	fclose(f);
-	if (readlease(&l) < 0 || !held)
-		return 1;
-	return l.secs == INFINITE || l.got + (long)l.secs > time((long *)0) ? 0 : 1;
+	/* the daemon removes the file when the lease ends: a file a live
+	 * daemon holds is a lease held (the wall clock may have been set) */
+	return readlease(&l) < 0 || !held ? 1 : 0;
 }
 
 static int
@@ -1202,7 +1240,7 @@ release()
 	if ((pid = heldby()) != 0) {
 		kill(pid, SIGTERM);
 		for (i = 0; i < 20 && kill(pid, 0) == 0; i++)
-			sleepuntil(time((long *)0) + 1);
+			sleepuntil(mono() + 1);
 	}
 	if (readlease(&l) < 0) {
 		say("release: no lease held", 0, 0, 0, 0);
