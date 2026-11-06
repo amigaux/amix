@@ -1,29 +1,47 @@
 # Cut 68030-261106-75
 
 The k30 module kernel, kabi k30.1.4 (abi 18c0a1c9), cut from amix `75ded5c`: -74's recipe with the ufs hole fix made
-by a block lookup.  -74 is kept as it was cut; this cut replaces it.
+by a block lookup.  -74, which was not released, is kept as it was cut; this cut replaces it and its hole rule.
 
 - **hat_growsdt gives a shrunk segment table's tail back where it is**, as in -74: `tools/growsdt030.py` makes the
   second shift of hat_growsdt's free a nop (2 bytes in `unix`; `build-cross-kernel.sh`, on by default from `84ea5ae`,
-  `--no-growsdt-fix` without).  See -74's README for the cause and the netinstall and watch evidence; the code is the
-  same here.
-- **A new ufs block never shows old disk data, and an allocated block is rewritten as stock.** For a write of whole
-  pages as_iolock grants pagecreate, and ufs_bmap allocated a new block alloc-only, without reading or zeroing it, so
-  the pages the write left alone read the disk block's former contents.  `src/ufs_bmap_hf.c` looks the block up
-  first (ufs_bmap with S_READ, which allocates nothing, under the inode lock rwip holds for the real call) and turns
-  alloc-only off for a hole, so ufs_bmap reads the new block -- zero-filled -- before the write; a block already
-  allocated keeps alloc-only, which allocates nothing there, so its rewrite reads nothing, as stock.
-  `tools/bmaphf030.py` retargets rwip's one call of ufs_bmap to it in the ufs object (on by default from `75ded5c`,
-  `--no-ufs-hole-fix` without); as_iolock and ufs_bmap's other callers are stock.  -74 kept pagecreate only for writes
-  from the 8 KiB window's start instead (`src/as_iolock_ufs.c`, retired), which made random rewrites of pages not in
-  the cache read them first.
-  In emulation at 16 MiB `tests/sparsehole` found 40 (direct, writes at page 1) and 122 direct and 205 indirect
-  (writes on the block's last page) of 288 pages wrong on -73 and none on this cut and its trial build, in all four
-  modes (`eof` and `keep` are regression cases: 0 on both).  20000 random 4 KiB rewrites of pages not in the cache of
-  a 96 MB file at 64 MiB took 27 and 26 s on -73, 24 and 25 s on the trial in the same run and 24 and 25 s on this
-  cut (-74's rule: 30 and 29 s against 23 and 23 s); appends and copies cost the same.  rnd found no bad block at 16
-  and 64 MiB; for growsdt, forkst at 16 MiB under the chain-head watch logged none bad and vm30 printed what it did
-  on -92.
+  `--no-growsdt-fix` without).  See -74's README for the cause and the netinstall and watch evidence, which ran on a
+  build whose `unix.brel` differs from this cut's only in the build id; the code is the same here.
+- **A new ufs block never shows old disk data, and a full allocated block is rewritten as stock.** For a write of
+  whole pages as_iolock grants pagecreate, and ufs_bmap allocated a new block alloc-only, without reading or zeroing
+  it, so the pages the write left alone read the disk block's former contents.  `src/ufs_bmap_hf.c` looks the block
+  up first (ufs_bmap with S_READ, which allocates nothing, under the inode lock rwip holds for the real call).  For a
+  hole it turns alloc-only off, so ufs_bmap reads what it allocates (the whole block, or up to the fragment the write
+  ends in when the block is the file's last) before setting it in the inode: zero-filled, then written over; the
+  rest of a last block, past the end of the file, is zeroed by rwip when the file grows over it, as stock.  A block
+  already allocated keeps alloc-only: a full block allocates nothing, so the pages written are created unread and the
+  others are read from the file's own block, as stock, which is right because -73's rwip fix gives segmap_pagecreate
+  the write's address (the build refuses the hole fix without it); a last block held as a fragment is grown by
+  realloccg and read whatever alloc-only says (osize != 0).  `tools/bmaphf030.py` retargets rwip's one call of
+  ufs_bmap to it in the ufs object (on by default from `75ded5c`, `--no-ufs-hole-fix` without); as_iolock and
+  ufs_bmap's other callers are stock.  -74 kept pagecreate only for writes from the 8 KiB window's start instead
+  (`src/as_iolock_ufs.c`, retired), which made random rewrites of pages not in the cache read them first.
+
+Evidence, in emulation (A4000, 68030), by the build each row ran on.  "The trial" is 68030-261106-95, built from the
+same kernel/ tree as this cut: its ufs object `hole/ufs.exp` is this cut's byte for byte, and its ufs module differs
+only in the build id it is bound to; its `unix` also lacks -72's IP read queue mark (the port's patch_ip_lrhiwat was
+not applied), so it is not this cut's kernel beside the build id.
+
+- This cut: `tests/sparsehole` at 16 MiB found 0 pages wrong in all four modes, where -73 found 40 (direct, writes
+  at page 1) and 122 direct and 205 indirect (writes on the block's last page) of 288 in a run beside the trial's;
+  rnd found no bad block at 64 MiB; `tests/wcost`'s 20000 random 4 KiB rewrites of pages not in the cache of a 96 MB
+  file at 64 MiB took 24 and 25 s.
+- The trial, in the same run as -73: sparsehole 0 in all four modes; the rewrites 24 and 25 s against -73's 27 and
+  26 s (-74's rule, in an earlier run: 30 and 29 s against 23 and 23 s); appends the same; 64 MB copied by 8 KiB,
+  whose new blocks are now zero-filled in memory first, 49 and 47 s against -73's 46 and 43 (47 and 46 on this cut;
+  -73 took 52 and 42 in another run); rnd no bad block at 16 and 64 MiB; for growsdt, forkst at 16 MiB under the
+  chain-head watch logged none bad and vm30 printed what it did on -92.
+- This cut, `tests/sparsehole`'s `rewrite` mode at 16 MiB (2 KiB rewritten into allocated blocks whose other pages
+  are not in the cache: the branch that keeps alloc-only): 0 of 288 direct and 0 of 288 indirect pages wrong, read at
+  once and after the cache was pushed out; -73 the same; -72 (rwip unfixed) 96 and 96 wrong at once, 0 after.
+  `ufs_hf_holes` and `ufs_hf_kept`, read from the running box after each of the five modes: the 192 rewrites went
+  the kept way (kept up 193), the hole modes' writes and the test's own new blocks the zero-fill way (kept up 1 per
+  mode).
 
 Against -74 the shipped files differ only there: `unix` and `unix.brel` in the build id (one byte), `kabi` in its
 `build=` and `sha256=` lines, `mod.d/s5` in its `build=` (one byte), `mod.d/ufs` in its `build=` and ufs_bmap_hf in
