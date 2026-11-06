@@ -157,8 +157,9 @@
 #   --no-audio-replies  with --audio-paula, build WITHOUT tools/patch_audio_replies.py (on by default;
 #                AUDIO_REPLIES=0 does the same), which runs after paula's three, as the port's k46 build does: in the
 #                stock audioioctl each AUDIO_VOLUME and AUDIO_PERIOD reply is sent twice, the second time as M_IOCACK
-#                with error 0 (a refusal arrives as success), and audiointr's refill copies part of a message too
-#                long for the 8 KiB buffer without advancing b_rptr, so a long write replays stretches of itself.
+#                with error 0 (a refusal arrives as success), an I_STR with no data calls pullupmsg(NULL), and
+#                audiointr's refill copies part of a message too long for the buffer it fills without advancing
+#                b_rptr, so a long write replays stretches of itself.
 #                It takes only the audio.c paula's three make (pinned) and gives a pinned result.  Without
 #                --audio-paula, audio.c is the stock one and this does nothing.
 #   --ttcompat-fix <patch_ttcompat_init.py>  (opt-in) the port's DRIVER-LINE-7 fix: clear the three
@@ -789,8 +790,9 @@ if [ -n "$AUDIO_PAULA" ]; then
   for n in paula_busy audio_nopen; do grep -q "^int[[:space:]][[:space:]]*$n;" "$AUD" \
     || { echo "FATAL: the patched audio.c defines no $n" >&2; exit 1; }; done
   if [ "$AUDIO_REPLIES" = 1 ]; then	# one reply per volume/period ioctl, refills move on (both lines, after paula's three)
-    python3 "$KT/tools/patch_audio_replies.py" --selftest "$AUD" >/dev/null \
-      || { echo "FATAL: patch_audio_replies.py --selftest failed on audio.c" >&2; exit 1; }
+    ST="$(python3 "$KT/tools/patch_audio_replies.py" --selftest "$AUD" 2>&1)" \
+      || { echo "$ST" >&2; echo "FATAL: patch_audio_replies.py --selftest failed on audio.c" >&2; exit 1; }
+    echo "$ST" | tail -1
     python3 "$KT/tools/patch_audio_replies.py" "$AUD" || { echo "FATAL: patch_audio_replies.py refused audio.c" >&2; exit 1; }
   fi
   echo "  audio.c: $(sha256sum < "$WORK/audio.c.stock" | cut -c1-16) -> $(sha256sum < "$AUD" | cut -c1-16), +$(( $(wc -l < "$AUD") - $(wc -l < "$WORK/audio.c.stock") )) lines"
