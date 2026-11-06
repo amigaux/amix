@@ -1,5 +1,47 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-05 — APKGENG 1.12.9: an ignored SIGHUP stays ignored, and what a hangup leaves
+
+`pkgadd` and `pkginstall` hooked SIGHUP whatever it was, and every child was reset to default, so
+`nohup` protected nothing: `(nohup pkgadd ... &)` from a login that closed at once ended rc 3 in 9 of
+40 runs, 0 of 40 with the login held (emulated 68060, 64 MiB). Twice, 40 and 40 each. Now
+`pkg_sighup_ignored()` and `pkg_sig_default()` keep an ignored SIGHUP ignored in the commands and what
+they start. One that is not ignored still interrupts. T36 hangs up a real install and removal.
+
+What an interrupted install leaves, on the old engine, the hangup at points through a run:
+- **Early, or the package not yet touched:** "No changes were made to the system." On an installed
+  package all 9 rc 3 runs of the loop above left it completely installed, `pkgchk` clean.
+- **During the install:** `pkginfo` says partially installed, `!I-Lock!` in its pkg directory, `pkgchk`
+  rc 1 naming what is missing (0 if the files were all down). The next `pkgadd` gives rc 0, completely
+  installed; `pkgrm` gives rc 0, gone.
+- **One wart:** in 1 of 2 recoveries where `pkgchk` had listed files, it then said rc 1 with a single
+  modtime line for the file the hangup cut: the install found its content right and left its time.
+  Not fixed; `pkgchk -f` sets it.
+- **`apkg install`, a plain logout:** during the download a `.pkg.part`, no journal, and the next
+  `apkg install` works; `apkg clean` takes the part. Once journaled, the next `apkg` refuses and names
+  `apkg recover`, which finishes the install: rc 0, complete, `pkgchk` clean. So apkg needed no change.
+- **A leak:** a killed run can leave a `/var/tmp/dstream*` directory; nothing removes it.
+
+Under `nohup`, the login closed at once or at points through the run, 1.12.8 then 1.12.9, emulated:
+
+| run | 68060 1.12.8 | 68060 1.12.9 | 68030 1.12.9 |
+|---|---|---|---|
+| `pkgadd`, the loop above, closed / held | 9/40, 0/40 failed | 0/40, 0/40 | 0/40, 0/40 |
+| `pkgrm`, 6 points | 6 of 6 partially removed, `!R-Lock!` | 0 | 0 |
+| `apkg install`, 12 points | 1 of 12 not installed | 0 | 0 |
+| `apkg -f install` of a kernel, 4 points | 0 | 0 | 0 |
+
+A kernel install that is not under `nohup` and loses its login is finished by `apkg recover` (4 of 4
+on both lines, with 1.12.8 and 1.12.9), and `kbootset status` is whole after it.
+
+## 2026-11-05 — assemble-release.py: a published row gains the #fstype it lacks
+
+A published catalog older than the mark has no `#fstype` lines, and keeping its row dropped the mark:
+`amixrt` 1.0-2 is UFS-only (long file names under /opt/amix/doc/amixrt) and apkg's check would not
+have applied to it on s5. When an input carries the line and the published row has none, the line is
+carried, and said: the bytes are the same and the mark is true of them. A published line that
+disagrees stays, with a note. On the 1.1 inputs the catalog gains the one line `#fstype amixrt ufs`.
+
 ## 2026-11-05 — the repo tools stop rather than pass without having looked
 
 Every tool that could report a pass over nothing now refuses, each with a test that fails on the old code:

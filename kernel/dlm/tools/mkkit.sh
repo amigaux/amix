@@ -81,11 +81,18 @@ need GCA "gcc-cross-amix's build directory" toolchain/
 [ -f "$GCA/env.sh" ] || { echo "mkkit: no $GCA/env.sh (GCA: gcc-cross-amix's build directory)" >&2; exit 1; }
 . "$GCA/env.sh"
 PIN=gcc-$(awk '$1 == "gcc" {print $2}' "$R/toolchain.pin")-$(awk '$1 == "commit" {print $2}' "$R/toolchain.pin")
+# a commit in eight digits: git's own abbreviation grows with the clone, and
+# these labels go into the lock.  A build from an export has a git that
+# answers --short alone, with the label its recipe gives (build/pkg/common).
+short_rev() {
+	_sr=$(git -C "$1" rev-parse HEAD 2>/dev/null) && { echo "$_sr" | cut -c1-8; return; }
+	git -C "$1" rev-parse --short HEAD 2>/dev/null || echo unknown
+}
 # KIT_REV: the amix commit, -dirty when kernel/ has uncommitted changes
 if [ -n "$ARCHIVE" ]; then
 	REV=$ARCHIVE
 else
-	REV=$(git -C "$AMIX" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	REV=$(short_rev "$AMIX")
 	if [ -n "$(git -C "$AMIX" status --porcelain -- kernel 2>/dev/null)" ]; then
 		REV=$REV-dirty
 		echo "mkkit: amix has uncommitted changes under kernel/: KIT_REV=$REV" >&2
@@ -153,7 +160,7 @@ esac
 if [ -n "$MONSW_IN" ]; then
 	MONSW_REPO=amix MONSW_REV=$REV
 else
-	MONSW_REV=$(git -C "$MONSW_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	MONSW_REV=$(short_rev "$MONSW_DIR")
 	git -C "$MONSW_DIR" diff --quiet HEAD -- "$MONSW_H" 2>/dev/null || MONSW_REV=$MONSW_REV-dirty
 	MONSW_TOP=$(git -C "$MONSW_DIR" rev-parse --show-toplevel 2>/dev/null || echo unknown)
 	if [ "$MONSW_TOP" = "$AMIX" ]; then MONSW_REPO=amix; else MONSW_REPO=$(basename "$MONSW_TOP"); fi
@@ -200,7 +207,7 @@ if [ "$LINE" = k46 ]; then
 		done
 	done
 	# the port commit the two headers come from, -dirty if they differ from it
-	PORT_REV=$(git -C "$PORT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+	PORT_REV=$(short_rev "$PORT")
 	git -C "$PORT" diff --quiet HEAD -- include-modelb/sys/immu.h include-modelb/sys/param.h \
 		2>/dev/null || PORT_REV=$PORT_REV-dirty
 fi

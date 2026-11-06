@@ -504,6 +504,15 @@ kspace_dirs() {
 	return 0
 }
 
+# what a directory's recipes leave beside their packages for the media: when
+# all of them rolled (exit 0), a file of its list that is not there fails the
+# step, rather than the media and the lock going without it
+kspace_beside() {
+	case $1 in
+	kernel/dlm) echo amix-cdboot ;;
+	esac
+}
+
 step_kspace() {
 	host_pkgtools
 	# every shared directory alike in every kernel-space prototype
@@ -535,7 +544,15 @@ step_kspace() {
 		rc=0
 		AMIX_BUILD_ROOT=$out/build/kspace sh "$top/$d/pkg/build.sh" || rc=$?
 		case $rc in
-		0) ;;
+		0)
+			for f in $(kspace_beside "$d"); do
+				_kb=$out/build/kspace/kspace/beside/$f
+				if [ -L "$_kb" ] || [ ! -f "$_kb" ]; then
+					echo "[FAIL] kspace: $d's recipes rolled, but left no file beside/$f" >&2
+					exit 1
+				fi
+			done
+			;;
 		3) waiting="$waiting $d" ;;
 		*) echo "[FAIL] kspace: $d/pkg/build.sh failed (exit $rc)" >&2; exit 1 ;;
 		esac

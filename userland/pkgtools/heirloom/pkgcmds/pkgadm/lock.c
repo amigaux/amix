@@ -531,7 +531,9 @@ admin_lock(int argc, char **argv)
 	nact.sa_flags = SA_RESTART;
 	(void) sigemptyset(&nact.sa_mask);
 
-	if (sigaction(SIGHUP, &nact, &oact) < 0) {
+	if (pkg_sighup_ignored()) {
+		funcSighup = SIG_IGN;
+	} else if (sigaction(SIGHUP, &nact, &oact) < 0) {
 		funcSighup = SIG_DFL;
 	} else {
 		funcSighup = oact.sa_handler;

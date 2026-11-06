@@ -45,7 +45,7 @@ static const struct medium *med;
 static const struct ax_gen *g;
 static ax_u8 *mbuf, *mcopy, *kbuf;
 static ax_u32 gen, vaddr;
-static int k30;			/* the generation is for the k30 line */
+static ax_u32 linecap;		/* the most its line can use: 10 section 3 */
 static struct ax_bootdata bd;
 
 /* the L codes' lines, packed: entry n follows the n-th NUL; each at most
@@ -381,12 +381,12 @@ load_first(const struct ax_sel *sel)
 			fail(9, gen);
 			goto next;
 		}
-		k30 = man.line[1] == '3';	/* line_ok: k30 or k46 */
+		linecap = man.line[1] == '3' ? AX_K30_MEMCAP : AX_K46_MEMCAP;	/* line_ok: k30 or k46 */
 		con_say("generation %u, kernel %s %u bytes\n", gen, man.kernel.name,
 			   man.kernel.size);
 		vaddr = bind_address(&room);
-		if (k30 && room > AX_K30_MEMCAP)
-			room = AX_K30_MEMCAP;	/* the k30 kernel's limit (10 section 3) */
+		if (room > linecap)
+			room = linecap;
 		if (!room) {	/* never bind in chip memory: 0 is the vector table */
 			con_say("no fast memory below 0x40000000 to run the kernel in\n");
 			fail(4, gen);
@@ -439,6 +439,18 @@ struct ax_ci {
 static const ax_u16 nullcop[] = {
 	0x01fc, 0x0000, 0x0106, 0x0c00, 0x010c, 0x0011,
 	0x0100, 0x0200, 0x0180, 0x0000, 0xffff, 0xfffe };
+
+/* the line's limit on the regions the kernel is handed; said when it takes
+ * memory from the kernel, rounded up (10 section 3.2) */
+static void
+memory_cap(int nmem)
+{
+	ax_u32 had = ax_memcap(w->mems, nmem, vaddr, linecap, linecap == AX_K30_MEMCAP);
+
+	if (had)
+		con_say("%s kernel: using %u MiB of the %u MiB here\n", man.line,
+			linecap >> 20, (had + 0xFFFFFUL) >> 20);
+}
 
 long
 core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
@@ -512,8 +524,7 @@ core_boot(const struct medium *m, const struct ax_ctl *c, void *replyport)
 	for (mh = *(ax_u8 **)((ax_u8 *)ax_execbase + EXEC_MEMLIST); *(ax_u32 *)mh && nmem < AXB_MAXMEM;
 	     mh = *(ax_u8 **)mh, nmem++)
 		x_memcpy(w->mems + nmem * AXB_MEMSIZE, mh, AXB_MEMSIZE);
-	if (k30)
-		ax_memcap(w->mems, nmem, vaddr, AX_K30_MEMCAP);
+	memory_cap(nmem);
 	for (i = 0; rd_addr && i < nmem; i++) {	/* the image's pages are not the kernel's */
 		mh = w->mems + i * AXB_MEMSIZE;
 		if (AX_GET32(mh + 20) <= rd_addr && rd_addr < AX_GET32(mh + 24))

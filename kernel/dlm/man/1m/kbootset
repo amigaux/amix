@@ -294,6 +294,8 @@ from the root, except the running generation's, which goes after the next boot.
 .BI loader-install " boot2" " \fR[\fP\fB\-\-version\fP \fIn\fP\fR] [\fP\fB\-\-boot1\fP \fIfile\fP\fR]\fP"
 Installs a new boot loader as the primary one; the old primary becomes the
 secondary, which boot1 runs when the new one does not complete a boot.
+While a new loader is on trial or damaged, an install replaces only it: the
+secondary stays the loader that last completed a boot.
 boot1 is replaced only with
 .BR \-\-boot1 .
 .B \-\-version
@@ -428,6 +430,13 @@ INQUIRY, as
 prints it after
 .IR "  unit u: " .
 Exit status 0 whatever the units answer.
+.TP
+.BI "flush " "card unit"
+Sends one unit one SCSI SYNCHRONIZE CACHE through
+.BR /dev/scsi ,
+as kbootset does after each store write on a Gayle disk, and says whether the
+unit took it.
+That tells whether it takes the command, not whether it has a cache.
 .TP
 .BI "inquiry " "card unit"
 Asks one unit its type with one SCSI INQUIRY through

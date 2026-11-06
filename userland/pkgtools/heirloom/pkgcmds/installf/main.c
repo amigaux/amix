@@ -158,7 +158,8 @@ main(int argc, char **argv)
 
 	/* hookup signals */
 
-	(void) signal(SIGHUP, exit);
+	if (!pkg_sighup_ignored())
+		(void) signal(SIGHUP, exit);
 	(void) signal(SIGINT, exit);
 	(void) signal(SIGQUIT, exit);
 

@@ -71,7 +71,9 @@ with no arguments it rolls all its recipes, with names those; it reads
 `AMIX_BUILD_ROOT` (make dist sets `out/build/kspace`), writes each `.pkg` to
 `$AMIX_BUILD_ROOT/kspace/pkg/`, prints a `pkg <file> <sha256>` line for each,
 and exits non-zero on a failure. A file the media need that is no package goes to
-`$AMIX_BUILD_ROOT/kspace/beside/`, which reaches `out/kspace/beside/` and the lock. It exits 3 when an input outside the recipe
+`$AMIX_BUILD_ROOT/kspace/beside/`, which reaches `out/kspace/beside/` and the lock;
+`kspace_beside` in `build/dist.sh` lists those a directory must leave (kernel/dlm:
+`amix-cdboot`), and one missing after an exit 0 fails the step. It exits 3 when an input outside the recipe
 is absent, with a `[MISSING]` line naming the input (a kernel
 cut's output, for one); the step then runs the other directories and ends
 with exit 3. Its recipes set `SOURCE_DATE_EPOCH` from

@@ -12,6 +12,10 @@
 # The bytes depend on the gcc14-cross-amix runtime it links (libgcc,
 # libamixc99), the same runtime kbootset links (--with-cpu=m68020-60).
 #
+# -15 (2026-11-05): a package-only revision: the description no longer names a
+# commit, which went stale; the copyright file names the pinned one.  The same
+# commit and payload as -14.
+#
 # -14 (2026-11-04): amix 569ddc8 -- the manual page modadmin(1M) and its
 # whatis fragment, in the shared /opt/amix/man layout (amix
 # userland/packages/docs/man-pages.md).  modadmin's source is as -13's: the
@@ -91,5 +95,5 @@ MT_SHA=fd8e8a20aa007ba0bcab1d5631ee06b637a8aceb882f47ecd91e677208e2467f
 MT_MAN_SHA=e111f86fc7c9ca5e944c9a8da49dbb6100967007c34c85975d57347cde69bc6f
 MT_WHATIS_SHA=59d050166020f1c06224382d3db0061204152c276b6d1bb1146df7d8656664d7
 
-MT_VERSION=1.0.261104-14
-MT_SOURCE_EPOCH=1793750400
+MT_VERSION=1.0.261105-15
+MT_SOURCE_EPOCH=1793836800

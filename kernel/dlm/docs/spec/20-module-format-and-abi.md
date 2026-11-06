@@ -198,8 +198,8 @@ this repository stays free of them. (`gcc-cross-amix` keeps its own,
 stricter redistribution notice for its repository.)
 
 **The kit's revision.** `kit.conf` names what a kit was built from.
-`KIT_REV` is the short hash of the amix commit, with `-dirty` when amix had
-uncommitted changes under `kernel/`. A kit built from an archive of amix
+`KIT_REV` is the first eight hex digits of the amix commit, in any clone,
+with `-dirty` when amix had uncommitted changes under `kernel/`. A kit built from an archive of amix
 (`git archive`, `make dist`) records the `KIT_REV` its environment gives,
 else `unknown`; a git checkout around the archive that is not amix is never
 taken for it. `MONSW_REV` is `<repository>@<commit>`
