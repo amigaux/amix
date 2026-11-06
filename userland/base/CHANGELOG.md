@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — amix-base 1.0-33 (234f707, f6a2b00, f2cef53)
+
+The swap boot step adds the whole swap slice by default (swap_add all), stepping down when the kernel refuses an area for want of memory. On a 68030 kernel whose guard has the eighth rule (cut 68030-261106-72 on, symbol swg_keep), the step-down's limit is maxmem/32 MiB. A kernel without the ENOMEM guard, told by its marker swg_magic read with adb, gets 30 MiB a slice whatever swap_add says, and the console says so. Swap files are added after the slices. bootswap(1M) explains /SWAPFILE for more swap than one area takes, and that swap -a lasts until reboot; rc.conf(4)'s example follows.
+
 ## 2026-11-06 — amix-base 1.0-32 (35360e7, 843a66b, aef12e4)
 
 bootswap(1M) names swap(1M) again. xstart writes its clean marker with echo, and test-lint refuses ': > file' in shipped scripts, as the stock sh empties a file that way only the first time the command runs.
