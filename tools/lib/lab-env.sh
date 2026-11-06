@@ -25,14 +25,12 @@ if [ -f "$LAB_ENV_FILE" ]; then
 fi
 AMIBERRY_HOME="${AMIBERRY_HOME:-$HOME/Amiberry}"
 LAB_WS="${LAB_WS:-`cd "$LAB_REPO/.." && pwd`}"
-LAB_DOMAIN_NODOT=`printf '%s' "$LAB_DOMAIN" | tr -d .`
 
 lab_localize() {
 	sed -E -e "s/(^|[^0-9.])192\\.0\\.2\\./\\1$LAB_NET./g" \
 	    -e "s/(^|[^0-9.])198\\.51\\.100\\./\\1$LAB_ALT_NET./g" \
 	    -e "s/(^|[^0-9.])203\\.0\\.113\\./\\1$LAB_SLOT_NET./g" \
 	    -e "s/\\bexample\\.net\\b/$LAB_DOMAIN/g" \
-	    -e "s/\\bexamplenet\\b/$LAB_DOMAIN_NODOT/g" \
 	    -e "s|@WS@|$LAB_WS|g" \
 	    -e "s|@AMIBERRY@|$AMIBERRY_HOME|g"
 }
