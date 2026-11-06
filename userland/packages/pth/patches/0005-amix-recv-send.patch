@@ -1,15 +1,17 @@
 Ours.  Two Amix libsocket behaviours that every Pth program met (measured):
 recvfrom with a NULL address faults ("User BUS ERROR at 0"), and Pth's recv
-is recvfrom with a NULL address; and a non-blocking send of more than the
-socket has room for fails with ENOMEM instead of sending part, while select
-reports the socket writable.  recv and send now go to recv and send when
-there is no address, a send that meets ENOMEM is retried in smaller pieces
-down to 512 bytes, and with no room at all Pth waits 20 ms instead of
-spinning on select (a caller's non-blocking socket gets EAGAIN).
+is recvfrom with a NULL address; and a non-blocking send that meets less
+room than it asked for writes part, counts every byte as sent and drops the
+rest (with no room at all it fails with ENOMEM).  recv goes to recv when
+there is no address.  send with no flags and no address goes to write(2),
+which gives the count that went, and EAGAIN; with flags or an address a
+stream sends in pieces of 1024 bytes (one stream message each, queued whole
+or not at all) and ENOMEM is EAGAIN.  On EAGAIN while select says writable
+(less room than one message) Pth waits 20 ms instead of spinning.
 
 --- a/pth_high.c
 +++ b/pth_high.c
-@@ -1411,13 +1411,46 @@
+@@ -1414,13 +1414,68 @@
         above by polling that the next recvfrom(2) call will not block.  But keep
         in mind, that only 1 next recvfrom(2) call is guarrantied to not block
         (except for the EINTR situation). */
@@ -28,43 +30,65 @@ spinning on select (a caller's non-blocking socket gets EAGAIN).
  }
  
 +#ifdef __amix__
-+/* send or sendto on Amix, whose libsocket answers ENOMEM, not a partial
-+   count, when a non-blocking socket has some room but not enough for the
-+   whole buffer; and whose sendto wants no NULL address on a connected
-+   socket either.  Smaller pieces until one goes; none at 512 bytes is EAGAIN. */
++/* send or sendto on Amix.  A non-blocking send through Amix's libsocket that
++   meets less room than it asked for writes part, counts every byte as sent
++   and drops the rest; with no room at all it fails with ENOMEM.  write(2)
++   gives the count that went, and EAGAIN.  With flags or an address, a stream
++   sends in pieces of 1024 bytes: one stream message each, queued whole or not
++   at all; a datagram goes whole.  (sendto with a NULL address faults on a
++   connected socket, too.) */
 +static ssize_t pth_amix_send(int fd, const void *buf, size_t nbytes, int flags,
 +                             const struct sockaddr *to, socklen_t tolen)
 +{
 +    ssize_t s;
 +    size_t len = nbytes;
++    int type = 0;
++    int tlen = sizeof(type);
 +
-+    for (;;) {
-+        while ((s = (to == NULL ? pth_sc(send)(fd, (void *)buf, len, flags)
-+                     : pth_sc(sendto)(fd, buf, len, flags, to, tolen))) < 0
-+               && errno == EINTR) ;
-+        if (s >= 0 || errno != ENOMEM)
-+            return s;
-+        if (len <= 512) {
-+            errno = EAGAIN;
-+            return -1;
-+        }
-+        len = (len > 8192 ? 8192 : len / 2);
++    if (to == NULL && flags == 0) {
++        while ((s = pth_sc(write)(fd, buf, nbytes)) < 0 && errno == EINTR) ;
++        return s;
 +    }
++    if (len > 1024 && getsockopt(fd, SOL_SOCKET, SO_TYPE, (void *)&type, &tlen) == 0
++        && type == SOCK_STREAM)
++        len = 1024;
++    while ((s = (to == NULL ? pth_sc(send)(fd, (void *)buf, len, flags)
++                 : pth_sc(sendto)(fd, buf, len, flags, to, tolen))) < 0
++           && errno == EINTR) ;
++    if (s < 0 && errno == ENOMEM)
++        errno = EAGAIN;
++    return s;
++}
++
++/* EAGAIN, and select says writable anyway: the room is less than one
++   message.  Wait a moment, so that a caller polling for writable does not
++   spin while the reader is a thread of this process. */
++static void pth_amix_eagain(int fd)
++{
++    fd_set fds;
++    struct timeval delay;
++
++    FD_ZERO(&fds);
++    FD_SET(fd, &fds);
++    delay.tv_sec  = 0;
++    delay.tv_usec = 0;
++    if (pth_sc(select)(fd+1, NULL, &fds, NULL, &delay) > 0)
++        pth_nap(pth_time(0, 20000));
 +}
 +#endif
 +
  /* Pth variant of SUSv2 send(2) */
  ssize_t pth_send(int s, const void *buf, size_t len, int flags)
  {
-@@ -1499,8 +1532,19 @@
+@@ -1502,8 +1557,19 @@
              }
  
              /* now perform the actual send operation */
 +#ifdef __amix__
 +            s = pth_amix_send(fd, buf, nbytes, flags, to, tolen);
 +            if (s < 0 && errno == EAGAIN) {
-+                /* no room even for a small piece, and select says writable
-+                   anyway (Amix): wait a moment rather than spin */
++                /* select said writable, and there is less room than one
++                   message (Amix): wait a moment rather than spin */
 +                pth_nap(pth_time(0, 20000));
 +                n = 1;
 +                continue;
@@ -76,12 +100,14 @@ spinning on select (a caller's non-blocking socket gets EAGAIN).
              if (s > 0)
                  rv += s;
  
-@@ -1524,8 +1568,12 @@
+@@ -1527,8 +1593,14 @@
      }
      else {
          /* just perform the actual send operation */
 +#ifdef __amix__
 +        rv = pth_amix_send(fd, buf, nbytes, flags, to, tolen);
++        if (rv < 0 && errno == EAGAIN)
++            pth_shield { pth_amix_eagain(fd); }
 +#else
          while ((rv = pth_sc(sendto)(fd, buf, nbytes, flags, to, tolen)) < 0
                 && errno == EINTR) ;
