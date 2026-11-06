@@ -361,7 +361,7 @@ then
 	{
 		echo '#!/bin/sh'
 		echo "/bin/sh $s"
-		echo "kill -0 \`cat $W.pid 2>/dev/null\` 2>/dev/null && : > $W.clean"
+		echo "kill -0 \`cat $W.pid 2>/dev/null\` 2>/dev/null && echo > $W.clean"
 	} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; finish 1; }
 	cli=$W.client
 fi

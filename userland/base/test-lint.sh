@@ -15,6 +15,10 @@
 # Clean up in a function that ends with exit $1 instead. The marker for a
 # line that is meant to differ: "# lint: trap-0".
 #
+# : > file: the stock sh empties the file only the first time that command
+# runs; run again, in a function or a loop, it leaves what is there. Empty a
+# file with echo, cp /dev/null or a plain > file. The marker: "# lint: colon".
+#
 # MIT licence, see LICENSE at the top of the repository.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
@@ -79,6 +83,15 @@ lint_trap() {
 	/(^|[;&|])[ \t]*trap[ \t].*[ \t](0|EXIT)([ \t]|$)/ { print f ":" NR ": " $0 }' "$1"
 }
 
+# lint_colon <file>: "<file>:<line>: <text>" for each : > file
+lint_colon() {
+	$AWK -v f="$1" '
+	/^[ \t]*#/ { next }
+	index($0, "# lint: colon") { next }
+	/(^|[;&|({])[ \t]*:[ \t]*[0-9]?>([^>&]|$)/ ||
+	/(^|[ \t])(then|do|else)[ \t]+:[ \t]*[0-9]?>([^>&]|$)/ { print f ":" NR ": " $0 }' "$1"
+}
+
 # --- the rule itself, on lines made for it
 cat > "$T/sample" <<'EOF'
 [ -d "$d" ] || mkdir -p "$d"
@@ -111,6 +124,26 @@ same "rule: the EXIT traps flagged" "$T/traps:1: trap 'rm -f \"\$t\"' 0
 $T/traps:2: 	trap finish 0 1 2
 $T/traps:5: x=1; trap \"echo bye\" EXIT" "$o"
 
+cat > "$T/colons" <<'EOF'
+: > "$f"
+	x=1; : >$f
+[ -f a ] && : > a
+for i in 1 2; do : > "$i"; done
+if true; then : > b; fi
+: >> "$f"
+: ${x:=1}
+case $a in *:*) echo > "$f" ;; esac
+echo "a: > b"
+: > "$f"   # lint: colon (runs once)
+# : > x in a comment
+EOF
+o=$(lint_colon "$T/colons")
+same "rule: : > flagged" "$T/colons:1: : > \"\$f\"
+$T/colons:2: 	x=1; : >\$f
+$T/colons:3: [ -f a ] && : > a
+$T/colons:4: for i in 1 2; do : > \"\$i\"; done
+$T/colons:5: if true; then : > b; fi" "$o"
+
 # --- the shipped set: the box's scripts are in it, the man pages are not
 s=$(shipped)
 for f in net/ifup net/ifdown net/ifup.subr net/inetinit net/dhcpc-hook rc/rc.subr \
@@ -129,6 +162,8 @@ do
 	same "mkdir -p behind [ -d ]: $f" "" "$o"
 	o=$(lint_trap "$here/$f")
 	same "no EXIT trap: $f" "" "$o"
+	o=$(lint_colon "$here/$f")
+	same "no : > file: $f" "" "$o"
 done
 [ "$n" -ge 12 ] && ok || bad "only $n shipped files found"
 
