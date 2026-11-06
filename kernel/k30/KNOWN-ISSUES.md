@@ -116,9 +116,36 @@ known about it, and what to do. Measurements are from emulation unless the entry
   from another machine times out (`RPC: Timed out`) while `ping` and `rpcinfo -u` to mountd and nfsd answer;
   restarting mountd, nfsd or all of NFS does not help. Give `/etc/inet/hosts` a line `<address> <nodename>` before NFS
   starts, then restart NFS. Seen on k30 and on the 040/060 kernel.
-- **A program that writes and then closes a TCP connection without SO_LINGER can lose the last data it wrote** (stock
-  `tcpclose`, both kernel lines): data still queued at close is dropped. Seen as short ftp downloads and an ssh session
-  that ends without its exit status.
+- **A program that wrote to a TCP connection and closed it without SO_LINGER could lose the last data it wrote**
+  (stock `tcpclose`, both kernel lines; fixed in cut -76). TCP's unsent data is its stream's write queue, freed when the
+  close returns; the stock close kept it only under SO_LINGER with a time, and otherwise sent the FIN after what had
+  gone out, so the peer saw an orderly end after a prefix. Seen as passive-mode ftp downloads arriving short with "226
+  Transfer complete" (in.ftpd's active path sets SO_LINGER, its passive path does not) and an ssh session ending
+  without its exit status. From -76 a close without SO_LINGER gets SO_LINGER with 60 s (`src/tcpclose_lg.c`, the close
+  of TCP's upper read queue, retargeted by `tools/tcpclose-retarget.py`): the close waits until the data and the FIN
+  are acknowledged, the peer resets, 60 s pass (the data is then dropped, as stock) or a signal arrives. A program's
+  own SO_LINGER is kept: {1, 0} still resets the connection. The cost is that wait in close, where stock returned at
+  once; a close with nothing unsent returns at once as before. Measured at 64 MiB, a guest sending 8 MiB in 8 KiB
+  writes and closing, the host reading at full speed: -75 short 2 of 6 (the guest listening) and in.ftpd's passive
+  RETR short 2 of 6; -76 0 of 10 and 0 of 10, the guest connecting 0 of 6, SO_LINGER 60 0 of 3, SO_LINGER {1, 0}
+  reset 3 of 3; each transfer took 11 s on both, and 8 MiB ftp puts and gets over the A2065 took the same time
+  (about 21 and 7.5 s) with no frame dropped.
+
+## Audio
+
+- **/dev/audio answered each AUDIO_VOLUME and AUDIO_PERIOD request twice, and a refused one reported success**
+  (stock audioioctl, both kernel lines; fixed in cut -76). Each case sent its reply and then fell through to the
+  common tail, which sent the same message again as M_IOCACK with error 0: a request of the wrong length arrived as
+  success, and the stream head was handed one message twice. In emulation on -75, 100 of 100 wrong-length requests
+  returned 0; in one run the first request had not returned 15 minutes later (the process asleep in the ioctl). From
+  -76 each case returns after its one reply (`tools/patch_audio_replies.py`, applied after amix-paula's three
+  patchers): 100 of 100 wrong-length requests returned EINVAL, and the right length and the transparent form 0.
+- **A sound written in one piece larger than the free 8 KiB channel buffer repeated parts of itself** (stock
+  audiointr, both kernel lines; fixed in cut -76). The interrupt's refill copied what fit from the message it kept
+  without moving past it, so each refill copied the same bytes again until the stream was closed. In emulation on
+  -75 a 32 KiB write at period 200 was still refilling full buffers after 30 s (it plays in 1.8 s); 4 and 12 KiB
+  writes, which fit in the buffers, drained. From -76 the refill moves past what it copied, as postaudio does: the
+  32 KiB write drained after 1.4 and 1.5 s in two runs, its last buffer queued.
 
 ## Programs
 
