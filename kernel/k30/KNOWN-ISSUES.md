@@ -44,18 +44,21 @@ known about it, and what to do. Measurements are from emulation unless the entry
   rwip passed the window's base to segmap_pagecreate instead of base + offset, as SVR4's source does. Fixed in the ufs
   module (4 bytes, `tools/rwippc030.py`); on -72 and earlier, write in whole 8 KiB pieces at 8 KiB offsets or keep such
   files smaller than free memory.
-- **A whole-page write into a hole in the middle of a file can leave the rest of the newly allocated block reading the
-  disk's old contents**, possibly another file's former data (stock, both kernel lines; not changed by cut -73). When
-  a page-aligned write of whole pages fills a hole, ufs allocates the block without reading or zeroing it and creates
-  only the pages written; the block's other pages are read from the disk block later. Among a file's first 12 blocks
-  (the first 96 KiB with 8 KiB blocks) this happens wherever in the block the write lands; past them ufs zeroes the
-  new block unless the write reaches the block's last page. `tests/sparsehole` in emulation, 16 files with six 2 KiB
-  writes into direct holes and six into indirect ones, after a removed filler file of 0x5a: with the writes 2 KiB into
-  each block, stock 2.1c had 188 and 206 of 288 direct pages wrong (30 of them 0x5a, the rest other old data), -73 40
-  of 288, and the indirect blocks 0 of 288 on both; with the writes on each block's last page (`last`), stock 2.1c had
-  176 of 288 indirect pages wrong (171 of them 0x5a) and a build with -73's ufs 171 of 288 (165 of them 0x5a).
-  Appending to a file and rewriting written data are not affected. Until it is fixed, fill holes in the middle of a
-  file with whole 8 KiB blocks, or write such files from start to end.
+- **A whole-page write into a hole in the middle of a file could leave the rest of the newly allocated block reading
+  the disk's old contents**, possibly another file's former data (stock, both kernel lines; fixed in cut -74). For a
+  write of whole pages as_iolock granted pagecreate: the pages written were created without being read, and ufs_bmap
+  allocated the new block without reading or zeroing it, so the block's other pages were read from the disk block
+  later. Among a file's first 12 blocks (the first 96 KiB with 8 KiB blocks) this happened wherever in the block the
+  write landed; past them only when the write reached the block's last page. From cut -74 rwip keeps pagecreate only
+  for a write that starts at its 8 KiB window and covers it or runs to the end of the file, as Solaris's ufs_wrip does
+  (`src/as_iolock_ufs.c`, `tools/iolockufs030.py`; `ufs_pc_cleared` counts the grants taken back); any other write
+  reads or zero-fills its window's pages first, and a new block is zeroed. `tests/sparsehole` in emulation, 16 files
+  with six 2 KiB writes into direct holes and six into indirect ones after a removed filler file of 0x5a: stock 2.1c
+  188 and 206 of 288 direct pages wrong with the writes 2 KiB into each block, 176 of 288 indirect ones with them on
+  the last page; -73 40 and 122 of 288 direct and 205 (16 MiB) and 242 (64 MiB) of 288 indirect; -74's fix 0 in every
+  mode. The cost, measured at 64 MiB: random 4 KiB rewrites of pages not in the cache take about 28% longer (20000 in
+  a 96 MB file, 23 s against 30 s), as they now read the page first; appending and copying cost the same. On -73 and
+  earlier, fill holes in the middle of a file with whole 8 KiB blocks, or write such files from start to end.
 
 ## Faults and memory protection
 
@@ -67,6 +70,18 @@ known about it, and what to do. Measurements are from emulation unless the entry
   to be safe either way: the read half of `tas` and `cas` reporting both the RM and RW bits in the special status word
   (`tools/rmwfault030.py`); the SSW's RW bit on instruction fetches; and the fault storms seen in emulation before the
   emulator's return-from-exception fix, which point to the emulator and not the kernel.
+
+- **A 68030 short of memory could hang in `hat_unload` or `hat_swapout`, or find a page it still used freed** (stock;
+  fixed in cut -74). Seen as installs at 16 MiB stopping for good, the netinstall every time (5 of 5, from -71 to a
+  build with -73's code), the CD and floppy install 1 time in 5. When the swapper shrinks a process's segment table,
+  hat_growsdt gave the table's tail back at table + units * 512 instead of table + units * 64: hat_sdtfree then
+  cleared bits in whatever page that address fell in, on a data page the head of its mapping chain, so chain walks
+  never ended, and a page left with no bits was freed while still mapped. Found in emulation with every store to a
+  page's chain head watched (the watch named hat_sdtfree, called from hat_growsdt). No 68k hat source exists to
+  compare with: the unit is the one hat_sdtalloc and hat_sdtfree themselves use (64 bytes: bit << 6, (address & 2047)
+  >> 6), and hat_growsdt counts its new size in those units (entries * 8 + 63 >> 6) and clears entries up to that many
+  units. From cut -74 the second shift is gone (`tools/growsdt030.py`, 2 bytes). With it the 16 MiB netinstall passes
+  (3 of 3), and the segment-table units allocated equal those in use at every sample, at 16 and 64 MiB.
 
 ## Networking
 
@@ -89,8 +104,3 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **One shutdown stalled after `INIT: New run level: 0`** on development build 68030-261105-98 in emulation: no
   further output, the machine still answering on the network. Not seen in the later runs that finished their load on
   this kernel or on 68030-261103-71. Cause unknown; not called fixed.
-- **Installs at 16 MiB can hang in `hat_swapout` or `hat_unload`** (68030-261103-71, -72 and a build with -73's fix,
-  in emulation; the netinstall every time so far, 4 of 4, the CD and floppy install 1 time in 5; installs at 64 MiB
-  pass). A page's mapping chain no longer holds an entry that still maps the page (once it names the base of a
-  page-table page instead), and the unbounded walk in the swapper or in segmap's reuse of a window never ends. Cause
-  under investigation; the fix of cut -73 does not end it. Install with more memory than 16 MiB.
