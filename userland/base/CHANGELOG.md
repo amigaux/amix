@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — amix-base 1.0-32 (35360e7, 843a66b, aef12e4)
+
+bootswap(1M) names swap(1M) again. xstart writes its clean marker with echo, and test-lint refuses ': > file' in shipped scripts, as the stock sh empties a file that way only the first time the command runs.
+
 ## 2026-11-06 — amix-base 1.0-31: the swap step says what it added (f396615, 6463ad4)
 
 The swap boot step steps down when the kernel refuses an area for want of memory, for files as for slices. It tries the largest smaller size of swap_add or the kernel's limit, else half in whole MiB, not under 8 MiB, at most 8 tries an area. An area added smaller than asked, or not at all, is one line on the console and in rc.log, naming the limit on 68040/68060 kernels (maxmem/8 MiB, read with adb). bootswap(1M) gives each kernel's limit, says swap -s counts 2 KiB pages, and no longer names the missing swap(1M).
