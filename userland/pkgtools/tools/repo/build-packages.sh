@@ -137,20 +137,24 @@ VER_APKG="0.3.11"
 # 1.12.9 (2026-11-05) -- a SIGHUP ignored on entry stays ignored in the commands
 # and what they start, so an install under nohup outlives its login.  1.12.8
 # (678a7808...) stays what it is.
-VER_ENG="1.12.9"
+# 1.12.10 (2026-11-06) -- a pkginstall that quits before its first part (an
+# installed package under instance=quit) no longer runs cpio on its caller's
+# stdin, where it waited for ever on a login's terminal.  1.12.9 (a7678fee...)
+# stays what it is.
+VER_ENG="1.12.10"
 # EPOCH_APKG, EPOCH_ENG: each version's own epoch: every
 # time stamp of its datastream, through the engine's SOURCE_DATE_EPOCH roll
 # (heirloom 21072b2), so one version is one set of bytes wherever and
 # whenever it is rolled.  Pinned beside the version and moved with it, never
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
-# 2026-11-05 00:00:00 UTC, the day 1.12.9 was set (1.12.7's and 1.12.8's were
-# 1793750400, 1.12.6's 1793577600, 1.12.5's 1793318400); EPOCH_APKG: 2026-11-04
+# 2026-11-06 00:00:00 UTC, the day 1.12.10 was set (1.12.9's was 1793836800,
+# 1.12.7's and 1.12.8's 1793750400, 1.12.6's 1793577600, 1.12.5's 1793318400); EPOCH_APKG: 2026-11-04
 # 00:00:00 UTC, the day 0.3.11 was set, as 0.3.7 to 0.3.10 were (0.3.6's was 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
 EPOCH_APKG=1793750400
-EPOCH_ENG=1793836800
+EPOCH_ENG=1793923200
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
 VER_M4="2.1"

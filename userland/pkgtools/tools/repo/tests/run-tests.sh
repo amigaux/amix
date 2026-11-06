@@ -3327,6 +3327,55 @@ else
     echo "  skip- the engine and a hangup (no host engine or fakeroot: heirloom/build-host.sh)"
 fi
 
+# --------------------------------------------------------------- T37 ----
+# A pkgadd -n that quits never reads its caller's stdin: an installed package
+# under instance=quit ends rc 4 at once with stdin open and silent, as a telnet
+# login's is, and so do the other quits a batch meets.
+echo "T37: a quitting engine command and an open stdin"
+S37="$WORK/t37"; mkdir -p "$S37/src/opt/qt"
+if [ -x "$HB/pkgadd" ] && [ -x "$HB/pkgmk" ] && command -v fakeroot >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
+    echo data > "$S37/src/opt/qt/data"
+    printf 'PKG=QT\nNAME=qt\nVERSION=1.0\nARCH=Amiga\nCATEGORY=application\nCLASSES=none\nBASEDIR=/\n' > "$S37/pkginfo"
+    printf 'i pkginfo=%s/pkginfo\nd none /opt 0755 root sys\nd none /opt/qt 0755 root sys\nf none /opt/qt/data=%s/src/opt/qt/data 0644 root sys\n' \
+        "$S37" "$S37" > "$S37/prototype"
+    mkdir -p "$S37/spool"
+    ( cd "$S37" && "$HB/pkgmk" -o -d "$S37/spool" -f prototype && "$HB/pkgtrans" -s "$S37/spool" "$S37/QT.pkg" QT ) >"$WORK/t37.mk" 2>&1
+    for i in overwrite quit; do
+        printf 'mail=\ninstance=%s\npartial=nocheck\nrunlevel=nocheck\nidepend=nocheck\nrdepend=nocheck\nspace=nocheck\nsetuid=nocheck\nconflict=nocheck\naction=nocheck\nbasedir=default\n' "$i" > "$S37/admin.$i"
+    done
+    R37="$S37/root"; mkdir -p "$R37/etc" "$R37/var/sadm/install"
+    printf 'root:x:%s:%s::/:/bin/sh\n' "$(id -u)" "$(id -g)" > "$R37/etc/passwd"
+    printf 'root::%s:\nsys::%s:\n' "$(id -g)" "$(id -g)" > "$R37/etc/group"
+    SAVE37="$WORK/t37-fake"; : > "$SAVE37"
+    mkfifo "$S37/in"
+    held37() { # held37 <engine command> <args>: stdin open and silent, 20 s at most
+        local c="$1" r; shift
+        sleep 120 > "$S37/in" & local w=$!
+        timeout -k 2 20 fakeroot -i "$SAVE37" -s "$SAVE37" "$HB/$c" -R "$R37" -n "$@" < "$S37/in" >"$WORK/t37.out" 2>&1
+        r=$?; kill "$w" 2>/dev/null; wait "$w" 2>/dev/null; return "$r"
+    }
+    null37() { local c="$1"; shift; fakeroot -i "$SAVE37" -s "$SAVE37" "$HB/$c" -R "$R37" -n "$@" < /dev/null >"$WORK/t37.out" 2>&1; }
+    null37 pkgadd -a "$S37/admin.overwrite" -d "$S37/QT.pkg" QT
+    check "the package installs: rc 0" test $? -eq 0
+    held37 pkgadd -a "$S37/admin.quit" -d "$S37/QT.pkg" QT
+    check "installed, instance=quit, stdin open: pkgadd ends rc 4, not held" test $? -eq 4
+    check "  ... says so and reads no stream" bash -c "grep -q 'already installed' '$WORK/t37.out' && ! grep -q -E 'cpio|datastream failed' '$WORK/t37.out'"
+    null37 pkgadd -a "$S37/admin.quit" -d "$S37/QT.pkg" QT
+    check "installed, instance=quit, stdin /dev/null: rc 4, no cpio error" bash -c "test $? -eq 4 && ! grep -q -E 'cpio|datastream failed' '$WORK/t37.out'"
+    held37 pkgadd -a "$S37/admin.overwrite" -d "$S37/QT.pkg" QT
+    check "installed, instance=overwrite, stdin open: rc 0" test $? -eq 0
+    held37 pkgadd -a "$S37/admin.quit" -d "$S37/QT.pkg" NOSUCH
+    check "a package the stream lacks, stdin open: ends, not held" bash -c "test $? -ne 0 && test $? -ne 124"
+    held37 pkgadd -a "$S37/admin.quit" -d "$S37/spool" QT
+    check "installed, from a directory, instance=quit, stdin open: rc 4" test $? -eq 4
+    held37 pkgrm -a "$S37/admin.quit" NOSUCH
+    check "pkgrm of a package not installed, stdin open: ends, not held" bash -c "r=$?; test \$r -ne 0 && test \$r -ne 124"
+    held37 pkgrm -a "$S37/admin.quit" QT
+    check "pkgrm, stdin open: rc 0, the package gone" bash -c "test $? -eq 0 && test ! -e '$R37/opt/qt/data'"
+else
+    echo "  skip- a quitting engine command and an open stdin (no host engine, fakeroot or timeout)"
+fi
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"

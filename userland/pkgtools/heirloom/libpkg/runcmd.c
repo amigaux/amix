@@ -225,6 +225,16 @@ esystem(char *cmd, int ifd, int ofd)
 
 		if (ifd > 0) {
 			(void) dup2(ifd, STDIN_FILENO);
+		} else if (ifd < 0) {
+			/*
+			 * AMIX PORT: with no input named the command
+			 * reads nothing, never the caller's stdin.
+			 */
+			i = open("/dev/null", O_RDONLY);
+			if (i > 0) {
+				(void) dup2(i, STDIN_FILENO);
+				(void) close(i);
+			}
 		}
 
 		if (ofd >= 0 && ofd != STDOUT_FILENO) {
