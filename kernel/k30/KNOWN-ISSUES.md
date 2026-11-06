@@ -31,6 +31,13 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **Memory for processes (malloc, stack, fork) is limited by swap, whatever the RAM** (stock). Anonymous memory is
   reserved against swap space; with little swap a large-RAM machine still refuses large processes. Add swap.
 
+## Files
+
+- **A large file written at random offsets can read back wrong blocks** (stock and every kernel since). A file that is
+  appended to, then rewritten and read at random offsets, as a swap file is, can read back wrong blocks once it
+  outgrows the page cache. Seen in emulation on the stock 2.1c kernel and on every kernel since; not yet checked on
+  real hardware; under investigation. Until it is fixed, keep such files smaller than free memory.
+
 ## Faults and memory protection
 
 - **A raw write from a buffer mapped write-only is refused** with EPERM until a read fault has made the page readable
