@@ -14,7 +14,7 @@ f none /etc/rc2.d/S69inet 0444 root sys
 l none /etc/init.d/inetinit=/etc/rc2.d/S69inet
 l none /etc/rc0.d/K69inet=/etc/rc2.d/S69inet
 l none /etc/rc1.d/K69inet=/etc/rc2.d/S69inet
-c none /dev/audio 46 0 0660 root audio
+c audio /dev/audio 46 0 0660 root audio
 f none /etc/init.d/devnodes 0444 root sys
 l none /etc/rc2.d/S20devnodes=/etc/init.d/devnodes
 f none /etc/init.d/ntp 0444 root sys

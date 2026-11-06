@@ -11,7 +11,9 @@
 #   class <module> the one the running kernel's registry gives the module
 #                  (rc_mknod asks kbootset); a node that is there at another
 #                  major is made again, and the record's disagreement is
-#                  logged as a packaging error
+#                  logged as a packaging error; a driver built into the
+#                  kernel (class audio, /dev/audio), which the registry
+#                  does not list, gets the record's
 #
 # A node of class none that is there but differs from its record is left
 # and logged. Nothing here carries a major number. One pass: the records,

@@ -158,6 +158,19 @@ there < /dev/null
 run "$K" > /dev/null
 same "unknown module: the record's major" "$R/dev/zz0 c 49 0" "$(cat "$T/mknod.log")"
 
+# a driver built into the kernel, in its own class (the base package's
+# /dev/audio): the registry does not list it, so the record's major and mode
+db <<'EOF'
+/dev/audio c audio 46 0 0660 root audio amxbase
+EOF
+there < /dev/null
+run "$K" > /dev/null
+same "built-in driver: the record's major" "$R/dev/audio c 46 0" "$(cat "$T/mknod.log")"
+same "built-in driver: the record's mode" "660" "$(stat -c %a "$R/dev/audio")"
+echo "$R/dev/audio c 46 0" | there
+run "$K" > /dev/null
+same "built-in driver there at its major: left" "" "$(cat "$T/mknod.log" 2>/dev/null)"
+
 # a block node of a module
 db <<'EOF'
 /dev/ram0 b ramdisk 20 0 0600 root sys ramdisk

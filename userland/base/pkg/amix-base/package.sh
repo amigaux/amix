@@ -15,6 +15,8 @@ SYSTEM_PATHS="/usr/amix/bin /usr/lib/amix /usr/lib/inet /usr/sbin/ifup /usr/sbin
 # /etc/profile, /etc/inittab and /etc/default/login are built in stage from
 # the stock files: profile plus etc/profile.add, inittab plus the dlm line
 # (etc/mkinittab.sh), login with ULIMIT=4194303 (etc/mklogin.sh); /etc/group
-# likewise, with audio::20: added (etc/mkgroup.sh)
+# likewise, with audio::20: added (etc/mkgroup.sh). /dev/audio is in its
+# driver's class, audio, which pkgadd lays after the conffile class: on a
+# fresh system the group comes from this package's own /etc/group
 STOCK_ETC="/etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/inet/strcf"
 CONFFILES="/etc/inittab /etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/default/login /etc/profile /etc/inet/strcf /etc/inet/network-config /etc/inet/rc.inet /etc/group"

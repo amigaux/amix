@@ -22,20 +22,23 @@ record, and with this major number:
 .TP
 .I a stock node
 (class
-.BR none :
-the system's own nodes, and
-.BR /dev/audio ,
-which the base package ships)
+.BR none )
 the major number of its record.
 .TP
-.I a module's node
-(its class is the name of the kernel module that drives it)
-the major number the running kernel's registry gives that module, as
+.I a driver's node
+(its class is the name of the driver that serves it: a kernel module, or
+a driver built into the kernel, as
+.B audio
+is for
+.BR /dev/audio ,
+which the base package ships)
+the major number the running kernel's registry gives that driver, as
 .B kbootset major
 prints it.
 A node that is there at another major number is made again, and a record
 that disagrees with the registry is reported as a packaging error.
-When the registry does not know the module, the record's major is used.
+When the registry does not know the driver (a driver built into the
+kernel), the record's major is used.
 .PP
 A stock node that is there but differs from its record is left as it is,
 and reported.
