@@ -192,6 +192,12 @@
 #                a 68030 without an FPU then survives its first signal.  --check after the link and after the dlm
 #                splice (sendsig its only caller, every other fpu_setup caller untouched).  --no-fpu-gate is the
 #                kernel without it, byte for byte.
+#   --no-growsdt-fix  build WITHOUT the hat_growsdt fix (on by default; GROWSDT_FIX=0 does the same).  The stock
+#                hat_growsdt frees a shrunk segment table's tail at table + units * 512 instead of + units * 64, so
+#                hat_sdtfree clears bits in whatever page that lands in -- a data page's mapping chain head -- and
+#                frees pages still in use; hat_swapout shrinks tables whenever it swaps a process out.  After the final
+#                link tools/growsdt030.py checks hat_growsdt and hat_sdtfree against the stock code and makes the
+#                second shift a nop (2 bytes).  --no-growsdt-fix is the kernel without it, byte for byte.
 #   --no-freeq-guard  build WITHOUT the STREAMS freeq guard (on by default; FREEQ_GUARD=0 does the same).  By default
 #                src/freeqguard030.c (grimoire quirk 92) joins the final link and tools/freeqguard-retarget.py retargets
 #                every relocation naming freeq to freeq_guarded, which takes the pair off the run and scan lists at
@@ -268,6 +274,7 @@ DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed 
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
 FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
+GROWSDT_FIX="${GROWSDT_FIX:-1}"   # --no-growsdt-fix (GROWSDT_FIX=0): the stock hat_growsdt (tools/growsdt030.py)
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
 ARENA8M="${ARENA8M:-1}"           # --no-arena8m (ARENA8M=0): kvseg 4 MiB, as stock
 SEGVN_PROT="${SEGVN_PROT:-1}"     # --no-segvn-prot (SEGVN_PROT=0): a denied access restarts for ever, as stock
@@ -321,6 +328,8 @@ while [ "$#" -gt 0 ]; do
     --no-ufs-rwip-fix) UFS_RWIP=0; shift ;;
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
+    --no-growsdt-fix) GROWSDT_FIX=0; shift ;;
+    --growsdt-fix) GROWSDT_FIX=1; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
     --no-arena8m) ARENA8M=0; shift ;;
     --no-kmem-wake) KMEM_WAKE=0; shift ;;
@@ -348,6 +357,7 @@ fi
 [ -z "$OBJ_ABSENT" ] || [ -n "$OBJ_BASELINE" ] || { echo "--object-absent needs --object-baseline" >&2; exit 2; }
 SD_CARDS="${SD_CARDS:-2}"
 case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$GROWSDT_FIX" in 0|1) ;; *) echo "GROWSDT_FIX='$GROWSDT_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SWAP_GUARD" in 0|1) ;; *) echo "SWAP_GUARD='$SWAP_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$ARENA8M" in 0|1) ;; *) echo "ARENA8M='$ARENA8M' (want 0 or 1)" >&2; exit 2 ;; esac
@@ -1682,6 +1692,13 @@ if [ "$FPU_GATE" = 1 ]; then
   echo "--- fpu gate: sendsig's jsr fpu_setup -> fpu_setup_gated (tools/fpugate-sendsig.py) ---"
   python3 "$KT/tools/fpugate-sendsig.py" "$BUILD/unix"
   python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"
+fi
+if [ "$GROWSDT_FIX" = 1 ]; then
+  echo "--- hat_growsdt: a shrunk table's tail freed at table + units * 64 (tools/growsdt030.py) ---"
+  python3 "$KT/tools/growsdt030.py" "$BUILD/unix" || { echo "--growsdt-fix: the kernel was not patched" >&2; exit 1; }
+  python3 "$KT/tools/growsdt030.py" --check "$BUILD/unix" || exit 1
+else
+  echo "--- hat_growsdt: --no-growsdt-fix -- the stock hat_growsdt ---"
 fi
 if [ "$FREEQ_GUARD" = 1 ]; then
   echo "--- freeq guard: every freeq relocation -> freeq_guarded (tools/freeqguard-retarget.py) ---"
