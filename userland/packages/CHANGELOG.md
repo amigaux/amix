@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — vim 9.1.0000-4 (277c90b, 6dcebe1)
+
+When a line can't be read back, the write now stops instead of writing "???" lines; under vim -es, errors also go to stderr; the undo save refuses an impossible line length; the swap file uses 8 Kbyte pages on Amix, so it no longer reads back wrong (E317, a crash or a wrong file) on a kernel without the ufs rwip fix.
+
 ## 2026-11-06 — libcfix 2.1c-2 (4581457, 925680a)
 
 The README says to install with `apkg`, not the stock `/usr/sbin/pkgadd`, which stops with "interaction required" over the stock library; the installer installs it with the base set; `pkgchk` is clean for both core and libcfix. The library is unchanged. docs/WHATS-NEW.md names libcfix in the base set. vim stays 9.1.0000-2 (the -3 commits are reverted).
