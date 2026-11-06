@@ -496,8 +496,8 @@ l11_bits()
 #     FB_IP empty (public) gives `* dhcp`, with the profile's name, else `hostname dhcp`.
 #   /etc/rc.conf (rc.conf(4)): syslogd=yes|no from FB_SYSLOG; dropbear=yes and ntp=yes, the SSH
 #     server's and the network time sync's switches shown where a user looks for them (their own
-#     defaults are on too); swap_add= from
-#     SWAP_ADD_MB, the sizes amix-base's boot swap step tries (bootswap(1M)); every other service
+#     defaults are on too); no swap_add: amix-base's boot swap step adds the whole swap slice by
+#     its own rules, stepping down when the kernel refuses (bootswap(1M)); every other service
 #     keeps its own default.
 #   /etc/display (display(4)): card auto (the first card whose device answers, the chipset
 #     display last), monsw from MONSW, start manual (no xdm is packaged yet).
@@ -536,7 +536,6 @@ l11_admin()
 		echo "# set to no to disable the SSH server"
 		echo "dropbear=yes"
 		echo "ntp=yes          # set the clock from time servers at boot and hourly: ntpsync(1M)"
-		[ -z "$SWAP_ADD_MB" ] || echo "swap_add=$SWAP_ADD_MB"
 	} > "$TARGET/etc/rc.conf" || die "cannot write $TARGET/etc/rc.conf"
 	run chmod 0644 "$TARGET/etc/rc.conf"
 	{

@@ -10790,11 +10790,41 @@ def audit_root_lock():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_swap_by_ram():
+    head("SR. 1.1 swap by memory: the interview and the driver share swap_by_ram word for word; its default "
+         "is 64 MB under 32 MB of memory, 128 MB from it, at most a quarter of the disk, at least MINSWAP; "
+         "the dialog warns past what the kernel takes; no rc.conf swap_add limits the boot step")
+    blk = re.compile(r'(# --- swap by memory \(1\.1\).*?# --- end of swap by memory ---\n)', re.S)
+    a = blk.search(open(SETUP, encoding="utf-8").read())
+    b = blk.search(open(DRIVER, encoding="utf-8").read())
+    if not a or not b:
+        fail("swap_by_ram block missing in %s" % ("setup.sh" if not a else "install.sh"))
+        return
+    (ok if a.group(1) == b.group(1) else fail)("swap_by_ram and kinfo_fast_mb are the same text in setup.sh and install.sh")
+    want = {("030", 16, 200): "50 128", ("030", 16, 512): "64 128", ("030", 32, 512): "128 384", ("030", 64, 4000): "128 384",
+            ("030", 16, 100): "25 128", ("060", 16, 100): "30 445", ("060", 16, 512): "64 445", ("060", 32, 512): "128 948",
+            ("060", 64, 4000): "128 1955", ("060", 128, 4000): "128 630", ("030", 0, 512): "64 128"}
+    bad = []
+    for (cpu, ram, disk), exp in want.items():
+        body = ('INST=/nonexistent\nINSTALL_CPU=%s\nINSTALL_RAM_MB=%s\nMINSWAP=%d\n%s\nswap_by_ram %d\necho "$DEFSWAP $SWAPBOUND"\n'
+                % (cpu, ram if ram else "", 30 if cpu == "060" else 5, a.group(1), disk))
+        r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10)
+        if r.stdout.strip() != exp:
+            bad.append("%s %s MB %s MB disk: %r, want %r" % (cpu, ram, disk, r.stdout.strip(), exp))
+    (fail if bad else ok)("swap_by_ram EXECUTED on %d cases (memory unknown counts as 16 MB)%s"
+                          % (len(want), (": " + "; ".join(bad)) if bad else ""))
+    st = open(SETUP, encoding="utf-8").read()
+    (ok if 'Use ${SWAPBOUND} megabytes instead? [y] ' in st and '[ "$ask" -gt "$SWAPBOUND" ]' in st else fail)(
+        "the swap question warns past SWAPBOUND and offers it; a NO keeps the typed size")
+    l11 = open(os.path.join(os.path.dirname(DRIVER), "l11.sh"), encoding="utf-8").read()
+    (ok if 'swap_add=' not in l11 else fail)("l11.sh writes no swap_add into /etc/rc.conf")
+
+
 def audit_swap_stepdown():
     head("SW. the swap slice is added in steps (SWAP_ADD_MB): sizes tried in order, the first the "
-         "kernel takes is used and logged, no size twice; default 30 MiB on 030, all on 040/060")
+         "kernel takes is used and logged, no size twice; default the whole slice on both lines, then 64 and 30 MiB")
     src = open(DRIVER, encoding="utf-8").read()
-    m = re.search(r'\n(\t\[ -n "\$SWAP_ADD_MB" \] \|\| case .*?\n\tearly_target_swap\(\) \{\n.*?\n\t\})\n', src, re.S)
+    m = re.search(r'\n(\t\[ -n "\$SWAP_ADD_MB" \] \|\| SWAP_ADD_MB=.*?\n\tearly_target_swap\(\) \{\n.*?\n\t\})\n', src, re.S)
     if not m:
         fail("install.sh: no SWAP_ADD_MB default and early_target_swap")
         return
@@ -10813,7 +10843,7 @@ def audit_swap_stepdown():
                            capture_output=True, text=True, timeout=10)
         return r.stdout
     cases = (
-        ("030 default: 30 MiB only", "030", "", 10**9, ["TRY 61440", "ADDED=/dev/dsk/c6d0s2 0 61440"], ["TRY 131072"]),
+        ("030 default: the whole slice", "030", "", 10**9, ["TRY 131072", "ADDED=/dev/dsk/c6d0s2 0 131072"], []),
         ("060 default: the whole slice", "060", "", 10**9, ["TRY 131072", "ADDED=/dev/dsk/c6d0s2 0 131072"], []),
         ("guarded list steps down to 48 MiB", "030", "all 48 30", 100000, ["TRY 131072", "TRY 98304", "ADDED=/dev/dsk/c6d0s2 0 98304"], ["TRY 61440"]),
         ("then to 30 MiB", "030", "all 48 30", 70000, ["TRY 131072", "TRY 98304", "TRY 61440", "ADDED=/dev/dsk/c6d0s2 0 61440"], []),
@@ -11234,11 +11264,11 @@ def audit_l11():
                                         FB_NODENAME="uaeamix", FB_ZEN_IP="192.0.2.39", FB_ZEN_NETMASK="255.255.255.0",
                                         FB_DOMAIN="example.net", FB_SYSLOG="n", MONSW="34", SWAP_ADD_MB="all 48 30")
         (ok if ifs == ["aen0 static 192.0.2.38/24 gw 192.0.2.1 name uaeamix", "zen0 static 192.0.2.39/24",
-                       "domain example.net"] and "syslogd=no" in rc and "\nswap_add=all 48 30\n" in rc
+                       "domain example.net"] and "syslogd=no" in rc and "swap_add" not in rc
               and "monsw 34" in disp
               and "start manual" in disp and "card auto" in disp
               and "/usr/sbin/ifup -n" in crl and "/usr/amix/bin/xstart -n" in crl else fail)(
-            "l11_admin, the bench profile: aen0 static, zen0 beside it, domain; syslogd=no; swap_add; monsw; checked: %r %r" % (ifs, out))
+            "l11_admin, the bench profile: aen0 static, zen0 beside it, domain; syslogd=no; no swap_add (the boot step's own rules); monsw; checked: %r %r" % (ifs, out))
         out, ifs, rc, disp, crl = admin(FB_ETHER_IF="zen0", FB_IP="192.0.2.38", FB_NETMASK="255.255.255.0",
                                         FB_GATEWAY="192.0.2.1",
                                         FB_ZEN_CARDS="00:80:51:01:02:03=192.0.2.39=a4000d default=192.0.2.38")
@@ -11854,6 +11884,7 @@ def main():
     audit_boot_pri()
     audit_guarded_rm_mv()
     audit_colon_truncate()
+    audit_swap_by_ram()
     audit_guarded_mkdir()
     audit_net_space()
     audit_ufs_rootcap()

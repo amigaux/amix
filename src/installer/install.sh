@@ -1319,6 +1319,46 @@ if [ "$INSTALL_LAYOUT" = 1.0 ]; then
 	msg "target kernel: relocunix sum -r $KERNEL_RELOCUNIX_SUMR / brel $KERNEL_BREL_SUMR (rootdev $ROOTDEV)"
 fi
 
+# --- swap by memory (1.1): the SAME text in setup.sh and install.sh (installer-selftest audit SR) ---
+# kinfo_fast_mb -- the fast memory the running kernel uses, in MB: /dev/kinfo's big-endian long at 528
+# (amix kernel/dlm C2-1). The miniroot has no od: the disc's SVR4 `sum -r` of one byte is that byte's value.
+# INSTALL_RAM_MB, when set, stands for it (the selftest). Nothing when there is nothing to read.
+kinfo_fast_mb()
+{
+	if [ -n "${INSTALL_RAM_MB:-}" ]; then echo "$INSTALL_RAM_MB"; return 0; fi
+	[ -r /dev/kinfo ] && [ -x "$INST/bin/sum" ] || return 0
+	[ "`dd if=/dev/kinfo bs=4 count=1 2>/dev/null`" = KIF1 ] || return 0
+	_k0=`dd if=/dev/kinfo bs=1 skip=528 count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )`
+	_k1=`dd if=/dev/kinfo bs=1 skip=529 count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )`
+	case "$_k0$_k1" in ""|*[!0-9]*) return 0 ;; esac
+	expr "$_k0" \* 16 + "$_k1" / 16
+}
+# swap_by_ram DISK_MB -- DEFSWAP and SWAPBOUND for a 1.1 install. The default grows with the memory: 64 MB
+# below 32 MB of it, 128 MB from 32 MB, never more than a quarter of the disk nor less than MINSWAP (30 on
+# the 68040/68060). SWAPBOUND is what one swap area this kernel takes at this memory (measured on the final
+# kernels; the RAM-disk miniroot's 68030 takes 128 MB at 16 MB): the dialog warns past it. Unknown memory
+# counts as 16 MB.
+swap_by_ram()
+{
+	_ram=`kinfo_fast_mb`
+	case "$_ram" in ""|*[!0-9]*|0) _ram=16 ;; esac
+	if [ "$_ram" -ge 32 ]; then DEFSWAP=128; else DEFSWAP=64; fi
+	case "${INSTALL_CPU:-030}" in
+		040|060)
+			if [ "$_ram" -ge 128 ]; then SWAPBOUND=630
+			elif [ "$_ram" -ge 64 ]; then SWAPBOUND=1955
+			elif [ "$_ram" -ge 32 ]; then SWAPBOUND=948
+			else SWAPBOUND=445; fi ;;
+		*)	if [ "$_ram" -ge 32 ]; then SWAPBOUND=384; else SWAPBOUND=128; fi ;;
+	esac
+	_q=`expr "$1" / 4`
+	[ "$DEFSWAP" -le "$_q" ] || DEFSWAP="$_q"
+	[ "$DEFSWAP" -le "$SWAPBOUND" ] || DEFSWAP="$SWAPBOUND"
+	[ "$DEFSWAP" -ge "$MINSWAP" ] || DEFSWAP="$MINSWAP"
+	RAM_MB="$_ram"
+}
+# --- end of swap by memory ---
+
 # ===========================================================================
 # 1. DISCOVER + PLAN -- the partition arithmetic (mkroot.sh, transcribed to sh)
 # ===========================================================================
@@ -1382,6 +1422,8 @@ plan_partitions() {
 	if [ "${INSTALL_CPU:-030}" = 040 ] || [ "${INSTALL_CPU:-030}" = 060 ]; then
 		DEFSWAP=30; MINSWAP=30; SWAPWHY=" (the 68040/68060 kernels link a 30 MB swap area)"
 	fi
+	# 1.1: the default grows with the memory (swap_by_ram, the interview's own text)
+	[ "$INSTALL_LAYOUT" != 1.1 ] || swap_by_ram "$disk_mb"
 
 	# ROOTMAX = the stock ceiling on the root answer: what is left once the
 	# MINSWAP floor is reserved. Stock computes it right here, from the SAME
@@ -1697,10 +1739,10 @@ build_target_author() {
 	# How much of the slice is added: SWAP_ADD_MB, sizes in MiB tried in order, `all` the whole
 	# slice; the first the kernel takes is used and logged, and no size is tried twice. The
 	# kernel's swap -a needs one contiguous block of kernel space for its page table (16 bytes
-	# a page); until a kernel refuses a request that does not fit, it waits for ever on one, so
-	# the list holds only sizes known to fit: 30 MiB on the 68030 line (its ceiling on a 64 MB
-	# box is about 48), the whole slice on the 68040/68060 line.
-	[ -n "$SWAP_ADD_MB" ] || case "${INSTALL_CPU:-030}" in 040|060) SWAP_ADD_MB=all ;; *) SWAP_ADD_MB=30 ;; esac
+	# a page). The kernels of this release refuse a request that does not fit (ENOMEM) instead of
+	# waiting for ever on it, so both lines try the whole slice first, then 64 and 30 MiB; the
+	# boot's swap step adds the slice again by its own rules (amix-base), which nothing here limits.
+	[ -n "$SWAP_ADD_MB" ] || SWAP_ADD_MB="all 64 30"
 	early_target_swap() {
 		set x `/bin/swap -l 2>/dev/null`; shift
 		[ "$6" = /dev/fakeswap ] || return 0
