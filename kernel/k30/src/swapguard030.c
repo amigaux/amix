@@ -15,16 +15,25 @@
  * array -- an area being deleted added back with the same start, size and name, the same area again, or an overlap
  * (EEXIST) -- it calls swapadd with nothing allocated, so those answers are stock's.  Otherwise it allocates the array
  * with KM_NOSLEEP and leaves it for swapguard_take, which hands it over; ENOMEM when the array of this one area would
- * take more than an eighth of memory, when kvseg has no run that large, or when taking it would leave kvseg no free
- * run of 1 MiB (SWG_KEEP): kmem's other large requests sleep without a signal until a run that large is free.
+ * take more than an eighth of memory, when kvseg has no run that large, or when taking it out of kvseg would leave no
+ * free run of 1 MiB (SWG_KEEP): kmem's other large requests sleep without a signal until a run that large is free.
+ * The first area (swapconf's, at boot) is exempt from the eighth and the reserve, as swapconf panics on any error.
  * When swapadd clamped the area to its device (the first area only) the size differs: swapguard_take allocates the
  * smaller block with KM_NOSLEEP while it still holds the larger; if that fails it frees the larger and allocates again
  * at spl7 (IPL 4, kmem's own level on this kernel), so no interrupt that allocates can take the run between the two.
  * swapadd has no failure path for the array and never sees 0: if the allocation still fails, it is retried once a
  * second, never on Km_OsizeWanted.  That can only be a block small enough for kmem's pools, whose growth needs more
  * than the block just freed: a first area clamped to 512 KiB or less.  A block swapadd did not take (it failed before
- * allocating) is freed on return.  Nothing else in swapadd changes.  swapadd's checks of the area against its device
- * (EINVAL) come after the guard's allocation, so a request it would refuse as EINVAL can be ENOMEM when memory is short.
+ * allocating) is freed on return.  Nothing else in swapadd changes.
+ *
+ * WHAT IT DOES NOT COVER.  swapadd opens the device and reads its size (VOP_OPEN, VOP_GETATTR) before its own checks,
+ * and those come after the guard's allocation: when memory is short, a request swapadd would refuse with EINVAL, ENXIO,
+ * EACCES or EIO is refused with ENOMEM after about 4 s instead.  The guard reads the list before swapadd's open and
+ * size calls, which can sleep, and swapdel is not held off meanwhile: if an area being deleted drains and is freed in
+ * between, swapadd allocates the array itself, through swapguard_take with no block in hand, so without the eighth or
+ * the reserve and retrying once a second until it has one.  A signal that ends swapadd inside one of those sleeps
+ * leaves swg_busy set, and every later swap -a waits for good.  All three need a swap -a racing a swap -d, or a
+ * signal to it while it opens its device; a user sees a swap -a that never returns, as stock's could.
  */
 #include <sys/types.h>
 #include <sys/param.h>
@@ -39,13 +48,14 @@
 #define	SWG_KEEP	512			/* clicks of kvseg an area must leave free in one run: 1 MiB, for kmem's other KM_SLEEP users */
 
 /* struct swapinfo as swapadd uses it (vm/swap.h of the stock kernel; the offsets are those its code reads) */
-#define	SI_VP(si)	(*(caddr_t *)((si) + 0))	/* the common vnode */
-#define	SI_START(si)	(*(u_int *)((si) + 8))		/* first byte of the area */
-#define	SI_END(si)	(*(u_int *)((si) + 12))		/* byte past it */
-#define	SI_NEXT(si)	(*(caddr_t *)((si) + 32))
-#define	SI_FLAGS(si)	(*(u_short *)((si) + 36))	/* 4: being deleted; 2: as swapadd's own test */
+/* pointers are 32 bits here; read through u_int so the host test can lay the list out at the same offsets */
+#define	SI_VP(si)	((caddr_t)(u_long)*(u_int *)((si) + 0))	/* the common vnode */
+#define	SI_START(si)	(*(u_int *)((si) + 8))			/* first byte of the area */
+#define	SI_END(si)	(*(u_int *)((si) + 12))			/* byte past it */
+#define	SI_NEXT(si)	((caddr_t)(u_long)*(u_int *)((si) + 32))
+#define	SI_FLAGS(si)	(*(u_short *)((si) + 36))		/* 4: being deleted; 2: as swapadd's own test */
 #define	SI_NPAGES(si)	(*(u_int *)((si) + 40))
-#define	SI_NAME(si)	(*(char **)((si) + 48))
+#define	SI_NAME(si)	((char *)(u_long)*(u_int *)((si) + 48))
 
 extern int maxmem;			/* pages of memory, set by kvm_init */
 extern caddr_t swapinfo;		/* swapadd's list of areas */
@@ -128,8 +138,8 @@ swapadd_guarded(vp, lowblk, nblks, name)
 	u_int lowblk, nblks;
 	char *name;
 {
-	u_int start, end, size;
-	int error, tries;
+	u_int start, end, size, before;
+	int error, tries, first;
 
 	swg_calls++;
 	while (swg_busy)
@@ -144,14 +154,19 @@ swapadd_guarded(vp, lowblk, nblks, name)
 		size = 0;
 	}
 	if (size != 0) {
-		/* the array is memory for good: at most an eighth of what the box has, for each area */
-		tries = (size >> SWG_PAGESHIFT) > (u_int)maxmem / 8 ? 0 : SWG_TRIES;
+		/* the array is memory for good: at most an eighth of what the box has, for each area.  The first area, swapconf's
+		 * at boot, is exempt from that and from the reserve: swapconf panics on any error, where stock would have slept */
+		first = swapinfo == 0;
+		tries = !first && (size >> SWG_PAGESHIFT) > (u_int)maxmem / 8 ? 0 : SWG_TRIES;
+		before = swg_largest();
 		swg_block = 0;
 		/* under paging the pages may need a moment to come free: only time helps, so a few seconds of it */
 		while (tries-- > 0 && (swg_block = (caddr_t)kmem_zalloc(size, KM_NOSLEEP)) == 0)
 			if (tries > 0)
 				delay(HZ);
-		if (swg_block != 0 && swg_largest() < SWG_KEEP) {
+		/* the reserve: refused when this array came out of kvseg (the largest run shrank) and left it under SWG_KEEP;
+		 * an array from kmem's pools takes nothing from kvseg and passes */
+		if (swg_block != 0 && !first && swg_largest() < SWG_KEEP && swg_largest() < before) {
 			kmem_free(swg_block, size);
 			swg_block = 0;
 			swg_keep++;

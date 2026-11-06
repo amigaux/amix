@@ -10,8 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 static int level, fails, nosleep_fail, sleeps, delays, nsallocs;
+static void sptmap_take(unsigned clicks);
 static int lvl_free = -1, lvl_alloc = -1;
 static char *freed;
 static unsigned freed_size;
@@ -31,6 +33,8 @@ static char *k_alloc(unsigned size, int flag)
 		nosleep_fail--;
 		return 0;
 	}
+	if (size > 4096)	/* a block over kmem's pools comes out of kvseg's largest run (sptmap[2] in this model) */
+		sptmap_take((size + 2047) / 2048);
 	memset(buf[nbuf & 3], 0x55, sizeof buf[0]);
 	return buf[nbuf++ & 3];
 }
@@ -55,6 +59,7 @@ char *swapinfo;				/* the list swapadd walks; empty unless a case sets it */
 unsigned int sptmap[8] = { 4, 0, 1000, 100, 0, 0, 0, 0 };	/* one free run of 1000 clicks */
 #include SWAPGUARD
 char *common_specvp(char *vp) { return vp; }
+static void sptmap_take(unsigned clicks) { sptmap[2] -= clicks < sptmap[2] ? clicks : sptmap[2]; }
 
 #undef sleep
 #undef wakeup
@@ -104,33 +109,46 @@ static int swapadd_fake(char *vp, unsigned lo, unsigned n, char *name)
 	return swapadd_ret;
 }
 
-/* a swapinfo entry laid out at the offsets swapadd reads */
-static union { char c[64]; long align; } si;
-static void si_set(char *vp, unsigned start, unsigned end, unsigned flags, unsigned npages, char *name)
+/* swapinfo entries laid out as the 68030 kernel's: 32-bit pointers at swapadd's offsets, so the list lives below 4 GiB */
+static char *low;			/* MAP_32BIT memory: entries at low + 64 * k, names at low + 1024 */
+static char *si_at(int k, char *vp, unsigned start, unsigned end, unsigned flags, unsigned npages, const char *name, char *next)
 {
-	memset(si.c, 0, sizeof si.c);
-	*(char **)(si.c + 0) = vp;
-	*(unsigned *)(si.c + 8) = start;
-	*(unsigned *)(si.c + 12) = end;
-	*(unsigned short *)(si.c + 36) = flags;
-	*(unsigned *)(si.c + 40) = npages;
-	*(char **)(si.c + 48) = name;
-	swapinfo = si.c;
+	char *e = low + 64 * k, *nm = low + 1024 + 32 * k;
+
+	memset(e, 0, 64);
+	strcpy(nm, name);
+	*(unsigned *)(e + 0) = (unsigned)(unsigned long)vp;
+	*(unsigned *)(e + 8) = start;
+	*(unsigned *)(e + 12) = end;
+	*(unsigned *)(e + 32) = (unsigned)(unsigned long)next;
+	*(unsigned short *)(e + 36) = flags;
+	*(unsigned *)(e + 40) = npages;
+	*(unsigned *)(e + 48) = (unsigned)(unsigned long)nm;
+	return e;
 }
 
-/* an add that stock answers from its list: no array is asked for even when memory is short, and stock's answer stands */
-static void noarray(const char *what, char *vp, unsigned flags, unsigned start, unsigned end, int ret)
+/* the area asked for in every list case: device 0x1000, blocks 0..256 (64 pages, bytes 0..0x20000), name "dev" */
+#define REQ_VP	((char *)0x1000)
+#define REQ_END	(64 * 2048)
+
+/* an add against the list: want_array says whether the guard must ask for an array (memory short, so it ends ENOMEM)
+ * or leave the answer to swapadd (whose answer here is ret) */
+static void walk(const char *what, char *list, int want_array, int ret)
 {
-	char msg[120];
+	char msg[160];
 	int before = swapadd_called, r;
 
-	si_set((char *)0x1000, start, end, flags, (end - start) / 2048, "dev");
+	swapinfo = list;
 	nosleep_fail = 100;
 	nsallocs = 0;
 	swapadd_ret = ret;
-	r = swapadd_guarded(vp, 0, 64 * 4, "dev");
-	snprintf(msg, sizeof msg, "%s: swapadd's own answer (%d), no array asked for", what, ret);
-	CHECK(r == ret && swapadd_called == before + 1 && nsallocs == 0, msg);
+	r = swapadd_guarded(REQ_VP, 0, 64 * 4, "dev");
+	if (want_array)
+		snprintf(msg, sizeof msg, "%s: an array asked for (ENOMEM, memory short)", what);
+	else
+		snprintf(msg, sizeof msg, "%s: swapadd's own answer (%d), no array asked for", what, ret);
+	CHECK(want_array ? r == ENOMEM && nsallocs > 0 && swapadd_called == before
+	    : r == ret && nsallocs == 0 && swapadd_called == before + 1, msg);
 	nosleep_fail = 0;
 	swapadd_ret = 0;
 	swapinfo = 0;
@@ -140,12 +158,24 @@ int main(void)
 {
 	char *got;
 
-	/* maxmem 8000 pages: an array of 1000 pages, each describing 128 pages of swap (4 blocks a page), passes; 1001 fails */
+	low = mmap((void *)0, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_32BIT, -1, 0);
+	if (low == MAP_FAILED || (unsigned long)low + 4096 > 0xffffffffUL) {
+		printf("FAIL no memory below 4 GiB for the list\n");
+		return 1;
+	}
 	swg_swapadd = swapadd_fake;
 	nosleep_fail = 0;
+
+	/* the eighth applies once an area exists (maxmem 8000: 1000 array pages pass, 1001 fail); the first area is exempt */
+	swapinfo = si_at(9, (char *)0x9000, 0, 2048, 0, 1, "other", 0);
+	sptmap[2] = 100000;
 	CHECK(swapadd_guarded((char *)0, 0, 1000 * 128 * 4, "x") == 0 && swapadd_called == 1, "an array of an eighth of memory is allowed");
 	CHECK(swapadd_guarded((char *)0, 0, 1001 * 128 * 4, "x") == ENOMEM && swapadd_called == 1 && swg_nomem == 1,
 	    "an array over an eighth of memory is ENOMEM before swapadd runs");
+	swapinfo = 0;
+	sptmap[2] = 100000;
+	CHECK(swapadd_guarded((char *)0, 0, 1001 * 128 * 4, "x") == 0 && swapadd_called == 2, "the first area is exempt from the eighth");
+	sptmap[2] = 1000;
 
 	swg_block = buf[2];
 	swg_size = 4000;
@@ -156,20 +186,40 @@ int main(void)
 	CHECK(lvl_alloc == 7, "the second allocation at spl7, in the same spl as the free");
 	resized(4, "resized, no memory for four tries");
 
-	/* the area being deleted, the same start (0), size (64 pages) and name: swapadd adds it back with no new array */
-	noarray("re-add of an area being deleted", (char *)0x2000, 4, 0, 64 * 2048, 0);
-	/* the same device, an overlapping area: stock's EEXIST, not ENOMEM */
-	noarray("an overlap on the same device", (char *)0x1000, 0, 32 * 2048, 200 * 2048, 17);
-	/* the same area again with flag 2: stock's answer at once */
-	noarray("the same area with flag 2", (char *)0x1000, 2, 0, 64 * 2048, 0);
+	/* the list walk: the first entry not the one, a match further down, a deleting entry kept out of the overlap test */
+	{
+		char *other = si_at(1, (char *)0x3000, 0, REQ_END, 0, 64, "elsewhere", 0);
+		char *dele, *dup, *ovl, *far;
 
-	/* kvseg's largest free run after the array: 600 clicks passes, 400 is under SWG_KEEP (512) and is ENOMEM, freed */
-	sptmap[2] = 600;
+		dele = si_at(2, (char *)0x7000, 0, REQ_END, 4, 64, "dev", 0);
+		walk("re-add of an area being deleted, second in the list", si_at(3, (char *)0x3000, 0, REQ_END, 0, 64, "elsewhere", dele), 0, 0);
+		dup = si_at(4, REQ_VP, 0, REQ_END, 2, 64, "dev", 0);
+		walk("the same area with flag 2, second in the list", si_at(5, (char *)0x3000, 0, REQ_END, 0, 64, "elsewhere", dup), 0, 0);
+		ovl = si_at(6, REQ_VP, 32 * 2048, 200 * 2048, 0, 168, "dev", 0);
+		walk("an overlap on the same device, third in the list", si_at(7, (char *)0x3000, 0, REQ_END, 0, 64, "a", si_at(8, (char *)0x4000, 0, REQ_END, 0, 64, "b", ovl)), 0, 17);
+		/* a deleting entry on the same device that overlaps but is not the one: no overlap test for it, an array */
+		far = si_at(10, REQ_VP, 300 * 2048, 400 * 2048, 0, 100, "dev", 0);
+		walk("an overlapping area being deleted under another name, then a far area: an array", si_at(11, REQ_VP, 0, REQ_END, 4, 64, "old", far), 1, 0);
+		walk("one area on another device: an array", other, 1, 0);
+		walk("a deleting area of the same name but another size: an array", si_at(12, REQ_VP, 0, 2 * REQ_END, 4, 128, "dev", 0), 1, 0);
+	}
+
+	/* the reserve: an array out of kvseg that leaves its largest run under 512 clicks is ENOMEM, the block freed */
+	swapinfo = si_at(9, (char *)0x9000, 0, 2048, 0, 1, "other", 0);
+	sptmap[2] = 1200;
+	CHECK(swapadd_guarded((char *)0, 0, 600 * 128 * 4 / 16 * 16, "y") == 0, "an array of 600 clicks from a run of 1200 is allowed");
+	sptmap[2] = 1000;
 	freed = 0;
-	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "y") == 0, "an array that leaves a run of 600 clicks is allowed");
+	{ long k0 = swg_keep;
+
+	CHECK(swapadd_guarded((char *)0, 0, 600 * 128 * 4, "y") == ENOMEM && freed != 0 && swg_keep == k0 + 1,
+	    "an array of 600 clicks from a run of 1000 leaves 400: ENOMEM, the block freed");
+	}
 	sptmap[2] = 400;
-	freed = 0;
-	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "y") == ENOMEM && freed != 0, "an array that leaves a run of 400 clicks is ENOMEM, the block freed");
+	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "y") == 0, "a pool-sized array with the run already at 400: allowed, kvseg untouched");
+	swapinfo = 0;
+	sptmap[2] = 1000;
+	CHECK(swapadd_guarded((char *)0, 0, 600 * 128 * 4, "y") == 0, "the first area is exempt from the reserve");
 	sptmap[2] = 1000;
 
 	/* no run for the array: tried SWG_TRIES (5) times, a second apart, then ENOMEM; a run free on the third try is taken */
