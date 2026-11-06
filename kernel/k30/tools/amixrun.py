@@ -7,7 +7,7 @@
 # (the clean-gate) is NOT run synchronously here -- amix-build backgrounds it with
 # nohup and polls a logfile with repeated short `tail` calls.
 #
-# Completion is detected with a marker emitted as  D''ONE_$?  so the echoed *input*
+# Completion is detected with a marker emitted as  D''ONE_<nonce>_$?  so the echoed *input*
 # line (which contains the quotes) never matches -- only the command's *output* does.
 #
 #   python3 amixrun.py 'uname -a' 'ls /usr/sys'
@@ -15,7 +15,10 @@
 # Target + credentials via env (no defaults baked in -- you must set these):
 #   AMIX_HOST=<box-ip>  AMIX_PORT=23  AMIX_USER=root  AMIX_PASS=<root-pw>
 #   AMIX_CMD_TIMEOUT=60   (seconds to wait for one command's DONE_ marker)
-import os, socket, sys, time
+#
+# Exit: 0 every command reached its marker (the commands' own status is in the output, after DONE_), 1 one did not
+# (NOT FINISHED, the rest not sent), 2 usage or a command over the limit (REFUSED, NOTHING RUN).
+import os, re, socket, sys, time
 
 HOST = os.environ.get('AMIX_HOST')
 PORT = int(os.environ.get('AMIX_PORT', '23'))
@@ -25,6 +28,11 @@ if not HOST or not _PASS:
     sys.exit('amixrun: set AMIX_HOST=<box ip> and AMIX_PASS=<root pw>')
 PW   = (_PASS + '\r\n').encode()
 CMD_TIMEOUT = int(os.environ.get('AMIX_CMD_TIMEOUT', '60'))
+# The box's tty takes 256 bytes on a line (MAX_CANON); a longer one is lost with no error. The marker and CRLF take 23, and the
+# last byte must stay free: 232 for the command. Over that nothing is sent, and it is an error, not an empty answer.
+# The marker carries a nonce, new for every command: a command that prints an old capture holding DONE_ text must not end the
+# wait. The nonce is taken out of what is printed, so readers still see "DONE_<rc>".
+MAX_CMD = 232
 
 
 def strip_iac(sock, data):
@@ -56,7 +64,7 @@ def strip_iac(sock, data):
     return bytes(out)
 
 
-def readuntil(sock, needles, timeout):
+def readuntil(sock, needles, timeout, until=None):
     sock.settimeout(1.0); buf = b''; end = time.time() + timeout
     while time.time() < end:
         try:
@@ -68,29 +76,44 @@ def readuntil(sock, needles, timeout):
         if not chunk:
             break
         buf += strip_iac(sock, chunk)
-        if any(nd in buf for nd in needles):
+        if any(nd in buf for nd in needles) or (until is not None and until.search(buf)):
             break
     return buf
 
 
 def main(argv):
+    for c in argv:
+        if len(c.encode()) > MAX_CMD:
+            sys.stderr.write('amixrun: REFUSED, NOTHING RUN: command is %d bytes, the limit is %d: %s...\n' % (len(c.encode()), MAX_CMD, c[:60]))
+            return 2
     s = socket.create_connection((HOST, PORT), timeout=20)
     readuntil(s, [b'ogin:'], 30); s.sendall(USER)
     readuntil(s, [b'assword:'], 15); s.sendall(PW)
     readuntil(s, [b'# ', b'$ '], 25)
     out = b''
+    rc = 0
     for c in argv:
-        s.sendall(c.encode() + b"; echo D''ONE_$?\r\n")
-        out += b'\n========== ' + c.encode() + b' ==========\n' + readuntil(s, [b'DONE_'], CMD_TIMEOUT)
+        nonce = b'%04x' % int.from_bytes(os.urandom(2), 'big')
+        s.sendall(c.encode() + b"; echo D''ONE_" + nonce + b"_$?\r\n")
+        end = re.compile(rb"(?<!')DONE_" + nonce + rb"_(\d+)\s")
+        got = readuntil(s, [], CMD_TIMEOUT, until=end)
+        fin = end.search(got)
+        got = got.replace(b"DONE_" + nonce + b"_", b"DONE_").replace(b"D''ONE_" + nonce + b"_$?", b"D''ONE_$?")
+        out += b'\n========== ' + c.encode() + b' ==========\n' + got
+        if not fin:
+            sys.stderr.write('amixrun: NOT FINISHED: no completion marker in %d s: %s\n' % (CMD_TIMEOUT, c[:80]))
+            rc = 1
+            break
     try:
         s.sendall(b'exit\r\n')
     except OSError:
         pass
     sys.stdout.buffer.write(out); sys.stdout.flush()
+    return rc
 
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         sys.stderr.write("usage: amixrun.py '<cmd>' ['<cmd>' ...]   (env: AMIX_HOST/PORT/USER/PASS)\n")
         sys.exit(2)
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))

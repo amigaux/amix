@@ -83,13 +83,13 @@
 #                         cap there is no partial result to salvage and no error to catch:
 #                         see the MAX_CANON note above.
 #   KPATCH_WIRE_SUFFIX_LEN  what the telnet command runner appends to EVERY command:
-#                         `; echo D''ONE_$?` = 16.
+#                         `; echo D''ONE_nnnn_$?` = 21, with a four-digit nonce.
 #   KPATCH_LINE_BUDGET    what we allow on the wire (command + suffix).  16 bytes below
 #                         MAX_CANON on purpose: markers and target paths come from
 #                         kernel-patches.conf, which is data, and a budget with no headroom
 #                         is a budget that fails on the next record somebody adds.
 KPATCH_MAX_CANON=256
-KPATCH_WIRE_SUFFIX_LEN=16
+KPATCH_WIRE_SUFFIX_LEN=21
 KPATCH_LINE_BUDGET=240
 
 # kpatch_wire_len <command> -- bytes this command occupies as a tty line once the runner has

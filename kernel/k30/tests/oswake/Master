@@ -1,0 +1,5 @@
+$modtype misc
+$class demand
+$unload allowed
+$desc kmem test: an oversize KM_SLEEP request and what wakes it
+oswake	oswake

@@ -17,3 +17,6 @@ test:
 	python3 tools/kernel-support-probe-inject.py --selftest
 	python3 tools/k0-gates.py --selftest
 	sh tools/cuts-selftest.sh
+	python3 tools/arena8m-selftest.py
+	sh tests/swapguard/run.sh
+	python3 -I tests/amixrun/test.py tools/amixrun.py

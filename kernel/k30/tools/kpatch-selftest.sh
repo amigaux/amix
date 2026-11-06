@@ -25,7 +25,7 @@
 #      them (so its rows still do not need one).
 #  12. THE WIRE BUDGET (MAX_CANON).  Every on-box line this library generates, for every
 #      record in the REAL conf at the worst-case revision width, measured against a 240-byte
-#      wire budget (command + the runner's 16-byte completion suffix) under SVR4's
+#      wire budget (command + the runner's 21-byte completion suffix) under SVR4's
 #      MAX_CANON = 256 -- plus the guard's own teeth and the split-sentinel echo immunity.
 #      12b is the regression fixture for the exact shape that broke: the aen record's OLD
 #      &&-chained post-push verify, reconstructed from the real conf, shown to overrun and to
