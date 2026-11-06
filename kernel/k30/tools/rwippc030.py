@@ -34,8 +34,8 @@ THE FIX.  The push of the address becomes pea a0@(0,d3:l) (4870 3800), the same 
 return there (only the store, the addaw, the tstl and the branch lie between) and d3 is the mapon uiomove adds.
 Both hold only for the stock instruction stream, so the tool checks it: the bytes around the call, the four
 relocations, d3 set once to uio_offset & 8191 before getmap, and the whole of rwip against the stock code's digest
-(its code with relocated fields and the 4 bytes zeroed, and its relocations; the same in 2.1 and 2.1c, in fs/ufs/exp,
-a carved module and a linked unix).
+(its code with relocated fields and the 4 bytes zeroed, and its relocations, with tools/bmaphf030.py's ufs_bmap_hf
+counted as ufs_bmap; the same in 2.1 and 2.1c, in fs/ufs/exp, a carved module and a linked unix).
 """
 import hashlib, struct, sys
 
@@ -99,6 +99,7 @@ def site(b, sh, syms, known=KNOWN_RWIP):
             off, info, add = struct.unpack_from('>IIi', b, o)
             if start <= off < end:
                 n, v, x, i = syms[info >> 8]
+                n = 'ufs_bmap' if n == 'ufs_bmap_hf' else n     # tools/bmaphf030.py's retarget is not a change
                 allrel.append((off, info & 0xff, n if (i & 15) != 3 else '', add))
             if start <= off < end and info & 0xff == 1:
                 rel.setdefault(syms[info >> 8][0], []).append((off, add))
@@ -142,7 +143,7 @@ def site(b, sh, syms, known=KNOWN_RWIP):
     return p - 10, cur == FIXED
 
 
-def synth(path, mutate=None, relocs=((16, 2, 0), (48, 3, 0), (54, 4, 0), (72, 5, 0))):
+def synth(path, mutate=None, relocs=((16, 2, 0), (48, 3, 0), (54, 4, 0), (72, 5, 0)), extra=None):
     """a minimal ET_REL whose rwip holds the stock sequence, with its four relocations"""
     t = bytearray.fromhex(
         '4e560000' '262d0008' '028300001fff'               # 0: link; 4: d3 = uio_offset; 8: & 8191
@@ -154,14 +155,16 @@ def synth(path, mutate=None, relocs=((16, 2, 0), (48, 3, 0), (54, 4, 0), (72, 5,
         '4eb900000000' '4e5e4e75')                         # 70: jsr uiomove (reloc 72); unlk, rts
     if mutate:
         mutate(t)
-    names = ['rwip', 'segmap_getmap', 'segkmap', 'segmap_pagecreate', 'uiomove']
+    names = ['rwip', 'segmap_getmap', 'segkmap', 'segmap_pagecreate', 'uiomove'] + ([extra] if extra else [])
     strtab = b'\0' + b''.join(n.encode() + b'\0' for n in names)
     off = [1]
     for n in names[:-1]:
         off.append(off[-1] + len(n) + 1)
     sym = bytes(16) + struct.pack('>IIIBBH', off[0], 0, len(t), 0x12, 0, 1)
-    sym += b''.join(struct.pack('>IIIBBH', off[i], 0, 0, 0x10, 0, 0) for i in range(1, 5))
+    sym += b''.join(struct.pack('>IIIBBH', off[i], 0, 0, 0x10, 0, 0) for i in range(1, len(names)))
     rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, a) for o, s, a in relocs)
+    if extra:
+        rela += struct.pack('>IIi', 10, (6 << 8) | 1, 0)          # a call of EXTRA (symbol 6) relocated at 10, as rwip's ufs_bmap
     shstr = b'\0.text\0.rela.text\0.symtab\0.strtab\0.shstrtab\0'
     body = [bytes(t), rela, sym, strtab, shstr]
     pos, offs = 52, []
@@ -226,13 +229,24 @@ def selftest():
             synth(p, relocs=relocs)
             before = open(p, 'rb').read()
             assert run([p], None) != 0 and open(p, 'rb').read() == before, 'an rwip with %s was not refused' % what
+        digs = {}
+        for name in ('ufs_bmap', 'ufs_bmap_hf', 'ufs_bmap_xyz'):
+            synth(p, extra=name)
+            b, sh, syms = load(p)
+            try:
+                site(b, sh, syms, set())
+            except SystemExit as e:
+                digs[name] = str(e.code).split('digest ')[-1].rstrip(')')
+        assert len(digs) == 3 and digs['ufs_bmap'] == digs['ufs_bmap_hf'] != digs['ufs_bmap_xyz'], \
+            'ufs_bmap_hf is not counted as ufs_bmap in the digest (or any name is): %r' % digs
         synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
         before = open(p, 'rb').read()
         assert run([p], None) == 0, 'the frame change alone tripped a context check'
         synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
         assert run([p], SYNTH) != 0 and open(p, 'rb').read() == before, 'a change only the digest sees was not refused'
     print('rwippc030 selftest: stock patched to pea a0@(0,d3:l) (4 bytes), idempotent, --check both ways, an unknown '
-          'rwip, %d changed contexts, %d changed relocations and a change only the digest sees refused'
+          'rwip, %d changed contexts, %d changed relocations and a change only the digest sees refused; ufs_bmap_hf counted '
+          'as ufs_bmap in the digest, another name not'
           % (len(cases), len(rcases)))
 
 

@@ -44,17 +44,47 @@ known about it, and what to do. Measurements are from emulation unless the entry
   rwip passed the window's base to segmap_pagecreate instead of base + offset, as SVR4's source does. Fixed in the ufs
   module (4 bytes, `tools/rwippc030.py`); on -72 and earlier, write in whole 8 KiB pieces at 8 KiB offsets or keep such
   files smaller than free memory.
-- **A whole-page write into a hole among a file's first 12 blocks leaves the rest of that newly allocated block
-  reading the disk's old contents**, possibly another file's former data (stock, both kernel lines; not changed by cut
-  -73). When a page-aligned write of whole pages fills a hole in one of the direct blocks (the first 96 KiB with 8 KiB
-  blocks), ufs allocates the block without reading or zeroing it and creates only the pages written; the block's other
-  pages are read from the disk block later. Past the direct blocks ufs zeroes the new block, unless (by the code; not
-  measured here) the write reaches the block's last page. `tests/sparsehole` in emulation, 16 files with six 2 KiB
-  writes each into direct holes and six into indirect ones, after a removed filler file of 0x5a: stock 2.1c 188 and
-  206 of 288 direct pages wrong (30 of them 0x5a, the rest other old data), -73 40 of 288 (30 of them 0x5a), both
-  passes; 0 of 288 in the indirect control on both. Appending to a file and rewriting written data are not affected.
-  Until it is fixed, fill holes among a file's first 96 KiB with whole 8 KiB blocks, or write such files from start to
-  end.
+- **A whole-page write into a hole in the middle of a file could leave the rest of the newly allocated block reading
+  the disk's old contents**, possibly another file's former data (stock, both kernel lines; fixed in cut -75, whose
+  rule replaces the one of cut -74, a cut that was not released). For a write of whole pages as_iolock granted
+  pagecreate: the pages written were created without being read, and ufs_bmap allocated the new block alloc-only,
+  without reading or zeroing it, so the block's other pages were read from the disk block later. Among a file's first
+  12 blocks (the first 96 KiB with 8 KiB blocks) this happened wherever in the block the write landed; past them only
+  when the write reached the block's last page. From cut -75 rwip's call of ufs_bmap looks the block up first
+  (`src/ufs_bmap_hf.c`, `tools/bmaphf030.py`; ufs_bmap with S_READ, which allocates nothing, under the inode lock rwip
+  holds for the real call). For a hole alloc-only is turned off, so ufs_bmap reads the new block before setting it in
+  the inode: what it allocates -- the whole block, or up to the fragment the write ends in when the block is the
+  file's last -- is zero-filled, the write's pages are copied over it, and the rest of a last block, past the end of
+  the file, is zeroed by rwip when the file grows over it, as stock. A block already allocated keeps alloc-only: a full
+  block allocates nothing, so the pages written are created unread and the others are read from the file's own block,
+  as stock (correct because rwip gives segmap_pagecreate the write's address, the -73 fix above, which the hole fix
+  needs: the build refuses it without); the file's last block, held as a fragment, is grown by realloccg and read
+  whatever alloc-only says. `ufs_hf_holes` and `ufs_hf_kept` count the two. Cut -74 had kept pagecreate only for a
+  write that starts at its 8 KiB window and covers it or runs to the end of the file, as Solaris's ufs_wrip does, which
+  made rewrites of pages not in the cache read them first. Not changed: `swap -a` on a sparse regular file
+  (ufs_allocstore) still allocates its holes without zeroing them, so the swap file holds old disk data until swapping
+  overwrites it. `tests/sparsehole` in emulation, 16 files after a removed filler file of 0x5a: with 2 KiB written 2
+  KiB into each of six direct and six indirect holes, stock 2.1c had 188 and 206 of 288 direct pages wrong, -73 40,
+  and 0 indirect on both; with the writes on each block's last page, stock had 176 of 288 indirect pages wrong, -73
+  122 direct and 205 (16 MiB) or 242 (64 MiB) indirect; -74's rule 0 at 16 and 64 MiB, -75 0 at 16 MiB. Its `eof` mode (a
+  write 2 KiB past the end into a new block) and `keep` mode (a write from a new block's start to the end, then the
+  file extended past it) found 0 of 48 on -73, -74 and -75 alike: they are regression cases, and a 0 there cannot show
+  that the new blocks landed on the filler's. Its `rewrite` mode, 2 KiB rewritten 2 KiB into blocks already
+  allocated whose other pages are not in the cache (the case -75 leaves alloc-only), found 0 of 288 direct and 0 of
+  288 indirect pages wrong on -73 and on -75, read at once and again after the cache was pushed out; on -72, whose
+  rwip gave segmap_pagecreate the window's base, 96 and 96 read wrong at once (each block's first page) and 0 after.
+  On -75, with `ufs_hf_holes` and `ufs_hf_kept` read from the running box after each mode, the rewrite mode's 192
+  writes (16 files of 12 blocks) went the kept way (`ufs_hf_kept` up 193) and every hole mode's writes the zero-fill
+  way (`ufs_hf_holes` up by them and by the 6144 whole new blocks of the test's own filler and eviction files, `kept`
+  up 1). The cost of -75's rule, from `tests/wcost` at 64 MiB with time()
+  in whole seconds, one boot of each kernel, two passes, 20000 random 4 KiB rewrites of pages not in the cache of a 96
+  MB file: 27 and 26 s on -73 against 24 and 25 s in the same run on a trial build with -75's ufs module (byte for byte
+  but its build id; its kernel lacked -72's IP read queue mark), and 24 and 25 s on the -75 cut in a run of its own;
+  -74's rule took 30 and 29 s against -73's 23 and 23 s. So -75's rewrites are not measurably slower than -73's. 64 MB
+  written by 4 KiB pages cost the same on all three; copied by 8 KiB, whose new blocks -75 now zero-fills in memory
+  before writing them too, it took 49 and 47 s on the trial against -73's 46 and 43 in the same run (47 and 46 on the
+  -75 cut), within -73's own spread between runs (52 and 42 s). On -73 and earlier, fill holes in the middle of a file
+  with whole 8 KiB blocks, or write such files from start to end.
 
 ## Faults and memory protection
 
@@ -66,6 +96,19 @@ known about it, and what to do. Measurements are from emulation unless the entry
   to be safe either way: the read half of `tas` and `cas` reporting both the RM and RW bits in the special status word
   (`tools/rmwfault030.py`); the SSW's RW bit on instruction fetches; and the fault storms seen in emulation before the
   emulator's return-from-exception fix, which point to the emulator and not the kernel.
+
+- **A 68030 short of memory could hang in `hat_unload` or `hat_swapout`, or find a page it still used freed** (stock;
+  fixed in cut -74). Seen as installs at 16 MiB stopping for good, the netinstall every time (5 of 5, from -71 to a
+  build with -73's code), the CD and floppy install 1 time in 5. When the swapper shrinks a process's segment table,
+  hat_growsdt gave the table's tail back at table + units * 512 instead of table + units * 64: hat_sdtfree then
+  cleared bits in whatever page that address fell in, on a data page the head of its mapping chain, so chain walks
+  never ended, and a page left with no bits was freed while still mapped. Found in emulation with every store to a
+  page's chain head watched (the watch named hat_sdtfree, called from hat_growsdt). No 68k hat source exists to
+  compare with: the unit is the one hat_sdtalloc and hat_sdtfree themselves use (64 bytes: bit << 6, (address & 2047)
+  >> 6), and hat_growsdt counts its new size in those units (entries * 8 + 63 >> 6) and clears entries up to that many
+  units. From cut -74 the second shift is gone (`tools/growsdt030.py`, 2 bytes). With the fix the 16 MiB netinstall
+  completed 3 times of 3 (a build with -73's ufs and this fix), and an install under the same watch logged no bad
+  store to a chain head.
 
 ## Networking
 
@@ -88,8 +131,3 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **One shutdown stalled after `INIT: New run level: 0`** on development build 68030-261105-98 in emulation: no
   further output, the machine still answering on the network. Not seen in the later runs that finished their load on
   this kernel or on 68030-261103-71. Cause unknown; not called fixed.
-- **Installs at 16 MiB can hang in `hat_swapout` or `hat_unload`** (68030-261103-71, -72 and a build with -73's fix,
-  in emulation; the netinstall every time so far, 4 of 4, the CD and floppy install 1 time in 5; installs at 64 MiB
-  pass). A page's mapping chain no longer holds an entry that still maps the page (once it names the base of a
-  page-table page instead), and the unbounded walk in the swapper or in segmap's reuse of a window never ends. Cause
-  under investigation; the fix of cut -73 does not end it. Install with more memory than 16 MiB.
