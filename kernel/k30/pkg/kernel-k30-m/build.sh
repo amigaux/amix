@@ -157,9 +157,10 @@ amix_dlm_kit "$K30M_KIT_COMMIT" "" "$K30M_KIT_PORT" >/dev/null
 KIT="$AMIX_DLM_TREE/build/kit/k30"
 # the object each carve Makefile links (its EXTRA=): the stock one, as pinned
 # and as the cut's carve/stock.sha256 names it -- or, for a filesystem named
-# in K30M_FSEXTRA, the cut's own object built from the stock one (-73: ufs
-# links rwip/ufs.exp, qz/ufs.exp's quirk-91 fix plus rwip's segmap_pagecreate
-# address fix; -56 to -72 linked qz/ufs.exp), pinned by sha256; the stock object
+# in K30M_FSEXTRA, the cut's own object built from the stock one (-74: ufs
+# links hole/ufs.exp: qz/ufs.exp's quirk-91 fix, rwip's segmap_pagecreate
+# address fix and as_iolock_ufs; -73 linked rwip/ufs.exp, -56 to -72
+# qz/ufs.exp), pinned by sha256; the stock object
 # is still checked against stock.sha256 either way.  The carve Makefile names
 # that object by the absolute path of the cut's run (the host's or the build
 # container's): its EXTRA= must end in the same name, and the object checked
