@@ -2,9 +2,9 @@
 NAME=python3
 PKG=python3
 VERSION=3.11.18
-PKGREV=3   # -3: a CPU-time timer lets a computing thread hand over the GIL; the port adapters' MIT notice; the new pth
+PKGREV=4   # -4: the socket, resource and unicodedata modules
 SUMMARY="Python 3.11.18"
-DESC="CPython 3.11.18 for Amix, statically linked, threads through GNU Pth, with its standard library (no test suite, IDLE or Tk) under /opt/amix/lib/python3.11. /opt/amix/bin/python3 seeds hash randomisation with PYTHONHASHSEED=0 while /dev/urandom cannot be read; os.urandom and secrets need the random driver. Needs a UFS file system."
+DESC="CPython 3.11.18 for Amix, statically linked, threads through GNU Pth, IPv4 sockets and subprocess, with its standard library (no test suite, IDLE, Tk, ssl, sqlite3 or ctypes: README) under /opt/amix/lib/python3.11. /opt/amix/bin/python3 seeds hash randomisation with PYTHONHASHSEED=0 while /dev/urandom cannot be read; os.urandom and secrets need the random driver. Needs a UFS file system."
 CATEGORY=language
 SET=extra
 LICENSE=PSF-2.0

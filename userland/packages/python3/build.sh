@@ -5,7 +5,7 @@ ASM_REVIEWED="libffi and other-platform assembly in the tree; _ctypes is not bui
 PTH="$AMIX_BUILD_ROOT/pth/dest$PREFIX"
 ZL="$AMIX_BUILD_ROOT/zlib/dest$PREFIX"
 
-# the modules linked into the interpreter (isoriano's set, with zlib)
+# the modules linked into the interpreter: isoriano's set, then ours (README, Modules)
 setup_local() {
 	cat <<SL
 *static*
@@ -23,6 +23,27 @@ _sha512 sha512module.c
 _sha3 _sha3/sha3module.c
 _blake2 _blake2/blake2module.c _blake2/blake2b_impl.c _blake2/blake2s_impl.c
 zlib zlibmodule.c -lz
+_socket socketmodule.c
+resource resource.c
+unicodedata unicodedata.c
+_posixsubprocess _posixsubprocess.c
+fcntl fcntlmodule.c
+_contextvars _contextvarsmodule.c
+_csv _csv.c
+array arraymodule.c
+grp grpmodule.c
+termios termios.c
+syslog syslogmodule.c
+cmath cmathmodule.c
+_pickle _pickle.c
+_bisect _bisectmodule.c
+_heapq _heapqmodule.c
+_queue _queuemodule.c
+_opcode _opcode.c
+_statistics _statisticsmodule.c
+_typing _typingmodule.c
+_zoneinfo _zoneinfo.c
+pyexpat pyexpat.c -I\$(srcdir)/Modules/expat Modules/expat/libexpat.a
 SL
 }
 
@@ -34,7 +55,7 @@ build() {
 	done
 	T=$PWD K=$BUILD/compat
 	mkdir -p "$K"
-	for n in math wide clock time environ; do
+	for n in math wide clock time environ net; do
 		cc1 $AMIX_CFLAGS -fno-strict-aliasing -I"$HERE/port/include" -c "$HERE/port/amix-$n.c" -o "$K/amix-$n.o" || {
 			echo "[FAIL] port/amix-$n.c" >&2; exit 1; }
 	done
@@ -44,22 +65,30 @@ build() {
 		CC=gcc CFLAGS= "$T/configure" --without-ensurepip --disable-shared > configure.log 2>&1 &&
 		env -u AR -u RANLIB make -j8 all > make.log 2>&1 ) || { echo "[FAIL] host python; see $BUILD/hostpy" >&2; exit 1; }
 	echo "  host python: $("$BUILD/hostpy/python" -E -S --version)"
-	LIBS1="$K/amix-math.o $K/amix-wide.o $K/amix-clock.o $K/amix-time.o $K/amix-environ.o -lz -lm -lpthread -lpth -ldl -lsocket -lnsl"
+	LIBS1="$K/amix-math.o $K/amix-wide.o $K/amix-clock.o $K/amix-time.o $K/amix-environ.o $K/amix-net.o -lz -lm -lpthread -lpth -ldl -lsocket -lnsl"
 	rm -rf -- "${BUILD:?}/x"; mkdir -p "$BUILD/x"; cd "$BUILD/x"
 	READELF=$(dirname "$AR")/$AMIX_TARGET-readelf \
 	CFLAGS="$AMIX_CFLAGS -fno-strict-aliasing" CPPFLAGS="-I$HERE/port/include -I$PTH/include -I$ZL/include" \
 	LDFLAGS="-L$PTH/lib -L$ZL/lib" LIBS="$LIBS1" ac_cv_file__dev_ptmx=yes ac_cv_file__dev_ptc=no \
+	ac_cv_func_accept=yes ac_cv_func_bind=yes ac_cv_func_connect=yes ac_cv_func_getsockname=yes \
+	ac_cv_func_listen=yes ac_cv_func_recvfrom=yes ac_cv_func_sendto=yes ac_cv_func_setsockopt=yes \
+	ac_cv_func_socket=yes ac_cv_func_socketpair=yes ac_cv_func_inet_pton=yes \
 	"$T/configure" --build=x86_64-pc-linux-gnu --host=m68k-cbm-sysv4 --with-build-python="$BUILD/hostpy/python" \
 		--prefix="$PREFIX" --disable-shared --disable-ipv6 --without-ensurepip --without-c-locale-coercion \
 		--disable-test-modules > "$BUILD/configure.log" 2>&1 || { echo "[FAIL] configure; see $BUILD/configure.log" >&2; exit 1; }
 	setup_local > Modules/Setup.local
+	# the socket calls: configure's tests do not see amix-decls.h and answer no,
+	# and socketmodule.c then builds a socket() that always fails: none may stay off
+	for f in ACCEPT BIND CONNECT GETSOCKNAME LISTEN RECVFROM SENDTO SETSOCKOPT SOCKET SOCKETPAIR INET_PTON; do
+		grep -q "^#define HAVE_$f 1" pyconfig.h || { echo "[FAIL] configure: HAVE_$f is off" >&2; exit 1; }
+	done
 	# the Makefile with Setup.local's modules (makesetup), before it is edited below
 	make Makefile > "$BUILD/makesetup.log" 2>&1 || { echo "[FAIL] makesetup; see $BUILD/makesetup.log" >&2; exit 1; }
 	# getpath.c's VPATH is the out-of-tree source directory, used only when python
 	# runs from its build tree: empty for the installed one (no build-host path)
 	sed "s|-DVPATH='\"\$(VPATH)\"'|-DVPATH='\"\"'|" Makefile > Makefile.amix && mv Makefile.amix Makefile
 	grep -q "DVPATH='\"\"'" Makefile || { echo "[FAIL] VPATH not emptied in the Makefile" >&2; exit 1; }
-	make -j8 python CPPFLAGS="-I$HERE/port/include -I$PTH/include -I$ZL/include -std=gnu11 -include $HERE/port/amix-python.h" \
+	make -j8 python CPPFLAGS="-I$HERE/port/include -I$PTH/include -I$ZL/include -std=gnu11 -include $AMIX_GCC14_DECLS -include $HERE/port/amix-python.h" \
 		CFLAGS="$AMIX_CFLAGS -fno-strict-aliasing -DTHREAD_STACK_SIZE=1048576" LIBS="$LIBS1" LDFLAGS="-L$PTH/lib -L$ZL/lib" \
 		>> "$BUILD/make.log" 2>&1 || { echo "[FAIL] make python; see $BUILD/make.log" >&2; exit 1; }
 	# the sysconfig data (_sysconfigdata__amigaunix_.py), written by the build python
