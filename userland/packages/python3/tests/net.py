@@ -28,7 +28,9 @@ def check(what, good, detail=""):
         fails += 1
 
 
-# echo: a blocking accept and recv in a thread, the client in the main thread
+# echo: a blocking accept and recv in a thread, the client in the main thread;
+# the client's 16 Kbytes go before the thread has run (before Pth 2.0.7-3, the
+# part of a send that did not fit was counted as sent and dropped)
 srv = socket.socket()
 srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 srv.bind(("127.0.0.1", 0))

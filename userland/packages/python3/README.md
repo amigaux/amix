@@ -115,8 +115,9 @@ so no `https`.
   to Pth's, so a thread that blocks on a socket lets the others run. `gethostbyname` is not mapped:
   a name lookup stops every thread until it answers. Pth 2.0.7-3 or later is needed: earlier ones
   failed every `connect`, crashed in every `recv`, read every connection as closed at once, gave
-  a refused connection as `BrokenPipeError`, and broke `accept` with `EINVAL` after a `poll` on the
-  listener or with a timeout set, on Amix (its README).
+  a refused connection as `BrokenPipeError`, dropped the part of a `send` that did not fit while
+  counting it as sent, and broke `accept` with `EINVAL` after a `poll` on the listener or with a
+  timeout set, on Amix (its README).
 - **`connect` waits until it is done**, timeout or not: Amix gives no way to see a connection in
   progress, so Pth finishes it before returning (other threads run meanwhile). A socket's timeout
   applies to everything after the connection, not to making it.
