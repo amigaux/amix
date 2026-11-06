@@ -60,8 +60,9 @@
 # tools/iolockufs030.py; carved from hole/ufs.exp, rwip/ufs.exp with it).
 # Against -73 only the build ids, kabi's sha256= of the brel, the 2 bytes in
 # unix and the ufs module differ.  kabi k30.1.4 and abi= 18c0a1c9 unchanged;
-# modules kabi k30.1.2.  Core and kit amix fb39fec (the kernel's bytes as at
-# 9cd652d), port 0508945, paula 1b2736d.
+# modules kabi k30.1.2.  Core and kit amix fb39fec (the module core's bytes as
+# at 9cd652d; unix carries growsdt's 2 bytes besides), port 0508945, paula
+# 1b2736d.
 #
 # -73 against -72 (2026-11-06): the cut 68030-261106-73 (amix kernel/k30/cuts/
 # 68030-261106-73), -72's recipe from amix 38ee0a2 with ufs rwip's
