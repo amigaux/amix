@@ -1,4 +1,4 @@
-.TH GROUP 4 "1 November 2026" "amix-base"
+.TH GROUP 4 "6 November 2026" "amix-base"
 .SH NAME
 group \- the group file
 .SH SYNOPSIS
@@ -28,8 +28,11 @@ packages need added; a package that installs a file or device node owned by
 a group can be installed only when the group is in this file.
 .TP
 .B audio
-(gid 20) the sound device: its node is readable and writable by root and by
-the members of
+(gid 20) the sound devices: their nodes,
+.B /dev/audio
+(which the base package ships) and
+.BR /dev/paula ,
+are readable and writable by root and by the members of
 .BR audio .
 .SH ADDING A LOGIN TO A GROUP
 .B usermod \-G

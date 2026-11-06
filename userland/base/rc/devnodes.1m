@@ -1,4 +1,4 @@
-.TH DEVNODES 1M "31 October 2026" "amix-base"
+.TH DEVNODES 1M "6 November 2026" "amix-base"
 .SH NAME
 devnodes \- re-create missing device nodes at boot
 .SH SYNOPSIS
@@ -22,7 +22,10 @@ record, and with this major number:
 .TP
 .I a stock node
 (class
-.BR none )
+.BR none :
+the system's own nodes, and
+.BR /dev/audio ,
+which the base package ships)
 the major number of its record.
 .TP
 .I a module's node
@@ -38,9 +41,7 @@ A stock node that is there but differs from its record is left as it is,
 and reported.
 Nodes made outside the packages, such as the disk nodes
 .B kbootset nodes
-makes and
-.BR /dev/kinfo ,
-are not looked at.
+makes, are not looked at.
 .PP
 Each node made and each one left is written to
 .BR /var/adm/rc.log ,
