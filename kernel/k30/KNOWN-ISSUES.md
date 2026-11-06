@@ -44,13 +44,17 @@ known about it, and what to do. Measurements are from emulation unless the entry
   rwip passed the window's base to segmap_pagecreate instead of base + offset, as SVR4's source does. Fixed in the ufs
   module (4 bytes, `tools/rwippc030.py`); on -72 and earlier, write in whole 8 KiB pieces at 8 KiB offsets or keep such
   files smaller than free memory.
-- **A whole-page write into a hole in the middle of a file leaves the rest of the newly allocated block reading the
-  disk's old contents**, possibly another file's former data (stock, both kernel lines; not changed by cut -73). When a
-  page-aligned write of whole pages fills a hole, ufs allocates the whole block without reading or zeroing it and
-  creates only the pages written; the block's other pages are read from the disk block later. `tests/sparsehole` shows
-  it in emulation on stock 2.1c, -72 and -73: after a 2 KiB write 2 KiB into a hole, the block's other pages read a
-  removed file's bytes (4 to 6 pages of 256). Appending to a file and rewriting written data are not affected. Until
-  it is fixed, fill holes in the middle of a file with whole filesystem blocks, or write such files from start to end.
+- **A whole-page write into a hole among a file's first 12 blocks leaves the rest of that newly allocated block
+  reading the disk's old contents**, possibly another file's former data (stock, both kernel lines; not changed by cut
+  -73). When a page-aligned write of whole pages fills a hole in one of the direct blocks (the first 96 KiB with 8 KiB
+  blocks), ufs allocates the block without reading or zeroing it and creates only the pages written; the block's other
+  pages are read from the disk block later. Past the direct blocks ufs zeroes the new block, unless (by the code; not
+  measured here) the write reaches the block's last page. `tests/sparsehole` in emulation, 16 files with six 2 KiB
+  writes each into direct holes and six into indirect ones, after a removed filler file of 0x5a: stock 2.1c 188 and
+  206 of 288 direct pages wrong (30 of them 0x5a, the rest other old data), -73 40 of 288 (30 of them 0x5a), both
+  passes; 0 of 288 in the indirect control on both. Appending to a file and rewriting written data are not affected.
+  Until it is fixed, fill holes among a file's first 96 KiB with whole 8 KiB blocks, or write such files from start to
+  end.
 
 ## Faults and memory protection
 
