@@ -179,6 +179,12 @@
 #                synchronously (SM_WRITE), then calls the stock pvn_vptrunc.
 #                A hard check: ufs_vptrunz defined once, qz_magic, ufs_itrunc its only caller and no longer a caller
 #                of pvn_vptrunc.  --no-ufs-tailzero is the kernel without it, byte for byte.
+#   --ufs-rwip-fix  build WITH rwip's segmap_pagecreate address fixed (off by default; UFS_RWIP=1 does the same; a
+#                trial until reviewed).  The stock ufs object passes the window base to segmap_pagecreate where its
+#                source passes base + mapon, so a whole-page write not at the window start creates the window's first
+#                pages unread and keeps their frames' old contents in the cache.  tools/rwippc030.py checks the stock
+#                bytes around the call and turns the address push into pea a0@(0,d3:l) (4 bytes, same length) in the
+#                ufs object the kernel uses (fs/ufs/exp in the base, or the carved ufs module's object).
 #   --no-fpu-gate  build WITHOUT the sendsig FPU gate (on by default; FPU_GATE=0 does the same).  By default
 #                src/fpugate030.s (grimoire quirk 74) joins the final link and tools/fpugate-sendsig.py retargets the one
 #                relocation of sendsig's jsr fpu_setup to fpu_setup_gated, which returns at once when fpu_present is 0:
@@ -270,6 +276,7 @@ IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the 
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
 PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
+UFS_RWIP="${UFS_RWIP:-0}"        # --ufs-rwip-fix (UFS_RWIP=1): rwip's segmap_pagecreate given base + mapon (tools/rwippc030.py)
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
 OBJ_BASELINE="${OBJ_BASELINE:-}"  # --object-baseline <sha256 list>: every object must match it ...
@@ -309,6 +316,7 @@ while [ "$#" -gt 0 ]; do
     --no-fstypes) FSTYPES_CONF=/dev/null; shift ;;
     --no-kzero) KZERO=0; shift ;;
     --no-ufs-tailzero) UFS_TAILZERO=0; shift ;;
+    --ufs-rwip-fix) UFS_RWIP=1; shift ;;
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
@@ -346,6 +354,7 @@ case "$KMEM_WAKE" in 0|1) ;; *) echo "KMEM_WAKE='$KMEM_WAKE' (want 0 or 1)" >&2;
 case "$RMW_FAULT" in 0|1) ;; *) echo "RMW_FAULT='$RMW_FAULT' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$UFS_RWIP" in 0|1) ;; *) echo "UFS_RWIP='$UFS_RWIP' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
@@ -1209,6 +1218,25 @@ else
   echo "--- ufs tail zeroing: --no-ufs-tailzero -- the stock fs/ufs/exp ---"
 fi
 
+# --- 7b-rw. rwip's segmap_pagecreate address (--ufs-rwip-fix): the ufs object above, 4 bytes patched by
+# tools/rwippc030.py after it has checked the stock instructions around the call
+if [ "$UFS_RWIP" = 1 ]; then
+  echo "--- ufs rwip: segmap_pagecreate given base + mapon (tools/rwippc030.py) ---"
+  RW="$WORK/rwip"; rm -rf "${RW:?}"; mkdir -p "$RW"
+  cp "$UFS_OBJ" "$RW/ufs.exp"; chmod u+w "$RW/ufs.exp"
+  python3 "$KT/tools/rwippc030.py" "$RW/ufs.exp" || { echo "--ufs-rwip-fix: the ufs object was not patched" >&2; exit 1; }
+  python3 "$KT/tools/rwippc030.py" --check "$RW/ufs.exp" || exit 1
+  D="$({ cmp -l "$UFS_OBJ" "$RW/ufs.exp" || :; } | wc -l)"
+  [ "$D" -ge 1 ] && [ "$D" -le 4 ] || { echo "--ufs-rwip-fix: the patch changed $D bytes (want 1 to 4)" >&2; exit 1; }
+  UFS_OBJ="$RW/ufs.exp"
+  case ",$CARVE_FS," in
+    *,ufs,*) echo "  the carved ufs module wraps $UFS_OBJ" ;;
+    *) cp "$UFS_OBJ" "$BUILD/fs/ufs/exp"; echo "  fs/ufs/exp in the work copy replaced by $UFS_OBJ" ;;
+  esac
+else
+  echo "--- ufs rwip: stock (segmap_pagecreate given the window base) ---"
+fi
+
 # --- 7c. relink fs/exp (now incl. any fs/<name>/exp) + master.d/exp (fresh filesys.o) + local/exp
 FS_SUB="$(mkvar "$BUILD/fs/Makefile" OPT_SUBEXP)"   # bfs/exp s5/exp ... rfs/exp [+ <fstype>/exp]
 ( cd "$BUILD/fs"; "$LD" -r -o exp fs.exp $FS_SUB )
@@ -1647,6 +1675,7 @@ kzero_check() {
 }
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
+case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
 if [ "$FPU_GATE" = 1 ]; then
   echo "--- fpu gate: sendsig's jsr fpu_setup -> fpu_setup_gated (tools/fpugate-sendsig.py) ---"
   python3 "$KT/tools/fpugate-sendsig.py" "$BUILD/unix"
@@ -1889,6 +1918,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
     # then (about 1 in 60 on an 8 KiB strings output); read it through a process substitution instead
     grep -q -- "$KINFO_BUILD" <(strings -a "$m") || { echo "FATAL: the $f module does not carry the build id $KINFO_BUILD" >&2; exit 1; }
     if [ "$f" = ufs ] && [ "$UFS_TAILZERO" = 1 ]; then qz_check "$m" m68k-elf-nm m68k-elf-objdump; fi
+    if [ "$f" = ufs ] && [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$m" || exit 1; fi
     cp "$m" "$BUILD/mod.d/$f"
     echo "  mod.d/$f: $(wc -c < "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-16), bound to $KINFO_BUILD; $(grep -a -i 'modcheck' "$WORK/carve/$f.make.log" | tail -1)"
   done
