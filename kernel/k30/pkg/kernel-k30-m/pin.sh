@@ -59,8 +59,9 @@
 # advancing past what it copied (tools/patch_audio_replies.py after
 # amix-paula's three: audio.c 3f434f35).  -76 (audio v1 and a TCP close
 # linger, reverted at d9db6ac) was not released.  Against -75: unix
-# (audio.o, the build id), unix.sym, kabi, and the build id of the two
-# modules.  kabi k30.1.4 and abi= 18c0a1c9 unchanged; modules kabi k30.1.2.
+# (audio.o, the build id) and so unix.brel, unix.sym and kabi, and the
+# build id of the two modules.  kabi k30.1.4 and abi= 18c0a1c9
+# unchanged; modules kabi k30.1.2.
 # Core and kit amix d9db6ac, port 0508945, paula 1b2736d.
 #
 # -75 against -74 (2026-11-06): the cut 68030-261106-75 (amix kernel/k30/cuts/

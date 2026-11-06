@@ -5,7 +5,8 @@ of /dev/audio fixed. -76, which was not released, also carried a TCP close linge
 KNOWN-ISSUES: the defect it aimed at stays open), and its audio patcher is replaced here by a second version.
 
 - **/dev/audio answers each request once, refuses one with no data, and plays a long write once.**
-  `tools/patch_audio_replies.py`, run after amix-paula's three patchers, changes five places of audio.c:
+  `tools/patch_audio_replies.py`, run after amix-paula's three patchers, changes eight places of audio.c (five
+  fingerprints, three of them found twice):
   - in audioioctl, the AUDIO_VOLUME and AUDIO_PERIOD cases sent their reply and then fell through to the common tail,
     which sent the same message again as M_IOCACK with error 0, so a refused request (the wrong length) reported
     success: the four breaks become returns, and the two acks set ioc_rval and ioc_error to 0 themselves, as only the
@@ -16,7 +17,7 @@ KNOWN-ISSUES: the defect it aimed at stays open), and its audio patcher is repla
   - audiointr refilled a channel buffer from a message too long for it without moving past what it copied, so the
     same bytes were copied again at every refill: both refill places advance b_rptr, as postaudio does.
   It takes only the audio.c those three make (1f43c5ff) and must give 3f434f35; its selftest shows each pin and each
-  place refusing on its own. The 040/060 line runs the same file byte for byte. On by default, `--no-audio-replies`
+  place refusing on its own. The 040/060 line will run the same file byte for byte (its next cut pins it). On by default, `--no-audio-replies`
   without.
 
 Evidence, in emulation (A3000, 68030, 64 MiB, Paula's interrupts emulated), by the build each row ran on.
@@ -27,7 +28,10 @@ still in its tree): its audio.c is this cut's, 3f434f35.
   length 100 of 100 returned 0, the transparent form 100 of 100 0, the wrong length 100 of 100 EINVAL, no data
   (ic_len 0) 100 of 100 EINVAL, and the box went on. A 32 KiB write at period 200 filled the channel's buffers from
   8, 16 and 24 KiB of the write once each (a ramp whose value names the part of the write a buffer holds) and drained
-  after 1.4 s, its last buffer queued; 4 and 12 KiB drained after 133 and 533 ms.
+  after 1.4 s, its last buffer queued; 4 and 12 KiB drained after 133 and 533 ms. These single writes go through the
+  refill from the message the driver keeps; the other refill place (a queued message that does not fit) is untested:
+  32 KiB streamed in 3000- and 5000-byte writes drained with no part loaded twice here and on -75 alike, so that
+  test does not show the stock defect.
 - -75, the same tests: the wrong length 100 of 100 returned 0 (in two runs); no data panicked the kernel at the first
   request (`PANIC: KERNEL FAULT ... (Bus Error)`, pc in xmsgsize, called from pullupmsg); the 32 KiB write was still
   refilling after 30 s, buffer after buffer filled from the write's second 8 KiB (86 times).
@@ -39,9 +43,10 @@ still in its tree): its audio.c is this cut's, 3f434f35.
   mid-play was gone at once, and /dev/audio and /dev/paula then opened again.
 - This cut, -75's rows: `tests/sparsehole` at 16 MiB 0 pages wrong in all four modes; rnd no bad block in 200000
   operations, twice; `tests/wcost`'s 20000 random rewrites 20 and 21 s, 64 MB copied by 8 KiB 42 and 42 s (-75: 24
-  and 25, 47 and 46, on a host less loaded in the earlier run). In the first rnd row the guest's shutdown stopped
+  and 25, 47 and 46; the host was less loaded during this cut's run than during -75's). In the first rnd row the guest's shutdown stopped
   after its broadcast, with no `INIT: New run level: 0` in the 3 minutes the rig waited (FAIL halt-banner); the
-  rerun halted as every other row did, and no other row of -75, -76 or this cut showed it.
+  rerun halted. The same stall was seen once on cut -73 that day and on rows of -71's builds (KNOWN-ISSUES, "Not
+  explained"); no other row of -75, -76 or this cut showed it.
 - This cut, three 8 MiB ftp puts and gets over the A2065: 21.0, 20.2 and 21.1 s, and 7.4 s each, the copies equal,
   no frame missed or dropped (-75: 21.3, 20.0 and 22.3 s, and 7.3 to 7.6 s).
 - This cut with Paula's interrupts not emulated (`sound_output=none`): opening /dev/audio for writing failed at once

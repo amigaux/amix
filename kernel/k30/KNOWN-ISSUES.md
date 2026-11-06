@@ -124,8 +124,10 @@ known about it, and what to do. Measurements are from emulation unless the entry
   "226 Transfer complete" (in.ftpd's active path sets SO_LINGER, its passive path does not) and an ssh session ending
   without its exit status. Measured at 64 MiB on -75, a guest sending 8 MiB in 8 KiB writes and closing, the host
   reading at full speed: 2 of 6 short (the guest listening) and in.ftpd's passive RETR 2 of 6 short; with the host
-  reading slowly none were short; one set on the 040/060 line's stock kernel found none in 30. A program avoids it with
-  shutdown(fd, 1) and reading to end of file before close, or SO_LINGER with a time. Giving every close a linger in
+  reading slowly none were short; one set on the 040/060 line's stock kernel found none in 30. A program avoids it with a
+  half-close: shutdown(fd, 1), then reading until end of file (the peer's own close), then close. SO_LINGER with a
+  time is not a safe way round: the stock close then sleeps on the connection, and data that arrives after the close
+  can free the connection under the sleeper (a hang, or a write into freed memory), the same path as below. Giving every close a linger in
   the kernel was tried and left out: a close then blocks, an exiting or killed process (whose signals are all
   ignored by then) stays up to the linger time per socket, and data arriving after the close can free the
   connection under the sleeper. The fix planned after 1.1 keeps the unsent data on the connection itself after the close (a
@@ -148,9 +150,11 @@ known about it, and what to do. Measurements are from emulation unless the entry
   32 KiB write at period 200 (1.8 s of sound) was still refilling after 30 s, every buffer filled from the write's
   second 8 KiB again (86 times in one run, the first byte of each buffer telling which part of the write it held); a
   12 KiB write drained after 466 to 583 ms with and without the fix (the polls are 50 to 117 ms apart), which
-  neither shows nor rules out a shorter stretch played twice. From -77 the refill moves past what it copied, as
-  postaudio does: the 32 KiB write filled its buffers from 8, 16 and 24 KiB once each and drained after 1.4 s, its
-  last buffer queued.
+  neither shows nor rules out a shorter stretch played twice. From -77 both refill places move past what they
+  copied, as postaudio does: the 32 KiB write filled its buffers from 8, 16 and 24 KiB once each and drained after
+  1.4 s, its last buffer queued. That write runs through the refill from the message the driver keeps; the other
+  place (a queued message that does not fit) is fixed the same way but no test has shown it: a writer streaming 32 KiB
+  in 3000- or 5000-byte writes drained with no part loaded twice on -75 and on -77 alike.
 - **An I_STR AUDIO_VOLUME or AUDIO_PERIOD with no data (ic_len 0) panicked the kernel** (stock audioioctl, both
   kernel lines; fixed in cut -77). Such a request reaches the driver with no data block, and the driver called
   pullupmsg on it before testing for one; pullupmsg does not test for NULL and followed whatever lay in low memory.
@@ -158,6 +162,17 @@ known about it, and what to do. Measurements are from emulation unless the entry
   `PANIC: KERNEL FAULT ... (Bus Error)` in xmsgsize, called from pullupmsg; the 040/060 line's kernel faulted the
   same way. From -77 pullupmsg is called only when there is a block, and the request is refused: 100 of 100 returned
   EINVAL, and the box went on.
+- **A write that leaves one byte for a channel buffer can play seconds of noise after the writer has gone** (stock
+  audio driver, both kernel lines; open, for after 1.1; from reading the code, not yet run). A buffer holding one
+  byte is loaded with a length of 1 / 2 = 0 words, which Paula takes as 65536 words: at period 200 about 7 s of
+  whatever chip memory follows the 8 KiB buffer. A 1-byte write reaches it, and so does a write one byte longer than
+  a multiple of 8 KiB (8193 bytes: the last refill copies the 1-byte tail). The interrupt lets go of the channel when
+  that block starts, so the close no longer stops it. Writing whole 16-bit samples (even lengths) avoids it.
+- **A zero-length message to /dev/audio prints two console warnings and replays stale sound** (stock audio driver,
+  both kernel lines; open, for after 1.1; from reading the code, not yet run). A data part of length 0 (putmsg, or a
+  zero-length write with SNDZERO set) attaches a channel with nothing to play: the driver prints `WARNING
+  loadup_dma called with no buffer ready` and, at the next interrupt, `WARNING; audiodriver: channel ..., pending
+  0`, and Paula replays what its registers last held. A loop of them floods the console. No panic.
 - **Two /dev/audio streams open at once can mix up their messages** (stock audiointr, both kernel lines; open). When
   the interrupt's scan of the clients posts part of one client's message, it keeps that message in the previous
   client's place, so that client later plays or frees a message it does not own. It needs two streams (two minor
@@ -171,6 +186,12 @@ known about it, and what to do. Measurements are from emulation unless the entry
 
 ## Not explained
 
+- **A shutdown sometimes stops after its broadcast, before init changes run level** (emulation, several builds). After
+  `shutdown -i0 -g0 -y` the console shows `THE SYSTEM IS BEING SHUT DOWN NOW` and the prompt, and then nothing: no
+  `INIT: New run level: 0` in the 3 minutes the test rig waits. Seen on rows of -71's builds, on cut -73 and on cut -77
+  (once each on the last two, on 2026-11-06, after rows that had finished their load), so not tied to one kernel's
+  change; a rerun of the same row halted. Whether the machine still answered on the network is not recorded. Cause
+  unknown.
 - **One shutdown stalled after `INIT: New run level: 0`** on development build 68030-261105-98 in emulation: no
   further output, the machine still answering on the network. Not seen in the later runs that finished their load on
   this kernel or on 68030-261103-71. Cause unknown; not called fixed.

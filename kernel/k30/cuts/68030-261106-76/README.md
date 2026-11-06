@@ -1,8 +1,17 @@
 # Cut 68030-261106-76
 
 The k30 module kernel, kabi k30.1.4 (abi 18c0a1c9), cut from amix `70e865e`: -75's recipe with two stock defects
-fixed, one in /dev/audio and one in TCP's close. Not released: its TCP close linger was reverted at `d9db6ac`, and
-68030-261106-77 carries the audio fix in its second version instead.
+fixed, one in /dev/audio and one in TCP's close.
+
+**Superseded, not released.** What follows is the record of this cut as it was reviewed; two of its claims do not
+hold:
+- the TCP close linger is withdrawn (reverted at `d9db6ac`): a close with unsent data blocked up to 60 s, an exiting
+  or killed process was held up to 60 s per socket (exit ignores every signal before it closes the files), and data
+  arriving after the close can free the connection under the sleeper. "The cost is the wait in close" is wrong, and
+  the TCP defect stays open (KNOWN-ISSUES);
+- the audio patcher here is its first version: it left an I_STR request with no data panicking the kernel through
+  pullupmsg(NULL), and "a refusal now returns its error" did not cover that request.
+68030-261106-77 carries the audio patcher's second version and no TCP change.
 
 - **/dev/audio answers each request once, and a long write plays once.** In the stock audioioctl the AUDIO_VOLUME
   and AUDIO_PERIOD cases sent their reply and then fell through to the common tail, which sent the same message again
