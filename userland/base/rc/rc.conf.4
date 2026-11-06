@@ -1,4 +1,4 @@
-.TH RC.CONF 4 "30 October 2026" "amix-base"
+.TH RC.CONF 4 "6 November 2026" "amix-base"
 .SH NAME
 rc.conf \- which boot services run, and their settings
 .SH SYNOPSIS
@@ -103,11 +103,20 @@ with
 syslogd=yes
 display=no        # no graphical login, whatever /etc/display says
 ifup_dhcpwait=30  # wait longer for a DHCP lease at boot
-swap_add=30       # swap on the slice: 30 MiB in all
+swap_add=256      # swap on the slice: at most 256 MiB in all
 ntp=yes           # set the clock from time servers at boot and hourly
 lpsched=yes       # the print service, which is off by default
 .ft R
 .fi
+.PP
+Without a
+.B swap_add
+line the whole swap slice is added, as far as the kernel takes it; more swap
+than one area is a file,
+.BR /SWAPFILE ,
+added at every boot.
+.BR bootswap (1M)
+tells both.
 .SH FILES
 .TP
 .B /etc/rc.conf
