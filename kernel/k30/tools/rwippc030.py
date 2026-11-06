@@ -4,7 +4,8 @@
   rwippc030.py OBJ           patch the ufs object (ELF32 big-endian ET_REL) in place; refuses unless the bytes are
                              exactly the stock ones or already patched
   rwippc030.py --check OBJ   verify, write nothing; exit 1 unless patched
-  rwippc030.py --selftest    patch a synthetic object: stock -> fixed, idempotent, changed contexts refused
+  rwippc030.py --selftest    patch a synthetic object: stock -> fixed, idempotent, an unknown rwip and changed
+                             contexts refused
 
 THE BUG.  For a write that covers whole pages, rwip maps the file's 8 KiB window (segmap_getmap returns its base)
 and asks segmap_pagecreate to create the pages it will overwrite, so that they are not read from disk first.  The
@@ -31,11 +32,19 @@ block's first n bytes return the old frame contents (an earlier block of the fil
 
 THE FIX.  The push of the address becomes pea a0@(0,d3:l) (4870 3800), the same length: a0 still holds getmap's
 return there (only the store, the addaw, the tstl and the branch lie between) and d3 is the mapon uiomove adds.
+Both hold only for the stock instruction stream, so the tool checks it: the bytes around the call, the four
+relocations, d3 set once to uio_offset & 8191 before getmap, and the whole of rwip against the stock code's digest
+(relocated fields and the 4 bytes zeroed; the same in 2.1 and 2.1c, in fs/ufs/exp, a carved module and a linked unix).
 """
-import struct, sys
+import hashlib, struct, sys
 
 STOCK = bytes.fromhex('2f2eff94')
 FIXED = bytes.fromhex('48703800')
+D3_MAPON = bytes.fromhex('262d0008028300001fff')   # movel a5@(8),d3; andil #8191,d3: d3 = uio_offset & MAXBOFFSET
+# rwip's code as the stock ufs object has it, relocated fields and the 4 patched bytes zeroed: the same in fs/ufs/exp,
+# the carved module and a linked unix (sha256).  Any other rwip is refused: the fix leans on a0 and d3 holding getmap's
+# return and mapon at the push, which only the stock instruction stream guarantees.
+KNOWN_RWIP = {'160936255b4c72c35519d9d08ad7493cec6c11fdb258060c9f911be16c6691e7'}   # 2.1 and 2.1c
 
 
 def fail(msg):
@@ -61,7 +70,15 @@ def load(path):
     return b, sh, syms
 
 
-def site(b, sh, syms):
+def rwip_digest(b, text, start, end, rels, siteoff):
+    c = bytearray(b[text + start:text + end])
+    for off in rels:
+        c[off - start:off - start + 4] = bytes(4)
+    c[siteoff - text - start:siteoff - text - start + 4] = bytes(4)
+    return hashlib.sha256(bytes(c)).hexdigest()
+
+
+def site(b, sh, syms, known=KNOWN_RWIP):
     """file offset of the 4 bytes to patch, and whether they are patched already"""
     rw = [s for s in syms if s[0] == 'rwip' and s[2] not in (0, 0xfff1, 0xfff2)]
     if len(rw) != 1:
@@ -70,12 +87,14 @@ def site(b, sh, syms):
     later = sorted(v for n, v, x, info in syms if x == sec and v > start and (info & 15) == 2)
     end = later[0] if later else sh[sec][5]
     text = sh[sec][4]
-    rel = {}
+    rel, allrel = {}, []
     for s in sh:
         if s[1] != 4 or s[7] != sec:
             continue
         for o in range(s[4], s[4] + s[5], 12):
             off, info, add = struct.unpack_from('>IIi', b, o)
+            if start <= off < end:
+                allrel.append(off)
             if start <= off < end and info & 0xff == 1:
                 rel.setdefault(syms[info >> 8][0], []).append((off, add))
     pc = rel.get('segmap_pagecreate', [])
@@ -104,18 +123,27 @@ def site(b, sh, syms):
     um = rel.get('uiomove', [])
     if not um or bytes.fromhex('2a6eff9448753800') not in bytes(b[text + jsr:text + um[0][0]]):
         fail('rwip\'s uiomove is not given fp@(-108) + d3 (movea fp@(-108),a5; pea a5@(0,d3:l)) after pagecreate')
+    # d3: set to mapon once, before getmap (the stock code writes it nowhere else in rwip; the digest below pins that)
+    code = bytes(b[text + start:text + end])
+    if code.count(D3_MAPON) != 1 or code.index(D3_MAPON) >= gend - start:
+        fail('rwip does not set d3 = uio_offset & 8191 exactly once before segmap_getmap')
+    if known is not None:
+        d = rwip_digest(b, text, start, end, allrel, p - 10)
+        if d not in known:
+            fail('rwip is not the stock code (digest %s)' % d)
     return p - 10, cur == FIXED
 
 
 def synth(path, mutate=None):
     """a minimal ET_REL whose rwip holds the stock sequence, with its four relocations"""
     t = bytearray.fromhex(
-        '4e560000' '4eb900000000'                          # 0: link; 4: jsr segmap_getmap (reloc at 6)
-        '2d48ff94' 'defc000c' '4aaeffe4' '67000042'        # 10: store, addaw, tstl, beqw
-        '42a7' '2f2eff8c' '2f2eff94'                       # 26: softlock, n, base
-        '2f3900000000' '4eb900000000'                      # 36: segkmap (reloc 38); 42: jsr pagecreate (reloc 44)
-        'defc0010' '2a6eff94' '48753800'                   # 48: addaw; 52: base into a5, pea a5@(0,d3:l)
-        '4eb900000000' '4e5e4e75')                         # 60: jsr uiomove (reloc 62); unlk, rts
+        '4e560000' '262d0008' '028300001fff'               # 0: link; 4: d3 = uio_offset; 8: & 8191
+        '4eb900000000'                                     # 14: jsr segmap_getmap (reloc at 16)
+        '2d48ff94' 'defc000c' '4aaeffe4' '67000042'        # 20: store a0, addaw, tstl, beqw
+        '42a7' '2f2eff8c' '2f2eff94'                       # 36: softlock, n, base
+        '2f3900000000' '4eb900000000'                      # 46: segkmap (reloc 48); 52: jsr pagecreate (reloc 54)
+        'defc0010' '2a6eff94' '48753800'                   # 58: addaw; 62: base into a5, pea a5@(0,d3:l)
+        '4eb900000000' '4e5e4e75')                         # 70: jsr uiomove (reloc 72); unlk, rts
     if mutate:
         mutate(t)
     names = ['rwip', 'segmap_getmap', 'segkmap', 'segmap_pagecreate', 'uiomove']
@@ -125,7 +153,7 @@ def synth(path, mutate=None):
         off.append(off[-1] + len(n) + 1)
     sym = bytes(16) + struct.pack('>IIIBBH', off[0], 0, len(t), 0x12, 0, 1)
     sym += b''.join(struct.pack('>IIIBBH', off[i], 0, 0, 0x10, 0, 0) for i in range(1, 5))
-    rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, 0) for o, s in ((6, 2), (38, 3), (44, 4), (62, 5)))
+    rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, 0) for o, s in ((16, 2), (48, 3), (54, 4), (72, 5)))
     shstr = b'\0.text\0.rela.text\0.symtab\0.strtab\0.shstrtab\0'
     body = [bytes(t), rela, sym, strtab, shstr]
     pos, offs = 52, []
@@ -149,31 +177,43 @@ def synth(path, mutate=None):
 
 
 def selftest():
-    import os, subprocess, tempfile
-    me = os.path.abspath(__file__)
-    run = lambda *a: subprocess.run([sys.executable, me] + list(a), capture_output=True, text=True)
+    import os, tempfile
+    want = bytes.fromhex('48703800')          # pea a0@(0,d3:l), written out here independently of FIXED
+
+    def run(args, known):
+        import contextlib, io
+        try:
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                main(args, known)
+            return 0
+        except SystemExit as e:
+            return 1 if e.code else 0
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, 'ufs.exp')
         synth(p)
         stock = open(p, 'rb').read()
-        assert run('--check', p).returncode == 1, 'the stock object passed --check'
-        assert run(p).returncode == 0, 'the stock object was not patched'
+        assert run(['--check', p], None) == 1, 'the stock object passed --check'
+        assert run([p], set()) == 1 and open(p, 'rb').read() == stock, 'an rwip of unknown digest was patched'
+        assert run([p], None) == 0, 'the stock object was not patched'
         fixed = open(p, 'rb').read()
         diff = [i for i in range(len(stock)) if stock[i] != fixed[i]]
-        assert len(diff) == 4 and fixed[diff[0]:diff[0] + 4] == FIXED, 'the patch is not the 4 bytes'
-        assert run('--check', p).returncode == 0, 'the patched object failed --check'
-        assert run(p).returncode == 0 and open(p, 'rb').read() == fixed, 'a second run changed the object'
-        for what, m in (('a context instruction', lambda t: t.__setitem__(slice(28, 32), bytes.fromhex('2f2eff88'))),
-                        ('the address push', lambda t: t.__setitem__(slice(32, 36), bytes.fromhex('2f2eff90'))),
-                        ('the uiomove operand', lambda t: t.__setitem__(slice(56, 60), bytes.fromhex('48754800')))):
-            synth(p, m)
+        assert len(diff) == 4 and fixed[diff[0]:diff[0] + 4] == want, 'the patch is not pea a0@(0,d3:l) in 4 bytes'
+        assert run(['--check', p], None) == 0, 'the patched object failed --check'
+        assert run([p], None) == 0 and open(p, 'rb').read() == fixed, 'a second run changed the object'
+        cases = (('the length push', 38, '2f2eff88'), ('the address push (a foreign value)', 42, '48703000'),
+                 ('the uiomove operand', 66, '48754800'), ('a0\'s source (the store after getmap)', 20, '2d40ff94'),
+                 ('d3\'s mask', 10, '00000fff'), ('the segkmap push', 46, '2f3a'), ('the pagecreate flag test', 28, '4aaeffe0'))
+        for what, at, hexb in cases:
+            v = bytes.fromhex(hexb)
+            synth(p, lambda t: t.__setitem__(slice(at, at + len(v)), v))
             before = open(p, 'rb').read()
-            assert run(p).returncode != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
-    print('rwippc030 selftest: stock patched (4 bytes), idempotent, --check both ways, 3 changed contexts refused')
+            assert run([p], None) != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
+    print('rwippc030 selftest: stock patched to pea a0@(0,d3:l) (4 bytes), idempotent, --check both ways, an unknown '
+          'rwip and %d changed contexts refused' % len(cases))
 
 
-def main():
-    args = sys.argv[1:]
+def main(args=None, known=KNOWN_RWIP):
+    args = sys.argv[1:] if args is None else args
     if args == ['--selftest']:
         return selftest()
     check = args[:1] == ['--check']
@@ -182,7 +222,7 @@ def main():
     if len(args) != 1:
         sys.exit(__doc__)
     b, sh, syms = load(args[0])
-    off, done = site(b, sh, syms)
+    off, done = site(b, sh, syms, known)
     if check:
         if not done:
             fail('%s: rwip still passes the window base to segmap_pagecreate' % args[0])
