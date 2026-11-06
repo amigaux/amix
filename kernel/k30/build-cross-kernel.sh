@@ -179,12 +179,13 @@
 #                synchronously (SM_WRITE), then calls the stock pvn_vptrunc.
 #                A hard check: ufs_vptrunz defined once, qz_magic, ufs_itrunc its only caller and no longer a caller
 #                of pvn_vptrunc.  --no-ufs-tailzero is the kernel without it, byte for byte.
-#   --ufs-rwip-fix  build WITH rwip's segmap_pagecreate address fixed (off by default; UFS_RWIP=1 does the same; a
-#                trial until reviewed).  The stock ufs object passes the window base to segmap_pagecreate where its
+#   --no-ufs-rwip-fix  build WITHOUT rwip's segmap_pagecreate address fix (on by default; UFS_RWIP=0 does the same;
+#                --ufs-rwip-fix asks for it explicitly).  The stock ufs object passes the window base to segmap_pagecreate where its
 #                source passes base + mapon, so a whole-page write not at the window start creates the window's first
 #                pages unread and keeps their frames' old contents in the cache.  tools/rwippc030.py checks the stock
 #                bytes around the call and turns the address push into pea a0@(0,d3:l) (4 bytes, same length) in the
 #                ufs object the kernel uses (fs/ufs/exp in the base, or the carved ufs module's object).
+#                --no-ufs-rwip-fix is the kernel without it, byte for byte.
 #   --no-fpu-gate  build WITHOUT the sendsig FPU gate (on by default; FPU_GATE=0 does the same).  By default
 #                src/fpugate030.s (grimoire quirk 74) joins the final link and tools/fpugate-sendsig.py retargets the one
 #                relocation of sendsig's jsr fpu_setup to fpu_setup_gated, which returns at once when fpu_present is 0:
@@ -276,7 +277,7 @@ IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the 
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
 PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
-UFS_RWIP="${UFS_RWIP:-0}"        # --ufs-rwip-fix (UFS_RWIP=1): rwip's segmap_pagecreate given base + mapon (tools/rwippc030.py)
+UFS_RWIP="${UFS_RWIP:-1}"        # --no-ufs-rwip-fix (UFS_RWIP=0): the stock rwip, segmap_pagecreate given the window base
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
 HIWAT_FIX="${HIWAT_FIX:-}"      # --tcp-hiwat-fix <patch_tcp_hiwat.py>: the opt-in DRIVER-LINE-10 fix
 OBJ_BASELINE="${OBJ_BASELINE:-}"  # --object-baseline <sha256 list>: every object must match it ...
@@ -317,6 +318,7 @@ while [ "$#" -gt 0 ]; do
     --no-kzero) KZERO=0; shift ;;
     --no-ufs-tailzero) UFS_TAILZERO=0; shift ;;
     --ufs-rwip-fix) UFS_RWIP=1; shift ;;
+    --no-ufs-rwip-fix) UFS_RWIP=0; shift ;;
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
@@ -1218,7 +1220,7 @@ else
   echo "--- ufs tail zeroing: --no-ufs-tailzero -- the stock fs/ufs/exp ---"
 fi
 
-# --- 7b-rw. rwip's segmap_pagecreate address (--ufs-rwip-fix): the ufs object above, 4 bytes patched by
+# --- 7b-rw. rwip's segmap_pagecreate address (on by default, --no-ufs-rwip-fix without): the ufs object above, 4 bytes patched by
 # tools/rwippc030.py after it has checked the stock instructions around the call
 if [ "$UFS_RWIP" = 1 ]; then
   echo "--- ufs rwip: segmap_pagecreate given base + mapon (tools/rwippc030.py) ---"
@@ -1234,7 +1236,7 @@ if [ "$UFS_RWIP" = 1 ]; then
     *) cp "$UFS_OBJ" "$BUILD/fs/ufs/exp"; echo "  fs/ufs/exp in the work copy replaced by $UFS_OBJ" ;;
   esac
 else
-  echo "--- ufs rwip: stock (segmap_pagecreate given the window base) ---"
+  echo "--- ufs rwip: --no-ufs-rwip-fix -- the stock rwip (segmap_pagecreate given the window base) ---"
 fi
 
 # --- 7c. relink fs/exp (now incl. any fs/<name>/exp) + master.d/exp (fresh filesys.o) + local/exp

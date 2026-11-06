@@ -4,6 +4,7 @@
   rwippc030.py OBJ           patch the ufs object (ELF32 big-endian ET_REL) in place; refuses unless the bytes are
                              exactly the stock ones or already patched
   rwippc030.py --check OBJ   verify, write nothing; exit 1 unless patched
+  rwippc030.py --selftest    patch a synthetic object: stock -> fixed, idempotent, changed contexts refused
 
 THE BUG.  For a write that covers whole pages, rwip maps the file's 8 KiB window (segmap_getmap returns its base)
 and asks segmap_pagecreate to create the pages it will overwrite, so that they are not read from disk first.  The
@@ -21,7 +22,8 @@ stock object passes the window's base as the address:
     jsr   segmap_pagecreate     ; 4eb9 ....
 
 while the copy that follows is uiomove(base + mapon, n, ...) (2a6e ff94, 4875 3800: d3 is mapon).  Every other
-caller of segmap_pagecreate in the kernel (spec_write, s5's writei, nfs's rwvp, fbzero) passes base + offset.  So a
+caller of segmap_pagecreate in the kernel (spec_write, s5's writei, nfs's rwvp, fbzero) passes base + offset, as
+SVR4's own ufs_rwip does (segmap_pagecreate(segkmap, base + mapon, (u_int)n, 0)); the stock binary differs.  So a
 write of whole pages that does not start at the window's start creates the pages at window offsets [0, n) instead of
 [mapon, mapon + n): each one not in the cache is taken from the free list, entered under (vnode, block start) and
 mapped with no read, keeps its frame's previous contents, and is never modified.  The disk stays right; reads of the
@@ -105,8 +107,75 @@ def site(b, sh, syms):
     return p - 10, cur == FIXED
 
 
+def synth(path, mutate=None):
+    """a minimal ET_REL whose rwip holds the stock sequence, with its four relocations"""
+    t = bytearray.fromhex(
+        '4e560000' '4eb900000000'                          # 0: link; 4: jsr segmap_getmap (reloc at 6)
+        '2d48ff94' 'defc000c' '4aaeffe4' '67000042'        # 10: store, addaw, tstl, beqw
+        '42a7' '2f2eff8c' '2f2eff94'                       # 26: softlock, n, base
+        '2f3900000000' '4eb900000000'                      # 36: segkmap (reloc 38); 42: jsr pagecreate (reloc 44)
+        'defc0010' '2a6eff94' '48753800'                   # 48: addaw; 52: base into a5, pea a5@(0,d3:l)
+        '4eb900000000' '4e5e4e75')                         # 60: jsr uiomove (reloc 62); unlk, rts
+    if mutate:
+        mutate(t)
+    names = ['rwip', 'segmap_getmap', 'segkmap', 'segmap_pagecreate', 'uiomove']
+    strtab = b'\0' + b''.join(n.encode() + b'\0' for n in names)
+    off = [1]
+    for n in names[:-1]:
+        off.append(off[-1] + len(n) + 1)
+    sym = bytes(16) + struct.pack('>IIIBBH', off[0], 0, len(t), 0x12, 0, 1)
+    sym += b''.join(struct.pack('>IIIBBH', off[i], 0, 0, 0x10, 0, 0) for i in range(1, 5))
+    rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, 0) for o, s in ((6, 2), (38, 3), (44, 4), (62, 5)))
+    shstr = b'\0.text\0.rela.text\0.symtab\0.strtab\0.shstrtab\0'
+    body = [bytes(t), rela, sym, strtab, shstr]
+    pos, offs = 52, []
+    for x in body:
+        offs.append(pos)
+        pos += (len(x) + 3) & ~3
+    shoff = pos
+    data = bytearray(struct.pack('>4sBBBB8xHHIIIIIHHHHHH', b'\x7fELF', 1, 2, 1, 0, 1, 4, 1, 0, 0, shoff, 0, 52,
+                                 0, 0, 40, 6, 5))
+    for x in body:
+        data += x + bytes(((len(x) + 3) & ~3) - len(x))
+    sh = [(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+          (1, 1, 6, 0, offs[0], len(body[0]), 0, 0, 2, 0),
+          (7, 4, 0, 0, offs[1], len(rela), 3, 1, 4, 12),
+          (18, 2, 0, 0, offs[2], len(sym), 4, 1, 4, 16),
+          (26, 3, 0, 0, offs[3], len(strtab), 0, 0, 1, 0),
+          (34, 3, 0, 0, offs[4], len(shstr), 0, 0, 1, 0)]
+    for s in sh:
+        data += struct.pack('>IIIIIIIIII', *s)
+    open(path, 'wb').write(data)
+
+
+def selftest():
+    import os, subprocess, tempfile
+    me = os.path.abspath(__file__)
+    run = lambda *a: subprocess.run([sys.executable, me] + list(a), capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, 'ufs.exp')
+        synth(p)
+        stock = open(p, 'rb').read()
+        assert run('--check', p).returncode == 1, 'the stock object passed --check'
+        assert run(p).returncode == 0, 'the stock object was not patched'
+        fixed = open(p, 'rb').read()
+        diff = [i for i in range(len(stock)) if stock[i] != fixed[i]]
+        assert len(diff) == 4 and fixed[diff[0]:diff[0] + 4] == FIXED, 'the patch is not the 4 bytes'
+        assert run('--check', p).returncode == 0, 'the patched object failed --check'
+        assert run(p).returncode == 0 and open(p, 'rb').read() == fixed, 'a second run changed the object'
+        for what, m in (('a context instruction', lambda t: t.__setitem__(slice(28, 32), bytes.fromhex('2f2eff88'))),
+                        ('the address push', lambda t: t.__setitem__(slice(32, 36), bytes.fromhex('2f2eff90'))),
+                        ('the uiomove operand', lambda t: t.__setitem__(slice(56, 60), bytes.fromhex('48754800')))):
+            synth(p, m)
+            before = open(p, 'rb').read()
+            assert run(p).returncode != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
+    print('rwippc030 selftest: stock patched (4 bytes), idempotent, --check both ways, 3 changed contexts refused')
+
+
 def main():
     args = sys.argv[1:]
+    if args == ['--selftest']:
+        return selftest()
     check = args[:1] == ['--check']
     if check:
         args = args[1:]

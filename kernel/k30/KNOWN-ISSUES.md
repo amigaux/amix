@@ -33,10 +33,13 @@ known about it, and what to do. Measurements are from emulation unless the entry
 
 ## Files
 
-- **A large file written at random offsets can read back wrong blocks** (stock and every kernel since). A file that is
-  appended to, then rewritten and read at random offsets, as a swap file is, can read back wrong blocks once it
-  outgrows the page cache. Seen in emulation on the stock 2.1c kernel and on every kernel since; not yet checked on
-  real hardware; under investigation. Until it is fixed, keep such files smaller than free memory.
+- **Writing whole pages into an 8 KiB UFS block anywhere but at its start could leave the block's first pages reading
+  old memory contents** while the disk held the right data (stock, both kernel lines; fixed in cut -73). Seen with 2 KiB
+  and 4 KiB writes, never with 8 KiB, once the file outgrows the page cache: a read of the block's start returns an
+  earlier block of the file, zeros or another file's data, until the page leaves the cache. Amix's ufs rwip passed the
+  segmap window's base to segmap_pagecreate instead of base + offset, as SVR4's source does, so the pages created
+  unread were the window's first ones. Fixed in the ufs module (4 bytes, `tools/rwippc030.py`); on -72 and earlier,
+  write whole 8 KiB blocks at block boundaries or keep such files smaller than free memory.
 
 ## Faults and memory protection
 
