@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — docs: the loader specification says what boot2 does (aebf613)
+
+Spec 10 and C4-3 (version 7) now say: at most 16 memory regions and boards, a 17th left out without a message (the refusal message cannot fire; known issue); no Forbid at the hand-off, which runs through exec Supervisor() at SR 0x2700; the 030 hand-off's MMU and cache steps; memory[] not clipped at 1 GiB; the bind region chosen by address alone; the RAM-disk image always in the bind region. No code change.
+
 ## 2026-11-06 — kbootset 1.1.0.261105-43: a loader trial survives its failures (4629b30, 6862f1f)
 
 A retry keeps the loader that last booted; mark-good accepts a new loader only after it completes a boot and is still whole; a read error stops an install; an install with neither loader whole goes ahead without a fallback. Each store write is fsynced, and on Gayle IDE the drive cache flushed, before the next. New: kbootset flush CARD UNIT. The refusal of a misplaced `safe` mark calls it the administrator's, and the package description no longer names a commit. Box binary a94fd8d4.
