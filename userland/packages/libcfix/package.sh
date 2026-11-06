@@ -2,7 +2,7 @@
 NAME=libcfix
 PKG=libcfix
 VERSION=2.1c
-PKGREV=1
+PKGREV=2   # -2: README: install with apkg, not the stock pkgadd; the installer installs the package; pkgchk clean for both
 SUMMARY="libc.so.1 with its realloc and huge-size malloc faults fixed"
 DESC="/usr/lib/libc.so.1, Amix 2.1c's own C library, with 64 bytes changed: a realloc that sbrk refuses at the top of the heap no longer leaves the caller's block marked free, and malloc or realloc of 2 Gbyte or more returns NULL instead of shrinking the heap. Everything else is the stock file, byte for byte. Built from amix-system at its pin; replaces core's copy, which stays recorded under core."
 CATEGORY=library

@@ -41,6 +41,7 @@ Plans, with no dates; they may change.
 - SSH: `dropbear`, the server and client with scp, in the base set and on by default (`dropbear=no` in `/etc/rc.conf` turns it off), with a faster key exchange.
 - Time sync: the clock set from time servers at boot and hourly (`ntp=yes`, the default; DHCP-announced servers first, then the pool), and the battery clock written with a corrected `setclk`.
 - CDs: the `cdfs` filesystem module and its mount helper, in the base set.
+- `libcfix`, in the base set: the system's C library with two memory-allocation faults fixed; a program that ran short of memory could have its data overwritten without any error (Vim saved files with lines missing).
 - A `tar` that reads modern archives (GNU, ustar, pax) without crashing, from the Heirloom Toolchest.
 - `/dev/random`: the `random` module.
 - `sar`, `sadc` and `timex -s` work with the filesystems loaded as modules.
