@@ -18,6 +18,7 @@ test:
 	python3 tools/rwippc030.py --selftest
 	python3 tools/growsdt030.py --selftest
 	python3 tools/bmaphf030.py --selftest
+	python3 tools/tcpclose-retarget.py --selftest
 	python3 tools/check-chain-stamp.py --selftest
 	python3 tools/kernel-rootdev-stamp.py --selftest
 	python3 tools/kernel-cputype-stamp.py --selftest
