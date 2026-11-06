@@ -11,17 +11,18 @@
  *   1. writes a filler file of MB megabytes of 0x5a and removes it, so free blocks hold 0x5a;
  *   2. makes NF files of 41 blocks of 8 KiB: 0x11 in blocks 0, 12 and 40, the rest holes, so every hole is in the
  *      middle of its file; blocks 1-11 are direct, 13-39 indirect;
- *   3. writes 2 KiB of 0x22 at 2 KiB into blocks 1, 3, 5, 7, 9 and 11 (direct) and 15, 17, 19, 21, 23 and 25
- *      (indirect) of each file: offset 2048 in the 8 KiB window, page-aligned, whole page;
+ *   3. writes 2 KiB of 0x22 into blocks 1, 3, 5, 7, 9 and 11 (direct) and 15, 17, 19, 21, 23 and 25 (indirect) of
+ *      each file, at 2 KiB into the block (the default) or, with WHERE "last", at 6 KiB: the block's last page;
  *   4. writes and reads back MB megabytes of another file and removes it, to push the files' pages out of the cache;
  *   5. reads each written block back: zeros, then the 2 KiB of 0x22, then zeros.
  *
  * A page that should be zero and is not is counted, as direct or indirect, with how many hold the filler's 0x5a.  The
  * direct case reports the exposure; a direct count of 0 with no 0x5a anywhere can also mean the new blocks never
- * landed on the filler's, so the 0x5a count is printed beside it.  Exit 1 when a direct or an indirect page is wrong.
- * It assumes 8 KiB blocks (the 1.1 filesystems).
+ * landed on the filler's, so the 0x5a count is printed beside it.  With "last" the write reaches the block's last
+ * page, so ufs_bmap skips the read for indirect blocks too and both kinds are expected wrong.  Exit 1 when a direct or
+ * an indirect page is wrong.  It assumes 8 KiB blocks (the 1.1 filesystems).
  *
- * sparsehole DIR [NF [MB]]
+ * sparsehole DIR [NF [MB [WHERE]]]
  *
  * MIT licence, see LICENSE in kernel/k30.
  */
@@ -74,6 +75,7 @@ int main(int ac, char **av)
 {
 	char *dir = ac > 1 ? av[1] : "/tmp", f[256], g[256], h[256];
 	long nf = ac > 2 ? atol(av[2]) : 16, mb = ac > 3 ? atol(av[3]) : 24, bad[2], stale[2], n[2], page, off;
+	int wp = ac > 4 && strcmp(av[4], "last") == 0 ? 3 : 1;	/* the page written in each block */
 	int fd, i, j, k, want, ind, shown = 0;
 
 	sprintf(g, "%s/sh.fill", dir);
@@ -91,7 +93,7 @@ int main(int ac, char **av)
 			return 2;
 		}
 		for (k = 0; k < (int)(sizeof blocks / sizeof blocks[0]); k++)
-			if (wr(fd, blocks[k] * BLK + 2048, 0x22, 2048L) < 0) {
+			if (wr(fd, blocks[k] * BLK + wp * PG, 0x22, 2048L) < 0) {
 				perror("hole write");
 				return 2;
 			}
@@ -119,8 +121,8 @@ int main(int ac, char **av)
 				return 2;
 			}
 			for (page = 0; page < 4; page++) {
-				want = page == 1 ? 0x22 : 0;
-				if (page != 1)
+				want = page == wp ? 0x22 : 0;
+				if (page != wp)
 					n[ind]++;
 				for (j = 0; j < PG; j++)
 					if ((buf[page * PG + j] & 0xff) != want)
@@ -139,7 +141,7 @@ int main(int ac, char **av)
 		close(fd);
 		unlink(f);
 	}
-	printf("RES sparsehole: direct %ld of %ld pages wrong (%ld the filler's 0x5a); indirect control %ld of %ld wrong "
-	    "(%ld 0x5a); %ld files\n", bad[0], n[0], stale[0], bad[1], n[1], stale[1], nf);
+	printf("RES sparsehole: write at page %d: direct %ld of %ld pages wrong (%ld the filler's 0x5a); indirect %ld of %ld "
+	    "wrong (%ld 0x5a); %ld files\n", wp, bad[0], n[0], stale[0], bad[1], n[1], stale[1], nf);
 	return bad[0] || bad[1] ? 1 : 0;
 }
