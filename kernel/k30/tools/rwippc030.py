@@ -34,17 +34,18 @@ THE FIX.  The push of the address becomes pea a0@(0,d3:l) (4870 3800), the same 
 return there (only the store, the addaw, the tstl and the branch lie between) and d3 is the mapon uiomove adds.
 Both hold only for the stock instruction stream, so the tool checks it: the bytes around the call, the four
 relocations, d3 set once to uio_offset & 8191 before getmap, and the whole of rwip against the stock code's digest
-(relocated fields and the 4 bytes zeroed; the same in 2.1 and 2.1c, in fs/ufs/exp, a carved module and a linked unix).
+(its code with relocated fields and the 4 bytes zeroed, and its relocations; the same in 2.1 and 2.1c, in fs/ufs/exp,
+a carved module and a linked unix).
 """
 import hashlib, struct, sys
 
 STOCK = bytes.fromhex('2f2eff94')
 FIXED = bytes.fromhex('48703800')
 D3_MAPON = bytes.fromhex('262d0008028300001fff')   # movel a5@(8),d3; andil #8191,d3: d3 = uio_offset & MAXBOFFSET
-# rwip's code as the stock ufs object has it, relocated fields and the 4 patched bytes zeroed: the same in fs/ufs/exp,
-# the carved module and a linked unix (sha256).  Any other rwip is refused: the fix leans on a0 and d3 holding getmap's
-# return and mapon at the push, which only the stock instruction stream guarantees.
-KNOWN_RWIP = {'160936255b4c72c35519d9d08ad7493cec6c11fdb258060c9f911be16c6691e7'}   # 2.1 and 2.1c
+# rwip as the stock ufs object has it (rwip_digest: its code with relocated fields and the 4 patched bytes zeroed, and
+# its relocations): the same in fs/ufs/exp, the carved module and a linked unix.  Any other rwip is refused: the fix
+# leans on a0 and d3 holding getmap's return and mapon at the push, which only the stock instruction stream guarantees.
+KNOWN_RWIP = {'a249a12a434f9af89ea875a2f58ea7d7298fc1071218d7ceaa5d749a00a4b8a4'}   # 2.1 and 2.1c
 
 
 def fail(msg):
@@ -71,11 +72,14 @@ def load(path):
 
 
 def rwip_digest(b, text, start, end, rels, siteoff):
+    """sha256 of rwip's bytes with relocated fields and the site zeroed, then of its relocations: offset, type and,
+    for a named symbol, the name and addend (a section-relative one's addend moves with the link, so it is left out)"""
     c = bytearray(b[text + start:text + end])
-    for off in rels:
+    for off, typ, name, add in rels:
         c[off - start:off - start + 4] = bytes(4)
     c[siteoff - text - start:siteoff - text - start + 4] = bytes(4)
-    return hashlib.sha256(bytes(c)).hexdigest()
+    r = ''.join('%x:%d:%s:%s;' % (off - start, typ, name or '.', add if name else '.') for off, typ, name, add in sorted(rels))
+    return hashlib.sha256(bytes(c) + r.encode()).hexdigest()
 
 
 def site(b, sh, syms, known=KNOWN_RWIP):
@@ -94,9 +98,13 @@ def site(b, sh, syms, known=KNOWN_RWIP):
         for o in range(s[4], s[4] + s[5], 12):
             off, info, add = struct.unpack_from('>IIi', b, o)
             if start <= off < end:
-                allrel.append(off)
+                n, v, x, i = syms[info >> 8]
+                allrel.append((off, info & 0xff, n if (i & 15) != 3 else '', add))
             if start <= off < end and info & 0xff == 1:
                 rel.setdefault(syms[info >> 8][0], []).append((off, add))
+    for name in ('segmap_getmap', 'segkmap', 'segmap_pagecreate', 'uiomove'):
+        if any(a for o, a in rel.get(name, [])):
+            fail('a relocation of rwip names %s with an addend (the stock ones have none)' % name)
     pc = rel.get('segmap_pagecreate', [])
     gm = rel.get('segmap_getmap', [])
     if len(pc) != 1:
@@ -134,7 +142,7 @@ def site(b, sh, syms, known=KNOWN_RWIP):
     return p - 10, cur == FIXED
 
 
-def synth(path, mutate=None):
+def synth(path, mutate=None, relocs=((16, 2, 0), (48, 3, 0), (54, 4, 0), (72, 5, 0))):
     """a minimal ET_REL whose rwip holds the stock sequence, with its four relocations"""
     t = bytearray.fromhex(
         '4e560000' '262d0008' '028300001fff'               # 0: link; 4: d3 = uio_offset; 8: & 8191
@@ -153,7 +161,7 @@ def synth(path, mutate=None):
         off.append(off[-1] + len(n) + 1)
     sym = bytes(16) + struct.pack('>IIIBBH', off[0], 0, len(t), 0x12, 0, 1)
     sym += b''.join(struct.pack('>IIIBBH', off[i], 0, 0, 0x10, 0, 0) for i in range(1, 5))
-    rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, 0) for o, s in ((16, 2), (48, 3), (54, 4), (72, 5)))
+    rela = b''.join(struct.pack('>IIi', o, (s << 8) | 1, a) for o, s, a in relocs)
     shstr = b'\0.text\0.rela.text\0.symtab\0.strtab\0.shstrtab\0'
     body = [bytes(t), rela, sym, strtab, shstr]
     pos, offs = 52, []
@@ -176,6 +184,9 @@ def synth(path, mutate=None):
     open(path, 'wb').write(data)
 
 
+SYNTH = {'f9cb0500771b286fa87a63eaf3e356a22cb2850ab9dbb0d9f4d1225c46335f34'}   # synth()'s rwip under rwip_digest, pinned so that a change to the digest itself is seen
+
+
 def selftest():
     import os, tempfile
     want = bytes.fromhex('48703800')          # pea a0@(0,d3:l), written out here independently of FIXED
@@ -192,14 +203,14 @@ def selftest():
         p = os.path.join(d, 'ufs.exp')
         synth(p)
         stock = open(p, 'rb').read()
-        assert run(['--check', p], None) == 1, 'the stock object passed --check'
+        assert run(['--check', p], SYNTH) == 1, 'the stock object passed --check'
         assert run([p], set()) == 1 and open(p, 'rb').read() == stock, 'an rwip of unknown digest was patched'
-        assert run([p], None) == 0, 'the stock object was not patched'
+        assert run([p], SYNTH) == 0, 'the stock object was not patched'
         fixed = open(p, 'rb').read()
         diff = [i for i in range(len(stock)) if stock[i] != fixed[i]]
         assert len(diff) == 4 and fixed[diff[0]:diff[0] + 4] == want, 'the patch is not pea a0@(0,d3:l) in 4 bytes'
-        assert run(['--check', p], None) == 0, 'the patched object failed --check'
-        assert run([p], None) == 0 and open(p, 'rb').read() == fixed, 'a second run changed the object'
+        assert run(['--check', p], SYNTH) == 0, 'the patched object failed --check'
+        assert run([p], SYNTH) == 0 and open(p, 'rb').read() == fixed, 'a second run changed the object'
         cases = (('the length push', 38, '2f2eff88'), ('the address push (a foreign value)', 42, '48703000'),
                  ('the uiomove operand', 66, '48754800'), ('a0\'s source (the store after getmap)', 20, '2d40ff94'),
                  ('d3\'s mask', 10, '00000fff'), ('the segkmap push', 46, '2f3a'), ('the pagecreate flag test', 28, '4aaeffe0'))
@@ -208,8 +219,21 @@ def selftest():
             synth(p, lambda t: t.__setitem__(slice(at, at + len(v)), v))
             before = open(p, 'rb').read()
             assert run([p], None) != 0 and open(p, 'rb').read() == before, 'a changed %s was not refused' % what
+        rcases = (('getmap not right before the block', ((16, 5, 0), (48, 3, 0), (54, 4, 0), (72, 2, 0))),
+                  ('no segkmap relocation at the push', ((16, 2, 0), (48, 2, 0), (54, 4, 0), (72, 5, 0))),
+                  ('an addend on the getmap relocation', ((16, 2, 16), (48, 3, 0), (54, 4, 0), (72, 5, 0))))
+        for what, relocs in rcases:
+            synth(p, relocs=relocs)
+            before = open(p, 'rb').read()
+            assert run([p], None) != 0 and open(p, 'rb').read() == before, 'an rwip with %s was not refused' % what
+        synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
+        before = open(p, 'rb').read()
+        assert run([p], None) == 0, 'the frame change alone tripped a context check'
+        synth(p, lambda t: t.__setitem__(slice(2, 4), bytes.fromhex('fff0')))
+        assert run([p], SYNTH) != 0 and open(p, 'rb').read() == before, 'a change only the digest sees was not refused'
     print('rwippc030 selftest: stock patched to pea a0@(0,d3:l) (4 bytes), idempotent, --check both ways, an unknown '
-          'rwip and %d changed contexts refused' % len(cases))
+          'rwip, %d changed contexts, %d changed relocations and a change only the digest sees refused'
+          % (len(cases), len(rcases)))
 
 
 def main(args=None, known=KNOWN_RWIP):
