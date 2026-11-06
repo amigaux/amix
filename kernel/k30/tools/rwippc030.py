@@ -34,8 +34,8 @@ THE FIX.  The push of the address becomes pea a0@(0,d3:l) (4870 3800), the same 
 return there (only the store, the addaw, the tstl and the branch lie between) and d3 is the mapon uiomove adds.
 Both hold only for the stock instruction stream, so the tool checks it: the bytes around the call, the four
 relocations, d3 set once to uio_offset & 8191 before getmap, and the whole of rwip against the stock code's digest
-(its code with relocated fields and the 4 bytes zeroed, and its relocations; the same in 2.1 and 2.1c, in fs/ufs/exp,
-a carved module and a linked unix).
+(its code with relocated fields and the 4 bytes zeroed, and its relocations, with tools/iolockufs030.py's as_iolock_ufs
+counted as as_iolock; the same in 2.1 and 2.1c, in fs/ufs/exp, a carved module and a linked unix).
 """
 import hashlib, struct, sys
 
@@ -99,6 +99,7 @@ def site(b, sh, syms, known=KNOWN_RWIP):
             off, info, add = struct.unpack_from('>IIi', b, o)
             if start <= off < end:
                 n, v, x, i = syms[info >> 8]
+                n = 'as_iolock' if n == 'as_iolock_ufs' else n     # tools/iolockufs030.py's retarget is not a change
                 allrel.append((off, info & 0xff, n if (i & 15) != 3 else '', add))
             if start <= off < end and info & 0xff == 1:
                 rel.setdefault(syms[info >> 8][0], []).append((off, add))
