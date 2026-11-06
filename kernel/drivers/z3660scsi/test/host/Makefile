@@ -28,7 +28,7 @@ BIN       := $(BUILD)/z3660_test
 MOD_OBJS  := $(BUILD)/z3660_mod.o $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_modtest.o
 MOD_BIN   := $(BUILD)/z3660_modtest
 
-.PHONY: all check check-default check-diag clean
+.PHONY: all check check-default check-diag check-m68k clean
 all: $(BIN) $(MOD_BIN)
 
 # The driver: kernel include world + register seam + HOST_TEST.
@@ -65,5 +65,16 @@ check-default: $(BIN) $(MOD_BIN)
 	./$(BIN)
 	./$(MOD_BIN)
 
+# The same harness built for m68k (32-bit long, big-endian, as on the target)
+# and run under qemu-m68k user mode: the wrap of 32-bit block arithmetic is
+# only real there.  Needs m68k-linux-gnu-gcc and qemu-m68k.
+M68K_CC   := m68k-linux-gnu-gcc
+M68K_QEMU := qemu-m68k
+M68K_ROOT := /usr/m68k-linux-gnu
+check-m68k:
+	$(MAKE) --no-print-directory BUILD=build-m68k CC=$(M68K_CC) all
+	QEMU_LD_PREFIX=$(M68K_ROOT) $(M68K_QEMU) build-m68k/z3660_test
+	QEMU_LD_PREFIX=$(M68K_ROOT) $(M68K_QEMU) build-m68k/z3660_modtest
+
 clean:
-	rm -rf build build-diag
+	rm -rf build build-diag build-m68k

@@ -8,6 +8,7 @@ emulator. Catches CDB-shape regressions (the kind that only surface at a real
 ```sh
 make -C test/host check     # the default build, then the DIAG build; exit 0 == all pass
 make -C test/host check-diag   # the DIAG build only (-DZ3660_DIAG, in build-diag)
+make -C test/host check-m68k   # the default build for m68k, run under qemu-m68k
 make -C test/host clean
 ```
 
@@ -16,10 +17,17 @@ the DI-1 diagnostics, and gates that neither the page-cross ring nor the fault
 knob is in the object while `z3660_pagecross_n` still counts. The DIAG build
 (`-DZ3660_DIAG`) adds `test_pagecross_ring()` and `test_fault_knob()`.
 
+`check-m68k` builds the same harness with `m68k-linux-gnu-gcc` (in
+`build-m68k`) and runs both binaries under `qemu-m68k` user mode
+(`QEMU_LD_PREFIX=/usr/m68k-linux-gnu`). There `long` is 32 bits and the byte
+order is big-endian, as on the target, so 32-bit arithmetic wraps as it does in
+the kernel; on an LP64 host it does not. The bounds test below fails there
+without the fix and passes with it; the host build passes either way.
+
 ## What it exercises
 
-Current run: **225 gating assertions passed, 0 failed** in the default build
-(255 in the DIAG build), plus 6/6 stretch parity against the firmware's CD
+Current run: **234 gating assertions passed, 0 failed** in the default build
+(264 in the DIAG build; the same 234 under `check-m68k`), plus 6/6 stretch parity against the firmware's CD
 oracle; then `z3660_modtest`, the root-class module form
 (`-DZ3660SCSI_MODULE`, a mock `sd_register`): **46 passed, 0 failed**
 (`module/README.md`), 31 of them the ZS-06 cache arm: `cputype` 30/40/60 ×
@@ -49,6 +57,11 @@ Gating (mount-critical, gate the exit code):
 - Disk (`pdt=0x00`): INQUIRY / READ CAPACITY / READ(10) / WRITE(10) byte
   behavior **frozen** as the current driver emits it (the real box boots on
   this path; the oracle's disk strings do *not* apply here).
+- Disk READ/WRITE bounds (`test_disk_bounds()`): the last block reads; a
+  request at the block count, straddling the end or far past it is refused
+  with no doorbell; so is one whose 32-bit LBA plus count wraps past zero
+  (`0xFFFFFFFF` × 2, `0xFFFFFF00` × 256, and two WRITEs), and LBA 0 is left
+  untouched. Only `check-m68k` makes the wrap real.
 - TEST UNIT READY GOOD for both.
 - Console: the units with no drive mapped are named on one line after the
   attach sweep (`z3660: units 1-5,7: no drive mapped`, `test_nodrv_line()`);
