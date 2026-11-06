@@ -81,17 +81,29 @@ Both CPU lines' kernels expect, unchanged from 1.0 (`PORT/docs/boot-path-map.md:
 - d0 = 3 (boot method EXEC1), d1 = pointer to `struct bootinfo`;
   supervisor mode, SR = 0x2700, MMU off, a stack in chip RAM.
 - On a 68040/68060: caches pushed (`cpusha bc`) and TC, ITT0/1, DTT0/1
-  cleared before the jump. On a 68030: no cache action.
+  cleared before the image is moved, and the caches pushed again after
+  it, before the jump. On the 030 line (the probe reports 30 for a 68020
+  or 68030): TC cleared and CRP and SRP loaded with a do-nothing root
+  pointer before the move, TT0/TT1 cleared too when AttnFlags has
+  `AFB_68030`; after the move, CACR |= 0x0808 clears the instruction and
+  data caches before the jump (`loader/boot2/amiga.s`, `ax_handoff`).
 - `struct bootinfo` in the loader's layout, 0x778 bytes: `autocon[16]`
   (ConfigDev copies), `memory[16]` (MemHeader copies), `keystates[16]`,
   `bootdata` (entry point and text/rodata/data placement), `reserved[256]`
   zero-filled. The kernel copies 0x76c bytes, so only `reserved[0..243]`
   arrive, at kernel `bootinfo+0x678` (`PORT/docs/contracts/RTH1-ROOT-HINT.md:16-37`).
   The stock copy loops are unbounded: more than 16 boards or memory regions
-  overflow into the next array, so our boot2 refuses to write more than 16 of
-  either (stock
+  overflow into the next array (stock
   `amiga/boot/boot2.c:322-324`; the boot2 entry in
-  `KT/docs/amix-kernel-source-map.md:153`).
+  `KT/docs/amix-kernel-source-map.md:153`). Our boot2 stops each walk at
+  16: exec's memory list (for the bind, and again for `memory[]`) and
+  expansion.library's ConfigDev list. A 17th or later region or board,
+  in the list's own order, is left out without a word, and such a region
+  is never considered for the bind, so the bind region is the largest of
+  the first 16. Known issue: `ax_bootinfo_build` refuses more than 16, and
+  boot2 has a message for that refusal ("more than 16 boards or memory
+  regions"), but the walks never hand it more, so neither can happen. A
+  message for left-out entries is for after 1.1.
 - The kernel image relocated to its bind address: by default the 256-byte
   aligned base of the largest non-chip memory region (the stock `bind.c`;
   1.1 counts only memory below 0x40000000, step 6 below); relocation types
@@ -205,10 +217,15 @@ boot2 says so on the console.
   A4091 on k30 in emulation, 2026-10-28).
 - Members are read into fast memory and inflated, checked and relocated
   there by code running from fast memory.
-- The kernel's destination (step 6): the base of the largest fast-memory
+- The kernel's destination (step 6): the base of the largest non-chip
   region, counting only its part **below 0x40000000**. A kernel is never
-  bound in chip memory, where address 0 is the vector table, and never in
-  Zorro III expansion memory. The Amix kernels map the first 1 GiB one to
+  bound in chip memory, where address 0 is the vector table, and never at
+  or above 0x40000000. Zorro III expansion memory is kept out by its
+  address alone: `ax_bind_region` skips `MEMF_CHIP` regions and clips at
+  0x40000000, and reads neither `MEMF_FAST` nor any ConfigDev, so any
+  other region below 1 GiB can be the bind region (motherboard RAM,
+  CPU-card RAM, a 24-bit Zorro II board, or a region without `MEMF_FAST`).
+  The Amix kernels map the first 1 GiB one to
   one, and keep their own segment maps at virtual 0x40040000 (`syssegs`,
   the `sptalloc` arena). A kernel bound at 0x40000000 or above is not
   mapped once translation is on, and never starts. A bench run on 2026-10-26
@@ -219,6 +236,14 @@ boot2 says so on the console.
   `mh_Upper` (offsets 20 and 24; `mh_Attributes` at 14 gives `MEMF_CHIP`).
   Zorro III RAM carries the same `MEMF_FAST | MEMF_PUBLIC` attributes as a
   CPU board's, so the attributes cannot tell them apart.
+- The 0x40000000 clip applies to choosing the bind region and to the room
+  it gives, not to `bootinfo.memory[]`: each entry keeps exec's
+  `mh_Upper`, and the line's limit (below) ends the bind region's entry,
+  at its base plus the limit, only when it is longer than the limit. A
+  bind region that straddles 0x40000000 is therefore handed over ending
+  above 1 GiB, past what the kernel maps one to one, unless its base plus
+  the limit lies below. An edge case (CPU-local RAM across
+  1 GiB) met on no machine measured; not run.
 - On a machine without fast memory below 0x40000000, or whose largest such
   region is smaller than the bound kernel, boot2 refuses the generation
   with L4 and says which of the two it was (`no fast memory below
@@ -275,8 +300,12 @@ boot2 does, in order:
 8. **Place the RAM-disk image** if the manifest names one (§5.4).
 9. **Build `bootinfo`**: ConfigDev and memory copies (memory shortened by any
    RAM-disk carve-out), keyboard matrix, RTH1 record, loader record.
-10. **Hand off**: Forbid, supervisor, MMU off, the 040/060 cache and
-    transparent-translation sequence, jump with d0 = 3, d1 = bootinfo.
+10. **Hand off**: the hand-off code copied to chip memory (CacheClearU on
+    exec 37 and later), then run through exec `Supervisor()`; its first
+    instruction sets SR to 0x2700. No Forbid is taken: interrupts are
+    off from that instruction on. Then the null copper list, MMU off,
+    each line's cache and transparent-translation sequence (§2.2), the
+    image moved, and the jump with d0 = 3, d1 = bootinfo.
 
 ### 3.3 Toolchain
 
@@ -458,7 +487,7 @@ RDB-style disc would stop being a data CD, and that path is unproven on
 - It loads the kernel and the compressed miniroot as plain files, builds the
   same `bootinfo`, RTH1 and loader record (the root selector names the RAM
   disk, §5.4; RTH1 carries no boot-node match), takes the machine over
-  (Forbid, interrupts off, supervisor, MMU off) and hands off exactly as
+  (exec `Supervisor()`, SR 0x2700, MMU off; no Forbid) and hands off exactly as
   boot2 does (§3.2 steps 6–10). AmigaOS is the carrier for about two seconds
   and is never touched again.
 - Menu, safe mode, development load and failure messages are those of
@@ -571,9 +600,13 @@ already refused such a generation when it composed it.
 
 Media that root on a decompressed miniroot (CD, floppy RAM-disk profile,
 netinstall floppies) name it in the manifest:
-`ramdisk miniroot <size> at=… z=deflate crc32=…`. boot2 decompresses it to the
-top of the largest fast-memory region (or, when AmigaOS keeps memory
-there, as high below it as is free, C4-3 §2), ends that region in
+`ramdisk miniroot <size> at=… z=deflate crc32=…`. boot2 decompresses it
+into the bind region, never another: as high as it fits below the
+kernel's room (the bind base plus the region's size below 0x40000000,
+capped at the line's limit), on a 64 KiB boundary, or as high below that
+as is free when AmigaOS keeps memory there (C4-3 §2). On a k46 bind
+region larger than 128 MiB the image therefore sits below the bind base
+plus 128 MiB, not at the region's physical top. boot2 ends the region in
 `bootinfo.memory[]` at the image's start, and puts the
 physical address and size in the loader record. The `ramdisk` root-class
 module presents it as a block device (`30-module-core.md` §7). The manifest
