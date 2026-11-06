@@ -56,7 +56,8 @@
 # 68030-261106-73), -72's recipe from amix 38ee0a2 with ufs rwip's
 # segmap_pagecreate given base + mapon (tools/rwippc030.py, 4 bytes in the
 # ufs object; carved from rwip/ufs.exp, which is qz/ufs.exp with the fix).
-# Against -72 only the build ids and those 4 bytes differ.  kabi k30.1.4 and
+# Against -72 only the build ids, kabi's sha256= of the brel and those 4
+# bytes differ.  kabi k30.1.4 and
 # abi= 18c0a1c9 unchanged; modules kabi k30.1.2.  Core and kit amix 38ee0a2
 # (the kernel's bytes as at 9cd652d), port 0508945, paula 1b2736d.
 #
