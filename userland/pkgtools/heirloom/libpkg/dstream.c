@@ -871,6 +871,13 @@ ds_skip(char *device, int nskip)
 		(void) fprintf(stderr,
 		    "DS_DEBUG(ds_skip): nskip=%d offset=%ld\n",
 		    nskip, (long)lseek(ds_fd, 0L, SEEK_CUR));
+	/*
+	 * AMIX PORT: no stream open, nothing to skip.  The cpio below
+	 * would otherwise read the caller's stdin, and wait there for
+	 * ever when that is a login's terminal.
+	 */
+	if (nskip > 0 && ds_fd < 0)
+		return (1);
 	while (nskip--) {
 		/*
 		 * AMIX PORT: when the archive boundary can be computed
@@ -914,7 +921,12 @@ ds_skip(char *device, int nskip)
 void
 ds_skiptoend(char *device)
 {
-	if (ds_read < ds_nparts && ds_curpartcnt < 0)
+	/*
+	 * AMIX PORT: pkginstall quitting before its first part (an
+	 * installed package under instance=quit) holds no stream: pkgadd
+	 * read the package and keeps the stream itself.
+	 */
+	if (ds_fd >= 0 && ds_read < ds_nparts && ds_curpartcnt < 0)
 		(void) ds_skip(device, ds_nparts - ds_read);
 }
 

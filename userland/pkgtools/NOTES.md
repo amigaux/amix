@@ -1,5 +1,22 @@
 # amix-packagemanager — lab notes
 
+## 2026-11-06 — APKGENG 1.12.10: a quitting pkgadd no longer reads its caller's stdin
+
+`pkgadd -n -a <admin with instance=quit> -d <datastream> PKG` over an installed PKG printed
+"already installed ... No changes were made" and then waited for ever when its stdin was a login's
+terminal or any pipe held open, with no CPU used. pkginstall quits before its first part and holds
+no stream (pkgadd keeps it), yet `quit()` called `ds_skiptoend()`, and `ds_skip()` ran `cpio -ict`
+through `esystem()` with input fd -1, so cpio read the stdin it inherited. With stdin `/dev/null`
+the same run gave rc 4 and a spurious "cpio: Unexpected end-of-archive ... datastream failed".
+1.12.8 and 1.12.9 both do it, whoever installed the package before. The overwrite admin never
+quits there, and apkg runs the engine with stdin `/dev/null`, so neither met it.
+
+Now `ds_skiptoend()` and `ds_skip()` skip nothing with no stream open, and `esystem()` gives a
+command with no input `/dev/null`. The other spawns name their input, and every prompt in pkgadd,
+pkginstall, pkgrm and pkgremove is behind `-n`'s check. T37 runs the quits a batch meets with stdin
+open and silent: the installed package under instance=quit (from a stream and from a directory),
+a package the stream lacks, pkgrm of one not installed, and a plain pkgrm.
+
 ## 2026-11-05 — APKGENG 1.12.9: an ignored SIGHUP stays ignored, and what a hangup leaves
 
 `pkgadd` and `pkginstall` hooked SIGHUP whatever it was, and every child was reset to default, so
