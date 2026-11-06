@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — cut 68030-261106-72, kern30m k30.1.4.261106-72 (9c00380, f8878fa)
+
+kvseg (the kernel's map space) is 8 MiB instead of 4. kmem_freepool and kmem_free wake large requests that had to wait. The swap guard limits an area to 16 x maxmem pages, keeps 1 MiB of kvseg free in one run, exempts the boot area, and lets swapadd answer re-adds, duplicates and overlaps itself. A denied access gives a signal or EFAULT instead of a fault taken for ever; tas and cas on a read-only page give SIGSEGV; a core dump leaves pages with no access as holes. IP's lower read queue mark is 0x10000, so the A2065 no longer drops frames under receive load. kabi k30.1.4 and abi unchanged. KNOWN-ISSUES.md (including a large file written at random offsets reading back wrong blocks once it outgrows the page cache; under investigation) and docs/swap-areas.md added.
+
 ## 2026-11-04 — kern30m k30.1.4.261103-71.2 (161e3e2)
 
 Same cut and objects: the copyright file names the amix-distfiles copy of GCC 2.7.2.3's source first and GNU's site as the original.
