@@ -52,6 +52,17 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
+# -75 against -74 (2026-11-06): the cut 68030-261106-75 (amix kernel/k30/cuts/
+# 68030-261106-75), -74's recipe from amix 75ded5c with the hole fix made by a
+# block lookup instead: rwip's ufs_bmap call goes to ufs_bmap_hf
+# (src/ufs_bmap_hf.c linked into the ufs object, tools/bmaphf030.py), which
+# turns alloc-only off only for a hole; as_iolock is stock again (carved from
+# hole/ufs.exp, rwip/ufs.exp with ufs_bmap_hf).  Against -74 only the build
+# ids, kabi's sha256= of the brel and the ufs module differ.  kabi k30.1.4 and
+# abi= 18c0a1c9 unchanged; modules kabi k30.1.2.  Core and kit amix 75ded5c
+# (the module core's bytes as at 9cd652d; unix carries growsdt's 2 bytes
+# besides), port 0508945, paula 1b2736d.
+#
 # -74 against -73 (2026-11-06): the cut 68030-261106-74 (amix kernel/k30/cuts/
 # 68030-261106-74), -73's recipe from amix fb39fec with hat_growsdt's shrink
 # freeing the tail where it is (tools/growsdt030.py, 2 bytes in unix) and
@@ -197,33 +208,33 @@
 
 # the cut's output: kernel/k30/cuts/build.sh (make kernel-k30) writes it
 # there, from cuts/68030-261103-71/cut.sh (gitignored)
-K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261106-74}"
-K30M_SYSDIR=cut-68030-261106-74/usr/sys   # the cut's kernel tree under K30M_SRC
-K30M_SUMS=SHA256SUMS-68030-261106-74      # under K30M_SRC; names relative to K30M_SYSDIR
-K30M_CARVE=cut-68030-261106-74/carve      # the carve sources of ufs and s5 (R2)
-K30M_AMIX_COMMIT=fb39fec    # amix, the cut's commit: elf2brel and the in-amix licences
+K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261106-75}"
+K30M_SYSDIR=cut-68030-261106-75/usr/sys   # the cut's kernel tree under K30M_SRC
+K30M_SUMS=SHA256SUMS-68030-261106-75      # under K30M_SRC; names relative to K30M_SYSDIR
+K30M_CARVE=cut-68030-261106-75/carve      # the carve sources of ufs and s5 (R2)
+K30M_AMIX_COMMIT=75ded5c    # amix, the cut's commit: elf2brel and the in-amix licences
 K30M_ELF2BREL=kernel/k30/tools/elf2brel.py
 K30M_ELF2BREL_SHA=0026fb59d5bd58468786e0af6b4178667260e77944758c91d834e8adaf4b42f5
-K30M_DLM_COMMIT=fb39fec     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
-K30M_KIT_COMMIT=fb39fec     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
+K30M_DLM_COMMIT=75ded5c     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
+K30M_KIT_COMMIT=75ded5c     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
 K30M_KIT_PORT=0508945       # amix-040-060-port, the kit's headers (k46 half of `make kit`)
 K30M_PORT_COMMIT=0508945adbe18896444e4dc4ec56030c10c91314    # K30M_KIT_PORT in full, fetched by hash
 K30M_PAULA_COMMIT=1b2736d9bb291af77bd1e8995d15f3e60d0627ff   # amix-paula, the audio patchers
 
 K30M_CATALOG_NAME=kernel-k30-m
 K30M_PKG=kern30m
-K30M_BUILDID=68030-261106-74
+K30M_BUILDID=68030-261106-75
 K30M_KABI=k30.1.4
 K30M_FSKABI=k30.1.2       # the .moddata kabi of ufs and s5 (the minor they import)
-K30M_VERSION=k30.1.4.261106-74
+K30M_VERSION=k30.1.4.261106-75
 
-K30M_BREL_SHA=ac431c856d0266a27e0c1edc9df7d4b12795eab644ac488db45598f47c8a0237
+K30M_BREL_SHA=eb059687c7671fe4f3ccd5ccb2bc6cf9495e3415a4b12b6b6b7e540d4350ba06
 K30M_BREL_SIZE=1543028
 K30M_BSS=350780
-K30M_KABI_SHA=b798419fa1b92fd2b99f6c51161cfc60b12a478148172eafda82a346f71105b6
+K30M_KABI_SHA=9703fc76c9ad5b165b592590eec88feb88c7bc2bbaee0fba537fac48d72cb3d2
 K30M_SYM_SHA=2268a0f3c8b76bb92a353feea929df72f8a75e3db57982f9e260d93737a7ae56
 K30M_SYM_SIZE=181232
-K30M_ETREL_SHA=771504ee631179de576073693a04b549ccc73a540fac4d23c977dbb10ab8008a
+K30M_ETREL_SHA=17e397a6458acca4ed859af2e0a8db1511c61125452bbed9a31e0ffabc3f6724
 # the cut's patched audio driver source (SHA256SUMS names it; the three
 # amix-paula patchers, 1b2736d's (548d258's bytes), on the stock audio.c)
 K30M_AUDIO_SHA=1f43c5ff6558bf6583bcc3525b456bf3560e2bcf6100f5c736b0aa0221b260cc
@@ -236,8 +247,8 @@ K30M_AUDIO_SHA=1f43c5ff6558bf6583bcc3525b456bf3560e2bcf6100f5c736b0aa0221b260cc
 
 # the filesystem modules: <fs> <sha256> <size>, at $K30M_SYSDIR/mod.d/<fs>
 K30M_FSMODS="\
-ufs ae0bffa6b314b7ef6f4d2d613be95f50013aacc61488cec2dd06733531b0224c 80143
-s5  65625d3898d0bfc0e21ebe5327882e57d561c7460a81493368f3066a3ee87741 58365"
+ufs dbd17271156ab3ad40131d4d5c76e0ea086662a8fdef2bf6e895985ca3c49edb 80261
+s5  ce1ecd0ff805a9991b23113790dd5731d656685407ab15ee62ab7c42a4170c4b 58365"
 # the stock objects the carve wraps (the sysroot's, as the cut's carve/stock.sha256)
 K30M_FSSTOCK="\
 fs/ufs/exp a439e68f880d01450f156a0fd5886610c828d2a7cbdfdf3e8a28d93dd656273c
@@ -254,14 +265,14 @@ fs/s5/exp  1c9cb6342da321047b6861170543382eaa75457573858fe641586ff6fddaf33e"
 # its four stock-file patches (a2091.c, a3091.c, scsi.c, support.c) are
 # still applied (NOTICE parts 1 and 2)
 # a filesystem whose carve links the cut's own object instead of the stock
-# exp: name, path under the cut, sha256 (-74: ufs, hole/ufs.exp: the stock
+# exp: name, path under the cut, sha256 (-75: ufs, hole/ufs.exp: the stock
 # fs/ufs/exp with pvn_vptrunc rebound to ufs_vptrunz, the quirk-91 fix (as
 # qz/ufs.exp since -56), rwip's segmap_pagecreate address fixed by
-# tools/rwippc030.py (rwip/ufs.exp, -73) and src/as_iolock_ufs.c linked in with
-# rwip's as_iolock call retargeted to it by tools/iolockufs030.py, all by the
-# cut's build)
+# tools/rwippc030.py (rwip/ufs.exp, -73) and src/ufs_bmap_hf.c linked in with
+# rwip's ufs_bmap call retargeted to it by tools/bmaphf030.py (-75; -74 had
+# as_iolock_ufs), all by the cut's build)
 K30M_FSEXTRA="\
-ufs hole/ufs.exp 16eb468f2250cf86d8e7af2fca9d6ef9a59dfea8246b55c5d0d790a81834eb05"
+ufs hole/ufs.exp ec8fccf2f3b6c020333be68c041c61e063ba87c8ba971c1bed0bc998fb2ecb8f"
 # <name in the copyright> <sha256> <where>: amix:<path> at K30M_AMIX_COMMIT,
 # port:<path> at K30M_PORT_COMMIT, paula:<path> at K30M_PAULA_COMMIT.  The
 # names are the repositories the code came from; amix-kerntools' licence is

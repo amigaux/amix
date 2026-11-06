@@ -45,28 +45,30 @@ known about it, and what to do. Measurements are from emulation unless the entry
   module (4 bytes, `tools/rwippc030.py`); on -72 and earlier, write in whole 8 KiB pieces at 8 KiB offsets or keep such
   files smaller than free memory.
 - **A whole-page write into a hole in the middle of a file could leave the rest of the newly allocated block reading
-  the disk's old contents**, possibly another file's former data (stock, both kernel lines; fixed in cut -74). For a
+  the disk's old contents**, possibly another file's former data (stock, both kernel lines; fixed in cut -75). For a
   write of whole pages as_iolock granted pagecreate: the pages written were created without being read, and ufs_bmap
-  allocated the new block without reading or zeroing it, so the block's other pages were read from the disk block
-  later. Among a file's first 12 blocks (the first 96 KiB with 8 KiB blocks) this happened wherever in the block the
-  write landed; past them only when the write reached the block's last page. From cut -74 rwip keeps pagecreate only
-  for a write that starts at its 8 KiB window and covers it or runs to the end of the file, as Solaris's ufs_wrip does
-  (`src/as_iolock_ufs.c`, `tools/iolockufs030.py`; `ufs_pc_cleared` counts the grants taken back); any other write
-  reads or zero-fills its window's pages first, so ufs_bmap zeroes a block it allocates for it. A write that starts at
-  the window and runs to the end of the file still allocates without zeroing, as before: ufs allocates only the
-  fragments it covers there, and zeroes the rest when the block grows. Not changed: `swap -a` on a sparse regular file
+  allocated the new block alloc-only, without reading or zeroing it, so the block's other pages were read from the
+  disk block later. Among a file's first 12 blocks (the first 96 KiB with 8 KiB blocks) this happened wherever in the
+  block the write landed; past them only when the write reached the block's last page. From cut -75 rwip's call of
+  ufs_bmap looks the block up first (`src/ufs_bmap_hf.c`, `tools/bmaphf030.py`; ufs_bmap with S_READ, which allocates
+  nothing, under the inode lock rwip holds for the real call): for a hole alloc-only is turned off, so ufs_bmap reads
+  the new block -- every page zero-filled in memory -- before the write's pages are copied over it; a block already
+  allocated keeps alloc-only, which allocates nothing there, so a rewrite of its pages reads nothing, as stock
+  (`ufs_hf_holes` and `ufs_hf_kept` count the two). Cut -74 fixed it instead by keeping pagecreate only for a write
+  that starts at its 8 KiB window and covers it or runs to the end of the file, as Solaris's ufs_wrip does, which
+  also made rewrites of pages not in the cache read them first. Not changed: `swap -a` on a sparse regular file
   (ufs_allocstore) still allocates its holes without zeroing them, so the swap file holds old disk data until swapping
   overwrites it. `tests/sparsehole` in emulation, 16 files after a removed filler file of 0x5a: with 2 KiB written 2
   KiB into each of six direct and six indirect holes, stock 2.1c had 188 and 206 of 288 direct pages wrong, -73 40,
   and 0 indirect on both; with the writes on each block's last page, stock had 176 of 288 indirect pages wrong, -73
-  122 direct and 205 (16 MiB) or 242 (64 MiB) indirect; -74's fix 0 in both. Its `eof` mode (a write 2 KiB past the
-  end into a new block) and `keep` mode (a write from a new block's start to the end) found 0 of 48 on -73 and on -74
-  alike: they are regression cases, and a 0 there cannot show that the new blocks landed on the filler's. The cost,
-  measured at 64 MiB with time() in seconds, one boot of each kernel, two passes: random 4 KiB rewrites of pages not
-  in the cache took 4 and 6 s on -73 against 7 and 8 s with the fix for 4000 of them in a 96 MB file, and 23 and 23 s
-  against 30 and 29 s for 20000 (about 50% and 28% longer: they now read the page first); 64 MB written by 4 KiB pages
-  and copied cost the same. On -73 and earlier, fill holes in the middle of a file with whole 8 KiB blocks, or write
-  such files from start to end.
+  122 direct and 205 (16 MiB) or 242 (64 MiB) indirect; -74 and -75 0 in both. Its `eof` mode (a write 2 KiB past the
+  end into a new block) and `keep` mode (a write from a new block's start to the end) found 0 of 48 on -73, -74 and
+  -75 alike: they are regression cases, and a 0 there cannot show that the new blocks landed on the filler's. The
+  cost, measured at 64 MiB with time() in seconds, one boot of each kernel, two passes, 20000 random 4 KiB rewrites
+  of pages not in the cache of a 96 MB file: 27 and 26 s on -73 against 24 and 25 s with -75's fix in the same run
+  (-74's rule: 30 and 29 s against -73's 23 and 23 s); 64 MB written by 4 KiB pages and copied cost the same on all
+  three. On -73 and earlier, fill holes in the middle of a file with whole 8 KiB blocks, or write such files from
+  start to end.
 
 ## Faults and memory protection
 
