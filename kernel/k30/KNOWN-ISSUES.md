@@ -135,28 +135,29 @@ known about it, and what to do. Measurements are from emulation unless the entry
 ## Audio
 
 - **/dev/audio answered each AUDIO_VOLUME and AUDIO_PERIOD request twice, and a refused one reported success**
-  (stock audioioctl, both kernel lines; fixed in cut -76). Each case sent its reply and then fell through to the
+  (stock audioioctl, both kernel lines; fixed in cut -77). Each case sent its reply and then fell through to the
   common tail, which sent the same message again as M_IOCACK with error 0: a request of the wrong length arrived as
   success, and the stream head was handed one message twice. In emulation on -75, 100 of 100 wrong-length requests
-  returned 0; in one run the first request had not returned 15 minutes later (the process asleep in the ioctl). From
-  -76 each case returns after its one reply (`tools/patch_audio_replies.py`, applied after amix-paula's three
-  patchers): 100 of 100 wrong-length requests returned EINVAL, and the right length and the transparent form 0, in
-  two runs.
+  returned 0 in each of two runs; in another run the first request had not returned 15 minutes later (the process
+  asleep in the ioctl). From -77 each case returns after its one reply (`tools/patch_audio_replies.py`, applied after
+  amix-paula's three patchers): 100 of 100 wrong-length requests returned EINVAL, and the right length and the
+  transparent form 0.
 - **A sound written in one piece larger than the free channel buffer repeated parts of itself** (stock audiointr,
-  both kernel lines; fixed in cut -76). The interrupt's refill copied what fit from the message it kept without
+  both kernel lines; fixed in cut -77). The interrupt's refill copied what fit from the message it kept without
   moving past it, so each refill copied the same bytes again until the stream was closed. In emulation on -75 a
   32 KiB write at period 200 (1.8 s of sound) was still refilling after 30 s, every buffer filled from the write's
-  second 8 KiB again (86 times in one run, its first byte telling which part of the write it held); a 12 KiB write
-  drained after 466 to 583 ms with and without the fix (the polls are 50 to 117 ms apart), which neither shows nor
-  rules out a shorter stretch played twice. From -76 the refill moves past what it copied, as postaudio does: the 32 KiB write filled
-  its buffers from 8, 16 and 24 KiB once each and drained after 1.4 s, its last buffer queued.
+  second 8 KiB again (86 times in one run, the first byte of each buffer telling which part of the write it held); a
+  12 KiB write drained after 466 to 583 ms with and without the fix (the polls are 50 to 117 ms apart), which
+  neither shows nor rules out a shorter stretch played twice. From -77 the refill moves past what it copied, as
+  postaudio does: the 32 KiB write filled its buffers from 8, 16 and 24 KiB once each and drained after 1.4 s, its
+  last buffer queued.
 - **An I_STR AUDIO_VOLUME or AUDIO_PERIOD with no data (ic_len 0) panicked the kernel** (stock audioioctl, both
-  kernel lines; fixed after cut -76, by the audio patcher's fifth place). Such a request reaches the driver with no
-  data block, and the driver called pullupmsg on it before testing for one; pullupmsg does not test for NULL and
-  followed whatever lay in low memory. Any process that can open /dev/audio for writing could do it. In emulation on
-  -75 the first such request ended in `PANIC: KERNEL FAULT ... (Bus Error)` in xmsgsize, called from pullupmsg; the
-  040/060 line's kernel faulted the same way. With the fix pullupmsg is called only when there is a block, and the
-  request is refused with EINVAL: 100 of 100, and the box went on.
+  kernel lines; fixed in cut -77). Such a request reaches the driver with no data block, and the driver called
+  pullupmsg on it before testing for one; pullupmsg does not test for NULL and followed whatever lay in low memory.
+  Any process that can open /dev/audio for writing could do it. In emulation on -75 the first such request ended in
+  `PANIC: KERNEL FAULT ... (Bus Error)` in xmsgsize, called from pullupmsg; the 040/060 line's kernel faulted the
+  same way. From -77 pullupmsg is called only when there is a block, and the request is refused: 100 of 100 returned
+  EINVAL, and the box went on.
 - **Two /dev/audio streams open at once can mix up their messages** (stock audiointr, both kernel lines; open). When
   the interrupt's scan of the clients posts part of one client's message, it keeps that message in the previous
   client's place, so that client later plays or frees a message it does not own. It needs two streams (two minor

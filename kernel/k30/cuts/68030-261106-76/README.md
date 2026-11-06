@@ -1,7 +1,8 @@
 # Cut 68030-261106-76
 
 The k30 module kernel, kabi k30.1.4 (abi 18c0a1c9), cut from amix `70e865e`: -75's recipe with two stock defects
-fixed, one in /dev/audio and one in TCP's close.
+fixed, one in /dev/audio and one in TCP's close. Not released: its TCP close linger was reverted at `d9db6ac`, and
+68030-261106-77 carries the audio fix in its second version instead.
 
 - **/dev/audio answers each request once, and a long write plays once.** In the stock audioioctl the AUDIO_VOLUME
   and AUDIO_PERIOD cases sent their reply and then fell through to the common tail, which sent the same message again
