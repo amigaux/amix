@@ -194,11 +194,11 @@
 #                kernel without it, byte for byte.
 #   --no-ufs-hole-fix  build WITHOUT the hole fix (on by default; UFS_HOLE_FIX=0 does the same).  For a write of
 #                whole pages the stock rwip lets as_iolock grant pagecreate, and ufs_bmap then allocates a new block
-#                without reading or zeroing it, so its pages the write leaves alone read the disk block's old data.
-#                src/as_iolock_ufs.c keeps pagecreate only for writes that start at the 8 KiB window and cover it or
-#                run to the end of the file (as Solaris's ufs_wrip); it is linked into the ufs object and
-#                tools/iolockufs030.py retargets rwip's one call of as_iolock to it.  --no-ufs-hole-fix is the
-#                ufs object without it, byte for byte.
+#                alloc-only, without reading or zeroing it, so its pages the write leaves alone read the disk block's
+#                old data.  src/ufs_bmap_hf.c looks the block up first (ufs_bmap with S_READ) and turns alloc-only off
+#                for a hole, so a new block is read (zero-filled) before the write; an allocated block keeps it and is
+#                rewritten as stock.  It is linked into the ufs object and tools/bmaphf030.py retargets rwip's one
+#                call of ufs_bmap to it.  --no-ufs-hole-fix is the ufs object without it, byte for byte.
 #   --no-growsdt-fix  build WITHOUT the hat_growsdt fix (on by default; GROWSDT_FIX=0 does the same).  The stock
 #                hat_growsdt frees a shrunk segment table's tail at table + units * 512 instead of + units * 64, so
 #                hat_sdtfree clears bits in whatever page that lands in -- a data page's mapping chain head -- and
@@ -281,7 +281,7 @@ DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed 
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
 FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
-UFS_HOLE_FIX="${UFS_HOLE_FIX:-1}"  # --no-ufs-hole-fix (UFS_HOLE_FIX=0): rwip's as_iolock grants pagecreate as stock
+UFS_HOLE_FIX="${UFS_HOLE_FIX:-1}"  # --no-ufs-hole-fix (UFS_HOLE_FIX=0): rwip's ufs_bmap allocates a hole alloc-only as stock
 GROWSDT_FIX="${GROWSDT_FIX:-1}"   # --no-growsdt-fix (GROWSDT_FIX=0): the stock hat_growsdt (tools/growsdt030.py)
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
 ARENA8M="${ARENA8M:-1}"           # --no-arena8m (ARENA8M=0): kvseg 4 MiB, as stock
@@ -1260,28 +1260,28 @@ else
   echo "--- ufs rwip: --no-ufs-rwip-fix -- the stock rwip (segmap_pagecreate given the window base) ---"
 fi
 
-# --- 7b-hole. rwip's as_iolock -> as_iolock_ufs (on by default, --no-ufs-hole-fix without): src/as_iolock_ufs.c
-# linked into the ufs object above, rwip's one relocation retargeted by tools/iolockufs030.py
+# --- 7b-hole. rwip's ufs_bmap -> ufs_bmap_hf (on by default, --no-ufs-hole-fix without): src/ufs_bmap_hf.c
+# linked into the ufs object above, rwip's one relocation retargeted by tools/bmaphf030.py
 if [ "$UFS_HOLE_FIX" = 1 ]; then
-  echo "--- ufs holes: rwip's as_iolock -> as_iolock_ufs (src/as_iolock_ufs.c, tools/iolockufs030.py) ---"
+  echo "--- ufs holes: rwip's ufs_bmap -> ufs_bmap_hf (src/ufs_bmap_hf.c, tools/bmaphf030.py) ---"
   HF="$WORK/hole"; rm -rf "${HF:?}"; mkdir -p "$HF"
-  ( cd "$BUILD/fs/ufs" && "$CC" -c -O $CFLAGS_K -I../.. "$KT/src/as_iolock_ufs.c" -o "$HF/as_iolock_ufs.o" ) \
-    || { echo "--ufs-hole-fix: as_iolock_ufs.c did not compile" >&2; exit 1; }
-  GOT="$("$NM" "$HF/as_iolock_ufs.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOT" = "as_iolock" ] || { echo "--ufs-hole-fix: as_iolock_ufs.o imports '$GOT'" >&2; exit 1; }
-  GOTX="$("$NM" "$HF/as_iolock_ufs.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOTX" = "as_iolock_ufs ufs_pc_calls ufs_pc_cleared ufs_pc_kept ufs_pc_magic" ] \
-    || { echo "--ufs-hole-fix: as_iolock_ufs.o exports '$GOTX'" >&2; exit 1; }
-  "$LD" -r -o "$HF/ufs.exp" "$UFS_OBJ" "$HF/as_iolock_ufs.o"
-  python3 "$KT/tools/iolockufs030.py" "$HF/ufs.exp" || { echo "--ufs-hole-fix: rwip was not retargeted" >&2; exit 1; }
-  python3 "$KT/tools/iolockufs030.py" --check "$HF/ufs.exp" || exit 1
+  ( cd "$BUILD/fs/ufs" && "$CC" -c -O $CFLAGS_K -I../.. "$KT/src/ufs_bmap_hf.c" -o "$HF/ufs_bmap_hf.o" ) \
+    || { echo "--ufs-hole-fix: ufs_bmap_hf.c did not compile" >&2; exit 1; }
+  GOT="$("$NM" "$HF/ufs_bmap_hf.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "ufs_bmap" ] || { echo "--ufs-hole-fix: ufs_bmap_hf.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$HF/ufs_bmap_hf.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "ufs_bmap_hf ufs_hf_calls ufs_hf_holes ufs_hf_kept ufs_hf_magic" ] \
+    || { echo "--ufs-hole-fix: ufs_bmap_hf.o exports '$GOTX'" >&2; exit 1; }
+  "$LD" -r -o "$HF/ufs.exp" "$UFS_OBJ" "$HF/ufs_bmap_hf.o"
+  python3 "$KT/tools/bmaphf030.py" "$HF/ufs.exp" || { echo "--ufs-hole-fix: rwip was not retargeted" >&2; exit 1; }
+  python3 "$KT/tools/bmaphf030.py" --check "$HF/ufs.exp" || exit 1
   UFS_OBJ="$HF/ufs.exp"
   case ",$CARVE_FS," in
     *,ufs,*) echo "  the carved ufs module wraps $UFS_OBJ" ;;
     *) cp "$UFS_OBJ" "$BUILD/fs/ufs/exp"; echo "  fs/ufs/exp in the work copy replaced by $UFS_OBJ" ;;
   esac
 else
-  echo "--- ufs holes: --no-ufs-hole-fix -- rwip's as_iolock as stock ---"
+  echo "--- ufs holes: --no-ufs-hole-fix -- rwip's ufs_bmap as stock ---"
 fi
 
 # --- 7c. relink fs/exp (now incl. any fs/<name>/exp) + master.d/exp (fresh filesys.o) + local/exp
@@ -1723,7 +1723,7 @@ kzero_check() {
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
-case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/iolockufs030.py" --check-linked "$BUILD/unix" || exit 1; fi ;; esac
+case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/bmaphf030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
 if [ "$FPU_GATE" = 1 ]; then
   echo "--- fpu gate: sendsig's jsr fpu_setup -> fpu_setup_gated (tools/fpugate-sendsig.py) ---"
   python3 "$KT/tools/fpugate-sendsig.py" "$BUILD/unix"
@@ -1872,7 +1872,7 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$GROWSDT_FIX" = 1 ]; then python3 "$KT/tools/growsdt030.py" --check "$BUILD/unix" || exit 1; fi
   case ",$CARVE_FS," in *,ufs,*) ;; *)
     if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi
-    if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/iolockufs030.py" --check-linked "$BUILD/unix" || exit 1; fi ;; esac
+    if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/bmaphf030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
   if [ "$SWAP_GUARD" = 1 ]; then python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"; fi
   if [ "$ARENA8M" = 1 ]; then python3 "$KT/tools/arena8m030.py" --check "$BUILD/unix"; fi
   if [ "$KMEM_WAKE" = 1 ]; then python3 "$KT/tools/kmemwake030.py" --check "$BUILD/unix"; fi
@@ -1978,7 +1978,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
     grep -q -- "$KINFO_BUILD" <(strings -a "$m") || { echo "FATAL: the $f module does not carry the build id $KINFO_BUILD" >&2; exit 1; }
     if [ "$f" = ufs ] && [ "$UFS_TAILZERO" = 1 ]; then qz_check "$m" m68k-elf-nm m68k-elf-objdump; fi
     if [ "$f" = ufs ] && [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$m" || exit 1; fi
-    if [ "$f" = ufs ] && [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/iolockufs030.py" --check "$m" || exit 1; fi
+    if [ "$f" = ufs ] && [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/bmaphf030.py" --check "$m" || exit 1; fi
     cp "$m" "$BUILD/mod.d/$f"
     echo "  mod.d/$f: $(wc -c < "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-16), bound to $KINFO_BUILD; $(grep -a -i 'modcheck' "$WORK/carve/$f.make.log" | tail -1)"
   done
