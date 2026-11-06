@@ -31,6 +31,9 @@ not applied), so it is not this cut's kernel beside the build id.
   at page 1) and 122 direct and 205 indirect (writes on the block's last page) of 288 in a run beside the trial's;
   rnd found no bad block at 64 MiB; `tests/wcost`'s 20000 random 4 KiB rewrites of pages not in the cache of a 96 MB
   file at 64 MiB took 24 and 25 s.
+- This cut's package, installed in emulation at 16 MiB by the install matrix: the netinstall and the CD/floppy install
+  each passed all 10 gates (the netinstall, the 16 MiB install that stopped every time before the growsdt fix, now
+  with this cut's ufs as the root's filesystem), and no segment-table unit was leaked in any sample taken through them.
 - The trial, in the same run as -73: sparsehole 0 in all four modes; the rewrites 24 and 25 s against -73's 27 and
   26 s (-74's rule, in an earlier run: 30 and 29 s against 23 and 23 s); appends the same; 64 MB copied by 8 KiB,
   whose new blocks are now zero-filled in memory first, 49 and 47 s against -73's 46 and 43 (47 and 46 on this cut;
