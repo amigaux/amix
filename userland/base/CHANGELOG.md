@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — amix-base 1.0-34: /dev/audio (9681e6f, 711166f)
+
+The package ships the sound device's node as `c audio /dev/audio 46 0 0660 root audio`; 46 is the stock audio driver's major on both lines, and mode and group are as for /dev/paula. The node is in its driver's class, audio, which pkgadd lays after the conffile class, so on a fresh system the audio group exists when the node is made (in class none it was made 0:0 and pkgadd exited 2). S20devnodes makes the node again when it is missing, at the record's major. devnodes(1M) and group(4) name it. test-devnodes 33/0.
+
 ## 2026-11-06 — dhcp-client 1.0-9 (d41bf6c)
 
 dhcpc times a lease (T1, T2, its end, every wait) on times()'s clock, not the wall clock. The time step at boot comes after the lease it needs is bound; before this, a clock set back delayed the renew by the size of the step, and a clock set forward ended the lease at once. dhcpc -q trusts a running daemon's lease file. test-keep.sh tests the bound states, with the clock set both ways. dhcpc(1M) says so.
