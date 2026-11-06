@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — cut 68030-261106-77, kern30m k30.1.4.261106-77 (28107ac, d9db6ac, bf9e723, 7f6d9f1, f31a797)
+
+/dev/audio answers each AUDIO_VOLUME/AUDIO_PERIOD request once, so a refused request no longer reports success. A request with no data (ic_len 0) is refused with EINVAL instead of panicking the kernel through pullupmsg(NULL). A write longer than the free channel buffer plays once instead of replaying (tools/patch_audio_replies.py, after amix-paula's patchers, shared with the 040/060 line). Cut -76's TCP close linger was reverted before release; the TCP close defect stays open in KNOWN-ISSUES, whose workaround is a half-close (shutdown(fd,1), read to EOF, close). Also: kernel/k30/tests/audio (aurep2, audioctl2); KNOWN-ISSUES lists the shutdown stall and two open stock audio defects.
+
 ## 2026-11-06 — cut 68030-261106-75, kern30m k30.1.4.261106-75 (84ea5ae..a6ed061)
 
 hat_growsdt gives a shrunk segment table's tail back at table + units*64; the stock code used units*512, and hat_sdtfree then cleared another page's mapping-chain head or freed a page in use, so machines short of memory, 16 MB installs in particular, hung in hat_unload or hat_swapout (tools/growsdt030.py, 2 bytes). A new ufs block never shows old disk data: rwip's ufs_bmap call goes to ufs_bmap_hf (src/ufs_bmap_hf.c, tools/bmaphf030.py), which looks the block up first; a hole is allocated zero-filled, an allocated block is rewritten as stock, so rewrites keep their speed (each new block costs an in-memory zero-fill). The build refuses the hole fix without the rwip fix. sparsehole gains last, eof, keep and rewrite modes; tests/wcost holds the cost test. 16 MiB netinstall and CD/floppy install pass on the cut itself. Cut -74 (an earlier hole rule) was not released.
