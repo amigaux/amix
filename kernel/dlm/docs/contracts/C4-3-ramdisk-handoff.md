@@ -1,4 +1,4 @@
-# C4-3 — the RAM-disk hand-off, version 6
+# C4-3 — the RAM-disk hand-off, version 7
 
 - **Status:** agreed 2026-10-26; in force from commit 4003c9f (2026-10-27),
   which places the image. `ramdisk_image` is minor 2 (k30.1.2,
@@ -10,7 +10,9 @@
   serves one generation id (§1); version 5 (2026-11-04): the image goes
   as high in the region as is free, below memory AmigaOS keeps at its
   top, and an L4 says which of "too big" and "in use" it was (§2); version 6
-  (2026-11-05): on k46 the image stays within 128 MiB of the bind base (§2). Other repositories build against
+  (2026-11-05): on k46 the image stays within 128 MiB of the bind base (§2); version 7
+  (2026-11-06): §2 states the placement rule as boot2 has it, always in
+  the bind region; no change in behaviour. Other repositories build against
   this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/10-boot-loader.md` §5.4 (the RAM-disk image),
   §6 (the loader record); `30-module-core.md` §3 (`rth1_apply`'s root
@@ -62,26 +64,31 @@ rootfs <s5 or ufs>
 
 After the kernel is relocated and before the hand-off copy:
 1. it decompresses the image (CRC-32 checked, L3 on a mismatch, as any
-   member) to **the top of the largest fast-memory region the kernel can
-   use**: below 0x40000000, and within the line's limit above the bind
-   base (`AX_K30_MEMCAP`, 64 MiB; `AX_K46_MEMCAP`, 128 MiB). The image starts on a 64 KiB
-   boundary. It is claimed with AllocAbs while AmigaOS still runs; when
-   the top is in use (a software MapROM tool's Kickstart copy, a
-   reset-proof RAM disk), it goes at the highest free 64 KiB boundary
-   below, still above the kernel's end (version 5, `ax_rd_place`);
-2. it ends that region's entry in `bootinfo.memory[]` at the image's
-   start, so the kernel never uses the image's pages, nor anything above
-   them;
+   member) into **the bind region, never another**, below the kernel's
+   room: the top is the bind base plus the region's size below
+   0x40000000, capped at the line's limit (`AX_K30_MEMCAP`, 64 MiB;
+   `AX_K46_MEMCAP`, 128 MiB). On a bind region longer than the limit the
+   image sits below the bind base plus the limit, not at the region's
+   physical top. `ax_rd_place` takes the image's size below that top,
+   rounded down to a 64 KiB boundary, and claims it with AllocAbs while
+   AmigaOS still runs; when that place is in use (a software MapROM
+   tool's Kickstart copy, a reset-proof RAM disk), it tries each 64 KiB
+   boundary below in turn, down to the kernel's end (version 5);
+2. once the line's limit has shortened `memory[]`, it ends the entry that
+   holds the image at the image's start, so the kernel never uses the
+   image's pages, nor anything above them up to the room's top: the gap
+   under 64 KiB the alignment leaves, and any memory AmigaOS kept there,
+   are lost to the kernel;
 3. it writes the image's **physical address and size** into the loader
    record (`AXL1` offsets 116 and 120);
 4. it writes the root selector `ramdisk` (kind 2) and the swap selector
    `none` from the manifest's `root` and `swap` records, and the root
    filesystem type from `rootfs`.
 
-If the region cannot hold the kernel, its arena and the image, boot2
-refuses the generation with L4, giving the needed and the available
-bytes. When it could, but no free place of the image's size is left
-above the kernel, the L4 says `the RAM disk's place is in use`. The
+If the room between the kernel's end and the top cannot hold the image
+at its first 64 KiB-aligned place, boot2 refuses the generation with
+L4, giving the needed and the available bytes. When it could, but no
+place tried is free, the L4 says `the RAM disk's place is in use`. The
 image and the kernel never overlap: the kernel binds at the region's low
 end and the image above its end.
 
