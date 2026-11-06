@@ -12,8 +12,8 @@ to fix two faults in its allocator. Everything else is the stock file, byte for 
 Package: `libcfix`, category `library`, set `base`, essential. Nothing is compiled and no binary is
 kept here: `build.sh` takes the stock file from amix-system at its pin, checks it against
 `system/MANIFEST.sha256`, checks the bytes it changes, changes them, reads them back, and checks
-the result's sha256. The installer lays the same file over core's copy, so a new system has it
-from its first boot; the package carries it to systems installed before.
+the result's sha256. The installer installs the package with the base set, so a new system has it
+from its first boot; `apkg` carries it to systems installed before.
 
 ## Licence
 
@@ -67,10 +67,15 @@ skipped.
     other offsets;
   - `libc.a`, `libp/libc.a` and `minabi/libc.so` in `/usr/ccs/lib`, for anything linked statically
     on the box.
-- **The stock `core` package** still records the stock size and sum, so `pkgchk core` lists
-  `/usr/lib/libc.so.1` as changed.
-
 ## Install, upgrade and removal
+
+**Install it with `apkg`**: `apkg update`, then `apkg install libcfix`. Do not use the stock
+`/usr/sbin/pkgadd`: run with `-n` over the stock library it stops with "interaction required"
+(rc 5) and leaves the stock file. The pkgadd of the APKGENG package, `pkgadd -n -a <admin>`,
+installs it as `apkg` does.
+
+Once installed, the contents file lists `/usr/lib/libc.so.1` under both `core` and `libcfix`
+with the fixed file's size and sum, so `pkgchk` is clean for both.
 
 The file goes in by one rename over the live name: a dynamically linked program cannot start
 while `/usr/lib/libc.so.1` is missing, `mv` included. `pkgadd` writes a temporary file beside it
