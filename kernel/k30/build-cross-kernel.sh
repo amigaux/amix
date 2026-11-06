@@ -154,6 +154,14 @@
 #                port's order so both lines compile the same audio.c, applied to the work copy's
 #                amiga/driver/audio.c, which section 4b recompiles before section 5 relinks amiga/driver. Each
 #                script finds its places by fingerprint and refuses a mismatch.
+#   --no-audio-replies  with --audio-paula, build WITHOUT tools/patch_audio_replies.py (on by default;
+#                AUDIO_REPLIES=0 does the same), which runs after paula's three, as the port's k46 build does: in the
+#                stock audioioctl each AUDIO_VOLUME and AUDIO_PERIOD reply is sent twice, the second time as M_IOCACK
+#                with error 0 (a refusal arrives as success), an I_STR with no data calls pullupmsg(NULL), and
+#                audiointr's refill copies part of a message too long for the buffer it fills without advancing
+#                b_rptr, so a long write replays stretches of itself.
+#                It takes only the audio.c paula's three make (pinned) and gives a pinned result.  Without
+#                --audio-paula, audio.c is the stock one and this does nothing.
 #   --ttcompat-fix <patch_ttcompat_init.py>  (opt-in) the port's DRIVER-LINE-7 fix: clear the three
 #                ttcompat state fields the stock ttcompatopen leaves uninitialised -- a same-length byte patch
 #                on the linked ET_REL, located by symbol, after the rth1 hook and before elf2brel; --check after.
@@ -283,6 +291,7 @@ KINFO_FAMILY="${KINFO_FAMILY:-K030-U}"  # --kinfo-family NAME: the sidecar's fam
 DLM_CORE="${DLM_CORE:-}"        # --dlm-core <kernel/dlm dir>: the module core spliced in (stage 3)
 DLM_STUB=0                      # --dlm-stub-providers: a dry run with the owed providers stubbed
 AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and /dev/paula exclude each other
+AUDIO_REPLIES="${AUDIO_REPLIES:-1}"  # --no-audio-replies (AUDIO_REPLIES=0): with --audio-paula, the stock ioctl replies and refill
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
 FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
 UFS_HOLE_FIX="${UFS_HOLE_FIX:-1}"  # --no-ufs-hole-fix (UFS_HOLE_FIX=0): rwip's ufs_bmap allocates a hole alloc-only as stock
@@ -335,6 +344,7 @@ while [ "$#" -gt 0 ]; do
     --no-scsi-drivers) NO_SCSI_DRV=1; shift ;;
     --no-fstypes) FSTYPES_CONF=/dev/null; shift ;;
     --no-kzero) KZERO=0; shift ;;
+    --no-audio-replies) AUDIO_REPLIES=0; shift ;;
     --no-ufs-tailzero) UFS_TAILZERO=0; shift ;;
     --ufs-rwip-fix) UFS_RWIP=1; shift ;;
     --no-ufs-rwip-fix) UFS_RWIP=0; shift ;;
@@ -383,6 +393,7 @@ case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_RWIP" in 0|1) ;; *) echo "UFS_RWIP='$UFS_RWIP' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$AUDIO_REPLIES" in 0|1) ;; *) echo "AUDIO_REPLIES='$AUDIO_REPLIES' (want 0 or 1)" >&2; exit 2 ;; esac
 # ufs_bmap_hf keeps alloc-only for an allocated block, whose pages the write does not cover are then read from the
 # disk; the pages it does cover are created unread, at the right address only with the rwip fix
 [ "$UFS_HOLE_FIX" = 0 ] || [ "$UFS_RWIP" = 1 ] \
@@ -767,6 +778,12 @@ if [ -n "$AUDIO_PAULA" ]; then
     python3 "$AUDIO_PAULA/port/src/$f" "$AUD" || { echo "FATAL: $f refused audio.c" >&2; exit 1; }; done
   for n in paula_busy audio_nopen; do grep -q "^int[[:space:]][[:space:]]*$n;" "$AUD" \
     || { echo "FATAL: the patched audio.c defines no $n" >&2; exit 1; }; done
+  if [ "$AUDIO_REPLIES" = 1 ]; then	# one reply per volume/period ioctl, refills move on (both lines, after paula's three)
+    ST="$(python3 "$KT/tools/patch_audio_replies.py" --selftest "$AUD" 2>&1)" \
+      || { echo "$ST" >&2; echo "FATAL: patch_audio_replies.py --selftest failed on audio.c" >&2; exit 1; }
+    echo "$ST" | tail -1
+    python3 "$KT/tools/patch_audio_replies.py" "$AUD" || { echo "FATAL: patch_audio_replies.py refused audio.c" >&2; exit 1; }
+  fi
   echo "  audio.c: $(sha256sum < "$WORK/audio.c.stock" | cut -c1-16) -> $(sha256sum < "$AUD" | cut -c1-16), +$(( $(wc -l < "$AUD") - $(wc -l < "$WORK/audio.c.stock") )) lines"
   # audio.c's #include "memory.h" is the Amiga one (amiga/inc: MEMF_CHIP, AllocMem); the cross gcc's sysroot include path
   # comes before -I../inc and would hand it libc's <memory.h>. A quoted include looks beside the source first, so the

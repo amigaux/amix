@@ -52,6 +52,18 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
+# -77 against -75 (2026-11-06): the cut 68030-261106-77 (amix kernel/k30/cuts/
+# 68030-261106-77), -75's recipe from amix d9db6ac with /dev/audio answering
+# each AUDIO_VOLUME/AUDIO_PERIOD request once, refusing one with no data
+# (ic_len 0) with EINVAL instead of calling pullupmsg(NULL), and its refill
+# advancing past what it copied (tools/patch_audio_replies.py after
+# amix-paula's three: audio.c 3f434f35).  -76 (audio v1 and a TCP close
+# linger, reverted at d9db6ac) was not released.  Against -75: unix
+# (audio.o, the build id) and so unix.brel, unix.sym and kabi, and the
+# build id of the two modules.  kabi k30.1.4 and abi= 18c0a1c9
+# unchanged; modules kabi k30.1.2.
+# Core and kit amix d9db6ac, port 0508945, paula 1b2736d.
+#
 # -75 against -74 (2026-11-06): the cut 68030-261106-75 (amix kernel/k30/cuts/
 # 68030-261106-75), -74's recipe from amix 75ded5c with the hole fix made by a
 # block lookup instead: rwip's ufs_bmap call goes to ufs_bmap_hf
@@ -208,47 +220,48 @@
 
 # the cut's output: kernel/k30/cuts/build.sh (make kernel-k30) writes it
 # there, from cuts/68030-261103-71/cut.sh (gitignored)
-K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261106-75}"
-K30M_SYSDIR=cut-68030-261106-75/usr/sys   # the cut's kernel tree under K30M_SRC
-K30M_SUMS=SHA256SUMS-68030-261106-75      # under K30M_SRC; names relative to K30M_SYSDIR
-K30M_CARVE=cut-68030-261106-75/carve      # the carve sources of ufs and s5 (R2)
-K30M_AMIX_COMMIT=75ded5c    # amix, the cut's commit: elf2brel and the in-amix licences
+K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261106-77}"
+K30M_SYSDIR=cut-68030-261106-77/usr/sys   # the cut's kernel tree under K30M_SRC
+K30M_SUMS=SHA256SUMS-68030-261106-77      # under K30M_SRC; names relative to K30M_SYSDIR
+K30M_CARVE=cut-68030-261106-77/carve      # the carve sources of ufs and s5 (R2)
+K30M_AMIX_COMMIT=d9db6ac    # amix, the cut's commit: elf2brel and the in-amix licences
 K30M_ELF2BREL=kernel/k30/tools/elf2brel.py
 K30M_ELF2BREL_SHA=0026fb59d5bd58468786e0af6b4178667260e77944758c91d834e8adaf4b42f5
-K30M_DLM_COMMIT=75ded5c     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
-K30M_KIT_COMMIT=75ded5c     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
+K30M_DLM_COMMIT=d9db6ac     # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
+K30M_KIT_COMMIT=d9db6ac     # amix (kernel/dlm), the kit the modules are checked and rebuilt with
 K30M_KIT_PORT=0508945       # amix-040-060-port, the kit's headers (k46 half of `make kit`)
 K30M_PORT_COMMIT=0508945adbe18896444e4dc4ec56030c10c91314    # K30M_KIT_PORT in full, fetched by hash
 K30M_PAULA_COMMIT=1b2736d9bb291af77bd1e8995d15f3e60d0627ff   # amix-paula, the audio patchers
 
 K30M_CATALOG_NAME=kernel-k30-m
 K30M_PKG=kern30m
-K30M_BUILDID=68030-261106-75
+K30M_BUILDID=68030-261106-77
 K30M_KABI=k30.1.4
 K30M_FSKABI=k30.1.2       # the .moddata kabi of ufs and s5 (the minor they import)
-K30M_VERSION=k30.1.4.261106-75
+K30M_VERSION=k30.1.4.261106-77
 
-K30M_BREL_SHA=eb059687c7671fe4f3ccd5ccb2bc6cf9495e3415a4b12b6b6b7e540d4350ba06
-K30M_BREL_SIZE=1543028
+K30M_BREL_SHA=9fec40ddb040c1c1e8e8b69c120a77e4e038824982e6014a716f753883c1e6f8
+K30M_BREL_SIZE=1543136
 K30M_BSS=350780
-K30M_KABI_SHA=9703fc76c9ad5b165b592590eec88feb88c7bc2bbaee0fba537fac48d72cb3d2
-K30M_SYM_SHA=2268a0f3c8b76bb92a353feea929df72f8a75e3db57982f9e260d93737a7ae56
+K30M_KABI_SHA=15e9e5fc88d016796623126dc109deb0e47e3add65c9122b95251f30c13581b6
+K30M_SYM_SHA=6db9819367c7eaf074f3e8c21c42846c53ec51831eddb03a8858070fda9b13e4
 K30M_SYM_SIZE=181232
-K30M_ETREL_SHA=17e397a6458acca4ed859af2e0a8db1511c61125452bbed9a31e0ffabc3f6724
+K30M_ETREL_SHA=b755c5e6f106df2222c2baa85bfbd26b1c8ba88dd167f2317a9e9e74abb97f98
 # the cut's patched audio driver source (SHA256SUMS names it; the three
-# amix-paula patchers, 1b2736d's (548d258's bytes), on the stock audio.c)
-K30M_AUDIO_SHA=1f43c5ff6558bf6583bcc3525b456bf3560e2bcf6100f5c736b0aa0221b260cc
+# amix-paula patchers, 1b2736d's (548d258's bytes), on the stock audio.c, then
+# from -77 tools/patch_audio_replies.py)
+K30M_AUDIO_SHA=3f434f3507e1044ca794706a2de3a05c99ddefbcda6cd8e1b9abc6e60bc24fef
 # the sidecar's other fields, for the record (build.sh checks ident/arena/
 # ksym are present once and abi= against amix-dlm's reference):
-#   ident=0x000e2f70  arena=0x000e2fb0 0x00060000  ksym=0x000e163c 0x00001930
+#   ident=0x000e2fcc  arena=0x000e3010 0x00060000  ksym=0x000e1698 0x00001930
 #   abi=18c0a1c98b2c9284fb10a6b6386403ed5e13193e3ec7aa4f113ff2a174285378 (= abi-k30.1.4.txt, = 1.3's)
 #   root=mobo:a3000-wd,zorro:0202:01,zorro:0202:03, sdcards=4 and rth1=2
 #   passed through verbatim; no rootfs= (build.sh refuses one)
 
 # the filesystem modules: <fs> <sha256> <size>, at $K30M_SYSDIR/mod.d/<fs>
 K30M_FSMODS="\
-ufs dbd17271156ab3ad40131d4d5c76e0ea086662a8fdef2bf6e895985ca3c49edb 80261
-s5  ce1ecd0ff805a9991b23113790dd5731d656685407ab15ee62ab7c42a4170c4b 58365"
+ufs 50cb94890ed3a4132330e5fdb8e3fcb6c825546721f1627d07c862a2dfc13d1e 80261
+s5  b3d3af0e3cc653602c2aba5e64ef6e74d9c96036ffaac1b7c629356dc122ecab 58365"
 # the stock objects the carve wraps (the sysroot's, as the cut's carve/stock.sha256)
 K30M_FSSTOCK="\
 fs/ufs/exp a439e68f880d01450f156a0fd5886610c828d2a7cbdfdf3e8a28d93dd656273c
