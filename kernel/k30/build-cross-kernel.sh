@@ -224,14 +224,6 @@
 #                freed queue for queuerun.  --check after the link and after the dlm splice (freeq named only from
 #                freeq_guarded; qdetach and strclose among its callers).  --no-freeq-guard is the kernel without it,
 #                byte for byte.
-#   --no-tcp-close-fix  build WITHOUT the TCP close fix (on by default; TCPCLOSE_FIX=0 does the same).  The stock
-#                tcpclose keeps unsent data only under SO_LINGER with a time; without SO_LINGER it drops what is
-#                still queued and the FIN follows a prefix (in.ftpd's passive downloads arrive short).  By default
-#                src/tcpclose_lg.c joins the final link and tools/tcpclose-retarget.py retargets tcpurinit's
-#                qi_qclose to tcpclose_lg, which gives an endpoint without SO_LINGER SO_LINGER with 60 s before the
-#                stock tcpclose: the close waits for the data and the FIN to be acknowledged (at most 60 s, or a
-#                signal).  SO_LINGER set by the program, {1,0} (a reset) included, is left as it is.  --check after
-#                the link and after the dlm splice.  --no-tcp-close-fix is the kernel without it, byte for byte.
 #   --no-swap-guard  build WITHOUT the swapadd guard (on by default; SWAP_GUARD=0 does the same).  By default
 #                src/swapguard030.c joins the final link and tools/swapguard-retarget.py retargets swapadd's callers
 #                to swapadd_guarded and swapadd's anon-array kmem_zalloc to swapguard_take: the array is allocated
@@ -310,7 +302,6 @@ SEGVN_PROT="${SEGVN_PROT:-1}"     # --no-segvn-prot (SEGVN_PROT=0): a denied acc
 RMW_FAULT="${RMW_FAULT:-1}"       # --no-rmw-fault (RMW_FAULT=0): a tas or cas fault decided as a read, as stock
 KMEM_WAKE="${KMEM_WAKE:-1}"       # --no-kmem-wake (KMEM_WAKE=0): oversize sleepers woken as stock
 IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the opt-in IP lower read queue fix
-TCPCLOSE_FIX="${TCPCLOSE_FIX:-1}"  # --no-tcp-close-fix (TCPCLOSE_FIX=0): a close without SO_LINGER drops unsent data, as stock
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
 PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
@@ -364,7 +355,6 @@ while [ "$#" -gt 0 ]; do
     --ufs-hole-fix) UFS_HOLE_FIX=1; shift ;;
     --growsdt-fix) GROWSDT_FIX=1; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
-    --no-tcp-close-fix) TCPCLOSE_FIX=0; shift ;;
     --no-arena8m) ARENA8M=0; shift ;;
     --no-kmem-wake) KMEM_WAKE=0; shift ;;
     --no-rmw-fault) RMW_FAULT=0; shift ;;
@@ -394,7 +384,6 @@ case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; ex
 case "$UFS_HOLE_FIX" in 0|1) ;; *) echo "UFS_HOLE_FIX='$UFS_HOLE_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$GROWSDT_FIX" in 0|1) ;; *) echo "GROWSDT_FIX='$GROWSDT_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
-case "$TCPCLOSE_FIX" in 0|1) ;; *) echo "TCPCLOSE_FIX='$TCPCLOSE_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SWAP_GUARD" in 0|1) ;; *) echo "SWAP_GUARD='$SWAP_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$ARENA8M" in 0|1) ;; *) echo "ARENA8M='$ARENA8M' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SEGVN_PROT" in 0|1) ;; *) echo "SEGVN_PROT='$SEGVN_PROT' (want 0 or 1)" >&2; exit 2 ;; esac
@@ -1657,21 +1646,6 @@ if [ "$SWAP_GUARD" = 1 ]; then
 else
   echo "--- swap guard: --no-swap-guard -- swapadd's anon array KM_SLEEP, as stock ---"
 fi
-TCL_OBJ=""
-if [ "$TCPCLOSE_FIX" = 1 ]; then
-  # === 8h1. the TCP close: src/tcpclose_lg.c; tcpurinit's close is retargeted after the link ===
-  echo "--- tcp close: compiling $KT/src/tcpclose_lg.c (tcpclose_lg) ---"
-  ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/tcpclose_lg.c" -o "$BUILD/tcpclose_lg.o" ) \
-    || { echo "--tcp-close-fix: tcpclose_lg.c did not compile" >&2; exit 1; }
-  GOT="$("$NM" "$BUILD/tcpclose_lg.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOT" = "tcpclose" ] || { echo "--tcp-close-fix: tcpclose_lg.o imports '$GOT'" >&2; exit 1; }
-  GOTX="$("$NM" "$BUILD/tcpclose_lg.o" | awk '$2 ~ /^[TDBC]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOTX" = "tcl_calls tcl_magic tcl_set tcpclose_lg" ] || { echo "--tcp-close-fix: tcpclose_lg.o exports '$GOTX'" >&2; exit 1; }
-  echo "  tcpclose_lg.o $(sha256sum "$BUILD/tcpclose_lg.o" | cut -c1-16): imports/exports exact"
-  TCL_OBJ="tcpclose_lg.o"
-else
-  echo "--- tcp close: --no-tcp-close-fix -- a close without SO_LINGER drops the unsent data, as stock ---"
-fi
 A8M_OBJ=""
 if [ "$ARENA8M" = 1 ]; then
   # === 8h2. the 8 MiB kvseg: kseg's table; the sites are patched after the link (tools/arena8m030.py) ===
@@ -1705,7 +1679,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   # The stock tools that read these through /dev/kmem and the namelist (sadc's inode, crash) find them in the kernel.
   # An empty set builds no object, so a kernel whose core.list names none of them links as before.
   echo "--- carve commons: core.list names that are COMMONs of the carved ${CARVE_FS} and nothing else in the link has ---"
-  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $TCL_OBJ $A8M_OBJ $SVP_OBJ ) 2>/dev/null \
+  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ ) 2>/dev/null \
     | awk 'NF >= 2 && $(NF-1) != "U" {print $NF}' | LC_ALL=C sort -u > "$BUILD/carvecom.have"
   python3 - "$DLM_CORE/abi/k30/core.list" "$KABI_MINOR" "$BUILD/carvecom.s" "$BUILD/carvecom.have" \
     $(for f in ${CARVE_FS//,/ }; do echo "$BUILD/fs/$f/exp"; done) <<'PYC' || exit 1
@@ -1750,8 +1724,8 @@ PYC
     CCOM_OBJ="carvecom.o"
   fi
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${TCL_OBJ:+ $TCL_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $TCL_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
 # HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
 # modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
 kzero_check() {
@@ -1797,11 +1771,6 @@ if [ "$SWAP_GUARD" = 1 ]; then
   python3 "$KT/tools/swapguard-retarget.py" "$BUILD/unix"
   python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"
 fi
-if [ "$TCPCLOSE_FIX" = 1 ]; then
-  echo "--- tcp close: tcpurinit's qi_qclose -> tcpclose_lg (tools/tcpclose-retarget.py) ---"
-  python3 "$KT/tools/tcpclose-retarget.py" "$BUILD/unix" || exit 1
-  python3 "$KT/tools/tcpclose-retarget.py" --check "$BUILD/unix" || exit 1
-fi
 if [ "$ARENA8M" = 1 ]; then
   echo "--- 8 MiB kvseg: seed, page tables, length, kvsegmap, kvsegu, kseg's table (tools/arena8m030.py) ---"
   python3 "$KT/tools/arena8m030.py" --stock "$BUILD/unix"
@@ -1846,7 +1815,7 @@ print('--- process limits: rlimits ' + ' '.join(hit[0]) + ' ---')
 PYRL
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $TCL_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
@@ -1930,7 +1899,6 @@ if [ -n "$DLM_CORE" ]; then
     if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi
     if [ "$UFS_HOLE_FIX" = 1 ]; then python3 "$KT/tools/bmaphf030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
   if [ "$SWAP_GUARD" = 1 ]; then python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"; fi
-  if [ "$TCPCLOSE_FIX" = 1 ]; then python3 "$KT/tools/tcpclose-retarget.py" --check "$BUILD/unix" || exit 1; fi
   if [ "$ARENA8M" = 1 ]; then python3 "$KT/tools/arena8m030.py" --check "$BUILD/unix"; fi
   if [ "$KMEM_WAKE" = 1 ]; then python3 "$KT/tools/kmemwake030.py" --check "$BUILD/unix"; fi
   if [ "$RMW_FAULT" = 1 ]; then python3 "$KT/tools/rmwfault030.py" --check "$BUILD/unix"; fi

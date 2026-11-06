@@ -116,20 +116,21 @@ known about it, and what to do. Measurements are from emulation unless the entry
   from another machine times out (`RPC: Timed out`) while `ping` and `rpcinfo -u` to mountd and nfsd answer;
   restarting mountd, nfsd or all of NFS does not help. Give `/etc/inet/hosts` a line `<address> <nodename>` before NFS
   starts, then restart NFS. Seen on k30 and on the 040/060 kernel.
-- **A program that wrote to a TCP connection and closed it without SO_LINGER could lose the last data it wrote**
-  (stock `tcpclose`, both kernel lines; fixed in cut -76). TCP's unsent data is its stream's write queue, freed when the
-  close returns; the stock close kept it only under SO_LINGER with a time, and otherwise sent the FIN after what had
-  gone out, so the peer saw an orderly end after a prefix. Seen as passive-mode ftp downloads arriving short with "226
-  Transfer complete" (in.ftpd's active path sets SO_LINGER, its passive path does not) and an ssh session ending
-  without its exit status. From -76 a close without SO_LINGER gets SO_LINGER with 60 s (`src/tcpclose_lg.c`, the close
-  of TCP's upper read queue, retargeted by `tools/tcpclose-retarget.py`): the close waits until the data and the FIN
-  are acknowledged, the peer resets, 60 s pass (the data is then dropped, as stock) or a signal arrives. A program's
-  own SO_LINGER is kept: {1, 0} still resets the connection. The cost is that wait in close, where stock returned at
-  once; a close with nothing unsent returns at once as before. Measured at 64 MiB, a guest sending 8 MiB in 8 KiB
-  writes and closing, the host reading at full speed: -75 short 2 of 6 (the guest listening) and in.ftpd's passive
-  RETR short 2 of 6; -76 0 of 10 and 0 of 10, the guest connecting 0 of 6, SO_LINGER 60 0 of 3, SO_LINGER {1, 0}
-  reset 3 of 3; each transfer took 11 s on both, and 8 MiB ftp puts and gets over the A2065 took the same time
-  (about 21 and 7.5 s) with no frame dropped.
+- **A program that writes to a TCP connection and closes it without SO_LINGER can lose the last data it wrote**
+  (stock `tcpclose`, both kernel lines; open). TCP's unsent data is its stream's own write queue, which output and
+  acknowledgement both work on and which is freed when the close returns; the stock close keeps it only under
+  SO_LINGER with a time (the close then waits for it), and otherwise drops it and sends the FIN after what had already
+  gone out, so the peer reads an orderly end after a prefix. Seen as passive-mode ftp downloads arriving short with
+  "226 Transfer complete" (in.ftpd's active path sets SO_LINGER, its passive path does not) and an ssh session ending
+  without its exit status. Measured at 64 MiB on -75, a guest sending 8 MiB in 8 KiB writes and closing, the host
+  reading at full speed: 2 of 6 short (the guest listening) and in.ftpd's passive RETR 2 of 6 short; with the host
+  reading slowly none were short; one set on the 040/060 line's stock kernel found none in 30. A program avoids it with
+  shutdown(fd, 1) and reading to end of file before close, or SO_LINGER with a time. Giving every close a linger in
+  the kernel was tried and left out: a close then blocks, an exiting or killed process (whose signals are all
+  ignored by then) stays up to the linger time per socket, and data arriving after the close can free the
+  connection under the sleeper. The fix planned after 1.1 keeps the unsent data on the connection itself after the close (a
+  send queue of its own that output and acknowledgement use once the stream is gone), so the close returns at once
+  and TCP sends the rest and the FIN in the background.
 
 ## Audio
 
