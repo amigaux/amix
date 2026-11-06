@@ -16,14 +16,11 @@ At boot it adds the swap lines of
 .B /etc/vfstab
 (file system type
 .BR swap ),
-and, as the system's script did,
+the slices first and then the files, and, as the system's script did,
 .B /SWAPFILE
 and
 .B /usr/src/SWAPFILE
-when they exist:
-.TP
-.I a file
-is added whole.
+when they exist (see MORE SWAP, below):
 .TP
 .I a slice
 .RB ( /dev/dsk/c\fIn\fPd\fIn\fPs\fIn\fP )
@@ -45,7 +42,10 @@ shows
 .BR 68060\- ...).
 How far the added area reaches is set by
 .BR swap_add ,
-below.
+below: by default, to the end of the slice.
+.TP
+.I a file
+is added whole.
 .PP
 At shutdown the files are removed first, then every area after the first.
 .PP
@@ -76,7 +76,11 @@ In
 .TP
 .BI swap_add= "size ..."
 the sizes to try for a slice, in order; default
-.BR 30 .
+.BR all .
+On a kernel without the guard (below) a slice gets
+.B 30
+whatever the list says, and the console says so: such a kernel is booted
+as a fallback, with a list set for another.
 A size is
 .B all
 (to the end of the slice) or a number of MiB counted from the start of the
@@ -109,6 +113,16 @@ then
 and exits 2), and the step steps down from it.
 A kernel without the guard waits forever on such a request, and the boot
 with it.
+The guard is in the kernels from 68030-261101-67 and 68060-261101-56 on;
+the step tells it by its marker,
+.BR swg_magic ,
+read with
+.B adb
+from the booted kernel's namelist
+.RB ( "echo swg_magic/X | adb \-k /stand/unix /dev/kmem"
+prints 53574721), and reads the figures below the same way at the first
+refusal.
+The kernel's own area, added at boot, is exempt.
 .TP
 .I "68040/68060 kernel"
 an area of
@@ -118,44 +132,85 @@ MiB is taken only when
 is at most
 .IR maxmem /8,
 .I maxmem
-being the pageable memory in 4 KiB pages, which the step reads with
-.BR "echo maxmem/D | adb \-k /stand/unix /dev/kmem" :
+being the pageable memory in 4 KiB pages
+.RB ( "echo maxmem/D | adb \-k /stand/unix /dev/kmem" ):
 about 445 MiB on a 16 MB machine, 948 on 32 MB, 1955 on 64 MB and 3968 on
 128 MB.
-The kernel's own area, added at boot, is exempt.
 The array and 1 MiB more must also fit in the kernel's arena, which can
 refuse less: on a 128 MB machine with two areas already in, about 630 MiB.
-The step tries the limit next after a refusal, and its line gives it as
-\(lqat most\(rq.
 .TP
 .I "68030 kernel"
-an area's array must fit in one free run of kernel memory, which changes as
-the machine runs: there is no fixed figure, and the step's line gives none.
-Measured on the 68030 kernel 68030-261103-71 at idle, one area on a slice:
-up to 128 MiB on a 16 MB and on a 32 MB machine; 30 MiB, but not 64, on a
-64 MB one.
+the array must fit in one free run of the kernel's map space and leave a
+free run of 1 MiB there.
+From 68030-261106-72 on, an area of
+.I M
+MiB is also taken only when
+.I M
+is at most
+.IR maxmem /32,
+.I maxmem
+being in 2 KiB pages here: about 222 MiB on a 16 MB machine, 469 on 32 MB
+and 964 on 64 MB.
+The map space refuses first on a larger machine.
+Measured on 68030-261106-72, one area at a time: 192 MiB taken on a 16 MB
+machine (256 refused), 384 MiB on a 64 MB one (512 refused), and on a
+32 MB one its limit, 469 MiB, added at boot.
+A refusal by the map space takes about 4 seconds.
 .PP
-A kernel with the guard steps down from any list, so there the list sets
-only what is asked first; for a kernel without it, the list must fit:
-.TP
-.B 30
-any kernel: 30 MiB in all is known to fit.
-.TP
-.B "all 48 30"
-a 68030 kernel with the guard.
-.TP
-.B "all 256 30"
-a 68040/68060 kernel with the guard.
+A list sets what is asked first; on a kernel with the guard the step finds
+the rest, and the line on the console says what it got.
+A kernel without the guard, or one whose marker cannot be read (no
+.BR adb ,
+or a namelist that is not the booted kernel's), gets 30 MiB in all on a
+slice, which fits any kernel.
+.SH MORE SWAP
+One area is at most what the kernel takes (above), whatever the size of the
+slice.
+For more swap, make a file of the size wanted, as
+.B /SWAPFILE
+on the root file system or
+.B /usr/src/SWAPFILE
+on
+.BR /usr ,
+whichever has room for it
+.RB ( "df \-k" );
+the step adds it at every boot, after the slices, and steps down from it as
+from a slice when the kernel refuses it.
+For 128 MiB:
 .PP
-The installer writes the line for the kernel it installs.
+.nf
+.ft CW
+dd if=/dev/zero of=/SWAPFILE bs=1024k count=128
+swap -a /SWAPFILE 0 262144
+.ft R
+.fi
+.PP
+The second line adds it now (its length in 512-byte blocks).
+What
+.B "swap \-a"
+adds lasts only until the next reboot; the swap step makes it last.
+Another file, or another slice, can be named in
+.B /etc/vfstab
+with file system type
+.BR swap .
 .SH EXAMPLE
-On a 68030 kernel with the guard, whose own area is the first 20476 blocks
-of a 64 MiB slice,
-.B "swap_add=all 48 30"
-first asks for blocks 20480 to the end (110592 blocks); if the kernel
-refuses, blocks 20480 to 98304 (77824 blocks); if it refuses again, blocks
-20480 to 61440 (40960 blocks); if that is refused too, blocks 20480 to
-40960 (its half, 10 MiB), then nothing, as the next half is under 8 MiB.
+On a 68030 kernel 68030-261106-72 on a 32 MB machine (maxmem 15021), whose
+own area is the first 20476 blocks of a 512 MiB slice, with no
+.B swap_add
+line, the step first asks for blocks 20480 to the end (1028096 blocks,
+502 MiB); the kernel refuses it, as its limit is 469 MiB, and the step adds
+469 MiB (960512 blocks) from block 20480 and says on the console:
+.PP
+.nf
+.ft CW
+swap: /dev/dsk/c6d0s2: 469 of 502 MiB added; the kernel refused more
+for want of memory (it takes at most 469 MiB per area with 29 MiB of
+pageable memory)
+.ft R
+.fi
+.PP
+Were 469 MiB refused as well, it would try 234 MiB, its half, and so on
+down to 8 MiB.
 .SH FILES
 .TP
 .B /etc/vfstab
@@ -163,6 +218,11 @@ the swap lines.
 .TP
 .B /etc/rc.conf
 .BR swap_add .
+.TP
+.B /SWAPFILE
+.TP
+.B /usr/src/SWAPFILE
+swap files, added when they exist.
 .TP
 .B /var/adm/rc.log
 what was added and refused.
