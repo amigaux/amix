@@ -2345,7 +2345,8 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 		# The disc filename stays in the log, which is where the detail belongs.
 		stage "Installing $pkg"
 		logline "$PROG: package file $pfbase"
-		if runq "$PKGADD" -R "$TARGET" -n -a "$ADMIN" -d "$pf" "$pkg"; then
+		# stdin closed: the engine's quit path (instance=quit over an installed package) runs cpio on it
+		if runq "$PKGADD" -R "$TARGET" -n -a "$ADMIN" -d "$pf" "$pkg" < /dev/null; then
 			echo "$pkg" >> "$pkgok"
 		else
 			warn "  FAIL $pkg  pkgadd returned nonzero (rc=$?)"
