@@ -118,7 +118,8 @@ amix_s5_mark() {
 # file, write the new default beside it) are copied next to the prototype
 # and named on `i' lines, so no host path enters it.  pkgmeta has already
 # checked the list against the prototype; here every path must be rewritten
-# once, and pkginfo must say CLASSES=none conffile.  No paths: nothing.
+# once, and pkginfo must say CLASSES=none conffile, which other classes may
+# follow (pkgmeta lists the prototype's in its order).  No paths: nothing.
 amix_conffiles() {
 	_cf_list=$(echo "$2" | tr ',' ' ' | tr -s ' ' | sed 's/^ //; s/ $//')
 	[ -n "$_cf_list" ] || return 0
@@ -130,8 +131,8 @@ amix_conffiles() {
 		}
 		cp "$_cf_dir/$_cf_s" "$1/$_cf_s"
 	done
-	grep '^CLASSES=none conffile$' "$1/pkginfo" >/dev/null || {
-		echo "[FAIL] CONFFILES: $1/pkginfo does not say CLASSES=none conffile" >&2; exit 1; }
+	grep '^CLASSES=none conffile\( [a-z][a-z0-9]*\)*$' "$1/pkginfo" >/dev/null || {
+		echo "[FAIL] CONFFILES: $1/pkginfo does not say CLASSES=none conffile, then any other classes" >&2; exit 1; }
 	awk -v list=" $_cf_list " '
 		$1 ~ /^[fe]$/ && NF >= 3 {
 			p = $3; sub(/=.*$/, "", p)

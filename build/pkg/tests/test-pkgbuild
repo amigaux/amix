@@ -256,7 +256,9 @@ stage() {
 """)
 
         # a base package: set base, the period toolchain, /usr/sbin, a conffile
-        for name, knob in (("sysbase", "SYSTEM_PATHS=/usr/sbin\n"), ("sysnone", "")):
+        # (sysaudio: a device node in a class of its own, laid after conffile)
+        for name, knob in (("sysbase", "SYSTEM_PATHS=/usr/sbin\n"), ("sysnone", ""),
+                           ("sysaudio", "SYSTEM_PATHS='/usr/sbin /dev/audio'\n")):
             d = package(pkgs, name, "hooks", "SET=base\nTOOLCHAIN=period\n"
                         "CONFFILES=/etc/out.conf\n" + knob,
                         build=HOOKS_BUILD, src={"greet.txt": "x\n"})
@@ -267,7 +269,7 @@ f none /usr/sbin/out.txt 0755 root sys
 f none /etc/out.conf 0644 root sys
 f none /opt/amix/man/1/out.txt 0644 root bin
 f none /opt/amix/man/5/out.conf 0644 root bin
-""")
+""" + ("c audio /dev/audio 46 0 0660 root audio\n" if name == "sysaudio" else ""))
             write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
 stage() {
 	mkdir -p "$DEST/usr/sbin" "$DEST/etc" "$DEST/opt/amix/man/1" "$DEST/opt/amix/man/5"
@@ -633,6 +635,11 @@ stage() {
         check("base package: pkginfo says period and the conffile class",
               "\nPSTAMP=amix-packages-sysbase-1.0-1-period\n" in rolled
               and "\nCLASSES=none conffile\n" in rolled, rolled)
+        rc2, out2 = build("sysaudio")
+        rolled2 = read(os.path.join(log, "pkginfo")) if rc2 == 0 else ""
+        check("base package: a c line in class audio: CLASSES=none conffile audio, and it rolls",
+              rc2 == 0 and "\nCLASSES=none conffile audio\n" in rolled2
+              and os.path.isfile(os.path.join(out_pkg, "pkg", "sysaudio-1.0-1.pkg")), out2)
         check("base package: /usr/sbin and /etc staged as listed",
               rc == 0 and "prototype == staged tree (and parent directories: "
               "/etc /opt /opt/amix /opt/amix/man /opt/amix/man/1 /opt/amix/man/5 /usr)" in out, out)

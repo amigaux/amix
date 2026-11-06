@@ -186,6 +186,25 @@ try:
     rc, out, err = run("pkginfo", conf("conf", "cnone"))
     check("no CONFFILES: CLASSES=none", rc == 0 and "\nCLASSES=none\n" in out,
           err or out)
+    # a class of the prototype's own follows none and conffile, in its order
+    dev = PROTO + "c audio /dev/audio 46 0 0660 root audio\nc mix2 /dev/mixer 46 1 0660 root audio\n"
+    rc, out, err = run("pkginfo", conf("conf", "caudio", dev, CONFFILES='"/etc/foo.conf"', SYSTEM_PATHS='"/dev/audio /dev/mixer"'))
+    check("CONFFILES and a class audio: CLASSES=none conffile audio, then the next, in prototype order",
+          rc == 0 and "\nCLASSES=none conffile audio mix2\n" in out, err or out)
+    rc, out, err = run("pkginfo", conf("conf", "caudio1", dev.replace("c mix2", "c audio"), SYSTEM_PATHS='"/dev/audio /dev/mixer"'))
+    check("no CONFFILES, a class audio named twice: CLASSES=none audio",
+          rc == 0 and "\nCLASSES=none audio\n" in out, err or out)
+    for name, proto, over, needle in (
+            ("cupper", PROTO + "c Audio /dev/audio 46 0 0660 root audio\n", {},
+             "class Audio is not 1-12 of a-z and 0-9"),
+            ("clong", PROTO + "c audiodevices1 /dev/audio 46 0 0660 root audio\n", {},
+             "class audiodevices1 is not 1-12"),
+            ("cdigit", PROTO + "c 2audio /dev/audio 46 0 0660 root audio\n", {},
+             "class 2audio is not"),
+            ("cfconf", PROTO.replace("f none /etc/foo.conf", "f conffile /etc/foo.conf"), {},
+             "/etc/foo.conf is in class conffile, but not in CONFFILES")):
+        refused("check refuses %s" % name,
+                ("check", conf("cbad", name, proto, **over)), needle)
     e_proto = PROTO.replace("f none /etc/foo.conf", "e conffile /etc/foo.conf")
     rc, out, err = run("check", conf("conf", "cecls", e_proto, CONFFILES='"/etc/foo.conf"'))
     check("CONFFILES: a listed e object passes", rc == 0, err)
