@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — libcfix 2.1c-2 (4581457, 925680a)
+
+The README says to install with `apkg`, not the stock `/usr/sbin/pkgadd`, which stops with "interaction required" over the stock library; the installer installs it with the base set; `pkgchk` is clean for both core and libcfix. The library is unchanged. docs/WHATS-NEW.md names libcfix in the base set. vim stays 9.1.0000-2 (the -3 commits are reverted).
+
 ## 2026-11-06 — libcfix 2.1c-1 (a844ad7)
 
 New, base set, essential: the stock /usr/lib/libc.so.1 with two allocator faults fixed in place (64 bytes, sha256-gated from system/). A realloc whose heap growth failed left the live block on the free list, so later mallocs returned memory inside it (corrupted vim's file buffers; crashed stress loads). A malloc or realloc of 2 GiB or more now fails instead of shrinking the heap under live data. Removing the package keeps the fixed library (core owns the path).
