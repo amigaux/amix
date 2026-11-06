@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # tests/amixrun/test.py AMIXRUN -- amixrun.py against a fake telnet server: over-long, answered, never answered, old marker text.
 # MIT licence, see LICENSE in kernel/k30.
-import os, socket, subprocess, sys, threading, time
+import os, re, socket, subprocess, sys, threading, time
 def serve(mode):
     l = socket.socket(); l.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); l.bind(('127.0.0.1', 0)); l.listen(1)
     def run():
@@ -26,7 +26,11 @@ def go(name, want, cmd, port):
     global bad
     env = dict(os.environ, AMIX_HOST='127.0.0.1', AMIX_PORT=str(port), AMIX_PASS='x', AMIX_CMD_TIMEOUT='2')
     p = subprocess.run([sys.executable, T, cmd], env=env, capture_output=True, text=True, timeout=40)
-    ok = p.returncode == want; bad += not ok
+    ok = p.returncode == want
+    # the marker comes out as DONE_<rc>, the nonce taken out, as callers parse it
+    if ok and want == 0 and ('DONE_0' not in p.stdout or re.search(r'DONE_\w+_\d', p.stdout)):
+        ok = False
+    bad += not ok
     print('%-4s %-36s rc %d (want %d) %s' % ('ok' if ok else 'FAIL', name, p.returncode, want, p.stderr.strip()[:70]))
 go('over-long, nothing dialled', 2, 'x' * 233, 1)
 go('exactly the limit, answered', 0, 'x' * 232, serve('answer'))

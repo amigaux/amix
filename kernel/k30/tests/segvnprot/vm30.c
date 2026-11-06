@@ -405,6 +405,8 @@ static int rmw(void)
 			_exit(4);
 		if (cas1((long *)(f + 3 * PG), 5L, 6L) != 5L || cas1((long *)(z + 3 * PG), 5L, 6L) != 5L)
 			_exit(5);
+		if (*(volatile long *)(f + 3 * PG) != 6L || *(volatile long *)(z + 3 * PG) != 6L)
+			_exit(7);	/* the store happened, in the child's copy */
 		_exit(0);
 	}
 	waitpid(c, &st, 0);
@@ -517,6 +519,13 @@ static int shared_denied(void)
 	msync((caddr_t)w, 16 * PG, MS_SYNC);
 	if (w[0] != 3)
 		bad |= 16;
+	{
+		char c = 0;	/* and in the file: read through the descriptor, not the mapping */
+
+		lseek(fd, (off_t)(32 * PG), 0);
+		if (read(fd, &c, 1) != 1 || c != 3)
+			bad |= 32;
+	}
 	close(fd);
 	unlink(TF);
 	return bad;

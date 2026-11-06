@@ -171,5 +171,14 @@ int main(void)
 	freed = 0;
 	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "y") == ENOMEM && freed != 0, "an array that leaves a run of 400 clicks is ENOMEM, the block freed");
 	sptmap[2] = 1000;
+
+	/* no run for the array: tried SWG_TRIES (5) times, a second apart, then ENOMEM; a run free on the third try is taken */
+	nosleep_fail = 5;
+	delays = 0;
+	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "z") == ENOMEM && delays == 4, "no run for five tries: ENOMEM after 4 one-second waits");
+	nosleep_fail = 2;
+	delays = 0;
+	CHECK(swapadd_guarded((char *)0, 0, 64 * 4, "z") == 0 && delays == 2, "a run free on the third try: taken after 2 waits");
+	nosleep_fail = 0;
 	return fails != 0;
 }
