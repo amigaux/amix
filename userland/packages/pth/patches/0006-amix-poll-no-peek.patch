@@ -1,0 +1,43 @@
+Ours.  Pth's poll checks each readable descriptor for POLLHUP with
+recv(MSG_PEEK), a listening socket included.  Amix's libsocket answers that
+recv with ENOTCONN and then refuses accept on the listener with EINVAL
+without asking the kernel (measured, libsocket alone): Python's accept after
+poll, or in timeout mode, failed with EINVAL.  Amix cannot tell a listener
+(getsockopt SO_ACCEPTCONN is ENOPROTOOPT), so the check is left out on Amix:
+a reset connection stays POLLIN, and the reader gets the error from its next
+read, as with select.
+
+--- a/pth_high.c
++++ b/pth_high.c
+@@ -472,7 +472,9 @@
+     struct timeval tv, *ptv;
+     int maxfd, rc, n;
+     unsigned int i;
++#ifndef __amix__
+     char data[64];
++#endif
+ 
+     pth_implicit_init();
+     pth_debug2("pth_poll_ev: called from thread \"%s\"", pth_current->name);
+@@ -560,6 +562,13 @@
+             if (pfd[i].events & POLLRDNORM)
+                 pfd[i].revents |= POLLRDNORM;
+             n++;
++#ifdef __amix__
++            /* No POLLHUP check here: Amix's libsocket answers a recv on a
++               listening socket with ENOTCONN and then refuses accept on it
++               with EINVAL, and a listener cannot be told apart (no
++               SO_ACCEPTCONN).  A reset connection stays POLLIN; the reader
++               gets the error from its next read. */
++#else
+             /* support for POLLHUP */
+             if (   recv(pfd[i].fd, data, sizeof(data), MSG_PEEK) == -1
+                 && (   errno == ESHUTDOWN    || errno == ECONNRESET
+@@ -568,6 +577,7 @@
+                 pfd[i].revents &= ~(POLLRDNORM);
+                 pfd[i].revents |= POLLHUP;
+             }
++#endif
+         }
+         else if (FD_ISSET(pfd[i].fd, &wfds)) {
+             if (pfd[i].events & POLLOUT)

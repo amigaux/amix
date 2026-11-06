@@ -1,0 +1,91 @@
+Ours.  Two Amix libsocket behaviours that every Pth program met (measured):
+recvfrom with a NULL address faults ("User BUS ERROR at 0"), and Pth's recv
+is recvfrom with a NULL address; and a non-blocking send of more than the
+socket has room for fails with ENOMEM instead of sending part, while select
+reports the socket writable.  recv and send now go to recv and send when
+there is no address, a send that meets ENOMEM is retried in smaller pieces
+down to 512 bytes, and with no room at all Pth waits 20 ms instead of
+spinning on select (a caller's non-blocking socket gets EAGAIN).
+
+--- a/pth_high.c
++++ b/pth_high.c
+@@ -1411,13 +1411,46 @@
+        above by polling that the next recvfrom(2) call will not block.  But keep
+        in mind, that only 1 next recvfrom(2) call is guarrantied to not block
+        (except for the EINTR situation). */
++#ifdef __amix__
++    /* Amix's libsocket recvfrom faults on a NULL address: recv for that */
++    while ((n = (from == NULL ? pth_sc(recv)(fd, buf, nbytes, flags)
++                : pth_sc(recvfrom)(fd, buf, nbytes, flags, from, fromlen))) < 0
++           && errno == EINTR) ;
++#else
+     while ((n = pth_sc(recvfrom)(fd, buf, nbytes, flags, from, fromlen)) < 0
+            && errno == EINTR) ;
++#endif
+ 
+     pth_debug2("pth_recvfrom_ev: leave to thread \"%s\"", pth_current->name);
+     return n;
+ }
+ 
++#ifdef __amix__
++/* send or sendto on Amix, whose libsocket answers ENOMEM, not a partial
++   count, when a non-blocking socket has some room but not enough for the
++   whole buffer; and whose sendto wants no NULL address on a connected
++   socket either.  Smaller pieces until one goes; none at 512 bytes is EAGAIN. */
++static ssize_t pth_amix_send(int fd, const void *buf, size_t nbytes, int flags,
++                             const struct sockaddr *to, socklen_t tolen)
++{
++    ssize_t s;
++    size_t len = nbytes;
++
++    for (;;) {
++        while ((s = (to == NULL ? pth_sc(send)(fd, (void *)buf, len, flags)
++                     : pth_sc(sendto)(fd, buf, len, flags, to, tolen))) < 0
++               && errno == EINTR) ;
++        if (s >= 0 || errno != ENOMEM)
++            return s;
++        if (len <= 512) {
++            errno = EAGAIN;
++            return -1;
++        }
++        len = (len > 8192 ? 8192 : len / 2);
++    }
++}
++#endif
++
+ /* Pth variant of SUSv2 send(2) */
+ ssize_t pth_send(int s, const void *buf, size_t len, int flags)
+ {
+@@ -1499,8 +1532,19 @@
+             }
+ 
+             /* now perform the actual send operation */
++#ifdef __amix__
++            s = pth_amix_send(fd, buf, nbytes, flags, to, tolen);
++            if (s < 0 && errno == EAGAIN) {
++                /* no room even for a small piece, and select says writable
++                   anyway (Amix): wait a moment rather than spin */
++                pth_nap(pth_time(0, 20000));
++                n = 1;
++                continue;
++            }
++#else
+             while ((s = pth_sc(sendto)(fd, buf, nbytes, flags, to, tolen)) < 0
+                    && errno == EINTR) ;
++#endif
+             if (s > 0)
+                 rv += s;
+ 
+@@ -1524,8 +1568,12 @@
+     }
+     else {
+         /* just perform the actual send operation */
++#ifdef __amix__
++        rv = pth_amix_send(fd, buf, nbytes, flags, to, tolen);
++#else
+         while ((rv = pth_sc(sendto)(fd, buf, nbytes, flags, to, tolen)) < 0
+                && errno == EINTR) ;
++#endif
+     }
+ 
+     /* restore filedescriptor mode */

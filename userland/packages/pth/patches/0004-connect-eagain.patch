@@ -1,0 +1,72 @@
+Ours.  Amix's connect on a socket made non-blocking with O_NONBLOCK says
+EAGAIN, not EINPROGRESS, and select reports the socket writable at once,
+connected or not (measured): pth_connect, which waits only on EINPROGRESS,
+failed every connect, and a caller that waits on select took a connection in
+progress for one made (ENOTCONN on its first send).  pth_connect now finishes
+the connection itself: it naps 20 ms and asks connect again until EISCONN or
+the real error.  Other threads run meanwhile; a caller's own timeout on
+connect does not apply.  A connection finished this way leaves a message of
+no data first in the queue, for which the first recv returns 0 (as if the
+peer had closed; read skips it): pth_connect removes it.
+A refused connection comes back from the repeated connect as EPIPE, which
+callers took for a broken pipe (Python: BrokenPipeError): it is given as
+ECONNREFUSED.
+
+--- a/pth_high.c
++++ b/pth_high.c
+@@ -34,6 +34,9 @@
+  */
+ 
+ #include "pth_p.h"
++#ifdef __amix__
++#include <stropts.h>    /* I_NREAD, for pth_connect */
++#endif
+ 
+ /* Pth variant of nanosleep(2) */
+ int pth_nanosleep(const struct timespec *rqtp, struct timespec *rmtp)
+@@ -618,6 +621,45 @@
+            && errno == EINTR)
+         ;
+ 
++#ifdef __amix__
++    /* Amix's connect on an O_NONBLOCK socket says EAGAIN for "in progress",
++       and select reports such a socket writable at once, connected or not,
++       so neither Pth nor the caller can wait for it in the usual way.  Finish
++       the connection here: nap, and ask connect again until it says EISCONN
++       (done) or gives the real error.  Other threads run meanwhile.  Even a
++       caller's non-blocking socket comes back connected, so a caller's own
++       connect timeout does not apply. */
++    if (rv == -1 && (errno == EAGAIN || errno == EINPROGRESS)) {
++        for (;;) {
++            pth_nap(pth_time(0, 20000));
++            if (pth_sc(connect)(s, (struct sockaddr *)addr, addrlen) == 0
++                || errno == EISCONN) {
++                rv = 0;
++                break;
++            }
++            if (errno != EALREADY && errno != EINPROGRESS && errno != EAGAIN
++                && errno != EINTR) {
++                /* a refused connection comes back as EPIPE here */
++                if (errno == EPIPE)
++                    errno = ECONNREFUSED;
++                rv = -1;
++                break;
++            }
++        }
++        /* A connection finished this way leaves its confirmation queued as
++           a message with no data, and the first recv returns 0 for it: the
++           caller would take the connection for closed.  Remove it here when
++           it is first in the queue (I_NREAD: messages queued, the first's
++           length); a blocking connect leaves none. */
++        if (rv == 0) {
++            int len = -1;
++            char c;
++            if (ioctl(s, I_NREAD, &len) > 0 && len == 0)
++                (void)pth_sc(recv)(s, &c, 1, 0);
++        }
++    }
++#endif
++
+     /* restore filedescriptor mode */
+     pth_shield { pth_fdmode(s, fdmode); }
+ 
