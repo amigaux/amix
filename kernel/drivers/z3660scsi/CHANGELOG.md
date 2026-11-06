@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — module 1.0.0-6, packages 1.0.0-9 (78bf011, f740a20)
+
+A READ/WRITE whose 32-bit LBA plus count wraps past zero is refused like any other past the end (it reached the firmware as LBA 0xFFFFFFFF). test/host check-m68k runs the harness as m68k under qemu-m68k, where the wrap is real (4 failures before, 234/0 after; host 234/0, DIAG 264/0, module 46/0). Objects k30 152e1d8e, k46 751d52a5; zscsi30 7a93488e, zscsi46 32b435a2.
+
 ## 2026-11-02 — module 1.0.0-5, packages 1.0.0-8: DI-1 diagnostics only with Z3660_DIAG (94f1f04, 5535da0)
 
 The DI-1 page-cross ring and fault knob compile only with -DZ3660_DIAG (make -C module DIAG=1); the shipped object has neither (.data -540 bytes), and the census counter z3660_pagecross_n stays. Units with no drive mapped are named on one console line ("z3660: units 1-5,7: no drive mapped"). Host check runs the default and DIAG builds (225/0 and 255/0, module 46/0). Objects k30 36578277, k46 2e6f0e6b; zscsi30 caa18a69, zscsi46 c7d48c8d.
