@@ -33,10 +33,28 @@ known about it, and what to do. Measurements are from emulation unless the entry
 
 ## Files
 
-- **A large file written at random offsets can read back wrong blocks** (stock and every kernel since). A file that is
-  appended to, then rewritten and read at random offsets, as a swap file is, can read back wrong blocks once it
-  outgrows the page cache. Seen in emulation on the stock 2.1c kernel and on every kernel since; not yet checked on
-  real hardware; under investigation. Until it is fixed, keep such files smaller than free memory.
+- **A write of whole pages that did not start at an 8 KiB boundary of the file could leave the pages before it in that
+  8 KiB reading old memory contents** while the disk held the right data (stock, both kernel lines; fixed in cut -73).
+  ufs writes through 8 KiB windows of the file (segmap) aligned to 8 KiB offsets; for a whole-page write at a nonzero
+  offset into its window (2, 4 or 6 KiB in) it created the window's first pages instead of its own, without reading
+  them, so they kept their frames' old contents: a read of the window's start then returned an earlier block of the
+  file, zeros or another file's data until those pages left the cache. Seen with 2 KiB and 4 KiB writes once the file
+  outgrew the page cache, never with 8 KiB writes at 8 KiB offsets. The trigger is the offset within the window, not
+  within a filesystem block: on a filesystem of 4 KiB blocks a block-aligned 4 KiB write can meet it too. Amix's ufs
+  rwip passed the window's base to segmap_pagecreate instead of base + offset, as SVR4's source does. Fixed in the ufs
+  module (4 bytes, `tools/rwippc030.py`); on -72 and earlier, write in whole 8 KiB pieces at 8 KiB offsets or keep such
+  files smaller than free memory.
+- **A whole-page write into a hole among a file's first 12 blocks leaves the rest of that newly allocated block
+  reading the disk's old contents**, possibly another file's former data (stock, both kernel lines; not changed by cut
+  -73). When a page-aligned write of whole pages fills a hole in one of the direct blocks (the first 96 KiB with 8 KiB
+  blocks), ufs allocates the block without reading or zeroing it and creates only the pages written; the block's other
+  pages are read from the disk block later. Past the direct blocks ufs zeroes the new block, unless (by the code; not
+  measured here) the write reaches the block's last page. `tests/sparsehole` in emulation, 16 files with six 2 KiB
+  writes each into direct holes and six into indirect ones, after a removed filler file of 0x5a: stock 2.1c 188 and
+  206 of 288 direct pages wrong (30 of them 0x5a, the rest other old data), -73 40 of 288 (30 of them 0x5a), both
+  passes; 0 of 288 in the indirect control on both. Appending to a file and rewriting written data are not affected.
+  Until it is fixed, fill holes among a file's first 96 KiB with whole 8 KiB blocks, or write such files from start to
+  end.
 
 ## Faults and memory protection
 
@@ -70,8 +88,8 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **One shutdown stalled after `INIT: New run level: 0`** on development build 68030-261105-98 in emulation: no
   further output, the machine still answering on the network. Not seen in the later runs that finished their load on
   this kernel or on 68030-261103-71. Cause unknown; not called fixed.
-- **One install hung in `hat_swapout`** on 68030-261103-71 in emulation (16 MiB, a package install under memory
-  pressure): one page's mapping chain named the wrong table entry, and the unbounded walk never ended. Not seen again
-  in 22 later installs and fork-and-swap stress runs on two emulator builds and two kernels, with the chains checked
-  from outside every 20 to 30 s and, on one emulator build, every store to a chain head checked as it was made. Cause
-  unknown.
+- **Installs at 16 MiB can hang in `hat_swapout` or `hat_unload`** (68030-261103-71, -72 and a build with -73's fix,
+  in emulation; the netinstall every time so far, 4 of 4, the CD and floppy install 1 time in 5; installs at 64 MiB
+  pass). A page's mapping chain no longer holds an entry that still maps the page (once it names the base of a
+  page-table page instead), and the unbounded walk in the swapper or in segmap's reuse of a window never ends. Cause
+  under investigation; the fix of cut -73 does not end it. Install with more memory than 16 MiB.
