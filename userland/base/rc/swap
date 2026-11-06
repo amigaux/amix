@@ -30,9 +30,10 @@
 # swg_keep: maxmem/32 MiB; maxmem read with adb), else to half the refused size
 # in whole MiB, not under 8 MiB; SWAP_TRIES (8) tries an area at most. Any
 # other failure ends it. A kernel without the ENOMEM guard waits forever on
-# an area that does not fit, so swap_add must suit such a kernel. An area
-# added smaller than asked, or not at all, is one line on the console and in
-# rc.log, with the limit when it is known.
+# an area that does not fit: on one (no guard marker) a slice gets 30 MiB
+# in all, whatever swap_add says. An area added smaller than asked, or not
+# at all, is one line on the console and in rc.log, with the limit when it
+# is known.
 # "swap -l" and "swap -s" count 2 KiB pages: half the real figures on a
 # 68040/68060 kernel.
 # stop: as the stock script: the files go, then every area after the first.
@@ -273,21 +274,17 @@ start)
 	# swap -l's blocks to the kernel's: 2 on a 4 KiB-page kernel
 	SWAP_PGX=1
 	"$UNAME" -a 2>/dev/null | grep ' 680[46]0-' > /dev/null && SWAP_PGX=2
-	# no swap_add: all, but 30 on a kernel with no guard, which would wait
-	# for ever on an area that does not fit
-	if _rc_has swap_add
+	# swap_add (default all); on a kernel with no guard, which would wait
+	# for ever on an area that does not fit, 30 whatever it says: such a
+	# kernel boots as a fallback, with the list set for another
+	SWAP_SIZES=`rc_conf swap add all`
+	kread
+	if [ $k_guard = no ]
 	then
-		SWAP_SIZES=`rc_conf swap add all`
-	else
-		SWAP_SIZES=all
-		kread
-		if [ $k_guard = no ]
-		then
-			SWAP_SIZES=30
-			_s="the kernel has no guard against a swap area too large for its memory: 30 MiB a slice in all"
-			echo "swap: $_s"
-			rc_log swap "$_s"
-		fi
+		SWAP_SIZES=30
+		_s="the kernel has no guard against a swap area too large for its memory: 30 MiB a slice in all"
+		echo "swap: $_s"
+		rc_log swap "$_s"
 	fi
 	# the slices first, then the files: the partition is added while the
 	# kernel's memory is free

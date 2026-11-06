@@ -110,8 +110,10 @@ STOCK='#device         device          mount   FS      fsck    mount   mount
 /dev/dsk/c6d0s1	/dev/rdsk/c6d0s1	/	ufs	1	yes	-
 /dev/dsk/c6d0s2	-	-	swap	-	no	-'
 
-# the slice's end: the cases below, before the size list
+# the slice's end: the cases below, before the size list; the kernel has
+# the guard (its marker read with adb) unless a case says otherwise
 echo "swap_add=all" > "$T/rc.conf"
+echo 53574721 > "$T/adb.swg_magic"
 
 # the bench kernel: the whole slice already its area -- nothing to add
 echo "$STOCK" | vfstab
@@ -213,8 +215,7 @@ same "comments and ufs: nothing" "" "$(cat "$T/calls")"
 # kernel's 20476-block area from 0
 printf '%s\n' "$STOCK" | vfstab
 : > "$T/rc.conf"
-# no swap_add, a 68030 kernel with the guard (its marker read with adb): all
-echo 53574721 > "$T/adb.swg_magic"
+# no swap_add, a 68030 kernel with the guard: all
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 o=$(run start)
 same "no swap_add, guard: the slice's end" "-a /dev/dsk/c6d0s2 20480 81920" "$(cat "$T/calls")"
@@ -234,6 +235,14 @@ same "no swap_add, no marker: 30" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/ca
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 ADB="$T/noadb" run start > /dev/null
 same "no swap_add, no adb: 30" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+# a list on a kernel with no guard: 30 still (a fallback kernel, the list
+# set for another)
+echo "swap_add=384" > "$T/rc.conf"
+echo "/dev/dsk/c6d0s2 0 20476" | areas
+o=$(run start)
+same "swap_add 384, no guard: 30" "-a /dev/dsk/c6d0s2 20480 40960" "$(cat "$T/calls")"
+expect "swap_add 384, no guard: said" "swap: the kernel has no guard" "$o"
+: > "$T/rc.conf"
 # a 68060 kernel the same: the guard, all; without (cuts before
 # 68060-261101-56), 30 in all, which its 30 MiB boot area already is
 echo "UNIX_System_V box 4.0 2.1c 0800430 Amiga (Unlimited) 68060-261106-64 m68k" > "$T/uname"
@@ -249,6 +258,7 @@ o=$(run start)
 same "no swap_add, 68060 no guard: 30" "-a /dev/dsk/c6d0s2 40960 20480" "$(cat "$T/calls")"
 expect "no swap_add, 68060 no guard: said" "swap: the kernel has no guard" "$o"
 rm -f "${T:?}/uname" "${T:?}/k46"
+echo 53574721 > "$T/adb.swg_magic"
 echo "swap_add=30" > "$T/rc.conf"
 echo "/dev/dsk/c6d0s2 0 20476" | areas
 run start > /dev/null
@@ -385,13 +395,15 @@ echo "/dev/dsk/c7d0s2 0 20476" | areas
 o=$(run start)
 refuse "68030 -72 nonsense: no figure" "at most" "$o"
 expect "68030 -72 nonsense: still said" "swap: /dev/dsk/c7d0s2: 255 of 8182 MiB added" "$o"
-# swg_keep with no marker: no figure
+# swg_keep with no marker (another kernel's namelist): no guard, 30
 rm -f "${T:?}/adb.swg_magic"
 echo 15021 > "$T/adb.maxmem"
 echo "/dev/dsk/c7d0s2 0 20476" | areas
 o=$(run start)
+same "68030 swg_keep, no marker: 30" "-a /dev/dsk/c7d0s2 20480 40960" "$(cat "$T/calls")"
 refuse "68030 swg_keep, no marker: no figure" "at most" "$o"
 rm -f "${T:?}/uname" "${T:?}/adb.swg_keep"
+echo 53574721 > "$T/adb.swg_magic"
 # a 68060 kernel: its limit read with adb (maxmem/8 MiB) is the next try,
 # and the line says it, with the pageable memory (maxmem 4 KiB pages)
 touch "$T/k46"
@@ -419,11 +431,11 @@ echo "/dev/dsk/c7d0s2 0 40960" | areas
 o=$(run start)
 expect "nonsense maxmem: still said" "swap: /dev/dsk/c7d0s2: 4086 of 8172 MiB added; the kernel refused more for want of memory" "$o"
 refuse "nonsense maxmem: no figure" "at most" "$o"
-# no adb: no figure, the line still said
+# no adb: the guard unseen, so 30 (the limit is not read either)
 echo 3562 > "$T/adb.maxmem"
 echo "/dev/dsk/c7d0s2 0 40960" | areas
 o=$(ADB="$T/noadb" run start)
-expect "no adb: still said" "swap: /dev/dsk/c7d0s2: 4086 of 8172 MiB added" "$o"
+same "no adb: 30" "-a /dev/dsk/c7d0s2 40960 20480" "$(cat "$T/calls")"
 refuse "no adb: no figure" "at most" "$o"
 # what fits whole: no line
 rm -f "${T:?}/max"

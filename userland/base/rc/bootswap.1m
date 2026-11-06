@@ -76,10 +76,11 @@ In
 .TP
 .BI swap_add= "size ..."
 the sizes to try for a slice, in order; default
-.BR all ,
-except on a kernel without the guard (below), where it is
+.BR all .
+On a kernel without the guard (below) a slice gets
 .B 30
-and the console says so.
+whatever the list says, and the console says so: such a kernel is booted
+as a fallback, with a list set for another.
 A size is
 .B all
 (to the end of the slice) or a number of MiB counted from the start of the
@@ -157,9 +158,10 @@ A refusal by the map space takes about 4 seconds.
 .PP
 A list sets what is asked first; on a kernel with the guard the step finds
 the rest, and the line on the console says what it got.
-On a kernel without the guard the list must fit:
-.B 30
-(30 MiB in all) fits any kernel.
+A kernel without the guard, or one whose marker cannot be read (no
+.BR adb ,
+or a namelist that is not the booted kernel's), gets 30 MiB in all on a
+slice, which fits any kernel.
 .SH MORE SWAP
 One area is at most what the kernel takes (above), whatever the size of the
 slice.
@@ -168,7 +170,9 @@ For more swap, make a file of the size wanted, as
 on the root file system or
 .B /usr/src/SWAPFILE
 on
-.BR /usr ;
+.BR /usr ,
+whichever has room for it
+.RB ( "df \-k" );
 the step adds it at every boot, after the slices, and steps down from it as
 from a slice when the kernel refuses it.
 For 128 MiB:
