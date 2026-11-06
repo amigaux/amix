@@ -4845,7 +4845,7 @@ def _audit_w1_log(code, driver_src):
         (r'LOGFILE="\$TARGET/var/adm/install\.log"', "the log is <target>/var/adm/install.log"),
         (r'\[\s+-d\s+"\$TARGET/var/adm"\s+\]\s+\|\|\s+run\s+mkdir\s+-p\s+"\$TARGET/var/adm"',
          "the log directory is mkdir'd (guarded) before the first append"),
-        (r':\s*>\s*"\$LOGFILE"\s+\|\|\s+die', "the log is created fail-closed"),
+        (r'(^|\s)(:\s*)?>\s*"\$LOGFILE"\s+\|\|\s+die', "the log is created fail-closed"),
         (r'RUNOUT="\$TARGET/tmp/\.runout\.\$\$"', "the scratch file lives under <target>/tmp"),
     ]
     for pat, desc in checks:
@@ -10927,6 +10927,33 @@ def audit_guarded_mkdir():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_colon_truncate():
+    head("CT. no `: > FILE` in a script that runs on the guest: the stock Amix sh empties a file that way only "
+         "the first time the command runs (in a function or loop, measured on the box, 2026-11-06), "
+         "while the host's dash always does; a plain `> FILE` empties it every time")
+    rx = re.compile(r'(^|[;&|(]|\bthen\b|\bdo\b|\belse\b)\s*:\s*>(?!>)')
+    tracked = subprocess.run(["git", "-C", REPO, "ls-files", "media/src/installer", "media/payload", "media/profiles",
+                              "media/src/miniroot/profile"], capture_output=True, text=True).stdout.split()
+    files, bad = [], []
+    for f in tracked:
+        pth = os.path.join(REPO, f)
+        if not os.path.isfile(pth) or "/licences/" in f or f.endswith(".md"):
+            continue
+        files.append(f)
+        for n, l in enumerate(open(pth, encoding="latin-1"), 1):
+            if l.lstrip().startswith("#"):
+                continue
+            if rx.search(l):
+                bad.append("%s:%d" % (f, n))
+    (fail if bad or len(files) < 8 else ok)("no `: >` truncation in %d guest scripts (installer, payload, profiles, "
+                                             "miniroot profile)%s" % (len(files), (": " + " ".join(bad[:10])) if bad else ""))
+    # the rule itself, on fixtures: a `: >` line is found, a `>` line and a comment are not
+    probe = [("\t: > \"$x\"\n", True), ("> \"$x\" || die\n", False), ("# : > old\n", False), ("a; : > b\n", True),
+             (": >> log\n", False)]
+    wrong = [t for t, want in probe if bool(rx.search(t)) != want and not t.lstrip().startswith("#")]
+    (fail if wrong else ok)("the `: >` rule finds the truncation forms and passes `>`, `: >>` and comments")
+
+
 def audit_guarded_rm_mv():
     head("RG. every rm and mv on a variable path names it \"${var:?}\" -- the root and every part after it, "
          "quoted or not, escaped in a generated script or not -- so an empty variable stops the script "
@@ -11826,6 +11853,7 @@ def main():
     audit_cd_candidates()
     audit_boot_pri()
     audit_guarded_rm_mv()
+    audit_colon_truncate()
     audit_guarded_mkdir()
     audit_net_space()
     audit_ufs_rootcap()

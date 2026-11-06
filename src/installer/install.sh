@@ -235,7 +235,7 @@ put_bytes()
 	_end=`expr $3 + $4`
 	[ "$_end" -le 512 ] || return 1
 	dd if="$1" of="$_pb" bs=512 skip="$2" count=1 2>/dev/null || return 1
-	: > "$_po"
+	> "$_po"
 	if [ "$3" -gt 0 ]; then
 		dd if="$_pb" bs="$3" count=1 2>/dev/null >> "$_po"
 	fi
@@ -1853,7 +1853,7 @@ msg "target root mounted at $TARGET"
 [ -d "$TARGET/tmp" ] || run mkdir -p "$TARGET/tmp"
 RUNOUT="$TARGET/tmp/.runout.$$"
 LOGFILE="$TARGET/var/adm/install.log"
-: > "$LOGFILE" || die "cannot create the install log $LOGFILE"
+> "$LOGFILE" || die "cannot create the install log $LOGFILE"
 chmod 644 "$LOGFILE"
 logline "=============================================================="
 logline "$PROG install log -- profile $PROFILE_NAME ($PROFILE_FILE)"
@@ -2312,8 +2312,8 @@ if [ "$SOURCE_KIND" = cdfs ]; then
 	# `done < FILE` loop leaves a variable-assign-then-use-after-loop.
 	pkgok="$TARGET/tmp/.pkgok.$$"        # one line per package installed rc=0
 	pkgfail="$TARGET/tmp/.pkgfail.$$"    # one line per package that failed (any cause)
-	: > "$pkgok"
-	: > "$pkgfail"
+	> "$pkgok"
+	> "$pkgfail"
 	while read pkg; do
 		case "$pkg" in ""|\#*) continue;; esac      # skip blanks + comments
 		# resolve the package file (stock/ then base/), first match
@@ -2389,7 +2389,7 @@ elif [ "$SOURCE_KIND" = net ]; then
 	# every package the order names must be in the repository catalog: a missing one means the
 	# repository is incomplete, and a system installed without it would lack what the CD gives
 	netnames="$TARGET/tmp/.netnames.$$" netmiss="$TARGET/tmp/.netmiss.$$" netone="$TARGET/tmp/.netone.$$"
-	: > "$netnames"; : > "$netmiss"
+	> "$netnames"; > "$netmiss"
 	while read pkg; do
 		case "$pkg" in ""|\#*) continue;; esac
 		rm -f "${netone:?}"
@@ -2472,7 +2472,7 @@ else
 	# catalog's names match the order-file tokens exactly (build-raw-source.sh
 	# names.conf preserves pkginst case), so the tokens pass straight to apkg.
 	rawnames="$TARGET/tmp/.rawnames.$$"
-	: > "$rawnames"
+	> "$rawnames"
 	while read pkg; do
 		case "$pkg" in ""|\#*) continue;; esac
 		echo "$pkg" >> "$rawnames"
@@ -2548,8 +2548,8 @@ if [ "$TARGET_ROOT_FSTYPE" = ufs ] && [ -d "$FPFIX" ]; then
 	# (fpok/fpfail files, reason per line) and the parent decides after `done` (IN-fp).
 	fpok="$TARGET/tmp/.fpok.$$"
 	fpfail="$TARGET/tmp/.fpfail.$$"
-	: > "$fpok"
-	: > "$fpfail"
+	> "$fpok"
+	> "$fpfail"
 	while read fp_nm fp_exp; do
 		[ -n "$fp_nm" ] || continue
 		case "$fp_nm" in
@@ -2750,8 +2750,8 @@ msg "verifying the written boot chain against $BOOTSLICE_MANIFEST ..."
 # OK/FAIL to append-only temp FILES inside; count them in the parent after `done`.
 vok_f="$TARGET/tmp/.vok.$$"
 vfails_f="$TARGET/tmp/.vfails.$$"
-: > "$vok_f"
-: > "$vfails_f"
+> "$vok_f"
+> "$vfails_f"
 tmpr="$TARGET/tmp/.bootregion.$$"
 # manifest lines: <region> <block_off> <n_blocks> <sum-r>. Every region is
 # block-aligned (the image is zero-padded to a whole block), so each read is a
@@ -3071,8 +3071,8 @@ fi
 # and firstboot.sh removes it when done -- that pair is the once-only mechanism.
 # `touch` is absent on the miniroot, so create the empty marker with a redirection
 # -- which cannot route through run().
-echo "+ : > $TARGET/var/adm/firstboot/PENDING"
-: > "$TARGET/var/adm/firstboot/PENDING" || die "cannot create the first-boot PENDING marker"
+echo "+ > $TARGET/var/adm/firstboot/PENDING"
+> "$TARGET/var/adm/firstboot/PENDING" || die "cannot create the first-boot PENDING marker"
 run chmod 600 "$TARGET/var/adm/firstboot/firstboot.conf" "$TARGET/var/adm/firstboot/PENDING"
 # /etc/inet/interfaces, /etc/rc.conf and /etc/display, from the profile (1.1)
 [ "$INSTALL_LAYOUT" = 1.1 ] && l11_admin
@@ -3442,8 +3442,8 @@ if [ "$TZFILES" = tzdata ]; then
 	[ -x "$TZSUM" ] || die "TZFILES=tzdata: no SVR4 sum at $TZSUM to verify the zone copies"
 	tzok="$TARGET/tmp/.tzok.$$"
 	tzfail="$TARGET/tmp/.tzfail.$$"
-	: > "$tzok"
-	: > "$tzfail"
+	> "$tzok"
+	> "$tzfail"
 	while read tz_sha tz_size tz_name; do
 		[ -n "$tz_name" ] || continue
 		tz_src="$INST/tz/$tz_name"; tz_dst="$TARGET/usr/lib/locale/TZ/$tz_name"
