@@ -153,7 +153,8 @@ being in 2 KiB pages here: about 222 MiB on a 16 MB machine, 469 on 32 MB
 and 964 on 64 MB.
 The map space refuses first on a larger machine.
 Measured on 68030-261106-72, one area at a time: 192 MiB taken on a 16 MB
-machine, 384 MiB on 32 MB and on 64 MB, 512 refused.
+machine (256 refused), 384 MiB on a 64 MB one (512 refused), and on a
+32 MB one its limit, 469 MiB, added at boot.
 A refusal by the map space takes about 4 seconds.
 .PP
 A list sets what is asked first; on a kernel with the guard the step finds
