@@ -10790,6 +10790,41 @@ def audit_root_lock():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_boot_rivals():
+    head("BR. a disk that boots first: the interview's scan lists every bootable partition (rdb_boot_parts, the PART "
+         "chain read byte by byte with sum -r), and the install ends by naming any on another disk above its own priority")
+    import struct
+    src = open(SETUP, encoding="utf-8").read()
+    fn = "\n".join(_extract_func(src, f) for f in ("rdb_byte", "rdb_long", "rdb_boot_parts"))
+    d = tempfile.mkdtemp(prefix="bp.")
+    try:
+        img = bytearray(512 * 8)
+        img[0:4] = b"RDSK"; struct.pack_into(">I", img, 28, 2)
+        def part(n, nxt, flags, name, pri):
+            o = n * 512; img[o:o + 4] = b"PART"; struct.pack_into(">I", img, o + 16, nxt); struct.pack_into(">I", img, o + 20, flags)
+            img[o + 36] = len(name); img[o + 37:o + 37 + len(name)] = name.encode(); struct.pack_into(">i", img, o + 188, pri)
+        part(2, 3, 0, "UNIX_Root", 0); part(3, 4, 1, "UNIX_Boot", 5); part(4, 0xffffffff, 1, "DH0", -128)
+        open(os.path.join(d, "fix.img"), "wb").write(img)
+        open(os.path.join(d, "zero.img"), "wb").write(bytes(4096))
+        os.makedirs(os.path.join(d, "bin"))
+        open(os.path.join(d, "bin", "sum"), "w").write('#!/bin/sh\nexec sum "$@"\n'); os.chmod(os.path.join(d, "bin", "sum"), 0o755)
+        def run(dev):
+            r = subprocess.run(["/usr/bin/dash", "-c", "INST=%s\nBLK0=%s/blk0\n%s\nrdb_boot_parts %s\n" % (d, d, fn, dev)],
+                               capture_output=True, text=True, timeout=60)
+            return r.stdout.split("\n")[:-1]
+        got = run(os.path.join(d, "fix.img"))
+        (ok if got == ["5 UNIX_Boot", "-128 DH0"] else fail)(
+            "rdb_boot_parts EXECUTED on a fixture RDB: the bootable partitions with their priorities, -128 signed (%r)" % (got,))
+        (ok if run(os.path.join(d, "zero.img")) == [] and run(os.path.join(d, "none")) == [] else fail)(
+            "rdb_boot_parts: no RDB and no device print nothing")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    drv = open(DRIVER, encoding="utf-8").read()
+    (ok if "BOOTP_F=/tmp/setup.bootparts" in src and "BOOTP_F=/tmp/setup.bootparts" in drv
+          and '[ "$_bp" -gt "$TARGET_BOOT_BOOTPRI" ] || continue' in drv and 'rdb_boot_parts "$dev"' in src else fail)(
+        "the scan records the bootable partitions and the install's closing lines name those above its priority")
+
+
 def audit_swap_by_ram():
     head("SR. 1.1 swap by memory: the interview and the driver share swap_by_ram word for word; its default "
          "is 64 MB under 32 MB of memory, 128 MB from it, at most a quarter of the disk, at least MINSWAP; "
@@ -11885,6 +11920,7 @@ def main():
     audit_guarded_rm_mv()
     audit_colon_truncate()
     audit_swap_by_ram()
+    audit_boot_rivals()
     audit_guarded_mkdir()
     audit_net_space()
     audit_ufs_rootcap()

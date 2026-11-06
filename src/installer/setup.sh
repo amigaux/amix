@@ -189,6 +189,7 @@ KMAP_FILE=/tmp/kmap
 # never inside a loop -- see the null-command-redirection rule above.
 BLK0=/tmp/setup.blk0
 SCAN_F=/tmp/setup.scan
+BOOTP_F=/tmp/setup.bootparts     # "ID PRI NAME" per bootable partition the scan saw (install.sh reads it)
 SET_F=/tmp/setup.sets
 TOK_F=/tmp/setup.tok
 CATN_F=/tmp/setup.catn
@@ -803,10 +804,59 @@ restart()
 # over a word list (NOT a redirect), so it is not a subshell -- but it still
 # only APPENDS to the file, and every decision is made afterwards, because that
 # is the idiom this codebase can prove.
+# rdb_byte FILE OFF / rdb_long FILE OFF -- an unsigned byte / a big-endian long of FILE. The miniroot has no od:
+# a byte's value is the disc's SVR4 `sum -r` of it (the checksum of one byte is the byte).
+rdb_byte()
+{
+	_bv=`dd if="$1" bs=1 skip="$2" count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )`
+	expr "${_bv:-0}" + 0
+}
+rdb_long()
+{
+	_l0=`rdb_byte "$1" "$2"`
+	_lo=`expr "$2" + 1`; _l1=`rdb_byte "$1" "$_lo"`
+	_lo=`expr "$2" + 2`; _l2=`rdb_byte "$1" "$_lo"`
+	_lo=`expr "$2" + 3`; _l3=`rdb_byte "$1" "$_lo"`
+	expr "$_l0" \* 16777216 + "$_l1" \* 65536 + "$_l2" \* 256 + "$_l3"
+}
+# rdb_boot_parts DEV -- "PRI NAME" for each bootable partition in DEV's RDB (its PART chain: pb_Flags bit 0,
+# pb_DriveName, de_BootPri), nothing when DEV has no RDB. Each RDB block is copied out whole first.
+rdb_boot_parts()
+{
+	_rf="$BLK0.rdb"
+	[ -x "$INST/bin/sum" ] || return 0
+	_blk=0 _rdsk=
+	while [ "$_blk" -lt 16 ]
+	do
+		dd if="$1" of="$_rf" bs=512 skip="$_blk" count=1 2>/dev/null || return 0
+		if [ "`dd if="$_rf" bs=4 count=1 2>/dev/null`" = RDSK ]; then _rdsk=y; break; fi
+		_blk=`expr "$_blk" + 1`
+	done
+	if [ -z "$_rdsk" ] || [ "`rdb_byte "$_rf" 28`" -eq 255 ]; then rm -f "${_rf:?}"; return 0; fi
+	_p=`rdb_long "$_rf" 28` _n=0
+	while [ "$_n" -lt 16 ]
+	do
+		dd if="$1" of="$_rf" bs=512 skip="$_p" count=1 2>/dev/null || break
+		[ "`dd if="$_rf" bs=4 count=1 2>/dev/null`" = PART ] || break
+		_fl=`rdb_byte "$_rf" 23`
+		if [ "`expr "$_fl" % 2`" = 1 ]; then
+			_len=`rdb_byte "$_rf" 36`
+			_nm=`dd if="$_rf" bs=1 skip=37 count="$_len" 2>/dev/null`
+			_pr=`rdb_byte "$_rf" 191`
+			[ "`rdb_byte "$_rf" 188`" -ne 255 ] || _pr=`expr "$_pr" - 256`
+			echo "$_pr ${_nm:-?}"
+		fi
+		[ "`rdb_byte "$_rf" 16`" -ne 255 ] || break
+		_p=`rdb_long "$_rf" 16` _n=`expr "$_n" + 1`
+	done
+	rm -f "${_rf:?}"
+}
+
 scan_disks()
 {
 	echo "\nScanning SCSI bus for hard disks..."
 	cp /dev/null "$SCAN_F"
+	cp /dev/null "$BOOTP_F"
 	nfound=0
 	for i in $SCAN_IDS
 	do
@@ -841,6 +891,8 @@ scan_disks()
 		fi
 
 		echo "$i $state `disk_size_hint "$i"`" >> "$SCAN_F"
+		# every bootable partition on it, for the install's closing check (install.sh: a disk that boots first)
+		rdb_boot_parts "$dev" | while read _bp _bn; do echo "$i $_bp $_bn"; done >> "$BOOTP_F"
 	done
 	[ "$nfound" -gt 0 ] || return 1
 	return 0

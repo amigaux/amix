@@ -3708,6 +3708,19 @@ if [ "$FIRSTBOOT_DIALOG" = y ]; then
 else
 	msg "   first-boot         : armed + wired (rc2.d/S16firstboot; stock dialog disarmed)"
 fi
+# Kickstart boots the bootable partition with the highest priority on any disk: one on another disk above this
+# disk's would boot instead (the interview's scan listed them: setup.sh BOOTP_F, "ID PRI NAME")
+BOOTP_F=/tmp/setup.bootparts
+if [ -s "$BOOTP_F" ]; then
+	while read _bi _bp _bn
+	do
+		[ "$_bi" != "$ID" ] || continue
+		is_num "$_bp" || continue
+		[ "$_bp" -gt "$TARGET_BOOT_BOOTPRI" ] || continue
+		msg "   BOOTS FIRST        : disk $_bi's partition $_bn (boot priority $_bp, this disk's $TARGET_BOOT_BOOTPRI): lower its"
+		msg "                        priority or raise this disk's (HDToolBox), or take that disk out of the boot"
+	done < "$BOOTP_F"
+fi
 msg "   next: halt (/etc/uadmin 2 0), remove the install kernel/CD, boot the target disk (c${ID}d0)."
 msg "=============================================================="
 exit 0
