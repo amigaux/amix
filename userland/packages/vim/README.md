@@ -35,9 +35,6 @@ group and mode, `uname`).
 | Patch | Why |
 |---|---|
 | `01-vim-snprintf-ll.patch` | **Numbers printed as garbage.** `vim_snprintf()` formats each integer conversion by handing a one-conversion format to libc `sprintf`, and Amix's libc printf family reads `ll` as `l`: a `long long` takes 8 bytes on the stack, so the value and every later argument came out wrong. That covers every Vim Number (`:echo 5`, `"%lld bytes"`, `g CTRL-G`'s counts). The two `long long` cases now go through `snprintf`, which is libamixc99's on Amix and handles `ll`. |
-| `02-vim-write-no-lost-lines.patch` | **Out of memory, a file written with `???` lines.** When a line can no longer be read back from Vim's memory or swap file, `ml_get` gives `???`, and `:w` wrote that in place of the line and reported success. `ml_get` now records the failure and the write stops at that line as on a write error (the backup is put back), with an `E316` naming the line. Under `vim -es`, which shows no messages, that error and `E342` (out of memory) also go to stderr; before, such an edit ended with rc 1 and no message. |
-| `03-vim-maxmem-from-limit.patch` | **`'maxmemtot'` of 1 Gbyte.** Vim cannot read the RAM size on Amix, so `mch_total_mem()` fell back to 2 Gbyte and Vim kept every block of a file in memory until the process hit its limit. It now takes the data limit (`ulimit -d`), else the address-space limit, else 20 Mbyte; `'maxmemtot'` is half of that, as on other systems. |
-| `04-vim-undo-line-length.patch` | **A huge allocation from the undo code.** Out of memory, the cached line length can be left invalid, and `u_save_line` then asked `malloc` for about 4 Gbyte. Stock Amix `malloc` has no ceiling and shrank the heap under live data (the libcfix package fixes that in libc). The undo save now fails instead. Why the length goes bad is Vim's own issue, left to upstream. |
 
 ## Build notes
 
