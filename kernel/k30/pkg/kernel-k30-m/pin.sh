@@ -241,8 +241,10 @@ fs/s5/exp  1c9cb6342da321047b6861170543382eaa75457573858fe641586ff6fddaf33e"
 # its four stock-file patches (a2091.c, a3091.c, scsi.c, support.c) are
 # still applied (NOTICE parts 1 and 2)
 # a filesystem whose carve links the cut's own object instead of the stock
-# exp: name, path under the cut, sha256 (-56: ufs, the stock fs/ufs/exp with
-# pvn_vptrunc rebound to ufs_vptrunz, the quirk-91 fix, by the cut's cut.sh)
+# exp: name, path under the cut, sha256 (-73: ufs, rwip/ufs.exp: the stock
+# fs/ufs/exp with pvn_vptrunc rebound to ufs_vptrunz, the quirk-91 fix (as
+# qz/ufs.exp since -56), and rwip's segmap_pagecreate address fixed by
+# tools/rwippc030.py, both by the cut's build)
 K30M_FSEXTRA="\
 ufs rwip/ufs.exp 574ff049705a40f417ad9e3ff862e69639d791ecf280bd783060c724ec5e9f0a"
 # <name in the copyright> <sha256> <where>: amix:<path> at K30M_AMIX_COMMIT,

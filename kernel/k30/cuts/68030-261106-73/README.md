@@ -10,11 +10,13 @@ The k30 module kernel, kabi k30.1.4 (abi 18c0a1c9), cut from amix `38ee0a2` with
   4 bytes in the ufs module (`build-cross-kernel.sh`, on by default from `38ee0a2`; `--no-ufs-rwip-fix` is -72's
   module).  Measured in emulation with a byte-checked random-rewrite test, -72 against this fix on the same rows:
   16 MiB with a 16 MB file, 4 KiB and 2 KiB writes, and 64 MiB with a 64 MB file, 4 KiB writes; -72 read back wrong
-  data within the first 2325 to 21152 writes, every bad block at offset 0 of its 8 KiB window, and the fix ran
+  data within the first 2325 to 21152 writes, each of the bad blocks it reported (rnd stops at 10) at offset 0 of its
+  8 KiB window, and the fix ran
   100000 to 200000 operations with none.
 
-Against -72 the shipped files differ only there: `unix` and `unix.brel` in the build id (one byte), `mod.d/s5` in its
-`build=` (one byte), `mod.d/ufs` in its `build=` and the four bytes of the fix.
+Against -72 the shipped files differ only there: `unix` and `unix.brel` in the build id (one byte), `kabi` in its
+`build=` and `sha256=` (the brel's hash) lines, `mod.d/s5` in its `build=` (one byte), `mod.d/ufs` in its `build=` and the
+four bytes of the fix; `unix.sym` and `audio.c` are the same.
 
 | File | What |
 |---|---|
