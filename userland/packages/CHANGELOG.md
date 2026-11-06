@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — libcfix 2.1c-1 (a844ad7)
+
+New, base set, essential: the stock /usr/lib/libc.so.1 with two allocator faults fixed in place (64 bytes, sha256-gated from system/). A realloc whose heap growth failed left the live block on the free list, so later mallocs returned memory inside it (corrupted vim's file buffers; crashed stress loads). A malloc or realloc of 2 GiB or more now fails instead of shrinking the heap under live data. Removing the package keeps the fixed library (core owns the path).
+
 ## 2026-11-05 — amix-benchmark 1.3-3 and x11r63 6.3-8 (bda8d29, 9ae3885)
 
 amix-benchmark 1.3-3: built here from src/ with the period toolchain, stripped, no build date, reproducible. Rebuilt binaries differ from the published 1.3 in `_lib_version` and the addresses it shifts. Man page and NOTICE added.
