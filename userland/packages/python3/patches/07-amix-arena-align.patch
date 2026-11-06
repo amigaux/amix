@@ -1,0 +1,23 @@
+--- a/Python/pyarena.c
++++ b/Python/pyarena.c
+@@ -77,15 +77,17 @@
+ block_new(size_t size)
+ {
+     /* Allocate header and block as one unit.
+-       ab_mem points just past header. */
+-    block *b = (block *)PyMem_Malloc(sizeof(block) + size);
++       ab_mem points just past header.  The allocator may align less than
++       ALIGNMENT (Amix's malloc: 4), so size bytes need room after the
++       padding that aligns them. */
++    block *b = (block *)PyMem_Malloc(sizeof(block) + size + ALIGNMENT - 1);
+     if (!b)
+         return NULL;
+-    b->ab_size = size;
+     b->ab_mem = (void *)(b + 1);
+     b->ab_next = NULL;
+     b->ab_offset = (char *)_Py_ALIGN_UP(b->ab_mem, ALIGNMENT) -
+             (char *)(b->ab_mem);
++    b->ab_size = size + b->ab_offset;
+     return b;
+ }
+ 

@@ -1,0 +1,62 @@
+--- a/Modules/socketmodule.c
++++ b/Modules/socketmodule.c
+@@ -251,6 +251,20 @@
+ #define PySocket_BUILDING_SOCKET
+ #include "socketmodule.h"
+ 
++#ifdef __amix__
++/* Not in Amix's headers.  inet_pton and inet_ntop are port/amix-net.c's. */
++#ifndef INET_ADDRSTRLEN
++#define INET_ADDRSTRLEN 16
++#endif
++int inet_pton(int, const char *, void *);
++const char *inet_ntop(int, const void *, char *, socklen_t);
++/* asyncio and others name socket.AF_INET6 even with no IPv6: a number no family
++   here uses, so socket() refuses it as it should */
++#ifndef AF_INET6
++#define AF_INET6 26
++#endif
++#endif
++
+ /* Addressing includes */
+ 
+ #ifndef MS_WINDOWS
+@@ -672,6 +686,12 @@
+ 
+ /* Function to perform the setting of socket blocking mode
+    internally. block = (1 | 0). */
++#ifdef __amix__
++/* Pth reads the mode with F_GETFL, which does not show FIONBIO: through fcntl,
++   or Pth takes a non-blocking socket for a blocking one and waits on it */
++#undef FIONBIO
++#endif
++
+ static int
+ internal_setblocking(PySocketSockObject *s, int block)
+ {
+--- a/Modules/resource.c
++++ b/Modules/resource.c
+@@ -330,6 +330,8 @@
+     pagesize = getpagesize();
+ #elif defined(HAVE_SYSCONF) && defined(_SC_PAGE_SIZE)
+     pagesize = sysconf(_SC_PAGE_SIZE);
++#elif defined(HAVE_SYSCONF) && defined(_SC_PAGESIZE)
++    pagesize = sysconf(_SC_PAGESIZE);
+ #else
+ #   error "unsupported platform: resource.getpagesize()"
+ #endif
+--- a/Python/fileutils.c
++++ b/Python/fileutils.c
+@@ -20,6 +20,12 @@
+ #include <sys/ioctl.h>
+ #endif
+ 
++#ifdef __amix__
++/* ioctl(FIOCLEX) on a socket fails with EINVAL here, and the caller would take
++   that for a real error: fcntl works on any descriptor. */
++#undef FIOCLEX
++#endif
++
+ #ifdef HAVE_NON_UNICODE_WCHAR_T_REPRESENTATION
+ #include <iconv.h>
+ #endif

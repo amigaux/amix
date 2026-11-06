@@ -10,3 +10,5 @@ some fallbacks from CPython and is under the Python Software Foundation
 licence in [LICENSE.PSF](LICENSE.PSF). Each file names its licence in an SPDX
 line. The package ships both notices, as `doc/python3/LICENSE.adapters` and
 `doc/python3/LICENSE.port`.
+
+`amix-net.c` is not his: it is this package's own, MIT, under `doc/python3/LICENSE.amix`.

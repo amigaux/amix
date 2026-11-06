@@ -31,6 +31,14 @@ cat py.out
 $X/bin/python3 "$H/tests/starve.py" > st.out 2>&1; rc=$?
 cat st.out
 [ $rc -eq 0 ] && grep 'RES ok   starve' st.out > /dev/null || bad "starve.py rc $rc (142: hung, killed by its alarm)"
+# sockets: loopback through threads, host names, HTTP; resource (SIGALRM ends it if it hangs)
+$X/bin/python3 "$H/tests/net.py" > net.out 2>&1; rc=$?
+cat net.out
+[ $rc -eq 0 ] && grep 'RES ok   net' net.out > /dev/null || bad "net.py rc $rc (142: hung, killed by its alarm)"
+# subprocess, csv, decimal, locks, XML
+$X/bin/python3 "$H/tests/mods.py" > mods.out 2>&1; rc=$?
+cat mods.out
+[ $rc -eq 0 ] && grep 'RES ok   mods' mods.out > /dev/null || bad "mods.py rc $rc (142: hung, killed by its alarm)"
 
 cd ..
 if [ $fails -eq 0 ]; then echo "RES smoke PASS"; else echo "RES smoke FAIL $fails"; fi
