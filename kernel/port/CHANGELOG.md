@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-06 — cut 68060-261106-65 is the k46 cut of record; kern46m -65 (574c62c, dcba0c6)
+
+port.pin moves to b936f5f (REV 53e52e4, core at amix 46ef7d1). -65 brings the port's -63 and -64, never packaged: the 8 MiB kernel arena, waiters for a large allocation woken when memory is free, IP's lower read queue at 64 KiB, an access the kernel cannot serve ending in a signal, the swap guard's limits only once an area exists, and ufs rwip's base + mapon. -65 itself zeroes a new ufs block written into a hole (ufs_bmap_hf) and fails a raw disk request past its slice end with ENXIO. kbootset-min stays 1.1.0.261103-37. kern46m k46.1.4.261106-65 (sha256 5995f687).
+
 ## 2026-11-04 — kern46m k46.1.4.261103-62.3 (6e48bc8)
 
 Same cut and objects: the copyright file names the amix-distfiles copy of GCC 2.7.2.3's source first and GNU's site as the original.
