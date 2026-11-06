@@ -1,8 +1,7 @@
 Out of memory, Vim could write a file with "???" in place of lines it could no
 longer read back, and say it had written it ("907264 lines written").  ml_get
 now records such a line and the write stops at it as on a write error, which
-puts the backup back, with an E316 that names the line; a file the write
-created is removed, since it holds only the lines before.  Under "vim -es",
+puts the backup back, with an E316 that names the line.  Under "vim -es",
 which shows no error messages, this one and E342 (out of memory) also go to
 stderr: before, an edit that ran out of memory ended with rc 1 and nothing
 said.  Measured with a 57 MB file under a 16 and a 24 Mbyte data limit.
@@ -70,20 +69,6 @@ said.  Measured with a 57 MB file under a 16 and a 24 Mbyte data limit.
  #ifdef FEAT_PERSISTENT_UNDO
  	    if (write_undo_file)
  		sha256_update(&sha_ctx, ptr + 1,
-@@ -2371,6 +2395,13 @@
- 		    end = 1;
- 	    }
- 	}
-+#ifdef __amix__
-+	// A file that did not exist before and stopped at a line that could
-+	// not be read back holds only the lines before it, and nothing in it
-+	// says so: remove it.  An existing file got its backup back above.
-+	if (ml_get_failed && newfile && backup == NULL)
-+	    mch_remove(fname);
-+#endif
- 	goto fail;
-     }
- 
 --- a/src/alloc.c
 +++ b/src/alloc.c
 @@ -343,6 +343,18 @@
