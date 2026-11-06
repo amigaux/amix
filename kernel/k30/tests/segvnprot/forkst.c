@@ -33,24 +33,27 @@ static long check(long gen, long *gens)
 	return bad;
 }
 
+/* a child checks the parent's pages, writes every 4th from a random first one, sleeps, and checks every page again:
+ * the ones it wrote must hold its own pattern, the others the parent's */
 static void child(long me)
 {
-	long i, bad;
+	long i, bad, off;
 
 	srand((unsigned)(time((time_t *)0) ^ (me << 8) ^ getpid()));
 	bad = check(0, (long *)0);
-	for (i = rand() % 4; i < npg; i += 4)
+	off = rand() % 4;
+	for (i = off; i < npg; i += 4)
 		mem[i * (PG / sizeof(long))] = pat(i, 7);
 	sleep(rand() % 4);
-	for (i = rand() % 4; i < npg; i += 4)
-		if (mem[i * (PG / sizeof(long))] != pat(i, 7) && mem[i * (PG / sizeof(long))] != pat(i, 0))
+	for (i = 0; i < npg; i++)
+		if (mem[i * (PG / sizeof(long))] != pat(i, i % 4 == off ? 7 : 0))
 			bad++;
 	_exit(bad ? 1 : 0);
 }
 
 static void parent(int me, long mb, long secs, int nch)
 {
-	long i, forks = 0, cbad = 0, sig = 0, live = 0;
+	long i, forks = 0, cbad = 0, sig = 0, live = 0, own;
 	time_t end = time((time_t *)0) + secs;
 	int st;
 	pid_t c;
@@ -81,10 +84,11 @@ static void parent(int me, long mb, long secs, int nch)
 	}
 	while (live > 0 && wait(&st) > 0)
 		live--;
+	own = check(0, (long *)0);
 	printf("parent %d: %ld forks, %ld children saw a wrong page, %ld killed, own pages wrong %ld\n", me, forks, cbad, sig,
-	    check(0, (long *)0));
+	    own);
 	fflush(stdout);
-	exit(cbad || sig ? 1 : 0);
+	exit(cbad || sig || own ? 1 : 0);
 }
 
 int main(int ac, char **av)

@@ -24,6 +24,7 @@
 #include <setjmp.h>
 
 #define PG 2048
+#define SKIP 125		/* a case's exit status when it could not run (run() reports SKIP, never PASS) */
 #define N 64
 #define TF tfname
 static char *tfname = "/tmp/vm30.dat";	/* VM30_TF: another file system */
@@ -318,40 +319,14 @@ static int copies(void)
 	return bad;
 }
 
-/* the byte of a core at address a, or -1: no segment holds it, -2 past its end */
-static int coreat(int fd, char *a)
-{
-	unsigned char e[52], ph[32], c;
-	unsigned long off, n, i;
-
-	lseek(fd, (off_t)0, 0);
-	if (read(fd, (char *)e, 52) != 52)
-		return -1;
-	off = (unsigned long)e[28] << 24 | (unsigned long)e[29] << 16 | (unsigned long)e[30] << 8 | e[31];
-	n = (unsigned long)e[44] << 8 | e[45];
-	for (i = 0; i < n; i++) {
-		unsigned long type, o, v, fsz;
-
-		lseek(fd, (off_t)(off + i * 32), 0);
-		if (read(fd, (char *)ph, 32) != 32)
-			return -1;
-		type = (unsigned long)ph[0] << 24 | (unsigned long)ph[1] << 16 | (unsigned long)ph[2] << 8 | ph[3];
-		o = (unsigned long)ph[4] << 24 | (unsigned long)ph[5] << 16 | (unsigned long)ph[6] << 8 | ph[7];
-		v = (unsigned long)ph[8] << 24 | (unsigned long)ph[9] << 16 | (unsigned long)ph[10] << 8 | ph[11];
-		fsz = (unsigned long)ph[16] << 24 | (unsigned long)ph[17] << 16 | (unsigned long)ph[18] << 8 | ph[19];
-		if (type != 1 || (unsigned long)a < v || (unsigned long)a >= v + fsz)
-			continue;
-		lseek(fd, (off_t)(o + ((unsigned long)a - v)), 0);
-		return read(fd, (char *)&c, 1) == 1 ? c : -2;
-	}
-	return -1;
-}
+#include "corechk.h"
 
 /* a core dump: the child's core has its size and its data pages; denied = pages made read-only, write-only and PROT_NONE
- * too: the first two are in the core with their data, and the PROT_NONE page, with others after it, reads back as zeros */
+ * too: the first two are in the core with their data, the PROT_NONE pages (one with others after it, one ending the run)
+ * read back as zeros, and the file is as long as its program headers say (corechk.h) */
 static int core1(int denied)
 {
-	int st, i, fd, v, bad = 0;
+	int st, i, fd, bad = 0;
 	pid_t c;
 	struct stat sb;
 	struct rlimit rl;
@@ -384,18 +359,10 @@ static int core1(int denied)
 		return 2;
 	if ((fd = open("core", O_RDONLY)) < 0)
 		return 3;
-	for (i = 0; i < 16; i++) {
-		int none = denied && (i == 3 || i == 15);
-
-		v = coreat(fd, (char *)p + i * PG);
-		if (none ? v > 0 : v != i + 1) {
-			printf("core page %d: %d\n", i, v);
-			bad++;
-		}
-	}
+	bad = corecheck(fd, (long)sb.st_size, (char *)p, denied);
 	close(fd);
 	if (bad)
-		return 4;
+		return bad;
 	unlink("core");
 	return 0;
 }
@@ -571,7 +538,7 @@ static int physio(void)
 
 	if (!dev) {
 		printf("physio: no VM30_RAW, not run\n");
-		return 0;
+		return SKIP;
 	}
 	if ((fd = open(dev, O_RDWR)) < 0) {
 		perror(dev);
@@ -774,11 +741,13 @@ static void run(const char *name, int (*f)(void))
 		alarm(60);
 		r = f();
 		fflush(stdout);
-		_exit(r ? (r > 100 ? 100 : r) : 0);
+		_exit(r == SKIP ? SKIP : r ? (r > 100 ? 100 : r) : 0);
 	}
 	waitpid(c, &st, 0);
 	if (WIFSIGNALED(st))
 		printf("FAIL %-16s signal %d\n", name, WTERMSIG(st) & 0177);
+	else if (WEXITSTATUS(st) == SKIP)
+		printf("SKIP %-16s not run\n", name);
 	else
 		printf("%s %-16s %d\n", WEXITSTATUS(st) ? "FAIL" : "PASS", name, WEXITSTATUS(st));
 	fflush(stdout);

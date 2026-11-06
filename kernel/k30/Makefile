@@ -3,6 +3,11 @@
 
 .PHONY: test
 test:
+	python3 tools/arena8m-selftest.py
+	sh tests/swapguard/run.sh
+	sh tests/segvnprot/t_forkst.sh
+	sh tests/segvnprot/t_corechk.sh
+	python3 -I tests/amixrun/test.py tools/amixrun.py
 	tools/kpatch-selftest.sh
 	tools/fstype-selftest.sh
 	python3 tools/elf2brel-selftest.py
@@ -17,6 +22,3 @@ test:
 	python3 tools/kernel-support-probe-inject.py --selftest
 	python3 tools/k0-gates.py --selftest
 	sh tools/cuts-selftest.sh
-	python3 tools/arena8m-selftest.py
-	sh tests/swapguard/run.sh
-	python3 -I tests/amixrun/test.py tools/amixrun.py
