@@ -1,3 +1,7 @@
+## 2026-11-06 — APKGENG 1.12.10 (48a8885)
+
+A pkgadd that quits before installing (an installed package under instance=quit) no longer runs cpio on its caller's stdin, where it waited for ever when that was a login's terminal and gave a spurious datastream error with /dev/null; a command the engine spawns with no input now reads /dev/null.
+
 ## 2026-11-05 — APKGENG 1.12.9; #fstype carried (a6f3584, 3d7e5ae)
 
 APKGENG 1.12.9: a SIGHUP ignored on entry stays ignored in the engine's commands and the processes they start, so an install or removal under nohup outlives its login; a hangup that is not ignored still interrupts, and the next pkgadd or apkg recover puts it right. assemble-release carries an input's #fstype over a published row that has none (amixrt).
