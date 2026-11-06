@@ -1432,6 +1432,7 @@ ask_sizes()
 					readask "Use ${SWAPBOUND} megabytes instead? [y] "
 					case "$ask" in
 						""|[yY]*) ANS_SWAP="$SWAPBOUND" ;;
+						*) SWAP_KEPT_OVER="$SWAPBOUND" ;;
 					esac
 				fi
 		esac
@@ -2581,6 +2582,7 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "TARGET_DISK_MB=$DISK_MB"
 	echo "TARGET_ROOT_MB=$ANS_ROOT"
 	echo "TARGET_SWAP_MB=$ANS_SWAP"
+	[ -z "${SWAP_KEPT_OVER:-}" ] || echo "# swap: $ANS_SWAP MB kept past the $SWAP_KEPT_OVER MB this machine takes"
 	# The root filesystem type. Written UNCONDITIONALLY, exactly like FB_KMAP
 	# above and for the same reason: the value must OVERRIDE whatever the base
 	# profile declares, so it can never be omitted just because the question was
