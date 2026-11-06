@@ -198,6 +198,24 @@
 #                with KM_NOSLEEP first, so a swap area larger than kvseg's largest free run fails with ENOMEM instead
 #                of sleeping on Km_OsizeWanted for ever.  --check after the link and after the dlm splice.
 #                --no-swap-guard is the kernel without it, byte for byte.
+#   --no-arena8m  build WITHOUT the 8 MiB kvseg (on by default; ARENA8M=0 does the same).  By default src/arena8m030.c
+#                joins the final link and tools/arena8m030.py moves the arena's seed, page tables, length, kvsegmap and
+#                kvsegu together and gives kseg its 64-byte table.  --check after the link and after the dlm splice.
+#                --no-arena8m is the kernel without it, byte for byte.
+#   --no-segvn-prot  build WITHOUT the denied-access check (on by default; SEGVN_PROT=0 does the same).  By default
+#                src/segvnprot030.s joins the final link and tools/segvnprot-retarget.py routes segvn_fault's call of
+#                segvn_faultpage through it: an access that would restart for ever returns FC_PROT, and src/coreseg030.c
+#                leaves a page no read can reach as a hole in a core dump.  --no-segvn-prot is the kernel without them,
+#                byte for byte.
+#   --no-rmw-fault  build WITHOUT the read-modify-write fault fix (on by default; RMW_FAULT=0 does the same).  By default
+#                tools/rmwfault030.py makes usrxmemflt treat a tas or cas fault as a write, so it does not restart for
+#                ever.  --no-rmw-fault is the kernel without it, byte for byte.
+#   --no-kmem-wake  build WITHOUT the oversize-sleeper wake (on by default; KMEM_WAKE=0 does the same).  By default
+#                tools/kmemwake030.py makes every kmem_freepool retirement and direct kmem_free over 4 KiB wake whoever
+#                sleeps on Km_OsizeWanted, set or not.  --no-kmem-wake is the kernel without it, byte for byte.
+#   --ip-lrhiwat-fix <patch_ip_lrhiwat.py>  (opt-in) IP's lower read queue mi_hiwat raised from 0x2000 (ipm_info's
+#                MUXRQ entry, one .data longword, located through iplrinit): an 8 KiB NFS reply's fragments no longer
+#                fill it, so the A2065 driver's canput stops refusing frames.
 #   --stock-proc-limits  build with the stock soft data and vmem limits (16 MB; PROC_LIMITS=0 does the same).  By
 #                default master.d/kernel.h's SDATLIM and SVMMLIM are 0x7fffffff (unlimited) like their hard limits,
 #                so a process may grow to what memory and swap allow; SSTKLIM stays 0x1000000 (a 16 MB soft stack
@@ -244,6 +262,11 @@ AUDIO_PAULA="${AUDIO_PAULA:-}"  # --audio-paula <amix-paula dir>: /dev/audio and
 TTC_FIX="${TTC_FIX:-}"          # --ttcompat-fix <patch_ttcompat_init.py>: the opt-in DRIVER-LINE-7 fix
 FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_setup call ungated, as stock
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
+ARENA8M="${ARENA8M:-1}"           # --no-arena8m (ARENA8M=0): kvseg 4 MiB, as stock
+SEGVN_PROT="${SEGVN_PROT:-1}"     # --no-segvn-prot (SEGVN_PROT=0): a denied access restarts for ever, as stock
+RMW_FAULT="${RMW_FAULT:-1}"       # --no-rmw-fault (RMW_FAULT=0): a tas or cas fault decided as a read, as stock
+KMEM_WAKE="${KMEM_WAKE:-1}"       # --no-kmem-wake (KMEM_WAKE=0): oversize sleepers woken as stock
+IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the opt-in IP lower read queue fix
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
 PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
@@ -289,6 +312,11 @@ while [ "$#" -gt 0 ]; do
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
     --no-swap-guard) SWAP_GUARD=0; shift ;;
+    --no-arena8m) ARENA8M=0; shift ;;
+    --no-kmem-wake) KMEM_WAKE=0; shift ;;
+    --no-rmw-fault) RMW_FAULT=0; shift ;;
+    --no-segvn-prot) SEGVN_PROT=0; shift ;;
+    --ip-lrhiwat-fix) IPLR_FIX="${2:?--ip-lrhiwat-fix needs the path of patch_ip_lrhiwat.py}"; shift 2 ;;
     --stock-proc-limits) PROC_LIMITS=0; shift ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
@@ -312,6 +340,10 @@ SD_CARDS="${SD_CARDS:-2}"
 case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SWAP_GUARD" in 0|1) ;; *) echo "SWAP_GUARD='$SWAP_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$ARENA8M" in 0|1) ;; *) echo "ARENA8M='$ARENA8M' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$SEGVN_PROT" in 0|1) ;; *) echo "SEGVN_PROT='$SEGVN_PROT' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$KMEM_WAKE" in 0|1) ;; *) echo "KMEM_WAKE='$KMEM_WAKE' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$RMW_FAULT" in 0|1) ;; *) echo "RMW_FAULT='$RMW_FAULT' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
@@ -1505,14 +1537,39 @@ if [ "$SWAP_GUARD" = 1 ]; then
   ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/swapguard030.c" -o "$BUILD/swapguard030.o" ) \
     || { echo "--swap-guard: swapguard030.c did not compile" >&2; exit 1; }
   GOT="$("$NM" "$BUILD/swapguard030.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOT" = "kmem_free kmem_zalloc sleep wakeup" ] || { echo "--swap-guard: swapguard030.o imports '$GOT'" >&2; exit 1; }
+  [ "$GOT" = "bzero delay kmem_alloc kmem_free kmem_zalloc maxmem sleep spl7 splx wakeup" ] || { echo "--swap-guard: swapguard030.o imports '$GOT'" >&2; exit 1; }
   GOTX="$("$NM" "$BUILD/swapguard030.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-  [ "$GOTX" = "swapadd_guarded swapguard_swapadd swapguard_take swg_calls swg_last swg_magic swg_nomem swg_resized swg_swapadd" ] \
+  [ "$GOTX" = "swapadd_guarded swapguard_swapadd swapguard_take swg_calls swg_last swg_magic swg_nomem swg_resized swg_retries swg_swapadd" ] \
     || { echo "--swap-guard: swapguard030.o exports '$GOTX'" >&2; exit 1; }
   echo "  swapguard030.o $(sha256sum "$BUILD/swapguard030.o" | cut -c1-16): imports/exports exact"
   SWG_OBJ="swapguard030.o"
 else
   echo "--- swap guard: --no-swap-guard -- swapadd's anon array KM_SLEEP, as stock ---"
+fi
+A8M_OBJ=""
+if [ "$ARENA8M" = 1 ]; then
+  # === 8h2. the 8 MiB kvseg: kseg's table; the sites are patched after the link (tools/arena8m030.py) ===
+  echo "--- 8 MiB kvseg: compiling $KT/src/arena8m030.c (ksegtbl64) ---"
+  ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/arena8m030.c" -o "$BUILD/arena8m030.o" ) \
+    || { echo "--arena8m: arena8m030.c did not compile" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/arena8m030.o" | awk '$(NF-1) != "t" {print $(NF-1), $NF}' | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "C ksegtbl64" ] || { echo "--arena8m: arena8m030.o holds '$GOT'" >&2; exit 1; }
+  A8M_OBJ="arena8m030.o"
+else
+  echo "--- 8 MiB kvseg: --no-arena8m -- kvseg 4 MiB, as stock ---"
+fi
+SVP_OBJ=""
+if [ "$SEGVN_PROT" = 1 ]; then
+  # === 8h3. the denied-access check: the relocations are retargeted after the link (tools/segvnprot-retarget.py) ===
+  echo "--- denied accesses: assembling $KT/src/segvnprot030.s (segvn_faultpage_prot) ---"
+  "$AS" -m68020 -o "$BUILD/segvnprot030.o" "$KT/src/segvnprot030.s" || { echo "--segvn-prot: segvnprot030.s did not assemble" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/segvnprot030.o" | awk '$(NF-1) ~ /^[TDBUC]$/ {print $(NF-1), $NF}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "D segvn_prot_n D segvn_prot_stock T segvn_faultpage_prot" ] || { echo "--segvn-prot: segvnprot030.o holds '$GOT'" >&2; exit 1; }
+  ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/coreseg030.c" -o "$BUILD/coreseg030.o" ) \
+    || { echo "--segvn-prot: coreseg030.c did not compile" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/coreseg030.o" | awk '$(NF-1) ~ /^[TDBUC]$/ {print $(NF-1), $NF}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "D core_holes T core_seg_holes U as_getprot U as_memory U vn_rdwr" ] || { echo "--segvn-prot: coreseg030.o holds '$GOT'" >&2; exit 1; }
+  SVP_OBJ="segvnprot030.o coreseg030.o"
 fi
 CCOM_OBJ=""
 if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
@@ -1522,7 +1579,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   # The stock tools that read these through /dev/kmem and the namelist (sadc's inode, crash) find them in the kernel.
   # An empty set builds no object, so a kernel whose core.list names none of them links as before.
   echo "--- carve commons: core.list names that are COMMONs of the carved ${CARVE_FS} and nothing else in the link has ---"
-  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ ) 2>/dev/null \
+  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ ) 2>/dev/null \
     | awk 'NF >= 2 && $(NF-1) != "U" {print $NF}' | LC_ALL=C sort -u > "$BUILD/carvecom.have"
   python3 - "$DLM_CORE/abi/k30/core.list" "$KABI_MINOR" "$BUILD/carvecom.s" "$BUILD/carvecom.have" \
     $(for f in ${CARVE_FS//,/ }; do echo "$BUILD/fs/$f/exp"; done) <<'PYC' || exit 1
@@ -1567,8 +1624,8 @@ PYC
     CCOM_OBJ="carvecom.o"
   fi
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
 # HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
 # modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
 kzero_check() {
@@ -1605,6 +1662,29 @@ if [ "$SWAP_GUARD" = 1 ]; then
   python3 "$KT/tools/swapguard-retarget.py" "$BUILD/unix"
   python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"
 fi
+if [ "$ARENA8M" = 1 ]; then
+  echo "--- 8 MiB kvseg: seed, page tables, length, kvsegmap, kvsegu, kseg's table (tools/arena8m030.py) ---"
+  python3 "$KT/tools/arena8m030.py" --stock "$BUILD/unix"
+  python3 "$KT/tools/arena8m030.py" "$BUILD/unix"
+  python3 "$KT/tools/arena8m030.py" --check "$BUILD/unix"
+fi
+if [ "$SEGVN_PROT" = 1 ]; then
+  echo "--- denied accesses: segvn_fault -> segvn_faultpage_prot (tools/segvnprot-retarget.py) ---"
+  python3 "$KT/tools/segvnprot-retarget.py" "$BUILD/unix"
+  python3 "$KT/tools/segvnprot-retarget.py" --check "$BUILD/unix"
+fi
+if [ "$RMW_FAULT" = 1 ]; then
+  echo "--- read-modify-write faults: RM counts as a write in usrxmemflt (tools/rmwfault030.py) ---"
+  python3 "$KT/tools/rmwfault030.py" --stock "$BUILD/unix"
+  python3 "$KT/tools/rmwfault030.py" "$BUILD/unix"
+  python3 "$KT/tools/rmwfault030.py" --check "$BUILD/unix"
+fi
+if [ "$KMEM_WAKE" = 1 ]; then
+  echo "--- kmem wake: every give-back wakes Km_OsizeWanted's sleepers (tools/kmemwake030.py) ---"
+  python3 "$KT/tools/kmemwake030.py" --stock "$BUILD/unix"
+  python3 "$KT/tools/kmemwake030.py" "$BUILD/unix"
+  python3 "$KT/tools/kmemwake030.py" --check "$BUILD/unix"
+fi
 # HARD CHECK (process limits): the linked rlimits table, {soft, hard} for cpu fsize data stack core nofile vmem
 if [ "$PROC_LIMITS" = 1 ]; then WANT_RL="7fffffff 7fffffff 10000000 7fffffff 7fffffff 7fffffff 1000000 7fffffff"
 else WANT_RL="7fffffff 7fffffff 10000000 7fffffff 1000000 7fffffff 1000000 7fffffff"; fi
@@ -1626,7 +1706,7 @@ print('--- process limits: rlimits ' + ' '.join(hit[0]) + ' ---')
 PYRL
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $CCOM_OBJ" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
@@ -1679,6 +1759,17 @@ if [ -n "$HIWAT_FIX" ]; then
   [ "$D" -eq 1 ] || { echo "--tcp-hiwat-fix: $D bytes changed (want exactly 1, the hiwat word's 0x10 -> 0x40)" >&2; exit 1; }
   echo "  bytes changed: 1 (tcpm_info[3].mi_hiwat)"
 fi
+if [ -n "$IPLR_FIX" ]; then
+  [ -f "$IPLR_FIX" ] || { echo "--ip-lrhiwat-fix: missing $IPLR_FIX" >&2; exit 2; }
+  echo "--- IP lower-read hiwat: $IPLR_FIX ---"
+  cp "$BUILD/unix" "$BUILD/unix.pre-iplr"
+  python3 "$IPLR_FIX" "$BUILD/unix"
+  python3 "$IPLR_FIX" --check "$BUILD/unix"
+  [ "$(stat -c%s "$BUILD/unix.pre-iplr")" = "$(stat -c%s "$BUILD/unix")" ] || { echo "--ip-lrhiwat-fix: the kernel changed size" >&2; exit 1; }
+  D="$({ cmp -l "$BUILD/unix.pre-iplr" "$BUILD/unix" || :; } | wc -l)"
+  [ "$D" -ge 1 ] && [ "$D" -le 2 ] || { echo "--ip-lrhiwat-fix: $D bytes changed (want the one longword's 1 or 2)" >&2; exit 1; }
+  echo "  bytes changed: $D (ipm_info's MUXRQ mi_hiwat)"
+fi
 if [ -n "$KINFO_C" ]; then
   echo "--- kinfo: cdevsw[53] -> kinfoopen/close/read/write (tools/kinfo-cdevsw.py) ---"
   python3 "$KT/tools/kinfo-cdevsw.py" "$BUILD/unix" 53
@@ -1695,6 +1786,11 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   if [ "$FREEQ_GUARD" = 1 ]; then python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"; fi
   if [ "$SWAP_GUARD" = 1 ]; then python3 "$KT/tools/swapguard-retarget.py" --check "$BUILD/unix"; fi
+  if [ "$ARENA8M" = 1 ]; then python3 "$KT/tools/arena8m030.py" --check "$BUILD/unix"; fi
+  if [ "$KMEM_WAKE" = 1 ]; then python3 "$KT/tools/kmemwake030.py" --check "$BUILD/unix"; fi
+  if [ "$RMW_FAULT" = 1 ]; then python3 "$KT/tools/rmwfault030.py" --check "$BUILD/unix"; fi
+  if [ "$SEGVN_PROT" = 1 ]; then python3 "$KT/tools/segvnprot-retarget.py" --check "$BUILD/unix"; fi
+  if [ -n "$IPLR_FIX" ]; then python3 "$IPLR_FIX" --check "$BUILD/unix"; fi
   # the sd seam, checked on the objects (a lost seam leaves a root module registered and never taken, the boot
   # line "RTH1: root c6d0s1 built in (controller not present)"): a four-card base must call a core's dlm_sd_close
   if [ "$SD_CARDS" = 4 ] && "$NM" "$WORK/dlm-core/obj/dlm.o" | awk '$2=="T" && $3=="dlm_sd_close" {f=1} END{exit !f}'; then
