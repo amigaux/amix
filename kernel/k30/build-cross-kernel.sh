@@ -195,10 +195,14 @@
 #   --no-ufs-hole-fix  build WITHOUT the hole fix (on by default; UFS_HOLE_FIX=0 does the same).  For a write of
 #                whole pages the stock rwip lets as_iolock grant pagecreate, and ufs_bmap then allocates a new block
 #                alloc-only, without reading or zeroing it, so its pages the write leaves alone read the disk block's
-#                old data.  src/ufs_bmap_hf.c looks the block up first (ufs_bmap with S_READ) and turns alloc-only off
-#                for a hole, so a new block is read (zero-filled) before the write; an allocated block keeps it and is
-#                rewritten as stock.  It is linked into the ufs object and tools/bmaphf030.py retargets rwip's one
-#                call of ufs_bmap to it.  --no-ufs-hole-fix is the ufs object without it, byte for byte.
+#                old data.  src/ufs_bmap_hf.c looks the block up first (ufs_bmap with S_READ, which allocates nothing)
+#                and turns alloc-only off for a hole, so ufs_bmap reads the new block (zero-filled) before the write.
+#                A block already allocated keeps alloc-only: ufs_bmap then allocates nothing, or grows the file's last
+#                fragment, which it reads whatever alloc-only says; the pages the write creates unread are its own
+#                only with rwip's segmap_pagecreate address fixed, so the hole fix needs the rwip fix (UFS_HOLE_FIX=1
+#                with UFS_RWIP=0 is refused).  ufs_bmap_hf is linked into the ufs object and tools/bmaphf030.py
+#                retargets rwip's one call of ufs_bmap to it.  --no-ufs-hole-fix is the ufs object without it (the
+#                rwip fix's object), byte for byte.
 #   --no-growsdt-fix  build WITHOUT the hat_growsdt fix (on by default; GROWSDT_FIX=0 does the same).  The stock
 #                hat_growsdt frees a shrunk segment table's tail at table + units * 512 instead of + units * 64, so
 #                hat_sdtfree clears bits in whatever page that lands in -- a data page's mapping chain head -- and
@@ -379,6 +383,10 @@ case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_RWIP" in 0|1) ;; *) echo "UFS_RWIP='$UFS_RWIP' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
+# ufs_bmap_hf keeps alloc-only for an allocated block, whose pages the write does not cover are then read from the
+# disk; the pages it does cover are created unread, at the right address only with the rwip fix
+[ "$UFS_HOLE_FIX" = 0 ] || [ "$UFS_RWIP" = 1 ] \
+  || { echo "--ufs-hole-fix needs the rwip fix (UFS_RWIP=1): without it rwip creates the window's leading pages unread" >&2; exit 2; }
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
 case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4)" >&2; exit 2 ;; esac

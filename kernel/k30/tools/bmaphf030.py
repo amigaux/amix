@@ -3,18 +3,19 @@
 
   bmaphf030.py OBJ           retarget, in the ufs object linked with ufs_bmap_hf.o (ELF32 big-endian ET_REL), in
                              place; refuses unless rwip is the stock code and the call is exactly the stock one
-  bmaphf030.py --check OBJ   verify, write nothing; exit 1 unless retargeted, ufs_bmap_hf called from rwip alone, and
-                             ufs_bmap called from ufs_bmap_hf and not from rwip (the ufs object, the carved module or
-                             a linked unix: ufs_bmap's other callers stay as they are)
+  bmaphf030.py --check OBJ   verify, write nothing; exit 1 unless retargeted (rwip names ufs_bmap_hf, and so not
+                             ufs_bmap), ufs_bmap_hf called from rwip alone, and ufs_bmap called from ufs_bmap_hf (the
+                             ufs object, the carved module or a linked unix: ufs_bmap's other callers stay as they are)
   bmaphf030.py --selftest    retarget a synthetic object: stock -> retargeted, idempotent, refusals proved
 
 src/ufs_bmap_hf.c says why: alloc-only is kept only for a block that is already allocated, so a new block is never
 allocated without being read (zero-filled) under a write that leaves part of it unwritten.  Only rwip's relocation
 changes (its symbol index): ufs_bmap's nine other callers in the ufs object keep the stock function, and no byte of
 .text moves.  rwip must be the stock code: tools/rwippc030.py's digest of it (relocations included, the rwip fix's 4
-bytes zeroed, ufs_bmap_hf counted as ufs_bmap) is required, and the call itself is checked byte for byte:
-ufs_bmap(ip, lbn, NULL, NULL, on + n, S_WRITE, pagecreate) with pagecreate at fp@(-28), ip in a3, the inode lock
-taken just before, the result kept in d2.
+bytes zeroed, ufs_bmap_hf counted as ufs_bmap) is required, which pins the whole function, the inode lock taken
+just before the call included; and the call itself is checked byte for byte: ufs_bmap(ip, lbn, NULL, NULL, on + n,
+S_WRITE, pagecreate) with pagecreate at fp@(-28) and ip in a3, the result kept in d2 and the lock count dropped
+after it.
 """
 import importlib.util, os, struct, sys
 
@@ -115,8 +116,9 @@ def main(args=None, known=rw.KNOWN_RWIP):
         a, u = callers(b, sh, syms, 'ufs_bmap'), callers(b, sh, syms, 'ufs_bmap_hf')
         if u != {'rwip'}:
             fail('%s: ufs_bmap_hf is called from %s (want rwip alone)' % (args[0], sorted(u)))
-        if 'ufs_bmap_hf' not in a or 'rwip' in a:
-            fail('%s: ufs_bmap is called from %s (want ufs_bmap_hf, and not rwip)' % (args[0], sorted(a)))
+        # rwip cannot be among them: site() found exactly one relocation naming ufs_bmap or ufs_bmap_hf in it
+        if 'ufs_bmap_hf' not in a:
+            fail('%s: ufs_bmap is called from %s (want ufs_bmap_hf among them)' % (args[0], sorted(a)))
         print('bmaphf030: %s: rwip calls ufs_bmap_hf, which rwip alone calls; ufs_bmap_hf calls ufs_bmap' % args[0])
         return
     if done:
