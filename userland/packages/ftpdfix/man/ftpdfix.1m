@@ -1,0 +1,48 @@
+.TH FTPDFIX 1M "7 November 2026" "ftpdfix 2.1-1"
+.SH NAME
+in.ftpd, ftpdfix \- the FTP server, with downloads that arrive whole
+.SH SYNOPSIS
+.B /usr/sbin/in.ftpd
+.SH DESCRIPTION
+The ftpdfix package replaces
+.BR /usr/sbin/in.ftpd ,
+the system's FTP server, which
+.BR inetd (1M)
+starts for each connection, with the stock program changed in one
+place: how it closes the data connection of a download
+.RB ( RETR ,
+.BR LIST ,
+.BR NLST ).
+Everything else, commands, options and messages, is as
+.BR ftpd (1M)
+describes.
+.PP
+The stock server closed the data connection as soon as it had written
+the file, and the system's TCP then threw away whatever the client had
+not yet acknowledged: the end of a download could be missing, while the
+server still answered
+.BR "226 Transfer complete" .
+In passive mode this happened often.
+In active mode the stock server lingered in the close instead, for up to
+60 seconds, a path of the system's TCP that is not safe when the client
+sends after the close.
+.PP
+This server shuts down its own side of the data connection (the client
+then sees the end of the file after the last byte), waits until the
+client has read everything and closed its side, and only then closes the
+connection.
+The wait is bounded: a client that never closes its side is let go after
+at most 60 seconds, and the connection is then closed as before.
+Nothing lingers in the close, in either mode.
+.PP
+A client that reads a download to its end and then closes the data
+connection, as every FTP client does, sees no difference but whole
+files.
+.SH FILES
+.TP 26
+.B /opt/amix/doc/ftpdfix/README.md
+the bytes changed and why
+.SH SEE ALSO
+.BR ftpd (1M),
+.BR inetd (1M),
+.BR ftp (1)
