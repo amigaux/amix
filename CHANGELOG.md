@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-07 — final16's set: make dist at amix cdf6c05, candidate d630412a (0e0f619)
+
+The set is generated from the proven candidate (lock caeca530): kernels 68030-261106-77 and 68060-261106-66, amix-base 1.0-34, dhcp-client 1.0-9, ftpdfix 2.1-1 (new), libcfix 2.1c-2, APKG 0.3.11 and APKGENG 1.12.10; the netinstall RAM disks at 5888 KiB; the 1.1 release notes gain "Fixed in 1.1" (bugs inherited from 2.1c and present in 1.0) and the TCP close limit.
+
 ## 2026-11-07 — 1.1 media rounds final15b to final16 groundwork (c7265f8..5c42f1a)
 
 Media: the build side lives in media/; 1.1 media only; setclk, zenmac and syslogd from the image or the system tree, pinned; make dist's amix-cdboot only; card disks pinned whole; RAM disks normalised (two builds, the same bytes) with the netinstall RAM disk at 5.5 MiB; fixed locale, zone and epoch; every offered set gets its base list; known-bad modules kept off every medium; process words and bench secrets out of tracked text, with a privacy check in run-checks. Installer: swap grows with memory (64 MB below 32 MB, 128 MB from it, at most a quarter of the disk) and warns past what the kernel takes; it names any disk whose boot priority is above the new disk's; files are cleared with a plain redirect; pkgadd runs with stdin closed; TARGET_HBA=auto for universal profiles. First boot and cells: the console hold from rig-run; the prompt reader past marks under the text; libc.so.1, setclk -p and the SSH server checked at first boot; a dotted documentation domain and its FQDN row; swap default and past-bound cells; /dev/audio's node and MTX_AUDIO (aurep2, audioctl2); slot handling, provenance of the emulator binary, and judges that cannot go blind. Release notes: the 16 MiB per-program limits, swap by memory, a disk booting first, two stock libsocket defects, and the tools not yet on the 68040/68060 kernel.
