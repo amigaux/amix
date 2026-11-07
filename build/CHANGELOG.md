@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-07 — make tools checks the gcc14 tree digest (03886a3)
+
+make tools checks the build container's GCC 14 against toolchain/gcc14-cross-amix.tree, as CI does, and stops before the media image when the digest differs. A new amix-system pin moves that digest too.
+
 ## 2026-11-06 — pkginfo lists the prototype's own classes after conffile (ca687f1)
 
 pkginfo's CLASSES is `none`, then `conffile` when CONFFILES is set, then every other class the prototype names, in the order it first names them, so a device node whose group a conffile creates can be made after that file. The roll accepts classes after `none conffile`. pkgmeta refuses a class name other than 1-12 of a-z and 0-9 starting with a letter, and an object in class conffile that CONFFILES doesn't list.
