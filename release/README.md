@@ -71,8 +71,9 @@ line is not one of record.
 Every live package rebuilds at the release's commit. Every published version
 stays, so a repository also holds older versions, which that commit does not
 build. `carried-<release>` lists them: each file, its sha256 and the commit whose
-make dist builds it. For 1.1, 20 of the 21 came out byte for byte at that commit,
-once, on one local machine. x11r63-6.3-7 does so only on the file system it was
+make dist builds it. For 1.1, 24 of the 25 came out byte for byte at their commit:
+the b97a720 rows once, on one local machine, the 6029ab5 rows in the proof there
+(two clones, two file systems). x11r63-6.3-7 does so only on the file system it was
 built on, as `carried-1.1` says. `build/dist-proof` does not rebuild them. `make lock`
 refuses a tree whose older versions are not exactly those, by name and sha256.
 For what the proof has shown of the live packages, see `docs/BUILDING.md`.
