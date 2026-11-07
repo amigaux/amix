@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-07 — gcc14 tree digest with amix-system debb2e1 (4e73603)
+
+gcc14-cross-amix.tree is d1964ac8, the GCC 14 build with amix-system debb2e1's in.ftpd in its sysroot; CI's image check passes again.
+
 ## 2026-11-05 — a frozen image (b62624a, 7bce020, 141c454)
 
 `container-build.sh` exports amix-system at its pin, as it does the toolchains, under a fixed umask, and checks that exported tree; a host's umask and a working copy's empty directories no longer reach the image. The base image's `ca-certificates` and `openssl` are the snapshot's, pinned by sha256 in `base-*.distfile` and installed before apt reads any archive, so the build no longer uses the live archive, and TLS stays verified. `base-*.distfile` joins the image's cache key. `docs/BUILDING.md` says when the image's freeze changed and what that was measured to do.

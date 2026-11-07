@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-07 — carried-1.1 keeps dhcpc -8, ldramix -13 and zscsi -8 (ff7f6b4)
+
+carried-1.1 also keeps dhcpc-1.0-8, ldramix-1.0.261104-13, zscsi30-1.0.0-8 and zscsi46-1.0.0-8, published in 1.1 and no longer built; each is byte for byte what make dist built at 6029ab5. The list now holds all 25 of the published tree's older versions.
+
 ## 2026-11-05 — x11r63-6.3-7 carried (f077a89)
 
 `release/carried-1.1` gains x11r63-6.3-7 (21 rows), and the amixbench-1.3 lock exception is gone.
