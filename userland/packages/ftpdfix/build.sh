@@ -6,7 +6,7 @@
 # less 0x80000000.
 
 STOCK_SHA=29048aef103a02d5975b1ce4571d770ad88c0cb1b7a5efdc76cd9c6a1bb3940d
-FIXED_SHA=fab610e3bea2251ad0e7d58d147ab72b50b11723c43099a3a807cd8ecd1ac6e4
+FIXED_SHA=6a7c40211733b6847efe1d5bdf75c0a58b9d00a77eff3bee430a941e59487de2
 
 build() {
 	:
@@ -47,12 +47,14 @@ stage() {
 	fd_put 2874 4eb980008106
 	# 2. dclose at 0x80008106, over _putspent (422 bytes, which nothing in
 	#    the program calls): fflush; ioctl(fd, I_STR, {SI_SHUTDOWN, -1, 4,
-	#    &1}); up to 4 rounds of _poll(POLLIN, 15000) and read(256), ending
-	#    at end of file, an error or a poll error; fclose.  Through the PLT:
-	#    fflush 1944, ioctl 16c4, _poll 1c78, read 18f4, fclose 1818
+	#    &1}); fcntl O_NONBLOCK; until time(0) + 60: read(256), ending at
+	#    end of file or an error other than EAGAIN, a nap of
+	#    _poll(NULL, 0, 20) after each EAGAIN; fclose.  Through the PLT:
+	#    fflush 1944, ioctl 16c4, _fcntl 1d68, time 1a0c, read 18f4,
+	#    _poll 1c78, fclose 1818; errno at 0x8000f39c
 	fd_at 8106 4e56000048e70038
 	fd_at 82ac 4e56dff0
-	fd_put 8106 4e56fee448e730002f2e00084eb980001944584f206e000874001428000d70012d40ffec2d7c00004966fff070ff2d40fff470042d40fff841eeffec2d48fffc486efff02f3c000053082f024eb9800016c44fef000c4a806d4876032d42ffe42d7c00010000ffe82f3c00003a9848780001486effe44eb980001c784fef000c4a806d1e671848780100486efee42f024eb9800018f44fef000c4a806f0451cbffbc2f2e00084eb980001818584f4cdf000c4e5e4e75
+	fd_put 8106 4e56feec48e730002f2e00084eb980001944584f206e000874001428000d70012d40ffec2d7c00004966fff070ff2d40fff470042d40fff841eeffec2d48fffc486efff02f3c000053082f024eb9800016c44fef000c4a806d00008a42a7487800032f024eb980001d684fef000c4a806d0000720080000000802f00487800042f024eb980001d684fef000c4a806d00005442a74eb980001a0c584f763cd68048780100486efeec2f024eb9800018f44fef000c4a80672c6e1c700bb0b98000f39c66204878001442a742a74eb980001c784fef000c42a74eb980001a0c584fb0836dbc2f2e00084eb980001818584f4cdf000c4e5e4e75
 	# 3. dataconn, active mode: the SO_LINGER {1, 60} setsockopt is skipped;
 	#    the SO_SNDBUF and SO_RCVBUF calls' 40 bytes of arguments are still
 	#    popped: addaw #40,%sp; bras 0x80002e1a (the connect)

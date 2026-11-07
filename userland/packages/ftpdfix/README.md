@@ -1,13 +1,13 @@
 # ftpdfix — the stock `in.ftpd` with downloads that arrive whole
 
 `/usr/sbin/in.ftpd` is Amix 2.1's FTP server (4.3BSD-Tahoe's ftpd), which `inetd` starts for each
-connection. This package ships that file with 179 bytes changed, in three places, so that the end of
+connection. This package ships that file with 230 bytes changed, in three places, so that the end of
 a download is no longer lost. Everything else is the stock file, byte for byte.
 
 | | sha256 | size |
 |---|---|---|
 | stock, net's `/usr/sbin/in.ftpd` (`system/MANIFEST.sha256`) | `29048aef103a02d5975b1ce4571d770ad88c0cb1b7a5efdc76cd9c6a1bb3940d` | 69760 |
-| this package | `fab610e3bea2251ad0e7d58d147ab72b50b11723c43099a3a807cd8ecd1ac6e4` | 69760 |
+| this package | `6a7c40211733b6847efe1d5bdf75c0a58b9d00a77eff3bee430a941e59487de2` | 69760 |
 
 Package: `ftpdfix`, category `network`, set `base`, essential. Nothing is compiled and no binary is
 kept here: `build.sh` takes the stock file from amix-system at its pin, checks it against
@@ -40,9 +40,16 @@ close, the connection's control block is freed under the waiting server.
 
 The server shuts down its own side of the data connection, reads until the client closes its side,
 and only then closes. The client's FIN comes after it has read everything, so by then every byte has
-been acknowledged and the close throws nothing away. The wait is bounded: four polls of 15 seconds
-at most, so a client that never closes is let go after 60 seconds, and the close then behaves as
-the stock one. Neither mode sets `SO_LINGER` any more.
+been acknowledged and the close throws nothing away. The wait is bounded: a client that never closes
+is let go 60 seconds after the shutdown, and the close then behaves as the stock one. Neither mode
+sets `SO_LINGER` any more.
+
+The wait cannot be a `poll`: once a socket's sending side is shut down, `poll` reports `POLLERR` on
+it at once, every time, whatever the peer does (measured: `revents` 0x8 after 0 ms, four times in a
+row, with the peer holding its side open; `FIONREAD` fails, and a read finds nothing). So the routine
+makes the socket non-blocking and reads: 0 is the end of file, data from the client is read and
+dropped, and nothing yet (`EAGAIN`) is followed by a nap of 20 ms (`poll` with no descriptors, which
+the clock rounds up to its ticks), until `time` says the 60 seconds are over.
 
 The program does not call `shutdown`; libsocket's `shutdown` is an `I_STR` ioctl to the socket
 module (`SI_SHUTDOWN`), and the new routine makes that ioctl itself. Every download (`RETR`, `LIST`,
@@ -57,13 +64,14 @@ Offsets are file offsets; the text's addresses are the offsets plus `0x80000000`
 |---|---|---|---|
 | `0x2874` | `4eb9 8000 1818` | `4eb9 8000 8106` | In `retrieve`, between the two `sigset(SIGPIPE)` calls: `jsr fclose@plt` becomes `jsr dclose`, with the same argument on the stack. |
 | `0x2de6` | `7201 2d41 ffc8` | `defc 0028 602e` | In `dataconn`, active mode: `addaw #40,%sp; bras 0x80002e1a` pops the two `SO_SNDBUF`/`SO_RCVBUF` calls' arguments and skips the `SO_LINGER {1, 60}` `setsockopt`, to the `connect` (whose retry loop branches to the same place). |
-| `0x8106` | `_putspent`, 182 of its 422 bytes | `dclose`, 182 bytes | `_putspent` is linked in from libc's shadow-file code, and nothing in the program calls it: its address appears only in `.symtab`, never in `.dynsym`. The rest of its bytes are left as they are and are never reached. |
+| `0x8106` | `_putspent`, 248 of its 422 bytes | `dclose`, 248 bytes | `_putspent` is linked in from libc's shadow-file code, and nothing in the program calls it: its address appears only in `.symtab`, never in `.dynsym`. The rest of its bytes are left as they are and are never reached. |
 
 `dclose`, assembled with the period toolchain's `as` (`&` marks an immediate there, `|` a comment);
-its calls go through the program's own PLT entries:
+its calls go through the program's own PLT entries, and `errno` is the program's own copy at
+`0x8000f39c`, which the stock code reads too:
 
 ```
-dclose:	linkw	%fp,&-284		| -16 strioctl, -20 how, -28 pollfd, -284 buffer
+dclose:	linkw	%fp,&-276		| -16 strioctl, -20 how, -276 buffer
 	moveml	%d2-%d3,%sp@-
 	movel	%fp@(8),%sp@-
 	jsr	0x80001944		| fflush(fp)
@@ -86,26 +94,48 @@ dclose:	linkw	%fp,&-284		| -16 strioctl, -20 how, -28 pollfd, -284 buffer
 	jsr	0x800016c4		| ioctl(fd, I_STR, &strioctl)
 	lea	%sp@(12),%sp
 	tstl	%d0
-	blts	done
-	moveq	&3,%d3			| 4 rounds
-loop:	movel	%d2,%fp@(-28)		| pollfd.fd
-	movel	&0x00010000,%fp@(-24)	| events POLLIN, revents 0
-	movel	&15000,%sp@-
-	pea	1:w
-	pea	%fp@(-28)
-	jsr	0x80001c78		| _poll(&pollfd, 1, 15000)
-	lea	%sp@(12),%sp
-	tstl	%d0
-	blts	done
-	beqs	next			| 15 s quiet: the next round
-	pea	256:w
-	pea	%fp@(-284)
+	bltw	done
+	clrl	%sp@-
+	pea	3:w			| F_GETFL
 	movel	%d2,%sp@-
-	jsr	0x800018f4		| read(fd, buffer, 256)
+	jsr	0x80001d68		| _fcntl(fd, F_GETFL, 0)
 	lea	%sp@(12),%sp
 	tstl	%d0
-	bles	done			| end of file: the client has had it all
-next:	dbf	%d3,loop
+	bltw	done
+	orl	&0x80,%d0		| O_NONBLOCK
+	movel	%d0,%sp@-
+	pea	4:w			| F_SETFL
+	movel	%d2,%sp@-
+	jsr	0x80001d68		| _fcntl(fd, F_SETFL, flags)
+	lea	%sp@(12),%sp
+	tstl	%d0
+	bltw	done
+	clrl	%sp@-
+	jsr	0x80001a0c		| time(0)
+	addqw	&4,%sp
+	moveq	&60,%d3
+	addl	%d0,%d3			| deadline: 60 s from now
+loop:	pea	256:w
+	pea	%fp@(-276)
+	movel	%d2,%sp@-
+	jsr	0x800018f4		| read(fd, buf, 256)
+	lea	%sp@(12),%sp
+	tstl	%d0
+	beqs	done			| end of file: the client has had it all
+	bgts	clock			| data from the client: read on
+	moveq	&11,%d0
+	cmpl	0x8000f39c,%d0		| errno == EAGAIN?
+	bnes	done
+	pea	20:w
+	clrl	%sp@-
+	clrl	%sp@-
+	jsr	0x80001c78		| _poll(NULL, 0, 20): a nap of 20 ms or more
+	lea	%sp@(12),%sp
+clock:	clrl	%sp@-
+	jsr	0x80001a0c		| time(0)
+	addqw	&4,%sp
+	cmpl	%d3,%d0
+	blts	loop			| before the deadline: again
 done:	movel	%fp@(8),%sp@-
 	jsr	0x80001818		| fclose(fp)
 	addqw	&4,%sp
