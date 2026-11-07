@@ -116,6 +116,27 @@ try:
           and "host pkgtools" not in out, out)
     shutil.rmtree(os.path.join(top, "userland", "packages"))
 
+    # tools: the build container, its gcc14 against the pinned digest, then the
+    # media image; a digest the check refuses stops it before the media image
+    seen = os.path.join(tmp, "tools.seen")
+    for t, rcode in (("container-build.sh", 0), ("extract-g14.sh", "${G14_RC:-0}"),
+                     ("container-media.sh", 0)):
+        write(os.path.join(top, "toolchain", t),
+              '#!/bin/sh\necho "%s $*" >> "%s"\nexit %s\n' % (t, seen, rcode), 0o755)
+    rc, out = run("tools", DIST_HOST=None, AMIX_IMAGE="amix-toolchain:t")
+    got = open(seen).read() if os.path.exists(seen) else ""
+    check("tools: container-build, then extract-g14 --check on that image, then container-media",
+          rc == 0 and got == "container-build.sh %s amix-toolchain:t\nextract-g14.sh --check amix-toolchain:t\n"
+          "container-media.sh amix-toolchain:t amix-toolchain:media\n" % sysdir, got + out)
+    os.remove(seen)
+    rc, out = run("tools", DIST_HOST=None, AMIX_IMAGE="amix-toolchain:t", G14_RC="1")
+    got = open(seen).read() if os.path.exists(seen) else ""
+    check("tools: a gcc14 digest the check refuses stops it before the media image",
+          rc != 0 and "extract-g14.sh --check" in got and "container-media" not in got, got + out)
+    for t in ("container-build.sh", "extract-g14.sh", "container-media.sh"):
+        os.remove(os.path.join(top, "toolchain", t))
+    os.remove(seen)
+
     rc, out = run("kspace", SYSTEM=os.path.join(tmp, "nothere"))
     check("no system input: refused before any step",
           rc == 1 and "no system input" in out and "MISSING" not in out, out)

@@ -54,7 +54,8 @@
 #
 # and `dist` (all of them: a step that exits 3 is a gap, named at the end, and
 # the others still run, the lock too; one that fails stops it), `tools` (the
-# build containers, toolchain/container-build.sh and container-media.sh),
+# build containers, toolchain/container-build.sh, extract-g14.sh --check and
+# container-media.sh),
 # `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
 # `drivers/<name>`.
 #
@@ -133,6 +134,9 @@ if [ "${1:-}" = tools ]; then
 	sys=${SYSTEM:-${AMIX_SYSTEM:-}}
 	[ -n "$sys" ] || { AMIX_TOP=$top; . "$here/pkg/layout.sh"; sys=$AMIX_SYSTEM; }
 	"$top/toolchain/container-build.sh" "$sys" "${AMIX_IMAGE:-amix-toolchain:dist}"
+	# its gcc14 against toolchain/gcc14-cross-amix.tree, as CI checks it: the
+	# sysroot holds amix-system's usr, so a system pin moves that digest too
+	"$top/toolchain/extract-g14.sh" --check "${AMIX_IMAGE:-amix-toolchain:dist}"
 	exec "$top/toolchain/container-media.sh" "${AMIX_IMAGE:-amix-toolchain:dist}" "${AMIX_MEDIA_IMAGE:-amix-toolchain:media}"
 fi
 if [ -z "${AMIX_IN_CONTAINER:-}" ]; then

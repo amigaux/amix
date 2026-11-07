@@ -61,7 +61,9 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `lock` | every input and output of the build (`release/README.md`), gaps or not; with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` | builds |
 
 `make tools` builds both containers (`toolchain/container-build.sh`, then
-`toolchain/container-media.sh` on top of it). A step gets only its own inputs:
+`toolchain/container-media.sh` on top of it), and between them checks the build
+container's GCC 14 against `toolchain/gcc14-cross-amix.tree`
+(`toolchain/extract-g14.sh --check`), as CI does. A step gets only its own inputs:
 `STOCK`, `STOCK_URL`, `RELEASE_PREVIOUS`, `ROM_MANIFEST`, `PRIVACY_PATTERNS` and
 `RELEASE_PUBLIC` reach `release`, the last three `media` too, and `LOCK` reaches
 `lock`, so a name a kernel's recipe reads for itself is never set by accident.

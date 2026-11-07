@@ -106,7 +106,10 @@ on `PATH`.
 `toolchain/*.pin` (`toolchain/check-image IMAGE` runs it in that image).
 `make dist` runs it first inside the container and stops on any difference,
 so a retagged or stale image cannot change a package's bytes unnoticed;
-rebuild the image (`make tools`) after a pin changes.
+rebuild the image (`make tools`) after a pin changes. check-image does not
+see `gcc14-cross-amix.tree`, which a new amix-system pin also moves (the GCC 14
+sysroot holds its `usr`): `make tools` runs `extract-g14.sh --check` on the new
+image, and a digest it refuses goes into that file with the pin.
 
 ## GCC 14 on the host
 
