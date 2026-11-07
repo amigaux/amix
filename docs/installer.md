@@ -71,9 +71,9 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   builds amix `userland/pkgtools` at the set's `pkgtools` revision (the host pkgtrans,
   the miniroot's static pkgadd set, apkg, `make dist`'s APKG and APKGENG, held to their
   md5) into `work/l11/pkgtools`, which every 1.1 tool reads.
-- **The set.** `tools/l11-set.conf`: the kernel-space candidate root of amix-packages,
-  and amix-base, dhcp-client and syslog rolled at the set's `base` amix revision
-  (reproducible; their sha256 pinned).
+- **The set.** Each round's set file (`tools/l11-set-final16.conf`): make dist's kernel space,
+  held to its lock, and the base packages rolled at the set's `dist` amix revision
+  (reproducible; their sha256 pinned to the candidate's bytes).
 - **The install.** After core and the base set, the base packages under the target's
   chroot (seeded baselines, `removef core`); the admin files `/etc/inet/interfaces`,
   `/etc/rc.conf`, `/etc/display`; no S99zen, S20monsw, syslog unit, S89rootswap,
@@ -5289,8 +5289,8 @@ netinstall images' gate in `build-netinstall.sh`) demands the medium table byte 
 
 ## The network installation in two stages
 
-The netinstall medium boots a 5.5 MiB RAM disk (5 MiB until the SSH server joined the base set the
-image carries) and reads its packages over HTTP. A set beyond minimal
+The netinstall medium boots a 5888 KiB RAM disk (5.5 MiB until libcfix joined the base packages the
+image carries, 5 MiB before the SSH server) and reads its packages over HTTP. A set beyond minimal
 is installed in two stages:
 
 1. **From the RAM disk.** The interview offers the repository's sets (minimal, standard, full) as

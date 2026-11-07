@@ -15,9 +15,10 @@
 #   2. this tool, --boot-mods DIR: each line's boot- and demand-class module objects at DIR/<line>/<name>
 #        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
 #        and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
-#   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5632 [--fp-patch] --net
-#        (5.5 MiB: the first stage installs the base packages from the image, dropbear among them;
-#        at 5 MiB k46 had 16 % of its blocks free, under build-ramdisk-miniroot's 20 % room gate)
+#   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 5888 [--fp-patch] --net
+#        (5888 KiB: the first stage installs the base packages from the image, dropbear among them;
+#        at 5 MiB k46 had 16 % of its blocks free, under build-ramdisk-miniroot's 20 % room gate, and
+#        at 5.5 MiB 18 % once libcfix (about 216 KiB) joined them)
 #        --install STAGE --apkg-http work/l11/apkg/apkg-http --kbootset work/l11/dlm/build/box/kbootset
 #        --mod NAME=DIR/<line>/NAME (each)   (the universal interview reads the cards with it)
 #        ...   (one image per line)

@@ -35,9 +35,10 @@ The installer:
    `UNI\0` partitions, and it clears the whole RDB area (blocks 0–127).
    Afterwards it checks there is exactly one `UNI\0`, counting PART blocks by
    their DosType.
-2. installs the medium's package set as for 1.0, then the base packages:
-   amix-base, dhcp-client and syslog, from `/install/l11/base` (built by amix's
-   reproducible roll at the set's `base` revision). They go in under the target's own
+2. installs the medium's package set as for 1.0, then the base packages of
+   `/install/l11/base/order`: libcfix, amix-base, amixrt, dhcp-client, syslog, ftpdfix,
+   dropbear, rdate, cdfs and heirloom-tar (and x11r6.3 for the x11 and full sets), built by
+   make dist's reproducible roll at the set's `dist` revision. They go in under the target's own
    chroot with APKGENG's engine (`/usr/apkg/bin/pkgadd`): their conffile class needs
    `cmp`, which the miniroot lacks. Before each package, `seed.sh` seeds the baseline
    (`/var/sadm/conffiles/<pkginst><path>`) of every conffile still equal to its contents
