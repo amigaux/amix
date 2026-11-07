@@ -55,7 +55,9 @@ find etc usr -type l | LC_ALL=C sort | while read -r l; do
 ```
 
 When amix-system changes, the pin, `MANIFEST.sha256` and `SYMLINKS` change
-together in one commit.
+together in one commit, with `toolchain/gcc14-cross-amix.tree`: the GCC 14
+sysroot in the build container holds amix-system's `usr`, so a new file there
+is a new digest (`toolchain/extract-g14.sh --check` prints it).
 
 ## Why the hashes are here
 

@@ -3,4 +3,4 @@
 # amix/gcc14-cross-amix/, that prefix removed), built by Containerfile from
 # the commit in gcc14-cross-amix.pin. toolchain/extract-g14.sh checks an image
 # against it; build/pkg/common/gcc14-pin.sh pins seven of its files.
-138e69312c06cf715a5c4b58cc47f68a0d39eeff3009ef26323ba9caed592fde
+d1964ac84cdf772fbfb42aa48ddaa5d58141f15dbfc7943c081ae4a3b89ccacb
