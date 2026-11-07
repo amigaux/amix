@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-07 — ftpdfix 2.1-1 (98c0777, 19c9f87)
+
+New base package: the stock /usr/sbin/in.ftpd with 230 bytes changed so a download (RETR, LIST, NLST) no longer loses its last bytes while the server reports 226. The server half-closes the data connection with the SI_SHUTDOWN ioctl, reads non-blocking until the client's EOF (at most 60 s by time(), 20 ms naps; poll reports POLLERR after a half-close), then closes. The active path's SO_LINGER {1,60} setsockopt is skipped. The new routine sits in the unreferenced _putspent. Built from amix-system debb2e1 (STOCK_PATCHED, stock sha256 29048aef…, patched 6a7c4021…); man page ftpdfix(1M) for in.ftpd; essential; net keeps its claim on the path. Measured in emulation: PASV downloads at MSS 1360 short 13/20 stock, 0/20 fixed, on both -77 and -66; PORT 0/20 both; a client that never closes is let go after 59.8 s; throughput unchanged.
+
 ## 2026-11-06 — pth 2.0.7-3, python3 3.11.18-4 (f60a783..926b67d)
 
 pth 2.0.7-3: on Amix, connect finishes before it returns, and a refused one gives ECONNREFUSED. recv and send no longer hit libsocket's NULL-address fault. send goes through write(2), so data that did not fit is no longer counted as sent and lost. poll no longer peeks at listening sockets, which broke accept with EINVAL.
