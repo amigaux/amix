@@ -921,6 +921,50 @@ disk_size_hint()
 	return 0
 }
 
+# disk_real_mb ID -- the chosen disk's own size in megabytes from its driver (/etc/ddsize, 512-byte blocks),
+# for ONE id, after it is chosen; nothing when the driver is not asked or does not answer, and the reason in
+# $BLK0.why. Never on the A3000's own SCSI controller (mobo:a3000-wd): its stock driver stops for the rest of the
+# boot on a first command that is not a block read (the a3091 hang, the header above). Bounded like the
+# miniroot's INQUIRY probe: ddsize runs in the background with its own descriptors (this runs in backticks,
+# whose substitution waits for every writer of its pipe) and is polled each second for DDSIZE_SECS; one past
+# the bound is abandoned -- the miniroot has no kill, and its init reaps it if it ever returns.
+DDSIZE_SECS="${DDSIZE_SECS:-20}"
+disk_real_mb()
+{
+	_rk=
+	_rc=`id_card "$1"`
+	[ -n "$_rc" ] && _rk=`card_key "$_rc"`
+	case "$_rk" in
+		"")		echo "its controller is not known here" > "$BLK0.why"; return 0 ;;
+		mobo:a3000-wd)	echo "the disk's own size cannot be read safely on the A3000's SCSI controller" > "$BLK0.why"; return 0 ;;
+	esac
+	if [ ! -x /etc/ddsize ] || [ ! -x /bin/sleep ]; then
+		echo "this miniroot cannot ask the driver" > "$BLK0.why"; return 0
+	fi
+	rm -f "${BLK0:?}.dd" "${BLK0:?}.ddd"
+	( /etc/ddsize "/dev/rdsk/c${1}d0s0" > "$BLK0.dd" 2>/dev/null
+	  echo $? > "$BLK0.ddd" ) < /dev/null > /dev/null 2>&1 &
+	_ds=0
+	while [ ! -s "$BLK0.ddd" ]
+	do
+		if [ "$_ds" -ge "$DDSIZE_SECS" ]; then
+			echo "the controller did not answer the size request within $DDSIZE_SECS seconds" > "$BLK0.why"
+			return 0
+		fi
+		/bin/sleep 1
+		_ds=`expr "$_ds" + 1`
+	done
+	_db=
+	[ "`cat "$BLK0.ddd"`" = 0 ] && _db=`( read _n _rest; echo "$_n" ) < "$BLK0.dd"`
+	rm -f "${BLK0:?}.dd" "${BLK0:?}.ddd"
+	if is_num "$_db" && [ "$_db" -gt 0 ]; then
+		expr "$_db" / "$BLOCKS_PER_MB"
+	else
+		echo "the driver gave no size" > "$BLK0.why"
+	fi
+	return 0
+}
+
 # rdb_present ID -- does this disk carry a Rigid Disk Block?
 # Two independent readings, and the disk is treated as HAVING an RDB if EITHER
 # says so, because the consequence of a false "no" is skipping the erase
@@ -1127,6 +1171,28 @@ choose_disk()
 	case "$DISK_MB" in
 		"?")	DISK_MB= ;;
 	esac
+	DISK_FROM=layout
+	[ -n "$DISK_MB" ] || DISK_FROM=
+	[ -n "$TARGET_DISK_MB" ] && [ "$SCSI" = "$TARGET_SCSI_ID" ] && DISK_FROM=profile
+
+	# A profile that pins no size (the published media): the disk's own size from its driver, not its old
+	# layout's extent -- a disk reinstalled over a smaller layout is offered all of itself. The old layout is
+	# only information. Where the driver cannot be asked safely, or does not answer in time, the old layout
+	# stays, and the interview says so.
+	if [ -z "$TARGET_DISK_MB" ]; then
+		rm -f "${BLK0:?}.why"
+		_rmb=`disk_real_mb "$SCSI"`
+		if is_num "$_rmb" && [ "$_rmb" -gt 0 ]; then
+			if [ -n "$DISK_MB" ] && [ "$DISK_MB" != "$_rmb" ]; then
+				echo "\nIts old layout covers $DISK_MB megabytes; the disk itself is $_rmb megabytes."
+			fi
+			DISK_MB="$_rmb"
+			DISK_FROM=driver
+		elif [ -n "$DISK_MB" ] && [ -s "$BLK0.why" ]; then
+			echo "\nThis is the size of the disk's old layout: `cat "$BLK0.why"`."
+		fi
+		rm -f "${BLK0:?}.why"
+	fi
 
 	# Only NOW, on ONE id, may the stock probe be considered.
 	if [ -z "$DISK_MB" ]; then
@@ -1136,6 +1202,7 @@ choose_disk()
 				pblk=`/etc/ddsize "/dev/rdsk/c${SCSI}d0s0" 2>/dev/null | ( read n rest; echo "$n" )`
 				if is_num "$pblk" && [ "$pblk" -gt 0 ]; then
 					DISK_MB=`expr "$pblk" / "$BLOCKS_PER_MB"`
+					DISK_FROM=driver
 				else
 					warn "/etc/ddsize returned no usable size for id $SCSI"
 				fi
@@ -1155,6 +1222,7 @@ choose_disk()
 					DISK_MB="$ask" ;;
 			esac
 		done
+		DISK_FROM=asked
 	fi
 
 	echo "\nYour disk is $DISK_MB megabytes."
@@ -2632,6 +2700,7 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	# the CD's address when the miniroot recorded it, or the IDE card gave it
 	{ [ -n "$CD_SPEC_EXACT" ] || [ -n "$IDE_CARD" ]; } && echo "CD_SPEC=$CD_SPEC"
 	echo "TARGET_DISK_MB=$DISK_MB"
+	echo "TARGET_DISK_FROM=$DISK_FROM"
 	echo "TARGET_ROOT_MB=$ANS_ROOT"
 	echo "TARGET_SWAP_MB=$ANS_SWAP"
 	[ -z "${SWAP_KEPT_OVER:-}" ] || echo "# swap: $ANS_SWAP MB kept past the $SWAP_KEPT_OVER MB this machine takes"
