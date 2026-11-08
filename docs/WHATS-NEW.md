@@ -50,5 +50,7 @@ Plans, with no dates; they may change.
 - Shared libraries with GCC 14 (`gcc -shared`).
 - Package repositories per release (`http://pkg.amigaux.org/1.1`).
 - `make dist` builds the release reproducibly from this repository.
-- Programs can use all of the machine's memory: data and mapped-memory limits are unlimited by default.
+- Memory limits are the stock ones: one program gets 16 MiB of data and 16 MiB of address space by default.
+  The hard limits are unlimited, so a user, or `/etc/profile` for everyone, can raise them with `ulimit -d`
+  and `ulimit -v`.
 - Network and print services that few machines need start only when `/etc/rc.conf` turns them on.
