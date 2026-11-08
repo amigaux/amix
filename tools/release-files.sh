@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # release-files.sh -- the release files of a set of images of record and media, checked.
 #
-#   tools/release-files.sh --images DIR [--media FILE]...
+#   tools/release-files.sh --images DIR [--kind 4g|ide-2g] [--media FILE]...
 #
-# For each DIR/amix-1.1-<line>-4g.img: DIR/amix-1.1-<line>-4g.zip holding that one image, plain
+# For each DIR/amix-1.1-<line>-<kind>.img (kind 4g by default; ide-2g the IDE images): its .zip holding that one image, plain
 # zip (`zip -fz-`: no zip64 -- an image is under 4 GiB, and old built-in unzippers choke on zip64),
 # under 2 GiB (a release host's file cap); `zipinfo -v` must show no zip64 extra field, and
 # `unzip -t` must pass. Then DIR/SHA256SUMS over the zips and the images, and the content check
@@ -13,6 +13,7 @@
 # tools/known-bad-scan.py over the same files (no module of tools/known-bad-modules.txt).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
+KIND=4g   # --kind: the images' name suffix, amix-1.1-<line>-<kind>.img
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # the workspace: the directory holding this repository's git directory (a worktree's too); amix's
 # tools/release-check is the one content check every release file passes
@@ -25,7 +26,7 @@ RC="${L11_IN:-$(dirname "$here")/work/l11}/amix-tools/release-check"
 missing_lines() {
 	local L hit=0
 	for L in k46 k30; do
-		[ -f "$1/amix-1.1-$L-4g.img" ] || { echo "$L"; hit=1; }
+		[ -f "$1/amix-1.1-$L-$KIND.img" ] || { echo "$L"; hit=1; }
 	done
 	return $hit
 }
@@ -63,6 +64,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--images) IMG="$2"; shift 2 ;;
 	--media) MEDIA+=("$2"); shift 2 ;;
+	--kind) case "$2" in 4g|ide-2g) KIND=$2 ;; *) echo "release-files: --kind 4g|ide-2g" >&2; exit 2 ;; esac; shift 2 ;;
 	*) sed -n '2,14p' "$0"; exit 2 ;;
 	esac
 done
@@ -85,7 +87,7 @@ for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do _mdirs+=("$(dirname "$m")"/*); done
 if _h=$(not_release_files "$IMG"/* "${_mdirs[@]+"${_mdirs[@]}"}" "${MEDIA[@]+"${MEDIA[@]}"}"); then :; else
 	say "FAIL not release files, a raw k30 image is a bench medium: $_h"; bad=1
 fi
-for img in "$IMG"/amix-1.1-*-4g.img; do
+for img in "$IMG"/amix-1.1-k??-"$KIND".img; do
 	[ -f "$img" ] || continue
 	b="$(basename "$img" .img)" z="$IMG/$b.zip"
 	rm -f "${z:?}"
@@ -101,11 +103,11 @@ for img in "$IMG"/amix-1.1-*-4g.img; do
 	[ "$ut" = 0 ] || { v="FAIL (unzip -t rc $ut)"; bad=1; }
 	say "zip $b.zip: $zs bytes ($(awk -v a="$zs" 'BEGIN { printf "%.1f", a / 1048576 }') MiB) holding $b.img $(stat -c %s "$img") bytes; zip64 lines in zipinfo -v: $z64; unzip -t rc $ut: $v"
 done
-( cd "$IMG" && sha256sum amix-1.1-*-4g.zip amix-1.1-*-4g.img > SHA256SUMS ) || { say "FAIL SHA256SUMS"; bad=1; }
+( cd "$IMG" && sha256sum amix-1.1-k??-"$KIND".zip amix-1.1-k??-"$KIND".img > SHA256SUMS ) || { say "FAIL SHA256SUMS"; bad=1; }
 say "# SHA256SUMS"
 cat "$IMG/SHA256SUMS" | tee -a "$R"
 say "# content check"
-imgs=("$IMG"/amix-1.1-*-4g.img)
+imgs=("$IMG"/amix-1.1-k??-"$KIND".img)
 for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do
 	[ -f "$m" ] || { say "FAIL $m: no such file"; bad=1; continue; }
 	if [ -f "$m.sha256" ]; then
