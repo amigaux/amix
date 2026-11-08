@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — live netinstall from pkg.amigaux.org/1.1 (e372065..e2623b1)
+
+Netinstall cells can install from the published repository by name (MTX_LIVE=URL): nothing local serves either stage, the live catalog is held to the local copy's md5 and every package of the order is judged against its rows. RETURN keeps pkg.amigaux.org at the first-boot dialog, which asks no address for it; live cells allow 9000 s to the first login prompt (the full set over the internet took 3873 s). Both lines pass live on the final16 media, each box holding catalog d630412a.
+
 ## 2026-11-08 — final16's cards on Z3660 CDEB9618, 6 MiB netinstall RAM disks (bdef564..e372065)
 
 The three 1.1 cards carry Z3660 CDEB9618 (sha256 6b4bc2fe…, from MANIFEST-golden-2026-11-06: 28072E28 plus the upload and RX fixes, 100 Mbit default), accepted on the A4000D 10/10 and the A4000T 3/3; the card disks are unchanged and all three card audits pass. The netinstall RAM disks grow to 6 MiB (k46's had 19.9 % free at 5888 KiB, under the 20 % gate); chain-line's CHAIN_NI16=1 runs both 16 MiB netinstalls first; a cell refuses to start while another emulator holds its IPC socket. The 1.1 notes say /dev/audio is new, with three stock defects fixed.
