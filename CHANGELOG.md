@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — 1.1 notes: network install timing, modadmin and kbootset (5d669ca..d6d9d07)
+
+The 1.1 notes say a network install finishes at the first boot, which fetches the rest of the chosen set and can take over an hour with the full set over the internet; and that the loaded modules are shown with `modadmin -s` and `kbootset status` (there is no kinfo command). The notes are on no medium.
+
 ## 2026-11-08 — live netinstall from pkg.amigaux.org/1.1 (e372065..e2623b1)
 
 Netinstall cells can install from the published repository by name (MTX_LIVE=URL): nothing local serves either stage, the live catalog is held to the local copy's md5 and every package of the order is judged against its rows. RETURN keeps pkg.amigaux.org at the first-boot dialog, which asks no address for it; live cells allow 9000 s to the first login prompt (the full set over the internet took 3873 s). Both lines pass live on the final16 media, each box holding catalog d630412a.
