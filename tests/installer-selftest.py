@@ -1210,6 +1210,9 @@ DRIVER_EXTRA = set()
 # userland (build-ramdisk-miniroot.sh --net) is on the netinstall image only, and the
 # profile reaches it only in net_source, behind the image's /install/NETINSTALL marker.
 PROFILE_EXTRA = {"modadmin", "aen", "date", "ifconfig", "route", "slink", "sleep"}
+# setup.sh's extra: the RAM disk's /bin/sleep (build-ramdisk-miniroot.sh), which bounds the chosen disk's size
+# request (disk_real_mb); the helper tests for it and keeps the old layout's size without it
+SETUP_EXTRA = {"sleep"}
 # firstboot.sh runs on the FULL installed target (core+base transplanted), so the
 # complete SVR4 userland is present. These are the tools it deliberately uses that
 # the miniroot itself lacks -- documented, and NOT granted to install.sh.
@@ -1563,7 +1566,7 @@ def audit_tool_allowlist():
     # miniroot exactly like the driver, so it gets the SAME strict allowlist:
     # no sed, no touch, no basename, no grep, no od.
     sbad = [w for w in swords if _classify(w, _defined_funcs(open(SETUP).read()),
-                                           proto_tools, DRIVER_EXTRA)]
+                                           proto_tools, DRIVER_EXTRA | SETUP_EXTRA)]
     if sbad:
         fail("setup.sh references tool(s) the miniroot does NOT carry: %s"
              % ", ".join(sorted(set(sbad))))
@@ -5459,17 +5462,31 @@ def audit_w2_structure():
     # Count ddsize as a COMMAND, not as text: the chooser also NAMES the probe
     # in the line it prints before running it (so a console that wedges says
     # exactly where), and a naive substring count would read those as calls.
+    # Two invocations, each on ONE already-chosen id: the stock-shaped one in choose_disk behind DDSIZE_SAFE
+    # (a pinned rig), and the bounded one in disk_real_mb (a profile that pins no size: the published media),
+    # which choose_disk alone calls, never on the A3000's WD, in the background with a per-second bound.
     chooser = _extract_func(src, "choose_disk") or ""
+    real = _extract_func(src, "disk_real_mb") or ""
     nds_file = list(command_words(src)).count("/etc/ddsize")
     nds_chooser = list(command_words(chooser)).count("/etc/ddsize")
-    if nds_file == 1 and nds_chooser == 1 and "DDSIZE_SAFE" in strip_full_comments(chooser):
-        ok("ddsize is INVOKED exactly once in the whole interview, inside "
-           "choose_disk, behind the DDSIZE_SAFE gate, on ONE already-chosen id")
+    nds_real = list(command_words(real)).count("/etc/ddsize")
+    if nds_file == 2 and nds_chooser == 1 and nds_real == 1 and "DDSIZE_SAFE" in strip_full_comments(chooser):
+        ok("ddsize is INVOKED twice in the whole interview: once in choose_disk behind the DDSIZE_SAFE gate, "
+           "once in the bounded disk_real_mb, each on ONE already-chosen id")
     else:
-        fail("expected exactly one ddsize INVOCATION, inside choose_disk and gated "
-             "on DDSIZE_SAFE; found %d in the file / %d in choose_disk, gated=%s"
-             % (nds_file, nds_chooser,
-                "DDSIZE_SAFE" in strip_full_comments(chooser)))
+        fail("expected two ddsize INVOCATIONs (choose_disk behind DDSIZE_SAFE, disk_real_mb); found %d in the "
+             "file / %d in choose_disk / %d in disk_real_mb, gated=%s"
+             % (nds_file, nds_chooser, nds_real, "DDSIZE_SAFE" in strip_full_comments(chooser)))
+    rb = strip_full_comments(real)
+    calls = [l for l in strip_full_comments(src).splitlines() if "disk_real_mb " in l and "disk_real_mb()" not in l]
+    if (re.search(r'mobo:a3000-wd\)', rb) and re.search(r'\) < /dev/null > /dev/null 2>&1 &', rb)
+            and "DDSIZE_SECS" in rb and "/bin/sleep 1" in rb and len(calls) == 1
+            and "disk_real_mb" in strip_full_comments(chooser)):
+        ok("disk_real_mb never asks the A3000's WD, runs ddsize in the background with its own descriptors, "
+           "polls it each second up to DDSIZE_SECS, and is called once, from choose_disk")
+    else:
+        fail("disk_real_mb must skip mobo:a3000-wd, background ddsize with its own descriptors, bound it by "
+             "DDSIZE_SECS with /bin/sleep 1, and be called once from choose_disk (calls: %d)" % len(calls))
 
     # --- U2: SCAN_IDS derived-checked against the proto ---------------------
     m = re.search(r'SCAN_IDS="([0-9 ]+)"', code)
@@ -10533,7 +10550,7 @@ def audit_cd_candidates():
     f = "\n".join(fns)
     keys = re.search(r'(?m)^NOINQ_KEYS="([^"]*)"$', src)
     (ok if keys and keys.group(1) == "mobo:a3000-wd" else fail)("the profile names the A3000's WD as a card no INQUIRY may reach")
-    (ok if 'echo "$s" > $CD_SPEC_FILE' in src and "CD_SPEC_FILE=/tmp/cd.spec" in src else fail)(
+    (ok if 'echo "$_pick" > $CD_SPEC_FILE' in src and "CD_SPEC_FILE=/tmp/cd.spec" in src else fail)(
         "the probe writes the address that answered to /tmp/cd.spec")
     (ok if re.search(r'(?m)^_cds=`cd_candidates_from_cards`\n\[ -n "\$_cds" \] && CD_CANDIDATES=`echo \$_cds`$', src)
      else fail)("CD_CANDIDATES is replaced only when the kernel's cards gave a list (the fixed list is the fallback)")
@@ -11839,6 +11856,149 @@ def audit_l11():
         fail("updbootpart-l11: rc %d, stderr %r" % (r.returncode, r.stderr[:200]))
 
 
+def _sh_session(body, stdin="", timeout=30):
+    """run body under dash in its own session; kill whatever it leaves behind; (rc, stdout)"""
+    pr = subprocess.Popen(["/usr/bin/dash", "-c", body], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    try:
+        out = pr.communicate(stdin, timeout=timeout)[0]
+        return pr.returncode, out
+    except subprocess.TimeoutExpired:
+        return -1, "TIMEOUT"
+    finally:
+        try:
+            os.killpg(pr.pid, 9)
+        except ProcessLookupError:
+            pass
+        pr.wait()
+
+
+def audit_source_fit():
+    head("SF. the source probe takes only an amigaux 1.1 install disc for the running kernel's line: another "
+         "medium is named and skipped, two fitting discs are listed and asked for, a stale /cdrom is let go")
+    prof = open(os.path.join(REPO, "src", "miniroot", "profile"), encoding="latin-1").read()
+    fns = []
+    for name in ("source_ok", "source_fits", "source_built", "pick_cd", "find_source"):
+        m = re.search(r"\n(%s\(\)\n\{\n.*?\n\})\n" % name, prof, re.S)
+        if not m:
+            fail("profile: no %s()" % name)
+            return
+        fns.append(m.group(1))
+    d = tempfile.mkdtemp(prefix="srcfit_")
+    try:
+        def medium(spec, kind, built="2026-11-08T10:00:00Z"):
+            m = os.path.join(d, "media", spec)
+            os.makedirs(os.path.join(m, "install", "bin"))
+            open(os.path.join(m, "install", "bin", "setup.sh"), "w").write("#!/bin/sh\n: interview\n")
+            open(os.path.join(m, "MANIFEST"), "w").write("amix-installng install CD\nbuilt:        %s\n" % built)
+            if kind != "1.0":
+                os.makedirs(os.path.join(m, "install", "l11"))
+                os.makedirs(os.path.join(m, "install", "profiles"))
+                open(os.path.join(m, "install", "profiles", "BASE." + kind), "w").write("universal-%s\n" % kind)
+
+        def run(probed, answers="", stale=False):
+            cdrom = os.path.join(d, "cdrom")
+            shutil.rmtree(cdrom, ignore_errors=True)
+            for f in ("calls", "cd.spec", "cd.found", "cd.found.pick"):
+                if os.path.exists(os.path.join(d, f)):
+                    os.remove(os.path.join(d, f))
+            if stale:
+                os.makedirs(os.path.join(cdrom, "install", "bin"))
+                os.makedirs(os.path.join(cdrom, "install", "l11"))
+                open(os.path.join(cdrom, "install", "bin", "setup.sh"), "wb").write(b"\x00\x13garbage(\n")
+            body = ('D=%s\nCDROM=$D/cdrom\nSETUP=$CDROM/install/bin/setup.sh\nNETINST=$D/netinst\nRAW_CANDIDATES=\n'
+                    'CD_SPEC_FILE=$D/cd.spec\nCD_FOUND=$D/cd.found\nKLINE=k46\nCD_PROBED=%s\nCD_CANDIDATES="1,3 2,5"\n'
+                    'probe_cdfs() { echo "mount $1" >> $D/calls; rm -rf $CDROM; [ -d $D/media/$1 ] && cp -r $D/media/$1 $CDROM; '
+                    '[ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ]; }\n'
+                    'drop_source() { rm -rf $CDROM; }\ndisk_present() { return 1; }\nprobe_raw() { return 1; }\n'
+                    'source_label() { echo "the CD-ROM drive at $2"; }\nnet_source() { :; }\n'
+                    'restart() { echo RESTART; exit 99; }\nreadask() { echo "$*"; read ask; }\n%s\n'
+                    'find_source\necho "SRC=$SRC_KIND $SRC_SPEC SPEC=`cat $CD_SPEC_FILE`"\necho "CALLS=`cat $D/calls`"\n'
+                    % (d, "y" if probed else "", "\n".join(fns)))
+            return _sh_session(body, answers)
+
+        shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
+        medium("1,3", "1.0"); medium("2,5", "k46")
+        rc, o = run(True)
+        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "The CD at 1,3 is not an amigaux 1.1 install disc" in o
+                and "More than one" not in o)
+        (ok if good else fail)("source EXECUTED: a 1.0 disc at 1,3 and the 1.1 disc at 2,5 -> the 1.0 disc is named and "
+                               "skipped, 2,5 is the source%s" % ("" if good else ": %r" % o[-300:]))
+        shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
+        medium("1,3", "k46", "2026-10-10T08:00:00Z"); medium("2,5", "k46", "2026-11-07T09:36:12Z")
+        rc, o = run(True, "2\n")
+        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "More than one amigaux 1.1 install disc" in o
+                and "1)  the CD-ROM drive at 1,3, built 2026-10-10T08:00:00Z" in o
+                and "2)  the CD-ROM drive at 2,5, built 2026-11-07T09:36:12Z" in o)
+        (ok if good else fail)("source EXECUTED: two 1.1 discs -> both listed with their build dates, the one chosen "
+                               "(2) is mounted again and taken%s" % ("" if good else ": %r" % o[-400:]))
+        rc, o = run(False)
+        good = rc == 0 and "SRC=cdfs 1,3 SPEC=1,3" in o and "CALLS=mount 1,3" in o and "mount 2,5" not in o
+        (ok if good else fail)("source EXECUTED: an address list not from the INQUIRY probe -> the walk stops at the "
+                               "first fitting disc, still mounted, and mounts nothing past it%s" % ("" if good else ": %r" % o[-300:]))
+        shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
+        medium("2,5", "k46")
+        rc, o = run(True, stale=True)
+        good = (rc == 0 and "not a readable amigaux 1.1 install disc: unmounting it" in o and "SRC=cdfs 2,5" in o
+                and "already mounted" not in o)
+        (ok if good else fail)("source EXECUTED: a stale /cdrom (setup.sh's first line is not its own) is let go and "
+                               "the drives are looked at again%s" % ("" if good else ": %r" % o[-300:]))
+        shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
+        medium("2,5", "k30")
+        rc, o = run(True)
+        good = rc == 99 and "RESTART" in o and "The CD at 2,5 is not an amigaux 1.1 install disc" in o
+        (ok if good else fail)("source EXECUTED: only a disc of the other line (BASE.k30 on a k46 kernel) -> named, "
+                               "not taken, the restart prompt%s" % ("" if good else ": %r" % o[-300:]))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def audit_disk_real_size():
+    head("RS. the chosen disk's own size from its driver, bounded: ddsize in the background, polled each second, "
+         "abandoned at DDSIZE_SECS; never on the A3000's WD; the old layout's size kept, with the reason, otherwise")
+    src = open(SETUP, encoding="latin-1").read()
+    m = re.search(r"\n(disk_real_mb\(\)\n\{\n.*?\n\})\n", src, re.S)
+    if not m:
+        fail("setup.sh: no disk_real_mb()")
+        return
+    fn = m.group(1).replace("/etc/ddsize", "$DDSZ")   # /bin/sleep is the host's own
+    d = tempfile.mkdtemp(prefix="realsz_")
+    try:
+        def run(key, stub):
+            dd = os.path.join(d, "ddsize")
+            open(dd, "w").write("#!/bin/sh\necho called >> %s/calls\n%s\n" % (d, stub))
+            os.chmod(dd, 0o755)
+            for f in ("calls", "blk0.why"):
+                if os.path.exists(os.path.join(d, f)):
+                    os.remove(os.path.join(d, f))
+            body = ('DDSZ=%s\nBLK0=%s/blk0\nBLOCKS_PER_MB=2048\nDDSIZE_SECS=2\nKEY="%s"\n'
+                    'is_num() { case "$1" in ""|*[!0-9]*) return 1 ;; esac; return 0; }\n'
+                    'id_card() { echo 1; }\ncard_key() { echo "$KEY"; }\n%s\n'
+                    'MB=`disk_real_mb 16`\necho "MB=[$MB]"\necho "WHY=[`cat $BLK0.why 2>/dev/null`]"\n'
+                    % (dd, d, key, fn))
+            t0 = time.time()
+            rc, o = _sh_session(body, timeout=30)
+            return rc, o, time.time() - t0, os.path.exists(os.path.join(d, "calls"))
+
+        rc, o, t, called = run("mobo:gayle", "echo 409600")
+        (ok if "MB=[200]" in o and called else fail)("real size EXECUTED: ddsize answers 409600 blocks -> 200 MB%s"
+                                                    % ("" if "MB=[200]" in o else ": %r" % o))
+        rc, o, t, called = run("mobo:a3000-wd", "echo 409600")
+        good = "MB=[]" in o and "A3000" in o and not called
+        (ok if good else fail)("real size EXECUTED: the A3000's WD -> ddsize is never run, the reason is given%s"
+                               % ("" if good else ": %r called=%s" % (o, called)))
+        rc, o, t, called = run("zorro:0202:54", "exec sleep 30")
+        good = "MB=[]" in o and "did not answer the size request within 2 seconds" in o and t < 15
+        (ok if good else fail)("real size EXECUTED: a ddsize that never returns is abandoned at the bound (%.1f s), "
+                               "the substitution comes back, the reason is given%s" % (t, "" if good else ": %r" % o))
+        rc, o, t, called = run("mobo:gayle", "exit 1")
+        good = "MB=[]" in o and "the driver gave no size" in o
+        (ok if good else fail)("real size EXECUTED: a failing ddsize -> no size, the reason is given%s"
+                               % ("" if good else ": %r" % o))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def main():
     # accept and ignore --self-test (the run-checks.sh entrypoint)
     args = [a for a in sys.argv[1:] if a != "--self-test"]
@@ -11916,6 +12076,8 @@ def main():
     audit_root_lock()
     audit_universal_cards()
     audit_cd_candidates()
+    audit_source_fit()
+    audit_disk_real_size()
     audit_boot_pri()
     audit_guarded_rm_mv()
     audit_colon_truncate()

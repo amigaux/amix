@@ -219,6 +219,8 @@ cards_probe_bounded()
 }
 cd_candidates_from_cards()
 {
+	_cpf=${CD_PROBED_F:-/tmp/cd.probed}
+	rm -f "${_cpf:?}" "${_cpf:?}.mixed"
 	[ -x $KBOOTSET ] || return 0
 	if [ -c $SCSIDEV ]
 	then
@@ -235,6 +237,7 @@ cd_candidates_from_cards()
 			elif [ "$_a" = not ] && [ -n "$_cur" ]
 			then
 				# a card no INQUIRY reaches: each of its units is tried once by the mount probe
+				echo n > $_cpf.mixed
 				for _u in 3 5 2 4 1 0 6
 				do
 					echo "$_cur,$_u"
@@ -243,6 +246,9 @@ cd_candidates_from_cards()
 		done < $CARDS_PROBE`
 		if [ -n "$_p" ]
 		then
+			# every address answered an INQUIRY as a CD drive: each can be mounted once and let go
+			[ -f $_cpf.mixed ] || echo y > $_cpf
+			rm -f "${_cpf:?}.mixed"
 			echo $_p
 			return 0
 		fi
@@ -263,11 +269,31 @@ cd_candidates_from_cards()
 		done
 	done
 }
+# CD_PROBED=y: every candidate is a unit that answered the INQUIRY as a CD drive (the probe's own list), so
+# each can be mounted, looked at and let go -- a second mount of a unit that is THERE is safe; of one that is
+# not, it panics (below). Otherwise the list may name units that are not there, and the walk stops at the first fit.
+CD_PROBED_F=/tmp/cd.probed
 _cds=`cd_candidates_from_cards`
 [ -n "$_cds" ] && CD_CANDIDATES=`echo $_cds`
+CD_PROBED=
+[ -f $CD_PROBED_F ] && CD_PROBED=y
 # the address that answered, for the interview (setup.sh reads it: the CD's unit is excluded
 # exactly, and no other candidate unit needs to be)
 CD_SPEC_FILE=/tmp/cd.spec
+# the 1.1 install discs for this kernel's line that answered: "<card,unit> <build date>" per line
+CD_FOUND=/tmp/cd.found
+# the running kernel's line (setup.sh's kinfo_line: /dev/kinfo's line long at 16 is 30 or 46, and byte 19 is
+# '.' only for 46); nothing when /dev/kinfo cannot tell
+KLINE=
+if [ -r /dev/kinfo ] && [ "`dd if=/dev/kinfo bs=4 count=1 2>/dev/null`" = KIF1 ]
+then
+	if [ "`dd if=/dev/kinfo bs=20 count=1 2>/dev/null | dd bs=1 skip=19 count=1 2>/dev/null`" = . ]
+	then
+		KLINE=k46
+	else
+		KLINE=k30
+	fi
+fi
 
 # ---------------------------------------------------------------------------
 # stock helpers, verbatim
@@ -645,6 +671,63 @@ drop_source()
 	/etc/umount $CDROM > /dev/null 2>&1
 }
 
+# source_ok -- the medium at /cdrom carries a READABLE installer: setup.sh's first line is its own. A mount
+# whose disc was ejected keeps the name and loses the bytes (a stale /cdrom: setup.sh then failed with
+# "syntax error at line 1", and the restart looped on it), so the name alone is never trusted.
+source_ok()
+{
+	[ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ] || return 1
+	# dd, not a redirected read: a redirection that fails would end this (non-interactive) shell
+	_sl=`dd if=$SETUP bs=9 count=1 2>/dev/null`
+	[ "$_sl" = "#!/bin/sh" ]
+}
+
+# source_fits -- and it is an amigaux 1.1 install medium for the running kernel's line: its 1.1 tree
+# (/install/l11) and its base profile for this line (BASE.k46 or BASE.k30). An older medium on another unit
+# (a 1.0 disc, a disc of the other line) is never taken for the source.
+source_fits()
+{
+	source_ok || return 1
+	[ -d $CDROM/install/l11 ] || return 1
+	if [ -n "$KLINE" ]
+	then
+		[ -f $CDROM/install/profiles/BASE.$KLINE ]
+	else
+		[ -f $CDROM/install/profiles/BASE.k46 ] || [ -f $CDROM/install/profiles/BASE.k30 ] || [ -f $CDROM/install/profiles/BASE ]
+	fi
+}
+
+# source_built -- the medium's build date (its /MANIFEST "built:" line), what tells two discs apart
+source_built()
+{
+	_sb=
+	[ -f $CDROM/MANIFEST ] && _sb=`while read _k _v _rest; do [ "$_k" = built: ] && { echo "$_v"; break; }; done < $CDROM/MANIFEST`
+	echo "${_sb:-no build date}"
+}
+
+# pick_cd SPEC... -- more than one 1.1 install disc answered: list them and ask which; the pick goes to $CD_FOUND.pick
+pick_cd()
+{
+	echo "\nMore than one amigaux 1.1 install disc is in a drive:\n"
+	_pi=0
+	while read _ps _pb
+	do
+		_pi=`expr $_pi + 1`
+		echo "  $_pi)  the CD-ROM drive at $_ps, built $_pb"
+	done < $CD_FOUND
+	_pk=
+	while [ -z "$_pk" ]
+	do
+		readask "\nWhich one do you want to install from? [1] "
+		case "$ask" in
+			"")	_pk=1 ;;
+			[1-9])	[ "$ask" -le $# ] && _pk=$ask ;;
+		esac
+	done
+	shift `expr $_pk - 1`
+	echo "$1" > $CD_FOUND.pick
+}
+
 source_label()
 {
 	case "$1" in
@@ -918,10 +1001,16 @@ find_source()
 	# to go looking for it would be its own bug.
 	if [ -f $SETUP ] && [ ! -f $CDROM/install/NETINSTALL ]
 	then
-		echo "\nThe installation source is already mounted on $CDROM."
-		SRC_KIND=mounted
-		SRC_SPEC=$CDROM
-		return 0
+		if source_fits
+		then
+			echo "\nThe installation source is already mounted on $CDROM."
+			SRC_KIND=mounted
+			SRC_SPEC=$CDROM
+			return 0
+		fi
+		# ejected (or another medium): its installer is not readable here
+		echo "\nThe medium mounted on $CDROM is not a readable amigaux 1.1 install disc: unmounting it."
+		drop_source
 	fi
 
 	echo "\nSearching for the installation source..."
@@ -941,21 +1030,59 @@ find_source()
 		drop_source
 	done
 
-	# 2. a CD. Only reachable by mounting, so one attempt each, in order.
+	# 2. a CD. Only reachable by mounting, so one attempt each, in order. Only an amigaux 1.1 install disc for
+	# this kernel's line is a source; another medium is named and skipped. When every address answered the
+	# INQUIRY as a CD drive (CD_PROBED), every disc is looked at and let go, and two or more fitting discs are
+	# listed for the user to choose; otherwise the walk stops at the first fit, still mounted.
 	if [ "$SRC_KIND" = "" ]
 	then
-		rm -f "${CD_SPEC_FILE:?}"
+		rm -f "${CD_SPEC_FILE:?}" "${CD_FOUND:?}.pick"
+		cp /dev/null $CD_FOUND
+		_held=
 		for s in $CD_CANDIDATES
 		do
 			if probe_cdfs "$s"
 			then
-				SRC_KIND=cdfs
-				SRC_SPEC="$s"
-				echo "$s" > $CD_SPEC_FILE
-				break
+				if source_fits
+				then
+					echo "$s `source_built`" >> $CD_FOUND
+					if [ "$CD_PROBED" != y ]
+					then
+						_held=$s
+						break
+					fi
+				else
+					echo "\nThe CD at $s is not an amigaux 1.1 install disc for this machine (built `source_built`); it is skipped."
+				fi
 			fi
 			drop_source
 		done
+		if [ -s $CD_FOUND ]
+		then
+			set -- `while read _fs _fb; do echo "$_fs"; done < $CD_FOUND`
+			_pick=$1
+			if [ $# -gt 1 ]
+			then
+				pick_cd "$@"
+				_pick=`cat $CD_FOUND.pick`
+			fi
+			if [ "$_held" != "$_pick" ]
+			then
+				# let go after the look: mount the chosen disc again (a unit that answered once is there)
+				if probe_cdfs "$_pick" && source_fits
+				then
+					:
+				else
+					drop_source
+					echo "\nThe CD at $_pick did not answer a second time."
+					echo "Check the disc and press RETURN to try again."
+					restart
+				fi
+			fi
+			SRC_KIND=cdfs
+			SRC_SPEC="$_pick"
+			echo "$_pick" > $CD_SPEC_FILE
+		fi
 	fi
 
 	if [ "$SRC_KIND" = "" ] && [ -f $NETINST/NETINSTALL ]
