@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — final16's cards on Z3660 CDEB9618, 6 MiB netinstall RAM disks (bdef564..e372065)
+
+The three 1.1 cards carry Z3660 CDEB9618 (sha256 6b4bc2fe…, from MANIFEST-golden-2026-11-06: 28072E28 plus the upload and RX fixes, 100 Mbit default), accepted on the A4000D 10/10 and the A4000T 3/3; the card disks are unchanged and all three card audits pass. The netinstall RAM disks grow to 6 MiB (k46's had 19.9 % free at 5888 KiB, under the 20 % gate); chain-line's CHAIN_NI16=1 runs both 16 MiB netinstalls first; a cell refuses to start while another emulator holds its IPC socket. The 1.1 notes say /dev/audio is new, with three stock defects fixed.
+
 ## 2026-11-07 — final16's set: make dist at amix cdf6c05, candidate d630412a (0e0f619)
 
 The set is generated from the proven candidate (lock caeca530): kernels 68030-261106-77 and 68060-261106-66, amix-base 1.0-34, dhcp-client 1.0-9, ftpdfix 2.1-1 (new), libcfix 2.1c-2, APKG 0.3.11 and APKGENG 1.12.10; the netinstall RAM disks at 5888 KiB; the 1.1 release notes gain "Fixed in 1.1" (bugs inherited from 2.1c and present in 1.0) and the TCP close limit.
