@@ -125,7 +125,9 @@ bash "$here/medium-address-check.sh" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 python3 "$here/public-text-check.py" --disc "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
-bash "$here/sidecar-path-check.sh" "$IMG"/*.MANIFEST "$IMG"/README.txt "$IMG"/SHA256SUMS "$R" 2>&1 | tee -a "$R"
+# the images' README is the kind's own: build-preinstalled.sh writes README.txt for 4g, README-ide-2g.txt for ide-2g
+RDM=README.txt; [ "$KIND" = ide-2g ] && RDM=README-ide-2g.txt
+bash "$here/sidecar-path-check.sh" "$IMG"/*.MANIFEST "$IMG/$RDM" "$IMG"/SHA256SUMS "$R" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 say "release-files: $( [ $bad = 0 ] && echo 'ALL CLEAN' || echo 'FAILED')"
 exit $bad
