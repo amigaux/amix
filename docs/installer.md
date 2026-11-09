@@ -2499,20 +2499,37 @@ Three properties are worth stating because each of them is a decision:
   the custom screen writes `/tmp/setup.order` by dropping lines. No dependency
   solver ever runs on the miniroot.
 
-### The free-space check, with stock's own override
+### The free-space check: the whole set, refused when it does not fit
 
 ```
-WARNING:  Your allocated space for installation is 30 MB,
-but you have selected to install 37 MB.
+WARNING:  Your allocated space for installation is 102 MB,
+but you have selected to install 151 MB.
+That set does not fit: make the root file system at least 154 MB, or choose a smaller set.
 
-Go ahead with the installation anyway? [n]
+Do you want to change the root file system's size? [y]
 ```
 
-Verbatim from amixpkg (assembled from its four `.rodata` fragments). Declining
-returns to the menu; accepting installs anyway, exactly as stock did. An
-**unknown** size is no gate at all — refusing an install because the medium
-declined to say how big a set is would be treating "unknown" as "too big", which
-is the same class of mistake as treating it as 0.
+The first two lines are amixpkg's own (assembled from its `.rodata`
+fragments); the figure is the set's **whole** footprint on the root: its
+packages' installed size (the catalog's `#isize` lines) and the 1.1 base
+packages the set takes from `l11/base` (`order` for every set, `o.<set>` for
+its own: x11r63 for x11), each counted twice because its datastream is copied
+to `/mnt/tmp` and then installed beside the copy. The budget is that sum plus a
+tenth, rounded up to the next MB, and on ufs the root keeps 2% for the
+superuser, so the root size named is the smallest one that passes. The menu's
+size column shows the same total (x11, "Everything on the disc", 150.8 MB on
+the 1.1 disc).
+
+There is no override: a set that does not fit would stop with `file system
+full` at the end of the install. `y` goes back to the root and swap sizes,
+`n` to the set menu. The beacon records the last refusal as a comment line,
+`# set: x11 refused, it needs 151 MB and the root had 102 MB (a root of 154 MB
+holds it)`. An **unknown** size is no gate at all: refusing an install because
+the medium declined to say how big a set is would treat "unknown" as "too
+big", the same class of mistake as treating it as 0. The network source counts
+its own way (the set's packages and twice the largest datastream, downloaded
+and installed) and keeps its question, `Go ahead with the installation
+anyway? [n]`.
 
 ### Digest policy — attested, or explicitly waived (plan §5.7)
 

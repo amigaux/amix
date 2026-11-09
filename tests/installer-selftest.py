@@ -6370,19 +6370,23 @@ def audit_w2_interview():
          ["Inst     Name       Description"], [" Total: "], []),
 
         # ---- the free-space check -----------------------------------------
-        ("set space: an overcommitted selection gets stock's WARNING and its "
-         "override, and declining goes back to the menu",
-         bench, ["y", "30", "", "2", "n", "1", "y", "", ""], dict(w3),
-         ["WARNING:  Your allocated space for installation is 30 MB,",
-          "but you have selected to install 37 MB.",
-          "Go ahead with the installation anyway? [n] "], [],
-         ["INSTALL_SET=standard", "TARGET_ROOT_MB=30"]),
-        ("set space: the stock override is honoured -- `y` installs anyway",
-         bench, ["y", "30", "", "2", "y", "", ""], dict(w3), [], [],
-         ["INSTALL_SET=minimal", "TARGET_ROOT_MB=30"]),
+        ("set space: an overcommitted selection gets stock's WARNING, the size it needs and no override; "
+         "keeping the root goes back to the menu",
+         bench, ["y", "35", "", "2", "n", "1", "y", "", ""], dict(w3),
+         ["WARNING:  Your allocated space for installation is 35 MB,",
+          "but you have selected to install 38 MB.",
+          "That set does not fit: make the root file system at least 38 MB",
+          "Do you want to change the root file system's size? [y] "],
+         ["Go ahead with the installation anyway?"],
+         ["INSTALL_SET=standard", "TARGET_ROOT_MB=35",
+          "# set: minimal refused, it needs 38 MB and the root had 35 MB (a root of 38 MB holds it)"]),
+        ("set space: changing the root's size asks the sizes again, and the set then fits",
+         bench, ["y", "30", "", "2", "y", "", "", "2", "", ""], dict(w3),
+         ["Do you want to change the root file system's size? [y] "], [],
+         ["INSTALL_SET=minimal"]),
         ("set space: a selection that FITS is never questioned",
          bench, ["y", "", "", "2", "", ""], dict(w3), [],
-         ["Go ahead with the installation anyway?"], []),
+         ["Do you want to change the root file system's size?", "WARNING:  Your allocated space"], []),
 
         # ---- the two COVERAGE HOLES, surfaced in-product (plan sec. 6) --
         # Neither of these can be triggered on hardware we own -- there is no
@@ -6445,17 +6449,17 @@ def audit_w2_interview():
           "Traditional UNIX file system"],
          ["TARGET_ROOT_FSTYPE=ufs"]),
         # The 2% superuser reserve: W_CATALOG_79 sizes the disc's own set at
-        # exactly 79 budgeted MB against a 79 MB root -- the one megabyte where
-        # `-o free=2` decides the answer.
+        # 79.x budgeted MB (80, rounded up) against a 79 MB root. An 80 MB root
+        # still has only 79 after `-o free=2`, so the size named is 81.
         ("UFS: the 2% superuser reserve is subtracted from the free-space check "
-         "-- 79 MB of packages into a 79 MB ufs root is an OVERCOMMIT, and the "
-         "operator is told the honest 78",
-         bench, ["y", "79", "18", "1", "y", "n", "n"],
+         "-- 80 MB of packages into a 79 MB ufs root is an OVERCOMMIT, the "
+         "operator is told the honest 78, and the root size named is one that passes",
+         bench, ["y", "79", "18", "1", "y", "81", "16", "1", "n", "n"],
          {"catalog": W_CATALOG_79},
          ["WARNING:  Your allocated space for installation is 78 MB,",
-          "but you have selected to install 79 MB.",
-          "Go ahead with the installation anyway? [n] "], [],
-         ["TARGET_ROOT_FSTYPE=ufs", "TARGET_ROOT_MB=79"]),
+          "but you have selected to install 80 MB.",
+          "make the root file system at least 81 MB, or choose a smaller set."], [],
+         ["TARGET_ROOT_FSTYPE=ufs", "TARGET_ROOT_MB=81"]),
 
         # ---- a universal medium (TARGET_HBA=auto): every card's disks, by what they hold ----
         ("universal: two disks (a blank one on the Z3660, AmigaOS on the IDE master behind it) -- "
@@ -6500,6 +6504,9 @@ def audit_w2_interview():
         bad += ["answers lack %r" % e for e in expans if e not in ans]
         if bad:
             fail("interview case: %s -- %s" % (name, "; ".join(bad)))
+            if os.environ.get("INSTALLSEL_DUMP"):
+                with open(os.environ["INSTALLSEL_DUMP"], "a") as df:
+                    df.write("==== %s\n%s\n---- answers.profile\n%s\n" % (name, p.stdout, ans))
         else:
             npass += 1
             ok("interview: %s" % name)
@@ -12017,6 +12024,80 @@ def audit_disk_real_size():
                            "the layout kept; equal, larger or no layout is taken; choose_disk says so%s" % ("" if good else ": %r" % o))
 
 
+def audit_set_space_d():
+    head("SS. a set's whole footprint (its packages and its base packages, copied and installed) against the root: "
+         "the A4000D's 104 MB root refuses x11 with the size it needs and takes standard; a 416 MB root takes x11")
+    src = open(SETUP, encoding="latin-1").read()
+    fns = []
+    for name in ("is_num", "budget", "bytes_mb1", "order_size_bytes", "base_bytes", "set_bytes", "set_size_mb",
+                 "check_space"):
+        m = re.search(r"\n(%s\(\)\s*\{\n.*?\n\})\n" % name, src, re.S)
+        if not m:
+            fail("setup.sh: no %s()" % name)
+            return
+        fns.append(m.group(1))
+    # the sizes of the 1.1 install disc these rows ran from (2026-11-09): the two sets' #isize sums, the base
+    # packages' datastreams (base/order, and o.x11's x11r63)
+    std_isize, x11_extra = 63872177, 73060944 - 63872177
+    base = [("libcfix", 220672), ("amxbase", 192000), ("amixrt", 67584), ("dhcpc", 49664), ("syslog", 17920),
+            ("ftpdfix", 89088), ("dropbear", 407040), ("rdate", 56832), ("cdfs", 16896), ("heirtar", 90624)]
+    d = tempfile.mkdtemp(prefix="setspace_")
+    try:
+        inst = os.path.join(d, "install")
+        os.makedirs(os.path.join(inst, "l11", "base"))
+        open(os.path.join(d, "catalog"), "w").write(
+            "#apkg-catalog 1\n#isize stdpkg %d\n#isize xpkg %d\n"
+            "stdpkg|1|STDPKG|base/STDPKG.pkg|00|1|none|system|the standard set\n"
+            "xpkg|1|XPKG|base/XPKG.pkg|00|1|none|x11|what x11 adds\n" % (std_isize, x11_extra))
+        open(os.path.join(inst, "order.standard"), "w").write("STDPKG\n")
+        open(os.path.join(inst, "order.x11"), "w").write("STDPKG\nXPKG\n")
+        bd = os.path.join(inst, "l11", "base")
+        open(os.path.join(bd, "order"), "w").write("".join(n + "\n" for n, _ in base))
+        open(os.path.join(bd, "o.standard"), "w").write("")
+        open(os.path.join(bd, "o.x11"), "w").write("x11r63\n")
+        for n, sz in base + [("x11r63", 34151424)]:
+            with open(os.path.join(bd, n + ".pkg"), "wb") as f:
+                f.truncate(sz)
+        # the disc's files are read-only: the base list is built from them all the same
+        for f in os.listdir(bd):
+            os.chmod(os.path.join(bd, f), 0o444)
+
+        def run(root, sname, answer="n"):
+            body = ("INST=%s\nCATF=%s/catalog\nTOK_F=%s/tok\nCATN_F=%s/catn\nISZ_F=%s/isz\nBASE_F=%s/base\n"
+                    "SET_F=%s/sets\nANS_ROOT=%d\nANS_FSYS=ufs\nSET_NAME=%s\nreadask() { echo \"$*\"; read ask; }\n"
+                    "%s\necho MENU `set_size_mb $INST/order.%s %s`\n"
+                    "if check_space $INST/order.%s; then echo FITS; else echo REFUSED; fi\n"
+                    "[ -f %s/sets.resize ] && echo RESIZE\n"
+                    % (inst, d, d, d, d, d, d, root, sname, "\n".join(fns), sname, sname, sname, d))
+            return _sh_session(body, answer + "\n")
+        rc, o = run(104, "x11")
+        good = ("MENU 150.8" in o and "REFUSED" in o and "RESIZE" not in o
+                and "Your allocated space for installation is 102 MB," in o
+                and "but you have selected to install 151 MB." in o
+                and "make the root file system at least 154 MB, or choose a smaller set." in o)
+        (ok if good else fail)("set space EXECUTED: x11 (150.8 MB on the menu) on the A4000D's 104 MB root is refused: "
+                               "151 MB to install, a root of at least 154 MB (ufs keeps 2%%)%s"
+                               % ("" if good else ": %r" % o))
+        rc, o = run(104, "x11", "y")
+        (ok if "REFUSED" in o and "RESIZE" in o else fail)(
+            "set space EXECUTED: answering yes goes back to the root's size%s" % ("" if "RESIZE" in o else ": %r" % o))
+        rc, o = run(104, "standard")
+        good = "MENU 69.5" in o and "FITS" in o and "WARNING" not in o
+        (ok if good else fail)("set space EXECUTED: standard (69.5 MB) on the 104 MB root is taken without a word%s"
+                               % ("" if good else ": %r" % o))
+        rc, o = run(416, "x11")
+        good = "FITS" in o and "WARNING" not in o
+        (ok if good else fail)("set space EXECUTED: x11 on a 416 MB root is taken without a word%s"
+                               % ("" if good else ": %r" % o))
+        rc, o = run(154, "x11")
+        r2, o2 = run(153, "x11")
+        good = "FITS" in o and "REFUSED" in o2
+        (ok if good else fail)("set space EXECUTED: the size it names is exact: x11 fits a 154 MB root, not 153%s"
+                               % ("" if good else ": %r %r" % (o, o2)))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def main():
     # accept and ignore --self-test (the run-checks.sh entrypoint)
     args = [a for a in sys.argv[1:] if a != "--self-test"]
@@ -12096,6 +12177,7 @@ def main():
     audit_cd_candidates()
     audit_source_fit()
     audit_disk_real_size()
+    audit_set_space_d()
     audit_boot_pri()
     audit_guarded_rm_mv()
     audit_colon_truncate()

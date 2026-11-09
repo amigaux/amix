@@ -194,6 +194,7 @@ SET_F=/tmp/setup.sets
 TOK_F=/tmp/setup.tok
 CATN_F=/tmp/setup.catn
 ISZ_F=/tmp/setup.isz
+BASE_F=/tmp/setup.base
 # The custom screen: the per-package table, its own copy of the #isize
 # block, one marker FILE per selected package (the 1991 sh has no arrays and
 # every list loop here is a subshell, so a file is the only state that survives),
@@ -1914,11 +1915,50 @@ set_net_eta()
 	echo " (~$dlm min)"
 }
 
-# set_size_mb ORDERFILE -- the menu's MB column: the BUDGETED footprint of that
-# set as "N.N", or nothing at all when the medium cannot answer.
-set_size_mb()
+# base_bytes SETNAME -- what the 1.1 base packages that set installs from the medium take on the target root:
+# base/order (every set) and base/o.<set> (the set's own, x11r63 for x11). Each datastream is copied to
+# /mnt/tmp before pkgadd reads it and is installed beside the copy, so twice its size. 0 on a medium without
+# the l11 base; nothing when a listed package is not on the medium. Not for the network source, whose
+# packages come from the repository (net_need_mb counts them there).
+base_bytes()
+{
+	[ -f "$INST/l11/base/order" ] || { echo 0; return 0; }
+	# cat, not cp: cp keeps the disc file's read-only mode and the append below would fail
+	cat "$INST/l11/base/order" > "$BASE_F"
+	[ -n "$1" ] && [ -f "$INST/l11/base/o.$1" ] && cat "$INST/l11/base/o.$1" >> "$BASE_F"
+	btot=0
+	for bp in `cat "$BASE_F"`
+	do
+		ls -l "$INST/l11/base/$bp.pkg" > "$BASE_F.l" 2>/dev/null
+		[ -s "$BASE_F.l" ] || { rm -f "${BASE_F:?}" "${BASE_F:?}.l"; return 0; }
+		set -- `cat "$BASE_F.l"`
+		is_num "$5" || { rm -f "${BASE_F:?}" "${BASE_F:?}.l"; return 0; }
+		btot=`expr "$btot" + "$5"`
+		btot=`expr "$btot" + "$5"`
+	done
+	rm -f "${BASE_F:?}" "${BASE_F:?}.l"
+	echo "$btot"
+}
+
+# set_bytes ORDERFILE SETNAME -- the set's whole footprint on the root: its packages' installed size and its
+# base packages (base_bytes); nothing when the medium cannot say
+set_bytes()
 {
 	sbytes=`order_size_bytes "$1"`
+	is_num "$sbytes" || return 0
+	if [ "$SRC_KIND" != net ]; then
+		sbase=`base_bytes "$2"`
+		is_num "$sbase" || return 0
+		sbytes=`expr "$sbytes" + "$sbase"`
+	fi
+	echo "$sbytes"
+}
+
+# set_size_mb ORDERFILE SETNAME -- the menu's MB column: the BUDGETED footprint of that
+# set (set_bytes) as "N.N", or nothing at all when the medium cannot answer.
+set_size_mb()
+{
+	sbytes=`set_bytes "$1" "$2"`
 	is_num "$sbytes" || return 0
 	sbud=`budget "$sbytes"`
 	bytes_mb1 "$sbud"
@@ -2009,7 +2049,7 @@ show_set_menu()
 			echo "($snum)  $slbl"
 			continue
 		fi
-		ssize=`set_size_mb "$INST/$sord"`
+		ssize=`set_size_mb "$INST/$sord" "$sname"`
 		seta=`set_net_eta "$INST/$sord"`
 		if [ -n "$ssize" ]; then
 			echo "($snum)  `padr "$slbl" 36``pad6 "$ssize"` MB$seta"
@@ -2102,19 +2142,40 @@ check_space()
 			esac
 		done
 	fi
-	kbytes=`order_size_bytes "$1"`
+	# the set's whole footprint: its packages and its base packages (the copy and the install). A root too small
+	# for it is refused: the install would stop at the end with "file system full" (an x11 set on a 104 MB root,
+	# 2026-11-09). The user goes back to the root's size, or to the set menu.
+	rm -f "${SET_F:?}.resize"
+	kbytes=`set_bytes "$1" "$SET_NAME"`
 	is_num "$kbytes" || return 0
 	kbud=`budget "$kbytes"`
+	# whole MB, rounded up: 150.8 MB does not fit in 150
+	kbud=`expr "$kbud" + 1048575`
 	kmb=`expr "$kbud" / 1048576`
 	[ "$kmb" -gt "$avail" ] || return 0
+	# the root size that passes this check: on ufs the smallest whose avail (less its margin) holds the set
+	rneed="$kmb"
+	if [ "$ANS_FSYS" = ufs ]; then
+		while :
+		do
+			rmar=`expr "$rneed" / 50`
+			ravl=`expr "$rneed" - "$rmar"`
+			[ "$ravl" -lt "$kmb" ] || break
+			rneed=`expr "$rneed" + 1`
+		done
+	fi
+	# stock's own two lines; no override: the install would not fit
+	echo "\nWARNING:  Your allocated space for installation is $avail MB,"
+	echo "but you have selected to install $kmb MB."
+	echo "That set does not fit: make the root file system at least $rneed MB, or choose a smaller set."
+	# the last refusal goes in the answers (a comment line): which set, what it needs, what the root had
+	SET_REFUSED="$SET_NAME" SET_REF_MB="$kmb" SET_REF_AVAIL="$avail" SET_REF_ROOT="$rneed"
 	while :
 	do
-		echo "\nWARNING:  Your allocated space for installation is $avail MB,"
-		echo "but you have selected to install $kmb MB."
-		readask "\nGo ahead with the installation anyway? [n] "
+		readask "\nDo you want to change the root file system's size? [y] "
 		case $ask in
-			[yY]|[yY][eE][sS] )	return 0 ;;
-			[nN]|[nN][oO]|"" )	return 1 ;;
+			[yY]|[yY][eE][sS]|"" )	echo y > "$SET_F.resize"; return 1 ;;
+			[nN]|[nN][oO] )		return 1 ;;
 		esac
 	done
 }
@@ -2142,9 +2203,12 @@ ask_set()
 				:
 			else
 				SET_ORDER=
+				# back to the root's size: the caller asks the sizes again
+				[ -f "$SET_F.resize" ] && { rm -f "${SET_F:?}.resize"; return 1; }
 			fi
 		fi
 	done
+	return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -2634,9 +2698,13 @@ do
 	# Right where stock ran it: after the disk is chosen (the controller
 	# probe needs a raw node) and before a single size is asked for.
 	check_old_boot
-	ask_sizes
 	ANS_FSYS=ufs	# the only target filesystem; not asked
-	ask_set
+	ask_sizes
+	# a set too big for the root sends the user back to the sizes
+	until ask_set
+	do
+		ask_sizes
+	done
 	ask_verbose
 	if confirm; then
 		DONE=y
@@ -2723,6 +2791,8 @@ done < "$PROFILE_FILE" > "$ANSWERS" || die "cannot write $ANSWERS"
 	echo "TARGET_ROOT_MB=$ANS_ROOT"
 	echo "TARGET_SWAP_MB=$ANS_SWAP"
 	[ -z "${SWAP_KEPT_OVER:-}" ] || echo "# swap: $ANS_SWAP MB kept past the $SWAP_KEPT_OVER MB this machine takes"
+	[ -z "${SET_REFUSED:-}" ] ||
+		echo "# set: $SET_REFUSED refused, it needs $SET_REF_MB MB and the root had $SET_REF_AVAIL MB (a root of $SET_REF_ROOT MB holds it)"
 	# The root filesystem type. Written UNCONDITIONALLY, exactly like FB_KMAP
 	# above and for the same reason: the value must OVERRIDE whatever the base
 	# profile declares, so it can never be omitted just because the question was
