@@ -924,7 +924,8 @@ disk_size_hint()
 # disk_real_mb ID -- the chosen disk's own size in megabytes from its driver (/etc/ddsize, 512-byte blocks),
 # for ONE id, after it is chosen; nothing when the driver is not asked or does not answer, and the reason in
 # $BLK0.why. Never on the A3000's own SCSI controller (mobo:a3000-wd): its stock driver stops for the rest of the
-# boot on a first command that is not a block read (the a3091 hang, the header above). Bounded like the
+# boot on a first command that is not a block read (the a3091 hang, the header above). Never on a third or fourth
+# disk card: the stock ddsize knows two, and would measure another disk. Bounded like the
 # miniroot's INQUIRY probe: ddsize runs in the background with its own descriptors (this runs in backticks,
 # whose substitution waits for every writer of its pipe) and is polled each second for DDSIZE_SECS; one past
 # the bound is abandoned -- the miniroot has no kill, and its init reaps it if it ever returns.
@@ -937,6 +938,13 @@ disk_real_mb()
 	case "$_rk" in
 		"")		echo "its controller is not known here" > "$BLK0.why"; return 0 ;;
 		mobo:a3000-wd)	echo "the disk's own size cannot be read safely on the A3000's SCSI controller" > "$BLK0.why"; return 0 ;;
+	esac
+	# the stock ddsize knows two disk cards: asked for a disk on the third or fourth, it measures another disk
+	# (the unit of the same number on card 0 -- seen 2026-11-08: the IDE as card 2 read as the Z3660's 13 MB
+	# boot disk at unit 6), so it is never asked there
+	case "$_rc" in
+		0|1)	;;
+		*)	echo "the disk is on a third or fourth disk card, which the stock size tool cannot reach" > "$BLK0.why"; return 0 ;;
 	esac
 	if [ ! -x /etc/ddsize ] || [ ! -x /bin/sleep ]; then
 		echo "this miniroot cannot ask the driver" > "$BLK0.why"; return 0

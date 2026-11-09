@@ -11964,18 +11964,18 @@ def audit_disk_real_size():
     fn = m.group(1).replace("/etc/ddsize", "$DDSZ")   # /bin/sleep is the host's own
     d = tempfile.mkdtemp(prefix="realsz_")
     try:
-        def run(key, stub):
+        def run(key, stub, card=1):
             dd = os.path.join(d, "ddsize")
             open(dd, "w").write("#!/bin/sh\necho called >> %s/calls\n%s\n" % (d, stub))
             os.chmod(dd, 0o755)
             for f in ("calls", "blk0.why"):
                 if os.path.exists(os.path.join(d, f)):
                     os.remove(os.path.join(d, f))
-            body = ('DDSZ=%s\nBLK0=%s/blk0\nBLOCKS_PER_MB=2048\nDDSIZE_SECS=2\nKEY="%s"\n'
+            body = ('DDSZ=%s\nBLK0=%s/blk0\nBLOCKS_PER_MB=2048\nDDSIZE_SECS=2\nKEY="%s"\nCARD=%s\n'
                     'is_num() { case "$1" in ""|*[!0-9]*) return 1 ;; esac; return 0; }\n'
-                    'id_card() { echo 1; }\ncard_key() { echo "$KEY"; }\n%s\n'
-                    'MB=`disk_real_mb 16`\necho "MB=[$MB]"\necho "WHY=[`cat $BLK0.why 2>/dev/null`]"\n'
-                    % (dd, d, key, fn))
+                    'id_card() { echo "$CARD"; }\ncard_key() { echo "$KEY"; }\n%s\n'
+                    'MB=`disk_real_mb e`\necho "MB=[$MB]"\necho "WHY=[`cat $BLK0.why 2>/dev/null`]"\n'
+                    % (dd, d, key, card, fn))
             t0 = time.time()
             rc, o = _sh_session(body, timeout=30)
             return rc, o, time.time() - t0, os.path.exists(os.path.join(d, "calls"))
@@ -11991,6 +11991,10 @@ def audit_disk_real_size():
         good = "MB=[]" in o and "did not answer the size request within 2 seconds" in o and t < 15
         (ok if good else fail)("real size EXECUTED: a ddsize that never returns is abandoned at the bound (%.1f s), "
                                "the substitution comes back, the reason is given%s" % (t, "" if good else ": %r" % o))
+        rc, o, t, called = run("mobo:gayle", "echo 26624", card=2)
+        good = "MB=[]" in o and "third or fourth disk card" in o and not called
+        (ok if good else fail)("real size EXECUTED: a disk on card 2 -> ddsize is never run (it would measure card 0's "
+                               "unit of the same number), the reason is given%s" % ("" if good else ": %r called=%s" % (o, called)))
         rc, o, t, called = run("mobo:gayle", "exit 1")
         good = "MB=[]" in o and "the driver gave no size" in o
         (ok if good else fail)("real size EXECUTED: a failing ddsize -> no size, the reason is given%s"
