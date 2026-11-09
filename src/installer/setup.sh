@@ -973,6 +973,14 @@ disk_real_mb()
 	return 0
 }
 
+# size_under_layout LAYOUT_MB MEASURED_MB -- true when a measured size is smaller than the layout already on the
+# disk: a disk is never smaller than its own layout, so such a measurement is of another disk (a mis-mapped unit)
+# and is not trusted. No layout (LAYOUT_MB empty) is never "under".
+size_under_layout()
+{
+	is_num "$1" && is_num "$2" && [ "$2" -lt "$1" ]
+}
+
 # rdb_present ID -- does this disk carry a Rigid Disk Block?
 # Two independent readings, and the disk is treated as HAVING an RDB if EITHER
 # says so, because the consequence of a false "no" is skipping the erase
@@ -1190,7 +1198,10 @@ choose_disk()
 	if [ -z "$TARGET_DISK_MB" ]; then
 		rm -f "${BLK0:?}.why"
 		_rmb=`disk_real_mb "$SCSI"`
-		if is_num "$_rmb" && [ "$_rmb" -gt 0 ]; then
+		if is_num "$_rmb" && [ "$_rmb" -gt 0 ] && size_under_layout "$DISK_MB" "$_rmb"; then
+			# a disk is never smaller than the layout already on it: such an answer measured another disk
+			echo "\nThe size tool's answer ($_rmb MB) is smaller than the disk's own layout ($DISK_MB MB); using the layout."
+		elif is_num "$_rmb" && [ "$_rmb" -gt 0 ]; then
 			if [ -n "$DISK_MB" ] && [ "$DISK_MB" != "$_rmb" ]; then
 				echo "\nIts old layout covers $DISK_MB megabytes; the disk itself is $_rmb megabytes."
 			fi

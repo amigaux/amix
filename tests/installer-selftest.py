@@ -12001,6 +12001,20 @@ def audit_disk_real_size():
                                % ("" if good else ": %r" % o))
     finally:
         shutil.rmtree(d, ignore_errors=True)
+    # a measured size under the disk's own layout is another disk's: the layout stays
+    m2 = re.search(r"\n(size_under_layout\(\)\n\{\n.*?\n\})\n", src, re.S)
+    ch = _extract_func(src, "choose_disk") or ""
+    if not m2:
+        fail("setup.sh: no size_under_layout()")
+        return
+    body = ('is_num() { case "$1" in ""|*[!0-9]*) return 1 ;; esac; return 0; }\n%s\n'
+            'for c in "199 13" "199 1023" " 200" "199 199" "199 198"; do set -- $c; '
+            'if [ $# = 1 ]; then size_under_layout "" "$1"; else size_under_layout "$1" "$2"; fi; echo "$c=$?"; done\n' % m2.group(1))
+    rc, o = _sh_session(body)
+    good = ("199 13=0" in o and "199 1023=1" in o and " 200=1" in o and "199 199=1" in o and "199 198=0" in o
+            and "smaller than the disk's own layout" in ch and "size_under_layout" in ch)
+    (ok if good else fail)("real size EXECUTED: a measured size under the disk's old layout (13 of 199) is refused and "
+                           "the layout kept; equal, larger or no layout is taken; choose_disk says so%s" % ("" if good else ": %r" % o))
 
 
 def main():
