@@ -47,6 +47,10 @@ medium's size and sha256, the tool versions). Scratch, logs, the master stage an
 checkout is read but the inputs above. Exit 0: built and clean; 1: failed; 3: an input missing,
 named on a `[MISSING] media:` line (make dist goes on and names the gap at the end).
 
+For development on a host whose gcc-cross-amix is not the pin's (its zenmac and setclk are other bytes),
+`MEDIA_PAYLOAD=<dir>` takes those two from a directory instead; they are held to the same sha256 pins, and
+`INPUTS` and `MEDIA.txt` say so (`payload-from-elsewhere`). make dist never sets it.
+
 `conf/base-packages.conf` names the userland packages the install CD carries beside the stock set,
 and the sets that take them.
 
