@@ -2,15 +2,28 @@
 
 `NOTICES.md` lists the acknowledgements the release notes must carry.
 
-Lock files: the exact inputs and outputs of each release. None is here yet:
-the lock of record for 1.1 is written when the 1.1 set is frozen.
-`release/amix-<version>.lock` is the lock of the promoted candidate, written
-by `make lock` (`build/mklock`) at the end of the make dist that built it.
-A rebuild is proven against it:
+Lock files: the exact inputs and outputs of each release, written by
+`make lock` (`build/mklock`) at the end of the make dist that built it.
+
+- `amix-1.1.lock` (sha256 `671008eef95ec93ddfbb3834a4cfe65fe8ff0d63199d94d697b1f6aaee20e8c5`):
+  1.1 as anyone rebuilds it, at the tag `1.1` with `RELEASE_PUBLIC=1`. A rebuild
+  is proven against it.
+- `amix-1.1-published.lock` (sha256 `caeca5303363d5de7695dc42d77461abe041e9339801748390d6cf1993f77992`):
+  the record of what `http://pkg.amigaux.org/1.1` holds. It is the first lock
+  plus a `previous` line, the digest of the catalog published before it; the
+  published catalog (md5 `d630412aa9558451de52f10765e13951`) in place of the
+  rebuild's; and the 24 older versions `carried-1.1` names, which that
+  repository keeps. That earlier catalog is no longer served, so this lock
+  is a record, not something a rebuild is checked against.
 
 ```sh
-make dist SYSTEM=../amix-system LOCK=release/amix-1.1.lock
+git show master:release/amix-1.1.lock > ../amix-1.1.lock
+git checkout 1.1
+make dist SYSTEM=$PWD/../amix-system RELEASE_PUBLIC=1 LOCK=$PWD/../amix-1.1.lock
 ```
+
+The tag is older than this file, so the lock goes in as a copy from outside
+the checkout, and at the tag the paths must be absolute (`docs/BUILDING.md`).
 
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
@@ -29,6 +42,7 @@ epoch package-version (...)           the epoch rule
 dirty <sha256>                        only when tracked files differ from the commit
 image <sha256>|host                   the build container's /opt/amix/TOOLCHAIN.sha256, or "host"
 media-tools <sha256>                  the media image's /opt/amix-media/TOOLS, when the media step ran
+media-epoch <seconds>                 the media's dates (SOURCE_DATE_EPOCH, else the commit's time), when it ran
 previous <sha256>                     the catalog of the published tree the release is built on (RELEASE_PREVIOUS)
 
 pin <path> <URL> <commit>             every one-line .pin in the checkout

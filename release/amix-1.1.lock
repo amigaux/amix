@@ -1,0 +1,272 @@
+#amix-lock 1
+amix cdf6c05de9d446e3f75e4b7cf204e6d1100aac5c
+epoch package-version (SOURCE_EPOCH, else the package directory's last commit)
+image 847812a3a75bfbdecfbde7adf2c416fd801a155bc6295fbcf7a42c828641c184
+distfile toolchain/amitools.distfile https://files.pythonhosted.org/packages/de/01/b837b2fbb7e1dc2a5f5b94149ba59c71293578f2373ae4bb926db0e53c04/amitools-0.8.1.tar.gz f622c0725c15737e7d4820ed147f930f4cfb7b80b04c786c2bc3943b799faf7e https://github.com/amigaux/amix-distfiles/releases/download/amitools-0.8.1/amitools-0.8.1.tar.gz
+distfile toolchain/base-ca-certificates.distfile https://snapshot.ubuntu.com/ubuntu/20261028T000000Z/pool/main/c/ca-certificates/ca-certificates_20260816ubuntu0.24.04.1_all.deb 8a0a754aaafed72cc8efb8c1731808133284a84fbfc76a4fcc73fce9e01b4187
+distfile toolchain/base-openssl.distfile https://snapshot.ubuntu.com/ubuntu/20261028T000000Z/pool/main/o/openssl/openssl_3.0.13-0ubuntu3.16_amd64.deb 675b84971ffd4467707008c25ef7520f90ea7c23ef27b7a76b0dccf1d7c4dc3f
+distfile toolchain/netbsd-syssrc.distfile https://archive.netbsd.org/pub/NetBSD-archive/NetBSD-10.1/source/sets/syssrc.tgz 76a600e703d2e964753323e264d3ec07d0c6cbe134648fc8f0f13ed9faaa1be4 https://github.com/amigaux/amix-distfiles/releases/download/netbsd-10.1/syssrc.tgz
+distfile tools/release-check-fixture-clean.distfile https://github.com/amigaux/amix-distfiles/releases/download/release-check-fixtures-1/fixture-clean.hdf.gz a6e6d1ea0372bbe45513273a00a7b4852774ce8a06b6eb1ade85d2ddd5f0931f
+distfile tools/release-check-fixture-planted.distfile https://github.com/amigaux/amix-distfiles/releases/download/release-check-fixtures-1/fixture-planted.hdf.gz e9ba097e3d9a4d54638285035f2a6b9097d03657cfbe47136539406bb5df995d
+pin kernel/dlm/core/upstream.pin sha256 f597dbd29a296fcfe4daf7d916cc1654aa3e64f15423376bae0563df9525462e
+pin kernel/dlm/toolchain.pin sha256 99fff92948e33ae2ca9c4e61fe8c59661fd143e36b8b8158f449d1eecbf576cf
+pin kernel/drivers/cdfs/cdfs.pin https://github.com/amigaux/amix-cdfs.git 215936fd6a6866b9d7c37332fa708117a2a05098
+pin kernel/drivers/gayle-ide/gayle-ide.pin https://github.com/amigaux/amix-gayle-ide.git 3b72994fc063f11634e197c726778c1123f9c5bf
+pin kernel/drivers/paula/paula.pin https://github.com/amigaux/amix-paula.git a111e57b95ef406bd794b0730420fe83446aa703
+pin kernel/drivers/z3660rtg/z3660rtg.pin https://github.com/amigaux/amix-z3660rtg.git a9d39a112235ee77e0d6ee8106617b4c327f3cae
+pin kernel/k30/cuts/68030-261031-63/paula.pin https://github.com/amigaux/amix-paula.git 548d258f43f44f7085fcc4a37295f7c976dd2933
+pin kernel/k30/cuts/68030-261031-63/port.pin https://github.com/amigaux/amix-040-060-port.git d0e88574f7ee8559452cc7363ff7bcf3dd9133e6
+pin kernel/k30/cuts/68030-261031-64/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261031-64/port.pin https://github.com/amigaux/amix-040-060-port.git 0d37eb1b1f16653e1fdd656eaf6d8d645721774d
+pin kernel/k30/cuts/68030-261031-65/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261031-65/port.pin https://github.com/amigaux/amix-040-060-port.git b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+pin kernel/k30/cuts/68030-261031-66/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261031-66/port.pin https://github.com/amigaux/amix-040-060-port.git b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+pin kernel/k30/cuts/68030-261101-67/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261101-67/port.pin https://github.com/amigaux/amix-040-060-port.git b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+pin kernel/k30/cuts/68030-261101-68/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261101-68/port.pin https://github.com/amigaux/amix-040-060-port.git b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+pin kernel/k30/cuts/68030-261102-69/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261102-69/port.pin https://github.com/amigaux/amix-040-060-port.git b0f1d8653d20b75c7de8e909733c2dd2ce16a9bd
+pin kernel/k30/cuts/68030-261102-70/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261102-70/port.pin https://github.com/amigaux/amix-040-060-port.git 31edbc688e2eefa013c1854811bf11973712351f
+pin kernel/k30/cuts/68030-261103-71/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261103-71/port.pin https://github.com/amigaux/amix-040-060-port.git 31edbc688e2eefa013c1854811bf11973712351f
+pin kernel/k30/cuts/68030-261106-72/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-72/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/k30/cuts/68030-261106-73/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-73/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/k30/cuts/68030-261106-74/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-74/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/k30/cuts/68030-261106-75/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-75/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/k30/cuts/68030-261106-76/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-76/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/k30/cuts/68030-261106-77/paula.pin https://github.com/amigaux/amix-paula.git 1b2736d9bb291af77bd1e8995d15f3e60d0627ff
+pin kernel/k30/cuts/68030-261106-77/port.pin https://github.com/amigaux/amix-040-060-port.git 0508945adbe18896444e4dc4ec56030c10c91314
+pin kernel/port/port.pin https://github.com/amigaux/amix-040-060-port.git 388b93b6dc6404fed5ec041b2005af4da48c1f84
+pin system/amix-system.pin https://github.com/amigaux/amix-system.git debb2e14bce281995d22bd5607a8db1afd4db677
+pin toolchain/gcc-cross-amix.pin https://github.com/jusii/gcc-cross-amix.git 33ebadcf6976ee65dbd1e25a586f59da55e5942d
+pin toolchain/gcc14-cross-amix.pin https://github.com/amigaux/gcc14-cross-amix.git dcfd12d79fb970f607a69d72b79e9f7470d1043f
+system system/MANIFEST.sha256 298dbff64fa2a879c489da9cc73fc17304b0f4635ee9ae93bd9ca7789cd5f530
+system system/SYMLINKS f64f2fee4effa63a955576da18a042d5c27d2704209299d7cfd73350b717e2f4
+system system/stock-1.1.assets 00c83de076aa92e1add9273be7253e2853f3625a814484e276aa24f64716d955
+system release/carried-1.1 174742c1819d3bee4e8615e51a62dbc7fa07567b768851ec5e14d838c6e96916
+stock userland amix-base-1.0-34 /etc/TIMEZONE 0e34bac958a24cb240406eb0d363ac0d3d7eca2cc1d1d86541554b2042f194f0
+stock userland amix-base-1.0-34 /etc/inet/hosts d70d38dedf229ffda8c849134b49055d2f0c02d370a73e3db9471774f464edd8
+stock userland amix-base-1.0-34 /etc/inet/strcf e0e225826ebd276d204dafd5f3cef333b9a906d1746f1828991071ed804e63c8
+stock userland amix-base-1.0-34 /etc/nodename d906aecb61d076a967d9ffe8821c7b04b063f72df9d9e35b33ef36b1c0d98f16
+stock userland ftpdfix-2.1-1 /usr/sbin/in.ftpd 29048aef103a02d5975b1ce4571d770ad88c0cb1b7a5efdc76cd9c6a1bb3940d patched 6a7c40211733b6847efe1d5bdf75c0a58b9d00a77eff3bee430a941e59487de2
+stock userland libcfix-2.1c-2 /usr/lib/libc.so.1 09d52bb3ff5a691c9ec4b057f3b3cad484ba98ce8d057a892082ca2010dda46c patched f57f624ba2d325dee8839adb5c7fcf1559f7a11ecdc21d870dcd78f75831cf52
+stock userland syslog-1.0-2 /etc/syslog.conf fa943663e864fd9a3220f6c8981bd02ba40ebd2f87687e354abf97cda5fdda50
+kit k30 k30.1.4 2cd583a5edc07701efa4e9184112044ae21daacb1d600427db40fe1ea9d4169a 36e21d21bd42e0dfe52391ff71a8da0fce7f8ff466d7b8fee30a334e390a5a89 KIT_REV=cdf6c05d PORT_REV=-
+kit k46 k46.1.4 3ec8f519c725a091bdd36f0a96862c76f23b144fb1555d929e216b50e16e805a 88084f419557e097d40faedb4dbe19b10531ea344462f3c0d33254c36ab75be2 KIT_REV=cdf6c05d PORT_REV=388b93b6
+kernel k30 amiga/driver/audio.c 3f434f3507e1044ca794706a2de3a05c99ddefbcda6cd8e1b9abc6e60bc24fef
+kernel k30 kabi 15e9e5fc88d016796623126dc109deb0e47e3add65c9122b95251f30c13581b6
+kernel k30 mod.d/s5 b3d3af0e3cc653602c2aba5e64ef6e74d9c96036ffaac1b7c629356dc122ecab
+kernel k30 mod.d/ufs 50cb94890ed3a4132330e5fdb8e3fcb6c825546721f1627d07c862a2dfc13d1e
+kernel k30 unix b755c5e6f106df2222c2baa85bfbd26b1c8ba88dd167f2317a9e9e74abb97f98
+kernel k30 unix.brel 9fec40ddb040c1c1e8e8b69c120a77e4e038824982e6014a716f753883c1e6f8
+kernel k30 unix.sym 6db9819367c7eaf074f3e8c21c42846c53ec51831eddb03a8858070fda9b13e4
+kernel k46 out/c/abi-k46.1.4.txt 18c0a1c98b2c9284fb10a6b6386403ed5e13193e3ec7aa4f113ff2a174285378
+kernel k46 out/c/kabi 2aa56860c1908b25b30ec1b5a91aabe61611fa5a8fdfbf0aa2faf9b68deacf4e
+kernel k46 out/c/ufs.mod 810ecba476629fe55c52841cc6e075e255d084812ee504aaadb28a3c1e5d5768
+kernel k46 out/c/unix 351884635b3e8f4b737a524811f2fff9a966d02f21eabc1802cb5d5c643ba644
+kernel k46 port/build/b-new 555b5e5fc1041cc7def57c48d906e9b5df415cdc9ebdc62daa372d2f2ff00d6c
+kernel k46 ufsmod/ufs-exp-hf.k46 1efb27a043929f1eaefe2851a6af37d7419334b1b76a2f66a16bf31fa39a280c
+kernel k46 ufsmod/ufs-exp-qz.k46 006f1c9c77a557d12338cb0e9d03eb149cfd5678a304929293cfa72499684d1b
+kernel k46 ufsmod/ufs-exp.k46 1a147403ea88eb84c000c2270f8117d8a23ccb18d2945b5731c0df256aff0243
+module k30/a4091 4bd6e5d32607a09693d0c8bee3904fc3419484f27e1764a8470fe4471582250d
+module k30/a4kt710 04ec15f0c083fec6bb8ad7221780745a0f958588ea92136d2623ff5aab9027b1
+module k30/cdfs 01c02625064bb3b320418bfa5da1b338b88713a17ffab1b297b532c09ae4692e
+module k30/gayle 3b7c03dadca22706ee7b4d13d748aa02d3854fe98aa35306bedd0c52c572e62b
+module k30/monsw 4bc8f57089b80baec94fa64e0a65dfd6a3b27a2ab4a66c63db345e9e35233a20
+module k30/paula 5db201d7df21e9ec06b097416857afee88db9d6e9ae59a36fc1823603922d858
+module k30/ramdisk 793ce89b14e99847a7948fa898ba00216371f58ffd19dee8b2786ba02ddbd81f
+module k30/random b4fe657c0ca138f1a919a49bdc1d875a7318103611868bde5377127c9a7a6549
+module k30/z3660eth 7fb5a3e0ea41c0c2b5c7f24a37ce10ea7b90c7d9446334cf4a4fc1405d928840
+module k30/z3660rtg ab7af11c013c2df07619f0f2991f7236aa358c76819f7fce210cdbd7ad778d71
+module k30/z3660scsi 152e1d8ea90a37e07a75a071d810e5f2bfed9d49dae47e84f214dd93cbe4b07c
+module k30/zz9kbus 24c00be48a7fc76860d34680b57aab417889569979e63bd05479f96414d73703
+module k30/zz9ksvc e6703beebf86e6a9df496ae4f440e854eb4d3df6a2dc38dfeb7f70dc8fb66300
+module k46/a4091 8d91ade277d8b627d393ac8ff61203a4ffcebb14bb92abf8336b0aca84aaff37
+module k46/a4kt710 a5546a47e9b80b7426dda79be2f7acaa474e0f446ce803920f81a7ad9c658eee
+module k46/cdfs 75c9d3f53f2b072ed3ee4c51d26a48ea52b99aeef1e317813aef7b352f76e77a
+module k46/gayle 33504a56f68d09b5616ffc970276ca7ecc4f1664323538b638bb2ff6f10ee1db
+module k46/monsw f9f6ed6b6a31a20d689f5cb8a30d53bf5804eae8b639ccf316b5feb1628f7623
+module k46/paula cb371bdef75b14064321dfc24b96ebdcb5a064a065fc470268947162cecd7781
+module k46/ramdisk b793e3437bddee2dc93bd313d740a98c155b8d9036194c97f57e46effca6732f
+module k46/random f7200bc5994e2356c54a235e2cfb9a1e3227d2ad68fa41ed91acdef6ee174475
+module k46/z3660eth 92d67894488ccb5576efabdd40f50ddd28189fdbe25e5722ecc4a45821e29b27
+module k46/z3660rtg 813898d9b37885c46777962838276a1e199526ed809ea53338f57e65f5bf2be8
+module k46/z3660scsi 751d52a53ca1066e93aaeddad5e60d113ed505b5e99c3794f9acf937c0fcb812
+module k46/zz9kbus 6ea8ca203303128f2e8cde46929dc79b36040e3dfcf8a95a257669428ecab776
+module k46/zz9ksvc 656815bcf6639cf7c1bf98110d8229c70455e07e3fb6d52ff3a802f180d86504
+beside kspace amix-cdboot 27936 5e9de648529e699aef70e521123834b40ebfb1c236227474b82be4e1f3126f94
+catalog kspace md5 b1b054ce86ccf32e6c7856e34302daa8 sha256 54bc5c7fecb3f0498340b924de084a37b796f2e757a658ea174a87aa5f184122
+pkg kspace a409130-1.0.0-10.pkg 25088 1273c40e8aa1fa81fc388166c777dc4d9df56a6470698bda6c78137fabcdeb7e
+pkg kspace a409146-1.0.0-10.pkg 25088 1e91e0fbe0351d6e8d6628bad235c060d8ce0023fc1c7e398254560d709de329
+pkg kspace a4kt71030-1.0.0-8.pkg 28672 09a9a802ebe1ec05a4bbe373813f0d7da541082feca24c3de47e1a0474615bca
+pkg kspace a4kt71046-1.0.0-8.pkg 29696 08475c02a452e057db15467409e3bbc1b26b903d183a179b615ab36ba97b7a9e
+pkg kspace cdfs30-1.1.0-8.pkg 101376 631e153af9dbf19599a72db5f99e066e4af15a46fe04537d2a67c7ccf80c0d33
+pkg kspace cdfs46-1.1.0-8.pkg 101376 e96586fb848d65120924302c837efeb3b0e450ffeff55cd58491d0e6151571bd
+pkg kspace dlmkit30-k30.1.4.261103-20.18102d7.pkg 4117504 ee6aa4bd2b85fe2f84ad033e5dcfb08e50733708145ebcf7d102250e2cc61b1b
+pkg kspace dlmkit46-k46.1.4.261103-20.18102d7.pkg 4134912 e11dc01ea5c2f3d0526518ada58b134c268da6bef939ebff8baa9681e2500f2c
+pkg kspace gayle30-1.1.0-9.pkg 31744 6768fb8ae54dbdd2681b2735b5d7187cfaa5ac6feebea40a5ca7a60e984ac1ec
+pkg kspace gayle46-1.1.0-9.pkg 32768 72e6a44206a7a6424a88cac51ad549208144255e802fa32d888a2f276b1f21f9
+pkg kspace kbootset-1.1.0.261105-43.pkg 213504 c75f62d5fa135c5b211323c274b53166807b658ffc6679aac7534ae7165352d6
+pkg kspace kern30m-k30.1.4.261106-77.pkg 1923072 b56e47e37731f5d5435d8dfe67ff5cc1ec314f308ed4dfe519ea57212b2f3b50
+pkg kspace kern46m-k46.1.4.261106-66.pkg 2518528 9f816b9cdc863044350dd39c86f42ebd09f402d86d123f1707b53dcd871238c7
+pkg kspace ldramix-1.0.261105-16.pkg 36352 a1ddf323ed2455817f01d57856963604615d2db3f2381bef82b718947fec0901
+pkg kspace modtools-1.0.261105-15.pkg 60416 b941c6330782847cd489e43f162b87162c7b675430804468af8fd578dc0f24c4
+pkg kspace monsw30-1.0.0-9.pkg 36864 ba270f88f81f116e0220aa961431b128f0f5b25dc044566d0f5f1e8e8e8204b3
+pkg kspace monsw46-1.0.0-9.pkg 36864 836f04c23a84be1bccf249cb4bb6482210d266b954d73b0750021556d0e9d3ae
+pkg kspace paula30-1.1.0-3.pkg 26112 93262d2b9969fc2c152dcf757dca7eb50601153d60d23230456dd5a21c274f2a
+pkg kspace paula46-1.1.0-3.pkg 26112 8a20ae890e96d2f2b4d69ce13021ec270d4bccd8b0897db899b250256f59fe60
+pkg kspace ramdisk30-1.0.0-6.pkg 18432 a0908643948b1139324ef1a7e80276ce55f7fd88329229336c531c1f646f6255
+pkg kspace ramdisk46-1.0.0-6.pkg 18432 302ecc6a2c032a283bb66633f3313e8d65e921e6097b26bfd30a5141ea030791
+pkg kspace random30-1.0.0-2.pkg 27136 3869c26e2e85df57ab7c6832682112d5ceacf8625d89bbb2763a056283ee70c2
+pkg kspace random46-1.0.0-2.pkg 27136 f8a0ac178e812626863dbd63c0049bc5593f96684925fcc49352a73e3818bfdf
+pkg kspace zeth30-1.0.0-13.pkg 28672 9966780b6bf3ecd6e11c7bfbb20f7dbe9b20368cf73e1344ab41389b1875b3c3
+pkg kspace zeth46-1.0.0-13.pkg 28672 b6334e4e0b86fce3a5c8281175e92ff3108a9751c434b5405c23bfc368fd3ebc
+pkg kspace zrtg30-1.1.1-4.pkg 91136 475281e092174e51d89ecd2497cf081e0ff1990ab9ebf73def892ea3cc6c34ae
+pkg kspace zrtg46-1.1.1-4.pkg 91136 3f493f77602ec3670b2b84d9ee755d028786dbd321965ea283e63a054509e83c
+pkg kspace zscsi30-1.0.0-9.pkg 23552 7a93488ef9971301e804006b727c6a73de331ad8b4995504d3eb30bde748b1b2
+pkg kspace zscsi46-1.0.0-9.pkg 23552 32b435a2cf7c648feededf3b7ea02f88d5cf84e7f860f99ddd086f47ac6461c8
+pkg kspace zz9kbus30-1.0.0-2.pkg 10752 b242359ed89759894986d61baee10fb22b4332cab3fc64c5a5b447feb2d6c403
+pkg kspace zz9kbus46-1.0.0-2.pkg 10752 86de0379dd42ea201dcb978534ef74d49a076a4e75f2980b4462084af9a804e3
+pkg kspace zz9ksvc30-1.0.0-4.pkg 65024 07875b3eb3f105228e641698440d9f1ebd7a94822d839f3511b79490ae032a9d
+pkg kspace zz9ksvc46-1.0.0-4.pkg 65024 7f5758136ea95a43d00efcc7ab68243541daf894383a641cdcaa06aaabb34062
+catalog userland md5 7fef506696a4f3b81d5aeaa07d1bc1ea sha256 18b2f7dee48476e6434a44f431d880bc0784f81d42aae1c27d10ee9325af57c7
+pkg userland acompat-0.1-9.pkg 79360 9d6a0cf241207f3f170a5f44d1b961e01881caebeea1fead8a40b7dd92ae8be9
+pkg userland amixbch14-1.3-9.pkg 134656 2e9ba7809af31ae6b33ddd5dffcade8cbfdd5df8931eb9770a5c913ec91543e3
+pkg userland amixbench-1.3-3.pkg 124928 d48e0276eb69364c1148c73e359d592aab3bf509efc7cd5d42bededbb93c2b13
+pkg userland amixrt-1.0-2.pkg 67584 eb7b4074d12b181a47f2ae1501e1c88bdec5f37e030a1ea6a5ddcd578d3bcf5e
+pkg userland amxbase-1.0-34.pkg 192000 6aff4192e8e11c1bf2bc30594de026a26ce1b2a78048c5b0c7e36dc4970fcd31
+pkg userland bzip2-1.0.8-4.pkg 223744 216c407568fed6341ab1d9502d1372b9fc28a72376189fa08080340ae2913336
+pkg userland cdfs-1.1.0-1.pkg 16896 898f0a6850910ad237ae1a1a6335633e11f1ceb973b03d463a34ec8a7ec09ac5
+pkg userland coreutil-5.2.1-5.pkg 3722752 a2d8d6f9305a1dbdaf2c4e8df219a3acdd939fbc15d64f1fb10d3aab338fe28a
+pkg userland dhcpc-1.0-9.pkg 49664 8343cf710c5df413a9b82f8d522310a62f5708ef32efc148bda67f5c61d20a1f
+pkg userland diffutil-2.8.1-4.pkg 214528 30cb1dd1ea79b7d275b5ac272838d2760c7c95c5baab2c91900f0b3a003a7baf
+pkg userland dropbear-2026.94-4.pkg 407040 82eea03e473243843c6db101ff0fdf4f39054fc4142ef5b657d3218f2386b8ec
+pkg userland ftpdfix-2.1-1.pkg 89088 4c3c3f63fca0d125a117373e4af9944f39766bca636b09386cff26cea71a5f48
+pkg userland grep-2.5.1a-9.pkg 158208 be21c009fd8fc22f458a3c2aecbcda3d95bd1360a4cab26ba5ea65b7f8957aaa
+pkg userland gtar-1.14-10.pkg 236544 0d3be2f69f43cf02e4d75a344ff872dda2bfe9741548d16b72dd4aaa82fb9c04
+pkg userland gzip-1.3.12-9.pkg 126976 11caf34d5f2b55f82379f7283e51fd5a9756942c20b35beb883ff320ce1a2ad9
+pkg userland heirtar-070715-1.pkg 90624 19cac716bacd5d9cf35dbc4ee78cfc55c78e9437b2efc560a9bc423c77d985ec
+pkg userland less-704-9.pkg 472576 dc25233ec439d59dd6af6ffb25f4441fcfd85d61e3fce4abf637630dd7729336
+pkg userland libcfix-2.1c-2.pkg 220672 b103dcb52acaf2c85ac586b7bac6e5f12b8d7275268cffc35fa96d8309f366eb
+pkg userland libzz9k-2.9.1-2.pkg 358400 c27b590f4d8c680493ed38cdc013d48655dba003d19ffa45f525a83efccb86d5
+pkg userland make-3.81-9.pkg 263680 b687455a91b5918deff852461619d7d5400e9147bcd4df25ebc2f2b0f1cde938
+pkg userland ncurses-6.6-1.pkg 1685504 ef750931cdef746f38e52ab14b9a4dbe7154a5dfb450451e4331bac7f692aded
+pkg userland patch-2.5.9-8.pkg 146432 e203211d88c3a75efb385310baaabc06476b8f6e827b608ca012e90e737e06c3
+pkg userland prngd-0.9.29-3.pkg 146432 c3b70a2969816423f04634285232f9e3bd0380275e1247e12ca23e3d170dab25
+pkg userland pth-2.0.7-3.pkg 732160 5e51c7774ca20e3ed1bb8619f30e85f40d5ae8082b2be723759770b417a7d826
+pkg userland python3-3.11.18-4.pkg 28624384 c401b5bfc8161bca84de838d8f28e7d51e74c264b2314a6fa2fff76c4124ed96
+pkg userland rdate-1.11-2.pkg 56832 c01743fa8fa99be7bbcbde32f4b58421c92a0717cf5d5eb0313279a0696a2c2e
+pkg userland rsync-3.1.3-3.pkg 686080 4865df619643d55ae39461ed31f177f24ab2a7e1ddf85506944138093beec3c3
+pkg userland syslog-1.0-2.pkg 17920 a4a585e5a514752b1bc779a1bab583942ee123801aec2ed3155f1039afba9e00
+pkg userland vim-9.1.0000-4.pkg 31297536 c6b418a0eb47a236be7fc5e1aae246b2841dc9fddbf2a64dc61079e10655571d
+pkg userland x11r63-6.3-8.pkg 34151424 2d6dc996fe9bb117535b0b7044276c2faa58f69f42a9b2c07806fab1afd89cb1
+pkg userland xztop-1.1.1-1.pkg 807424 fee4bf8eece0142610ffd360575a429035375c8f208a964e021a9d7dcd1c525a
+pkg userland zlib-1.2.13-9.pkg 360448 9ea9d5a1d9bf28cda5d8ac62e1bdef2b6c74f1e4a96fddf238654ce41b33dc00
+pkg apkg APKG-0.3.11.pkg 263680 b0d27059721aecdb101f195e2c20993ffa73b30b3e3a535a7c1109fd8291a4fc
+pkg apkg APKGENG-1.12.10.pkg 2363392 140e25ecc99c9f4820ebd50cbe36ea707e124ed892452ea97f900a65e28d4fc0
+catalog release/1.1 md5 8bdbd832b824b44798a0fd3ad19811bc sha256 87b875ff7aa4e856b986cd3137510aba32565b28966fabaecdd8d55482a8e9e2
+pkg release/1.1 a409130-1.0.0-10.pkg 25088 1273c40e8aa1fa81fc388166c777dc4d9df56a6470698bda6c78137fabcdeb7e
+pkg release/1.1 a409146-1.0.0-10.pkg 25088 1e91e0fbe0351d6e8d6628bad235c060d8ce0023fc1c7e398254560d709de329
+pkg release/1.1 a4kt71030-1.0.0-8.pkg 28672 09a9a802ebe1ec05a4bbe373813f0d7da541082feca24c3de47e1a0474615bca
+pkg release/1.1 a4kt71046-1.0.0-8.pkg 29696 08475c02a452e057db15467409e3bbc1b26b903d183a179b615ab36ba97b7a9e
+pkg release/1.1 acompat-0.1-9.pkg 79360 9d6a0cf241207f3f170a5f44d1b961e01881caebeea1fead8a40b7dd92ae8be9
+pkg release/1.1 amixbch14-1.3-9.pkg 134656 2e9ba7809af31ae6b33ddd5dffcade8cbfdd5df8931eb9770a5c913ec91543e3
+pkg release/1.1 amixbench-1.3-3.pkg 124928 d48e0276eb69364c1148c73e359d592aab3bf509efc7cd5d42bededbb93c2b13
+pkg release/1.1 amixrt-1.0-2.pkg 67584 eb7b4074d12b181a47f2ae1501e1c88bdec5f37e030a1ea6a5ddcd578d3bcf5e
+pkg release/1.1 amxbase-1.0-34.pkg 192000 6aff4192e8e11c1bf2bc30594de026a26ce1b2a78048c5b0c7e36dc4970fcd31
+pkg release/1.1 base/APKG-0.3.11.pkg 263680 b0d27059721aecdb101f195e2c20993ffa73b30b3e3a535a7c1109fd8291a4fc
+pkg release/1.1 base/APKGENG-1.12.10.pkg 2363392 140e25ecc99c9f4820ebd50cbe36ea707e124ed892452ea97f900a65e28d4fc0
+pkg release/1.1 bzip2-1.0.8-4.pkg 223744 216c407568fed6341ab1d9502d1372b9fc28a72376189fa08080340ae2913336
+pkg release/1.1 cdfs-1.1.0-1.pkg 16896 898f0a6850910ad237ae1a1a6335633e11f1ceb973b03d463a34ec8a7ec09ac5
+pkg release/1.1 cdfs30-1.1.0-8.pkg 101376 631e153af9dbf19599a72db5f99e066e4af15a46fe04537d2a67c7ccf80c0d33
+pkg release/1.1 cdfs46-1.1.0-8.pkg 101376 e96586fb848d65120924302c837efeb3b0e450ffeff55cd58491d0e6151571bd
+pkg release/1.1 coreutil-5.2.1-5.pkg 3722752 a2d8d6f9305a1dbdaf2c4e8df219a3acdd939fbc15d64f1fb10d3aab338fe28a
+pkg release/1.1 dhcpc-1.0-9.pkg 49664 8343cf710c5df413a9b82f8d522310a62f5708ef32efc148bda67f5c61d20a1f
+pkg release/1.1 diffutil-2.8.1-4.pkg 214528 30cb1dd1ea79b7d275b5ac272838d2760c7c95c5baab2c91900f0b3a003a7baf
+pkg release/1.1 dlmkit30-k30.1.4.261103-20.18102d7.pkg 4117504 ee6aa4bd2b85fe2f84ad033e5dcfb08e50733708145ebcf7d102250e2cc61b1b
+pkg release/1.1 dlmkit46-k46.1.4.261103-20.18102d7.pkg 4134912 e11dc01ea5c2f3d0526518ada58b134c268da6bef939ebff8baa9681e2500f2c
+pkg release/1.1 dropbear-2026.94-4.pkg 407040 82eea03e473243843c6db101ff0fdf4f39054fc4142ef5b657d3218f2386b8ec
+pkg release/1.1 ftpdfix-2.1-1.pkg 89088 4c3c3f63fca0d125a117373e4af9944f39766bca636b09386cff26cea71a5f48
+pkg release/1.1 gayle30-1.1.0-9.pkg 31744 6768fb8ae54dbdd2681b2735b5d7187cfaa5ac6feebea40a5ca7a60e984ac1ec
+pkg release/1.1 gayle46-1.1.0-9.pkg 32768 72e6a44206a7a6424a88cac51ad549208144255e802fa32d888a2f276b1f21f9
+pkg release/1.1 grep-2.5.1a-9.pkg 158208 be21c009fd8fc22f458a3c2aecbcda3d95bd1360a4cab26ba5ea65b7f8957aaa
+pkg release/1.1 gtar-1.14-10.pkg 236544 0d3be2f69f43cf02e4d75a344ff872dda2bfe9741548d16b72dd4aaa82fb9c04
+pkg release/1.1 gzip-1.3.12-9.pkg 126976 11caf34d5f2b55f82379f7283e51fd5a9756942c20b35beb883ff320ce1a2ad9
+pkg release/1.1 heirtar-070715-1.pkg 90624 19cac716bacd5d9cf35dbc4ee78cfc55c78e9437b2efc560a9bc423c77d985ec
+pkg release/1.1 kbootset-1.1.0.261105-43.pkg 213504 c75f62d5fa135c5b211323c274b53166807b658ffc6679aac7534ae7165352d6
+pkg release/1.1 kern30m-k30.1.4.261106-77.pkg 1923072 b56e47e37731f5d5435d8dfe67ff5cc1ec314f308ed4dfe519ea57212b2f3b50
+pkg release/1.1 kern46m-k46.1.4.261106-66.pkg 2518528 9f816b9cdc863044350dd39c86f42ebd09f402d86d123f1707b53dcd871238c7
+pkg release/1.1 ldramix-1.0.261105-16.pkg 36352 a1ddf323ed2455817f01d57856963604615d2db3f2381bef82b718947fec0901
+pkg release/1.1 less-704-9.pkg 472576 dc25233ec439d59dd6af6ffb25f4441fcfd85d61e3fce4abf637630dd7729336
+pkg release/1.1 libcfix-2.1c-2.pkg 220672 b103dcb52acaf2c85ac586b7bac6e5f12b8d7275268cffc35fa96d8309f366eb
+pkg release/1.1 libzz9k-2.9.1-2.pkg 358400 c27b590f4d8c680493ed38cdc013d48655dba003d19ffa45f525a83efccb86d5
+pkg release/1.1 make-3.81-9.pkg 263680 b687455a91b5918deff852461619d7d5400e9147bcd4df25ebc2f2b0f1cde938
+pkg release/1.1 modtools-1.0.261105-15.pkg 60416 b941c6330782847cd489e43f162b87162c7b675430804468af8fd578dc0f24c4
+pkg release/1.1 monsw30-1.0.0-9.pkg 36864 ba270f88f81f116e0220aa961431b128f0f5b25dc044566d0f5f1e8e8e8204b3
+pkg release/1.1 monsw46-1.0.0-9.pkg 36864 836f04c23a84be1bccf249cb4bb6482210d266b954d73b0750021556d0e9d3ae
+pkg release/1.1 ncurses-6.6-1.pkg 1685504 ef750931cdef746f38e52ab14b9a4dbe7154a5dfb450451e4331bac7f692aded
+pkg release/1.1 patch-2.5.9-8.pkg 146432 e203211d88c3a75efb385310baaabc06476b8f6e827b608ca012e90e737e06c3
+pkg release/1.1 paula30-1.1.0-3.pkg 26112 93262d2b9969fc2c152dcf757dca7eb50601153d60d23230456dd5a21c274f2a
+pkg release/1.1 paula46-1.1.0-3.pkg 26112 8a20ae890e96d2f2b4d69ce13021ec270d4bccd8b0897db899b250256f59fe60
+pkg release/1.1 prngd-0.9.29-3.pkg 146432 c3b70a2969816423f04634285232f9e3bd0380275e1247e12ca23e3d170dab25
+pkg release/1.1 pth-2.0.7-3.pkg 732160 5e51c7774ca20e3ed1bb8619f30e85f40d5ae8082b2be723759770b417a7d826
+pkg release/1.1 python3-3.11.18-4.pkg 28624384 c401b5bfc8161bca84de838d8f28e7d51e74c264b2314a6fa2fff76c4124ed96
+pkg release/1.1 ramdisk30-1.0.0-6.pkg 18432 a0908643948b1139324ef1a7e80276ce55f7fd88329229336c531c1f646f6255
+pkg release/1.1 ramdisk46-1.0.0-6.pkg 18432 302ecc6a2c032a283bb66633f3313e8d65e921e6097b26bfd30a5141ea030791
+pkg release/1.1 random30-1.0.0-2.pkg 27136 3869c26e2e85df57ab7c6832682112d5ceacf8625d89bbb2763a056283ee70c2
+pkg release/1.1 random46-1.0.0-2.pkg 27136 f8a0ac178e812626863dbd63c0049bc5593f96684925fcc49352a73e3818bfdf
+pkg release/1.1 rdate-1.11-2.pkg 56832 c01743fa8fa99be7bbcbde32f4b58421c92a0717cf5d5eb0313279a0696a2c2e
+pkg release/1.1 rsync-3.1.3-3.pkg 686080 4865df619643d55ae39461ed31f177f24ab2a7e1ddf85506944138093beec3c3
+pkg release/1.1 stock/Cdev-2.1.pkg 10370048 85f4ca01be08c5df29228de84a994660494ecea0a13d4ab83a64d9f73f9d86b1
+pkg release/1.1 stock/X11r5src-2.1.pkg 62920704 833cfdf0de951fd391df4fbd5f31798ecab2316f394acfad38fad4667911ab52
+pkg release/1.1 stock/Xbasic-2.1.pkg 772608 526555314bcf73482b81104393089e53ea413b65408c9feb55f2001806ac8a07
+pkg release/1.1 stock/Xcore-2.1.pkg 8172032 1ad2a7db0d514c5f74286222cde08c13ed0fc3f440482b6ccebaba0bc7cbdd04
+pkg release/1.1 stock/Xdev-2.1.pkg 2895360 3ed6e15ca90460b5c8f2e401d56dbaf3cb596b482689411f4fc20eba540f6a29
+pkg release/1.1 stock/Xsource-2.1.pkg 50784768 bec5b777f65650fcec3fc721c1c287e5f5c479d46360be8fd6dfea01546fac00
+pkg release/1.1 stock/Xtras-2.1.pkg 9348608 3cb578462e14145ff2106b29e1a35871d33ffe3c56b5ea9e1fc754c5470fb6c0
+pkg release/1.1 stock/amigasrc-2.1.pkg 1191424 01de21f232828acb8e4bf4e266e6c069ab3db81ac3240fb03868c1b132626ed0
+pkg release/1.1 stock/bsd-2.1.pkg 1654784 2b95aee7ccaf61650d456c0da816960f8bb3f7820525111359577e671d775dcc
+pkg release/1.1 stock/conf-2.1.pkg 2845696 c701cc3253c0b69e1a076a0410f671995492b8ff8ef8a9e5891c78b770b46793
+pkg release/1.1 stock/core-2.1.pkg 11247104 12cfa10323048a2149959932d4444f656a5881d1d198e1f35bf22ed0d28610f1
+pkg release/1.1 stock/emacs-2.1.pkg 7968256 a8370ab9d9aa98caa12994f75e8999de43ad8c35da9aed33fe819270668e2003
+pkg release/1.1 stock/emacsrc-2.1.pkg 11375616 9a3224c12059cfddda14a7c73b4c65adda96627a1210481081867acb41342460
+pkg release/1.1 stock/games-2.1.pkg 2354176 11b858a32ecf0fdbe872fcbbaae155ca5fc354c4aed66ac7589284c11c2d5c55
+pkg release/1.1 stock/gnusrc-2.1.pkg 21830656 452cc67717a7a5c8a30fa34c769440e335d57e62b96bfca2c7f80e24790d8cca
+pkg release/1.1 stock/gnusrc2-2.1.pkg 37325824 12206dfee76975cdb43ae5cc912e9391a160fe3f1666519d1923a11cc39b3256
+pkg release/1.1 stock/lp-2.1.pkg 2183168 280f5e7a5eae3fdf4804e8014d5d1ff5e0f6986188e808e100cf9ac20907b17f
+pkg release/1.1 stock/m4-2.1.pkg 26112 4f51a9cb5d99f6b4c43d0c0b9211ba8694808dda58aa3f7576ffbfe0c1dac4c6
+pkg release/1.1 stock/man-2.1.pkg 6344704 ad7157261e74e8468dfe6caa20de19389c48b448dc3be81fc822e87ce883f09d
+pkg release/1.1 stock/net-2.1.pkg 3042816 9ee47b51f6b01c605882424195ac15d1a2e0acdcd6b3076ef5c729eaf59f17fc
+pkg release/1.1 stock/olcore-2.1.pkg 2260480 40ff78054107273f7f345188a4b65d8cceebfc815f44ac5b86d72e10051d09d4
+pkg release/1.1 stock/oldev-2.1.pkg 2107904 b32dd2006639bbe66d4a174f32414670154f82faf231bb5db2c29797c07461cb
+pkg release/1.1 stock/public-2.1.pkg 7547904 96b9155f650e12db4b447d28c89a7729ee89b45fa01484abb37f575f5cd28ace
+pkg release/1.1 stock/pubsrc-2.1.pkg 18355200 54224a0ce077ee6327eaeab8457a68ef43e57472a66cc67f2a2ecf1584e4ecfe
+pkg release/1.1 stock/sysadm-2.1.pkg 6002176 d81bc74534d0f905592563aefb3f8c91fe89a590fc4ea7483c8a1ab21a276e84
+pkg release/1.1 stock/terminfo-2.1.pkg 2171904 a838f594db76aa5560aae36d942e65d40deda518e92b3e971def943744b570bf
+pkg release/1.1 stock/text-2.1.pkg 1513984 d4571c424e4fc7bbef1320c0c4d00cf46576dbce805dbb423534945316299ceb
+pkg release/1.1 stock/uucp-2.1.pkg 888832 73536c75ed651efb6f1f7f36c268af2a09d7f105cd6583296209d31b954fbd6f
+pkg release/1.1 syslog-1.0-2.pkg 17920 a4a585e5a514752b1bc779a1bab583942ee123801aec2ed3155f1039afba9e00
+pkg release/1.1 vim-9.1.0000-4.pkg 31297536 c6b418a0eb47a236be7fc5e1aae246b2841dc9fddbf2a64dc61079e10655571d
+pkg release/1.1 x11r63-6.3-8.pkg 34151424 2d6dc996fe9bb117535b0b7044276c2faa58f69f42a9b2c07806fab1afd89cb1
+pkg release/1.1 xztop-1.1.1-1.pkg 807424 fee4bf8eece0142610ffd360575a429035375c8f208a964e021a9d7dcd1c525a
+pkg release/1.1 zeth30-1.0.0-13.pkg 28672 9966780b6bf3ecd6e11c7bfbb20f7dbe9b20368cf73e1344ab41389b1875b3c3
+pkg release/1.1 zeth46-1.0.0-13.pkg 28672 b6334e4e0b86fce3a5c8281175e92ff3108a9751c434b5405c23bfc368fd3ebc
+pkg release/1.1 zlib-1.2.13-9.pkg 360448 9ea9d5a1d9bf28cda5d8ac62e1bdef2b6c74f1e4a96fddf238654ce41b33dc00
+pkg release/1.1 zrtg30-1.1.1-4.pkg 91136 475281e092174e51d89ecd2497cf081e0ff1990ab9ebf73def892ea3cc6c34ae
+pkg release/1.1 zrtg46-1.1.1-4.pkg 91136 3f493f77602ec3670b2b84d9ee755d028786dbd321965ea283e63a054509e83c
+pkg release/1.1 zscsi30-1.0.0-9.pkg 23552 7a93488ef9971301e804006b727c6a73de331ad8b4995504d3eb30bde748b1b2
+pkg release/1.1 zscsi46-1.0.0-9.pkg 23552 32b435a2cf7c648feededf3b7ea02f88d5cf84e7f860f99ddd086f47ac6461c8
+pkg release/1.1 zz9kbus30-1.0.0-2.pkg 10752 b242359ed89759894986d61baee10fb22b4332cab3fc64c5a5b447feb2d6c403
+pkg release/1.1 zz9kbus46-1.0.0-2.pkg 10752 86de0379dd42ea201dcb978534ef74d49a076a4e75f2980b4462084af9a804e3
+pkg release/1.1 zz9ksvc30-1.0.0-4.pkg 65024 07875b3eb3f105228e641698440d9f1ebd7a94822d839f3511b79490ae032a9d
+pkg release/1.1 zz9ksvc46-1.0.0-4.pkg 65024 7f5758136ea95a43d00efcc7ab68243541daf894383a641cdcaa06aaabb34062
+exception kit-revision-lines kit.conf and NOTICE name the amix and port commits; the kit's norev digest is compared across commits
+exception installed-images the disk and SD images are bench-built and proven by their contents
