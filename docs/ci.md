@@ -95,7 +95,7 @@ the m4 checks (the stock Cdev package and the install disk), and the checks
 that need the cross-built Amix binaries (apkg.conf's classes, installf, APKG
 removing itself, the APKGENG mark).
 
-What CI does not build yet: the kernels and the boot media. Host-test cases
+The kit job does not build the kernels or the media; the dist workflow does. Host-test cases
 that need inputs outside this repository (stock kernels, floppies) skip
 themselves and say so.
 
@@ -120,8 +120,8 @@ on the order a directory lists in fails here. Given a lock of record (`release/a
 dispatch's `lock` input), each run is also checked against it. The release step
 runs as a public rebuild (`RELEASE_PUBLIC=1`, `docs/BUILDING.md`), with the stock
 packages from their release assets and no published tree, so its tree has no older
-versions. Only `media`, not in make dist yet, may be a known gap; a gap in any other
-step, or any other failure, fails the run. The summary lists each step and the lock's
+versions. Only `media` may be a known gap, while an input it takes by sha256 is
+not to be had; a gap in any other step, or any other failure, fails the run. The summary lists each step and the lock's
 sha256, and after the proof the free space of both clones' filesystems, whatever the
 result. The locks, the step logs and the catalogs are kept as the run's `dist-proof`
 artifact. A cold image build reports its time in the summary. The job's

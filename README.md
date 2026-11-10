@@ -1,18 +1,38 @@
 # amix
 
-> **Work in progress.** This repository is being organised right now: projects
-> move in one at a time, and the layout, the build and the docs still change.
-> It does not build a release yet; follow along, but don't rely on paths.
-
 One repository that builds the Amiga UNIX (Amix) system: the kernels for the
 68030 and the 68040/68060, the loadable-module system, the drivers, the
 generic modules, the package tools, the outside software packaged for Amix,
 and the install media.
 
+Amix 1.1 is out: the install media are on
+[amigaux/amix-media](https://github.com/amigaux/amix-media/releases), and the
+packages at <http://pkg.amigaux.org/1.1>. Installing it:
+<https://amigaux.org/install/>.
+
+## Build it yourself
+
+`make dist` builds the whole release from this repository, in a container, the
+same bytes on any machine:
+
+```sh
+git clone https://github.com/amigaux/amix.git && cd amix
+system/fetch-amix-system ../amix-system
+make tools SYSTEM=../amix-system
+make dist  SYSTEM=../amix-system RELEASE_PUBLIC=1
+```
+
+You need docker or podman, a full clone (not shallow), network for the first
+run, about 6 GB of disk, and time: on a 32-thread machine `make tools` took
+19 minutes and `make dist` 27. Everything lands in `out/`.
+[docs/BUILDING.md](docs/BUILDING.md) explains each step, what it builds, and how
+to check a build against a release; [docs/RELEASING.md](docs/RELEASING.md) how
+releases are made.
+
 ## Status
 
-Being assembled. Projects move in one at a time, each with its history kept.
-Until a directory holds its project, its README says what will live there.
+Projects move in one at a time, each with its history kept. Until a directory
+holds its project, its README says what will live there.
 
 ## Layout
 

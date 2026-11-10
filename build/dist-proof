@@ -11,8 +11,8 @@
 # clone runs every make dist step in order, each its own `build/dist.sh
 # <step>`, with SYSTEM (or AMIX_SYSTEM), AMIX_IMAGE, AMIX_DISTFILES and LOCK
 # passed on: with LOCK=<lock of record>, each run's lock step also refuses a
-# lock that differs from it. Only media, not in make dist yet, may be a known gap
-# (exit 3 with a [MISSING] line): the run goes on and the summary names it as not
+# lock that differs from it. Only media, while an input it takes by sha256 is not
+# to be had, may be a known gap (exit 3 with a [MISSING] line): the run goes on and the summary names it as not
 # compared. A gap in any other step stops the proof, since two runs that both
 # lost a step would end with locks alike; so does any other failure, an exit 3
 # that says nothing included. Each step's log is WORKDIR/<run>/step-<step>.log,
