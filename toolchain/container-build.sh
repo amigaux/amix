@@ -54,10 +54,14 @@ export_pin g14 "$here/gcc14-cross-amix.pin" "${G14_REPO:-}"
 export_pin sys "$top/system/amix-system.pin" "$sys"
 # what is checked is what is built, before anything is
 "$top/system/check-amix-system" "$work/sys"
-# the base image's CA certificates and openssl, by sha256: it has no https until they are in
+# the base image's CA certificates and openssl, by sha256: it has no https until
+# they are in. Kept in out/cache, as make dist keeps its distfiles, so a second
+# run does not need the snapshot service
 mkdir "$work/debs"
-sh "$here/fetch-distfile" "$here/base-ca-certificates.distfile" "$work/debs" > /dev/null
-sh "$here/fetch-distfile" "$here/base-openssl.distfile" "$work/debs" > /dev/null
+for d in base-ca-certificates base-openssl; do
+	f=$(sh "$here/fetch-distfile" "$here/$d.distfile")
+	cp "$f" "$work/debs/"
+done
 read -r _ g14 < "$here/gcc14-cross-amix.pin"
 tag=${2:-amix-toolchain:$(printf %.7s "$g14")}
 

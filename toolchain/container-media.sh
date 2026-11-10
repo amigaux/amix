@@ -24,7 +24,9 @@ tag=${2:-amix-toolchain:media}
 
 work=$(mktemp -d)
 trap 'rm -rf "${work:?}"' EXIT INT TERM
-sh "$here/fetch-distfile" "$here/amitools.distfile" "$work" > /dev/null
+# kept in out/cache, as make dist keeps its distfiles
+f=$(sh "$here/fetch-distfile" "$here/amitools.distfile")
+cp "$f" "$work/"
 "$tool" build -f "$here/Containerfile.media" --build-arg BASE="$base" -t "$tag" "$work"
 
 list() { "$tool" run --rm "$1" sha256sum /opt/amix/TOOLCHAIN.sha256 | cut -c1-64; }

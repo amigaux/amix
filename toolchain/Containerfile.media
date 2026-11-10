@@ -34,7 +34,8 @@ RUN cd /tmp \
  && xdftool t.adf create + format T ffs > /dev/null && test -s t.adf \
  && rdbtool -f d.hdf create size=2Mi + init > /dev/null && test -s d.hdf \
  && rm t.adf d.hdf
-RUN { dpkg-query -W -f '${Package} ${Version}\n' xorriso libisoburn1t64 libisofs6t64 libburn4t64 python3; \
+RUN { xorriso -version 2>/dev/null | head -1; \
+      dpkg-query -W -f '${Package} ${Version}\n' xorriso libisoburn1t64 libisofs6t64 libburn4t64 python3; \
       (cd /opt/amix-media/amitools && find . -type f | LC_ALL=C sort | xargs sha256sum) | sha256sum | sed 's/ .*/ amitools tree/'; \
     } > /opt/amix-media/TOOLS \
  && chmod -R a+rX /opt/amix-media

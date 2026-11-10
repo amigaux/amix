@@ -243,7 +243,13 @@ git init -q "$cb/src/other"
 refused "container-build: a checkout without the pinned commit" "is not in" build "$cb/src/other"
 check "container-build: the base image's two packages reach the build" \
 	sh -c "grep -q 'ca-certificates.deb' '$cb/context-base-debs' && grep -q 'openssl.deb' '$cb/context-base-debs'"
+check "container-build: the base packages are kept in out/cache" \
+	sh -c "[ -s '$cb/out/cache/ca-certificates.deb' ] && [ -s '$cb/out/cache/openssl.deb' ]"
+mv "$cb/debs" "$cb/debs.away"
+check "container-build: a second run takes them from out/cache, with no source" build "$sys"
+mv "$cb/debs.away" "$cb/debs"
 printf 'other bytes\n' > "$cb/debs/openssl.deb"
+printf 'other bytes\n' > "$cb/out/cache/openssl.deb"
 refused "container-build: a base package with other bytes" "not the pinned" build "$sys"
 snapshot=$(sed -n 's/^ARG SNAPSHOT=//p' "$here/Containerfile")
 check "Containerfile: the base packages come from the snapshot apt uses after them" \
