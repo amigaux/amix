@@ -102,7 +102,7 @@ cp "$out/kspace/beside/amix-cdboot" "$B/amix-cdboot"
 mkdir -p "$L11_IN/kspace-beside"
 cp "$out/kspace/beside/amix-cdboot" "$L11_IN/kspace-beside/amix-cdboot"
 PT="$L11_IN/pkgtools"
-mv "$src/userland/pkgtools" "$PT"
+mv "${src:?}/userland/pkgtools" "${PT:?}"
 ( cd "$PT/heirloom" && ./build-host.sh ) > "$log/pkgtools-host.log" 2>&1 || { tail -20 "$log/pkgtools-host.log" >&2; fail "pkgtools build-host.sh"; }
 ( cd "$PT/heirloom" && GCA="$GCA" ./build-amix-static.sh ) > "$log/pkgtools-static.log" 2>&1 \
 	&& grep -q 'STATIC BUILD OK' "$log/pkgtools-static.log" || { tail -20 "$log/pkgtools-static.log" >&2; fail "pkgtools build-amix-static.sh"; }
