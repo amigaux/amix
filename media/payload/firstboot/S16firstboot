@@ -1,0 +1,11 @@
+#!/bin/sh
+# S16firstboot -- run the once-only first-boot identity payload iff armed.
+# Written onto the target by src/installer/install.sh (NOT a package member).
+# The stock sysinit first-boot dialog is disarmed at install time; this runs
+# firstboot.sh from run level 2 (which /etc/inittab completes before spawning
+# the console getty), then firstboot.sh removes PENDING so this stays inert.
+FB=/var/adm/firstboot
+if [ -f "$FB/PENDING" ]; then
+	/sbin/sh "$FB/firstboot.sh"
+fi
+exit 0

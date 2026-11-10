@@ -1,0 +1,47 @@
+amix-installng -- NOTICE
+========================
+
+Copyright (c) 2026 Jussi Alanärä. The original tooling, documentation and
+configuration in this repository are MIT-licensed; see LICENSE.
+
+Trademarks
+----------
+
+The wording Amiga Corporation asked us to carry:
+
+  This project and its developers are not affiliated with, endorsed by, or
+  sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga
+  Corporation.
+
+amigaux.org is an independent, unofficial project. The project is likewise not
+affiliated with, endorsed by, or sponsored by Commodore or any other trademark
+holder. AmigaOS and Amiga UNIX are trademarks of their respective owners; UNIX
+is a registered trademark of The Open Group. Amiga UNIX is Commodore's port of
+AT&T UNIX System V Release 4; portions are copyright AT&T, UNIX System
+Laboratories and their successors.
+
+Distribution
+------------
+
+On 2026-09-23 Amiga Corporation approved distributing the Commodore Amiga
+binaries that this project builds on; the project reads this as lifting the
+restriction on releasing Amiga UNIX to the public. This repository carries no
+Amiga or Amiga UNIX binaries. The install media built with it are published as
+release files on amigaux.org, never through this repository.
+
+Third-party material in this repository
+---------------------------------------
+
+src/tz/tzdata.zi
+  The IANA Time Zone Database, version 2026c (https://www.iana.org/time-zones),
+  in the public domain.
+
+src/setclk/setclk-y2k.patch
+  A patch to the stock Amix 2.1 setclk.c (Commodore's source, amigasrc-2.1
+  package): its context lines are Commodore's. It consolidates the two
+  community Y2K fixes by Piru (2006) and a_petri (2007), as collected at
+  https://www.amigaunix.com/doku.php/y2k-dst, credited in the patch header.
+
+src/miniroot/profile
+  Replaces the stock /etc/profile on the install miniroot and keeps the stock
+  banner and Ctrl-C trap (a few lines of Commodore's text).

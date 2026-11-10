@@ -1,0 +1,380 @@
+#!/bin/sh
+# updbootpart -- reframe the target's UNI\0 boot slice from /stand, so a kernel
+# delivered into /stand (e.g. by `pkgadd KERNBENCH`) becomes the RUNNING kernel on
+# the next cold boot. This is the on-box, tape-free "kernel upgrade via package"
+# finisher: pkgadd lands /stand/unix + /stand/boot2.boot; THIS tool rotates + writes
+# the boot slice and proves the write byte-for-byte before it trusts it.
+#
+# INSTALLED BY src/installer/install.sh onto every fresh target at
+# /usr/sbin/updbootpart (driver-written, additive -- NOT a package member, so it is
+# invisible to the contents DB / pkgchk, exactly like /etc/rc2.d/S16firstboot). The
+# driver emits it byte-for-byte from this tracked master (installer-selftest audit O
+# drift-locks the two).
+#
+# =============================================================================
+# RUNS ON THE FULL INSTALLED TARGET (not the thin install miniroot)
+# =============================================================================
+# So the complete SVR4 userland is present. It deliberately uses sum(1), wc(1),
+# cmp(1) and pkgparam(1) -- which the miniroot lacks but every installed Amix
+# carries. installer-selftest audit O carries a documented per-script allowlist for
+# exactly those target tools; install.sh (miniroot) gets no such exception.
+#
+# PRE-POSIX SVR4 /bin/sh SYNTAX (the installed box's /bin/sh is the same 1991 sh as
+# the miniroot's): NO $(...), NO `export VAR=val`, NO $(( )), NO [[ ]], NO `local`.
+# Arithmetic is `expr`; command substitution is `backticks`.
+#
+# =============================================================================
+# THE BOOTCHAIN CONTRACT (on-box probe -- codified here, do not re-derive)
+# =============================================================================
+# The kernel boots from the RAW UNI\0 boot slice, NOT from /stand/unix -- the
+# /stand files are the FRAMING SOURCE. The full-conformance reframe recipe, byte
+# for byte, is:
+#
+#   cd /stand
+#   ( cat boot1.boot; ./makeiblk boot2.boot; cat boot2.boot; \
+#     ./makeiblk unix;  cat unix ) | dd conv=sync of=/dev/dsk/cNd0s3
+#   sync; sync
+#
+# Traps this tool OWNS (each proven on-box):
+#   * /stand/CONFIG is ABSENT on installed boxes, so the stock `make bootpart`
+#     cannot run -- we drive the pipeline DIRECTLY with the slice device computed
+#     from the running system, never `make`.
+#   * makeiblk is invoked as ./makeiblk (it is /stand/makeiblk, not on PATH).
+#   * the boot slice is s3 of the ROOT disk: root cNd0s1 -> boot cNd0s3, with N
+#     DERIVED from the real root device in /etc/vfstab -- never hardcoded.
+#   * /stand/boot2.boot MUST be the flags-based loader (sum -r 14193). The
+#     name-based loader D245s the flags-based ET_REL kernels; we refuse anything
+#     but 14193 before we write a single block.
+#
+# =============================================================================
+# MODES
+# =============================================================================
+#   updbootpart [--pkg NAME | --ksum N | N]          reframe (default)
+#   updbootpart --backup                             rotate /stand/unix -> OLDunix
+#   updbootpart --rollback (--pkg NAME | --ksum N)   restore OLDunix -> unix + reframe
+#
+#   reframe  gates BEFORE any write, then frames + reads back + cmp's; the expected
+#            kernel sum -r comes from --ksum N, a bare numeric arg, or `pkgparam
+#            <NAME> KSUM_R` (--pkg NAME).  Refuses a mismatch.
+#   --backup rotates the CURRENTLY installed /stand/unix aside to /stand/OLDunix.
+#            Run it BEFORE `pkgadd KERNBENCH`, because pkgadd overwrites /stand/unix
+#            IN PLACE -- once pkgadd runs, the old kernel is gone unless backed up.
+#   --rollback GATES /stand/OLDunix against the expected sum FIRST and only then
+#            restores it over /stand/unix and reframes (so the boot slice matches).
+#            The gate is BEFORE the write: a wrong OLDunix leaves /stand/unix
+#            untouched.  (Until 2026-08-15 it copied first and gated second, which
+#            corrupted /stand/unix on exactly the refusal it was there to prevent.)
+#
+# Everything is FAIL CLOSED: every gate `die`s on failure (no `|| true` softening),
+# and the write is trusted only after the readback cmp is byte-clean.
+
+PROG=updbootpart
+STAND=/stand
+VFSTAB=/etc/vfstab
+
+# The flags-based /stand/boot2.boot fingerprint (sum -r). The name-based install-
+# media loader has a different sum and CANNOT relocate the flags-based ET_REL
+# kernels (D245/RELA Guru on metal); refuse anything but this.
+# The two CONTRACT-PROVEN flags-based loaders (amix-kerntools
+# contracts/bootchain-v1.json, its 'proven' list): good is the 68030 line's
+# loader and good_040 the 68040/68060 one. BOTH are legitimate here -- which one
+# is correct depends on the KERNEL LINE this disk boots, and that is the caller's
+# business, not ours: we frame a slice, we do not choose a lineage. What must be
+# refused is a loader that is NEITHER, because the name-based install-media
+# loader cannot relocate a flags-based ET_REL kernel (D245/RELA).
+BOOT2_SUMR=14193                # good      -- 68030 line
+BOOT2_SUMR_040=27860            # good_040  -- 68040/68060 line
+
+FRAME=/tmp/updbootpart.frame.$$
+BACK=/tmp/updbootpart.back.$$
+DDLOG=/tmp/updbootpart.dd.$$
+trap 'rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null' 0 1 2 3 15
+
+msg()  { echo "$PROG: $*"; }
+warn() { echo "$PROG: WARNING: $*" >&2; }
+die()  { echo "$PROG: STOP: $*" >&2; rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null; exit 1; }
+
+# dumplog -- echo the captured dd log to stderr (best-effort), for a failed write.
+dumplog() { [ -f "$DDLOG" ] && cat "$DDLOG" >&2; return 0; }
+
+usage() {
+	echo "usage: $PROG [--pkg NAME | --ksum N | N]      reframe boot slice from /stand"
+	echo "       $PROG --backup                         /stand/unix -> /stand/OLDunix"
+	echo "       $PROG --rollback (--pkg NAME|--ksum N)  /stand/OLDunix -> unix + reframe"
+}
+
+# sumr FILE -- echo the first field of `sum -r FILE` (the BSD checksum). Fail-closed
+# helpers compare against it; an empty result can never compare equal to a number.
+sumr() {
+	sum -r "$1" | ( read s rest; echo "$s" )
+}
+
+# is_num WORD -- strict non-negative integer test (no external tool). A garbled or
+# empty checksum is NOT a number, so it can never pass an equality gate.
+is_num() {
+	case "$1" in
+		'')       return 1 ;;
+		*[!0-9]*) return 1 ;;
+		*)        return 0 ;;
+	esac
+}
+
+# hexval CH -- decimal value of one hex digit (for decoding a ROOTDEV minor byte).
+hexval() {
+	case "$1" in
+		0) echo 0 ;; 1) echo 1 ;; 2) echo 2 ;; 3) echo 3 ;; 4) echo 4 ;;
+		5) echo 5 ;; 6) echo 6 ;; 7) echo 7 ;; 8) echo 8 ;; 9) echo 9 ;;
+		a|A) echo 10 ;; b|B) echo 11 ;; c|C) echo 12 ;; d|D) echo 13 ;;
+		e|E) echo 14 ;; f|F) echo 15 ;;
+		*) echo -1 ;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# 0. parse arguments
+# ---------------------------------------------------------------------------
+MODE=reframe
+PKG=
+KSUM=
+while [ $# -gt 0 ]; do
+	case "$1" in
+		--backup)   MODE=backup ;;
+		--rollback) MODE=rollback ;;
+		--reframe)  MODE=reframe ;;
+		--pkg)      shift; PKG="$1" ;;
+		--pkg=*)    PKG=`expr "$1" : '--pkg=\(.*\)'` ;;
+		--ksum)     shift; KSUM="$1" ;;
+		--ksum=*)   KSUM=`expr "$1" : '--ksum=\(.*\)'` ;;
+		-h|--help)  usage; exit 0 ;;
+		[0-9]*)     KSUM="$1" ;;
+		*)          die "unknown argument: $1  (try --help)" ;;
+	esac
+	shift
+done
+
+# ---------------------------------------------------------------------------
+# 1. derive the boot slice device from the running system (never hardcoded)
+# ---------------------------------------------------------------------------
+# The root device is the one the kernel actually MOUNTED: `/etc/devnm /` names the
+# block node of the mounted root -- the same source /sbin/bcheckrc uses for its root
+# fsck and the mnttab entry. /etc/vfstab is install-time text: on a disk moved to
+# another unit (the RTH1 root hint lets a moved disk boot) its "/" row still
+# names the OLD id, and framing onto that id's slice 3 would write ANOTHER disk.
+# vfstab is read only to say when it disagrees. Its block-special name is
+# /dev/dsk/cNd0s1; the boot slice is /dev/dsk/cNd0s3 on the SAME controller N.
+# The `while read ... done < FILE` runs in a subshell on the SVR4 sh, so its
+# result is taken via the backtick's STDOUT (an assign inside the loop body would
+# be lost) -- the loop only echoes.
+ROOTSPEC=`/etc/devnm / 2>/dev/null | ( read dev mnt; echo "$dev" )`
+[ -n "$ROOTSPEC" ] || die "/etc/devnm / named no root device -- cannot find the root device"
+VFROOT=`while read spec fsckd mp rest; do
+	case "$spec" in ''|\#*) continue ;; esac
+	if [ "$mp" = "/" ]; then echo "$spec"; fi
+done < "$VFSTAB"`
+if [ -n "$VFROOT" ] && [ "$VFROOT" != "$ROOTSPEC" ]; then
+	warn "$VFSTAB names the root $VFROOT, but the mounted root is $ROOTSPEC (a moved disk?) -- using $ROOTSPEC"
+fi
+
+# ROOTSPEC must be /dev/dsk/cNd0s1 (the family root convention). Extract N.
+#
+# N IS ONE HEX DIGIT, NOT DECIMAL. The controller field carries the CARD INDEX,
+# which the kernel packs into the minor's low NIBBLE -- so it spans 0..f and is
+# written in hex: card 1 / target 6 is ced0s1, never c14d0s1. A decimal-only match
+# here produced an EMPTY CN on every card-1 root, and the tool then refused to
+# guess -- correct behaviour on a wrong reading, which is exactly why it presented
+# as a missing device rather than as a parse bug.
+CN=`expr "$ROOTSPEC" : '/dev/dsk/c\([0-9a-fA-F]\)d0s1$'`
+[ -n "$CN" ] || die "root device $ROOTSPEC is not /dev/dsk/cNd0s1 with N one hex digit -- refusing to guess the boot slice"
+
+# CN as a NUMBER. Paths are built from the STRING $CN; every numeric comparison
+# uses $CN_VAL. Mixing the two is what made the ROOTDEV gate compare 14 to "e".
+CN_VAL=`hexval "$CN"`
+[ "$CN_VAL" -ge 0 ] || die "root device $ROOTSPEC has a non-hex controller digit"
+
+ROOT_BLK="/dev/dsk/c${CN}d0s1"
+BOOT_BLK="/dev/dsk/c${CN}d0s3"
+BOOT_RAW="/dev/rdsk/c${CN}d0s3"
+
+# both boot-slice nodes must exist (we WRITE the block node per the probed recipe and
+# READ BACK through the raw node so the cmp proves the DISK, not the buffer cache).
+[ -b "$BOOT_BLK" ] || die "boot-slice block node $BOOT_BLK is absent -- is c${CN}d0 the root disk?"
+[ -c "$BOOT_RAW" ] || die "boot-slice raw node $BOOT_RAW is absent -- is c${CN}d0 the root disk?"
+
+msg "root device  : $ROOTSPEC  (controller c${CN}d0)"
+msg "boot slice   : $BOOT_BLK  (readback via $BOOT_RAW)"
+
+# ---------------------------------------------------------------------------
+# 2. mode dispatch: --backup rotates and stops (no reframe, no ksum gate)
+# ---------------------------------------------------------------------------
+if [ "$MODE" = backup ]; then
+	[ -f "$STAND/unix" ] || die "$STAND/unix is absent -- nothing to back up"
+	cur=`sumr "$STAND/unix"`
+	msg "backup: $STAND/unix (sum -r $cur) -> $STAND/OLDunix"
+	cp "$STAND/unix" "$STAND/OLDunix" || die "cp $STAND/unix $STAND/OLDunix failed"
+	bak=`sumr "$STAND/OLDunix"`
+	is_num "$cur" && is_num "$bak" && [ "$cur" -eq "$bak" ] \
+		|| die "backup copy sum -r '$bak' != source '$cur' -- backup not trustworthy"
+	msg "backup done: $STAND/OLDunix sum -r $bak (run pkgadd next, then $PROG to reframe)"
+	exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 3. resolve the EXPECTED kernel sum -r (reframe + rollback both gate on it)
+# ---------------------------------------------------------------------------
+# ★ THIS RESOLVES BEFORE THE ROLLBACK COPY, AND THAT ORDER IS THE WHOLE POINT.
+# It used to sit AFTER the rollback block, so `--rollback` had already copied
+# OLDunix over /stand/unix before anything knew what the right kernel was. It is
+# needed by BOTH modes and depends on neither, so it belongs here. See section 4.
+# (`--backup` still exits in section 2 above and needs no expected sum at all.)
+EXPECT_KSUM="$KSUM"
+if [ -z "$EXPECT_KSUM" ] && [ -n "$PKG" ]; then
+	EXPECT_KSUM=`pkgparam "$PKG" KSUM_R 2>/dev/null`
+	[ -n "$EXPECT_KSUM" ] || die "pkgparam $PKG KSUM_R returned nothing -- is $PKG installed?"
+fi
+[ -n "$EXPECT_KSUM" ] || die "no expected kernel sum -- pass --ksum N or --pkg NAME (fail closed)"
+is_num "$EXPECT_KSUM" || die "expected kernel sum '$EXPECT_KSUM' is not a number"
+
+# ---------------------------------------------------------------------------
+# 4. --rollback restores OLDunix over unix, then falls through to reframe
+# ---------------------------------------------------------------------------
+# ★ THE GATE RUNS BEFORE THE COPY. MEASURED 2026-08-15: a `--backup` had rotated a
+# TRUNCATED /stand/unix into OLDunix, and `--rollback --ksum 55482` then printed
+#     rollback: restoring /stand/OLDunix (sum -r 61907) over /stand/unix
+#     STOP: kernel identity gate FAILED ... refusing to frame the wrong kernel
+# -- in that order. The tool refused to FRAME the bad kernel, correctly, but it had
+# already written it over /stand/unix. The box survived only because it was still
+# running off the intact boot frame; the next reframe would have shipped the
+# truncated blob to the boot slice. A gate that fires after the write is not a gate.
+#
+# So OLDunix is judged as a CANDIDATE, against the same expected sum the reframe
+# will apply to /stand/unix afterwards, and /stand/unix is not touched until it
+# passes. Everything this tool does stays FAIL CLOSED and, now, WRITE-LAST.
+#
+# The reframe's own KSUM gate (5b) still re-sums /stand/unix after the copy
+# -- that is not redundancy for its own sake, it is the check that the `cp` landed
+# what it read (a short write on a full /stand would otherwise pass unnoticed).
+if [ "$MODE" = rollback ]; then
+	[ -f "$STAND/OLDunix" ] || die "$STAND/OLDunix is absent -- nothing to roll back to"
+	old=`sumr "$STAND/OLDunix"`
+	if is_num "$old" && [ "$old" -eq "$EXPECT_KSUM" ]; then
+		msg "gate KSUM   : $STAND/OLDunix sum -r $old == expected $EXPECT_KSUM  OK"
+	else
+		die "kernel identity gate FAILED: $STAND/OLDunix sum -r '$old' != expected '$EXPECT_KSUM' -- refusing to restore the wrong kernel over $STAND/unix (unix is UNTOUCHED)"
+	fi
+	msg "rollback: restoring $STAND/OLDunix (sum -r $old) over $STAND/unix"
+	cp "$STAND/OLDunix" "$STAND/unix" || die "cp $STAND/OLDunix $STAND/unix failed"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. GATES -- everything checked BEFORE the first block is written
+# ---------------------------------------------------------------------------
+# 5a. the framing sources must all be present.
+[ -f "$STAND/boot1.boot" ]  || die "$STAND/boot1.boot absent (framing source)"
+[ -f "$STAND/boot2.boot" ]  || die "$STAND/boot2.boot absent (framing source)"
+[ -x "$STAND/makeiblk" ]    || die "$STAND/makeiblk absent or not executable (framing tool)"
+[ -f "$STAND/unix" ]        || die "$STAND/unix absent (the kernel to frame)"
+
+# 5b. the kernel identity gate: sum -r /stand/unix == the expected KSUM_R.
+kunix=`sumr "$STAND/unix"`
+if is_num "$kunix" && [ "$kunix" -eq "$EXPECT_KSUM" ]; then
+	msg "gate KSUM   : $STAND/unix sum -r $kunix == expected $EXPECT_KSUM  OK"
+else
+	die "kernel identity gate FAILED: $STAND/unix sum -r '$kunix' != expected '$EXPECT_KSUM' -- refusing to frame the wrong kernel"
+fi
+
+# 5c. the boot2 loader gate: it MUST be the flags-based loader (sum -r 14193). The
+# name-based loader cannot relocate the flags-based ET_REL kernels (D245/RELA).
+kboot2=`sumr "$STAND/boot2.boot"`
+b2name=""
+if is_num "$kboot2"; then
+	if [ "$kboot2" -eq "$BOOT2_SUMR" ]; then b2name=good; fi
+	if [ "$kboot2" -eq "$BOOT2_SUMR_040" ]; then b2name=good_040; fi
+fi
+if [ -n "$b2name" ]; then
+	msg "gate BOOT2   : $STAND/boot2.boot sum -r $kboot2 == flags-based $b2name  OK"
+else
+	# State what is known and no more. This loader is neither proven flags-based
+	# one; it MAY be the name-based install-media loader (which D245s on a
+	# flags-based kernel) or something nobody has characterised. Naming one culprit
+	# as fact is the failure the contract's unknown_policy warns about -- an
+	# unrecognised loader is UNPROVEN, which is a different claim.
+	die "boot2 loader gate FAILED: $STAND/boot2.boot sum -r '$kboot2' is neither proven flags-based loader ($BOOT2_SUMR good, $BOOT2_SUMR_040 good_040) -- unproven loader, refusing to frame"
+fi
+
+# 5d. ROOTDEV consistency (only when a package is named): the kernel's baked-in
+# rootdev must name the disk we are actually framing. Decode the minor byte:
+# minor = (slice << 4) | id, so the low nibble is the SCSI id and the high nibble
+# the slice. Require id == the derived controller N and slice == 1 (the root slice).
+if [ -n "$PKG" ]; then
+	prd=`pkgparam "$PKG" ROOTDEV 2>/dev/null`
+	if [ -n "$prd" ]; then
+		low2=`expr "$prd" : '.*\(..\)$'`
+		hn=`expr "$low2" : '\(.\)'`
+		ln=`expr "$low2" : '.\(.\)'`
+		rslice=`hexval "$hn"`
+		rid=`hexval "$ln"`
+		if [ "$rid" = "$CN_VAL" ] && [ "$rslice" = 1 ]; then
+			msg "gate ROOTDEV: $PKG ROOTDEV $prd => id $rid slice $rslice == root c${CN}d0s1 (card $CN_VAL)  OK"
+		else
+			die "ROOTDEV consistency FAILED: $PKG ROOTDEV $prd => id $rid slice $rslice, but the root is c${CN}d0s1 (card $CN_VAL slice 1) -- kernel rootdev does not match this disk"
+		fi
+	else
+		warn "pkgparam $PKG ROOTDEV returned nothing -- skipping the rootdev consistency check"
+	fi
+fi
+
+# ---------------------------------------------------------------------------
+# 6. FRAME: build the chain into a temp file, dd it to the slice, sync, read back
+# ---------------------------------------------------------------------------
+# The exact probed pipeline, to a TEMP FILE first (so the write to the slice is a single
+# clean dd we can read back and compare). conv=sync zero-pads the final short block,
+# so the frame is a whole number of 512-byte blocks.
+msg "framing boot chain from $STAND (boot1 | iblk boot2 | boot2 | iblk unix | unix) ..."
+( cd "$STAND" || exit 3
+  cat boot1.boot
+  ./makeiblk boot2.boot
+  cat boot2.boot
+  ./makeiblk unix
+  cat unix ) | dd conv=sync of="$FRAME" 2>"$DDLOG"
+[ -s "$FRAME" ] || { dumplog; die "framed image is empty -- the /stand pipeline produced no data"; }
+
+# NB: SVR4 `wc -c` LEFT-PADS its count with spaces ("  417280"), so strip the
+# whitespace via `read` (same idiom as sumr) -- an unstripped value is not is_num.
+framebytes=`wc -c < "$FRAME" | ( read n rest; echo "$n" )`
+is_num "$framebytes" || die "cannot size the framed image"
+nblk=`expr "$framebytes" / 512`
+[ "$nblk" -gt 0 ] || die "framed image is smaller than one block ($framebytes bytes)"
+framesum=`sumr "$FRAME"`
+msg "framed image : $framebytes bytes = $nblk blocks, sum -r $framesum"
+
+msg "writing $BOOT_BLK (dd bs=512) ..."
+dd if="$FRAME" of="$BOOT_BLK" bs=512 2>>"$DDLOG" || { dumplog; die "dd to $BOOT_BLK failed"; }
+sync
+sync
+
+# readback through the RAW node (bypasses the buffer cache -> proves the on-disk
+# bytes), then a byte-exact cmp against the temp frame. Refuse on ANY diff.
+msg "reading back $nblk blocks from $BOOT_RAW ..."
+dd if="$BOOT_RAW" bs=512 count="$nblk" of="$BACK" 2>>"$DDLOG" || { dumplog; die "readback dd from $BOOT_RAW failed"; }
+backsum=`sumr "$BACK"`
+if cmp "$FRAME" "$BACK"; then
+	msg "readback OK  : $BOOT_RAW sum -r $backsum == frame $framesum (byte-identical)"
+else
+	die "READBACK MISMATCH: $BOOT_RAW does not match the framed image (frame sum -r $framesum, disk sum -r $backsum) -- the boot slice is NOT trustworthy"
+fi
+
+# ---------------------------------------------------------------------------
+# 7. AUDIT RECORD
+# ---------------------------------------------------------------------------
+echo
+msg "=============================================================="
+msg " BOOT SLICE REFRAMED  ($MODE)"
+msg "   kernel /stand/unix : sum -r $kunix  (expected $EXPECT_KSUM)"
+msg "   boot2 /stand/boot2 : sum -r $kboot2 (flags-based $BOOT2_SUMR)"
+msg "   boot slice device  : $BOOT_BLK  ($nblk x 512-byte blocks)"
+msg "   frame  sum -r      : $framesum"
+msg "   disk   sum -r      : $backsum   (readback via $BOOT_RAW, cmp byte-clean)"
+msg "   next: cold boot c${CN}d0 -- the running kernel becomes sum -r $kunix"
+msg "=============================================================="
+rm -f "${FRAME:?}" "${BACK:?}" "${DDLOG:?}" 2>/dev/null
+exit 0

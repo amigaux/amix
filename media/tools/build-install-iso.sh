@@ -1,0 +1,1199 @@
+#!/usr/bin/env bash
+#
+# build-install-iso.sh -- assemble the installer payload into an /install/ tree,
+# then master the install CD with it via build-iso.sh. This is the
+# re-master: it turns the package disc into a self-contained install disc
+# the miniroot driver can run start-to-finish.
+#
+# The /install/ tree it builds (paths the driver + miniroot shim expect):
+#
+#   /install/bin/pkgadd,pkgtrans,pkginfo,pkgchk   static CD engine (amix-packagemanager)
+#   /install/bin/pkginstall                       static pkginstall (the shim exec target)
+#   /install/bin/sum                              genuine SVR4 `sum` (from core) -- the
+#                                                 on-target boot-chain verifier runs it
+#   /install/bin/apkg                             static apkg, IF present (optional)
+#   /install/admin/pkgadd                         permissive pkgadd -a policy
+#   /install/admin/default                        the 183-B stock admin (seeded to target)
+#   /install/order                                install order for the mastered set
+#   /install/order.<set>                          one per NAMED SET this medium can
+#                                                 satisfy in full
+#   /install/sets                                 the interview's tier table
+#   /install/profiles/*.profile                   target specs (copied verbatim)
+#   /install/boot/<profile>/{bootslice.img,boot2.boot,bootslice.manifest}
+#   /install/bin/install.sh + firstboot/*         the driver + first-boot payload
+#   /install/bin/setup.sh                         the interactive interview
+#   /install/profiles/BASE                        the base profile this medium was
+#                                                 mastered for (setup.sh reads it
+#                                                 when launched with no argument)
+#
+# Sources (read-only): ../amix-packagemanager heirloom/build-amix-static (engine),
+# the stock core tree build/core/root (tools/build-core-tree.sh: sum, the 183-B
+# admin, boot1.boot, bcheckrc), and this repo's
+# src/installer, payload/firstboot, profiles/, deps via the sibling's deps.conf.
+#
+# The staged tree + the ISO are build artefacts (Commodore boot-slice chain, sum
+# binary and packages). Never committed; the staging dir sits under work/
+# (gitignored) and build-iso.sh's release gate refuses a git-tracked ISO path.
+# Publishing a built disc is a separate decision for each medium (docs/install-iso.md).
+#
+#   tools/build-install-iso.sh                       # bench profile, base set
+#   tools/build-install-iso.sh --profile metal-a4000-z3660 --profile bench-a3000-a4091
+#   tools/build-install-iso.sh --set full            # full package set
+#
+# Requires: bash, python3, xorriso (via build-iso.sh), rdbtool not needed here.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+repo="$(cd "$here/.." && pwd)"
+PROFILE_DIR="${MEDIA_PROFILE_DIR:-$repo/profiles}"   # a rig run names its bench profiles
+LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench's real addresses
+
+# amix userland/pkgtools at the set's revision, built by tools/build-l11-inputs.sh
+# (nothing in 1.1 reads the frozen amix-packagemanager)
+PKGMGR="${PKGMGR:-${L11_IN:-$repo/work/l11}/pkgtools}"
+STATIC="${STATIC:-$PKGMGR/heirloom/build-amix-static}"
+CORE_T="${CORE_T:-$repo/build/core/root}"   # tools/build-core-tree.sh
+STAGING="${STAGING:-${L11_IN:-$repo/work/l11}/staging}"
+# Authored metadata comes from the sibling's REPO TREE, never its build staging:
+# the staging copy of deps.conf has been observed lagging (it predates the kernel-
+# package edges), and sets.conf/cats.conf are not staged there at all. Same rule as
+# build-iso.sh, deliberately -- the two must agree about what a set contains.
+DEPS="${DEPS:-$PKGMGR/tools/repo/deps.conf}"
+SETS_PY="${SETS_PY:-$PKGMGR/tools/repo/sets.py}"
+SETS_CONF="${SETS_CONF:-$PKGMGR/tools/repo/sets.conf}"
+
+# ---------------------------------------------------------------------------
+# ATTESTED SETS -- which named sets have a REFERENCE INSTALLED-TREE DIGEST
+# ---------------------------------------------------------------------------
+# Plan §5.7, locked: a named set WITH an attested reference is digest-gated; a
+# named set WITHOUT one, and every Custom selection, runs with the digest gate
+# explicitly WAIVED and is marked "unattested selection" on the interview's
+# confirmation screen and in the install log. The install matrix only ever drives
+# attested sets.
+#
+# This list is what the medium tells the interview. Its counterpart is
+# tools/install-matrix.sh's SET_REFS table, which holds the actual digests; the two
+# are cross-checked by installer-selftest audit X, so a set can never be advertised
+# as attested here while the matrix has no reference digest for it (or the
+# reverse). `standard` joined it on 2026-08-11 when the cd-standard bench run
+# recorded 4ad8e17b69b32208c9fffa600596a428 / 11012 objects; `developer` and
+# `x11` joined on 2026-08-12 at ebd61ce15699fbb34cf0f6a2d0a07024 / 11497 and
+# 5439f78fc1caf4da46af82db360f5d13 / 11546.
+#
+# ★★ `full` JOINED 2026-08-14 at 68de888084500aef703a9ccd3eeaa0e5 / 28,709
+# objects -- the last set to have no reference, and the only one that needed the
+# RIG changed twice to get one. It cannot be installed as declared ON s5: FIVE
+# groups / TEN objects in gnusrc2 and X11r5src collide under s5's 14-character
+# name limit (authority: ../amix-packagemanager docs/s5-14char-collisions.md;
+# An earlier scan said three groups and was directory-blind -- it missed the
+# ZAPHOD/ copies of the two amixInitExt pairs). On UFS the limit does not exist
+# and `full` installs WHOLE, at its natural object count, with nothing dropped
+# and no package re-minted. The 2026-08-14 cd-full run proved that half and then
+# ran out of DISK inside package thirty (pkgadd spools each datastream onto the
+# target: peak = tree + largest package, and the 400 MB rig was 8.5 MiB short);
+# the rig went to 512 MB and the re-run went 10/10.
+#
+# So the packagemanager brief's Option A -- drop 5 objects, re-mint two packages,
+# attest at 28,704 -- is now MOOT rather than an alternative: it exists only to
+# work around a limit this project no longer meets. Retiring it is that repo's
+# call. See install-matrix.sh SET_REFS and docs/installer.md.
+#
+# A medium mastered for a set NOT on this list still OFFERS it, and says in as
+# many words that it is an unattested selection -- and since 2026-08-14 the
+# DRIVER re-reads that judgement off the medium for unattended installs too,
+# because a canned profile knows its rig and not its set (docs/installer.md,
+# *A profile is a rig; a set is a medium*).
+ATTESTED_SETS="minimal standard developer x11 full"
+
+PROFILES=()
+SET=base
+EXTRA_PKGS=()
+OUT=""
+CDBOOT="" FOURCARD=""
+STAGE="${STAGE:-$repo/work/install-tree}"
+KEEP_STAGE=0
+STAGE_ONLY=0
+BSLICE_ARGS=()
+
+# `base` is this repo's historical spelling of the packagemanager's `minimal` set --
+# core bsd net text sysadm cdfs APKGENG APKG, the proven base-8. Before multi-set selection that
+# membership was a hardcoded array here AND a different hardcoded array in
+# build-iso.sh, and `--set full` used a third rule (every stock/*.pkg) that silently
+# dropped the three base/ packages -- so a "Full" install shipped no cdfs, no
+# package manager. All three are gone: the membership of every set now comes from
+# ../amix-packagemanager/tools/repo/sets.conf through its own resolver.
+#
+# Still true and still the reason the base/ three are in every set: APKGENG
+# (the heirloom engine) + APKG (the remote client) mean an installed box has a
+# working package manager OUT OF THE BOX. The dynamic apkg needs /usr/lib/libnsl.so
+# + /usr/lib/libc.so.1 at runtime; BOTH are core members. The APKG package ships a
+# default /etc/apkg.conf (editable, class e); the driver re-writes it
+# deterministically post-install, so "conf present with our repo line" is a
+# driver-guaranteed invariant rather than contingent on pkgadd's editable placement.
+#
+# CASE: sets.conf names packages the way the CATALOG does (lowercase); the order
+# file needs the SVR4 instance name's own case, because the driver passes each line
+# verbatim to `pkgadd -d <file> <NAME>` and resolves `pkgs/{stock,base}/<NAME>-*.pkg`
+# case-sensitively on a Rock-Ridge disc. The staging inventory bridges the two.
+SET_ALIAS_base=minimal
+
+usage() {
+  cat <<EOF
+usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
+                        [--out ISO] [--stage DIR] [--keep-stage]
+                        [--source-hdf PROFILE=HDF]... [--no-require-gate]
+                        [--cd-boot TREE]
+
+  --profile NAME    target profile to build a boot slice for (repeatable;
+                    default: bench-a3000-a4091). Each must exist in profiles/.
+  --set NAME        the set this medium is mastered for -- base (= minimal,
+                    default), minimal, standard, full, developer, x11.
+                    Resolved from the packagemanager's sets.conf.
+  --pkg NAME        add a package beyond the set (repeatable)
+  --out ISO         output ISO path (default: build-iso.sh's default under work/)
+  --stage DIR       /install/ staging dir (default: $STAGE)
+  --keep-stage      keep the staged tree after mastering
+  --stage-only      build the /install/ payload tree and STOP -- do NOT master an
+                    ISO. This is the reusable staging half: tools/build-raw-source.sh
+                    calls it to populate the RAW source disk's payload slice with
+                    the identical /install/ tree. Implies --keep-stage.
+  --source-hdf P=H  override a profile's BOOTSLICE_SOURCE_HDF (repeatable)
+  --no-require-gate do NOT require the kerntools bootchain-verify round-trip
+                    (default: required -- a missing sibling is fatal)
+  --cd-boot TREE    master a bootable CD: passed to build-iso.sh (amix-dlm's
+                    mkstore -C tree, System ID AMIGA BOOT)
+  --four-card       the profiles get the four-card names as on a CD-boot disc,
+                    without a boot tree: the netinstall stage (its RAM-disk
+                    medium boots the same module kernels behind the same A4091)
+EOF
+}
+
+REQUIRE_GATE=1
+declare -A SRC_OVERRIDE=()
+while [ $# -gt 0 ]; do case "$1" in
+  --profile)   PROFILES+=("$2"); shift 2;;
+  --set)       SET="$2"; shift 2;;
+  --pkg)       EXTRA_PKGS+=("$2"); shift 2;;
+  --out)       OUT="$2"; shift 2;;
+  --stage)     STAGE="$2"; shift 2;;
+  --keep-stage) KEEP_STAGE=1; shift;;
+  --stage-only) STAGE_ONLY=1; KEEP_STAGE=1; shift;;
+  --source-hdf) k="${2%%=*}"; v="${2#*=}"; SRC_OVERRIDE["$k"]="$v"; shift 2;;
+  --no-require-gate) REQUIRE_GATE=0; shift;;
+  --cd-boot)   CDBOOT="$2"; shift 2;;
+  --four-card) FOURCARD=1; shift;;
+  -h|--help)   usage; exit 0;;
+  *) echo "build-install-iso: unknown argument: $1" >&2; usage >&2; exit 2;;
+esac; done
+
+[ "${#PROFILES[@]}" -gt 0 ] || PROFILES=(bench-a3000-a4091)
+
+command -v python3 >/dev/null || { echo "STOP: python3 required" >&2; exit 1; }
+
+# --- preflight: the static engine + sum + admin must all be present ---------
+need_file() { [ -f "$1" ] || { echo "STOP: missing $2: $1" >&2; exit 1; }; }
+for b in pkgadd pkgtrans pkginfo pkgchk contents-fsck; do need_file "$STATIC/bin/$b" "static engine $b"; done
+need_file "$STATIC/sadm-helpers/pkginstall" "static pkginstall"
+[ -d "$CORE_T" ] || { echo "STOP: no stock core tree at $CORE_T -- run tools/build-core-tree.sh" >&2; exit 1; }
+need_file "$CORE_T/usr/bin/sum" "core /usr/bin/sum (on-target verifier)"
+need_file "$CORE_T/var/sadm/install/admin/default" "core 183-B admin default"
+need_file "$DEPS" "deps.conf (install order)"
+need_file "$SETS_CONF" "sets.conf (the named install sets)"
+need_file "$SETS_PY" "sets.py (the sets.conf reference resolver)"
+need_file "$repo/src/installer/install.sh" "the installer driver"
+need_file "$repo/src/installer/setup.sh" "the interactive interview"
+
+
+# ---------------------------------------------------------------------------
+# SET RESOLUTION -- sets.conf, through the packagemanager's own resolver
+# ---------------------------------------------------------------------------
+# The staging inventory, indexed by CATALOG NAME (lowercase), so nothing here has
+# to hardcode which package names are capitalised: gen-catalog.py derives the
+# catalog name by lowercasing the pkginst, and the pkginst is the .pkg filename's
+# leading token, so `X11r5src-2.1.pkg` -> token `X11r5src` -> catalog `x11r5src`.
+declare -A PKG_TOKEN=()
+shopt -s nullglob
+for f in "$STAGING"/stock/*.pkg "$STAGING"/stock/*.pkg.Z \
+         "$STAGING"/base/*.pkg "$STAGING"/base/*.pkg.Z; do
+  b="${f##*/}"; tok="${b%%-[0-9]*}"
+  PKG_TOKEN["${tok,,}"]="$tok"
+done
+shopt -u nullglob
+[ "${#PKG_TOKEN[@]}" -gt 0 ] || { echo "STOP: no packages under $STAGING/{stock,base}" >&2; exit 1; }
+
+# resolve_set NAME -> the set's catalog names, one per line, in the order
+# sets.conf DECLARES them (not sorted).
+#
+# ★ THE ORDER IS LOAD-BEARING AND IT IS NOT COSMETIC. gen-install-order.py breaks
+# topological ties by input order, so the input order IS the install order for
+# everything the dependency graph does not constrain -- and the base-8 install
+# order (core bsd net text sysadm cdfs APKGENG APKG) is the one that produced
+# every attested digest this project has. sets.py's `resolve()` returns a SORTED
+# membership, which is right for "is this package in the set" and wrong here: it
+# would have re-ordered the base-8 install for no reason at all, on a cut whose
+# whole acceptance is that the base-8 tree does not move.
+#
+# So the AUTHORED order is used, expanded in file order -- and then checked
+# against sets.py's own resolve() as a SET, so the two can never disagree about
+# membership. sets.py stays the reference: this uses its parser and its resolver,
+# it only chooses a different traversal order and proves the choice equivalent.
+resolve_set() {
+  python3 - "$SETS_PY" "$SETS_CONF" "$1" <<'PYEOF'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("amix_sets", sys.argv[1])
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+try:
+    sets = m.read_sets(sys.argv[2])
+except Exception as exc:
+    sys.exit("sets: %s" % exc)
+want = sys.argv[3]
+if want not in sets:
+    sys.exit("sets: no such set: %s" % want)
+
+def expand(name, stack=()):
+    if name in stack:
+        sys.exit("sets: include cycle: %s -> %s" % (" -> ".join(stack), name))
+    out = []
+    for mem in sets.get(name, []):
+        for p in (expand(mem[1:], stack + (name,)) if mem.startswith("+") else [mem]):
+            if p not in out:
+                out.append(p)
+    return out
+
+got = expand(want)
+ref = m.resolve(sets, want)
+if sorted(got) != ref:
+    sys.exit("sets: file-order expansion of %r disagrees with sets.py resolve(): "
+             "%r vs %r" % (want, sorted(got), ref))
+sys.stdout.write("".join(p + "\n" for p in got))
+PYEOF
+}
+set_tokens() {    # set_tokens NAME... -> order-file tokens; fails, saying which, on a package
+                  # the staging tree does not hold
+  local name key out=() miss=()
+  for name in "$@"; do
+    key="${name,,}"
+    if [ -n "${PKG_TOKEN[$key]:-}" ]; then out+=("${PKG_TOKEN[$key]}")
+    else miss+=("$name"); fi
+  done
+  [ "${#miss[@]}" -eq 0 ] || {
+    echo "package(s) not in $STAGING: ${miss[*]}" >&2; return 1; }
+  printf '%s\n' ${out[@]+"${out[@]}"}
+}
+
+SET_NAME="$SET"
+case "$SET" in base) SET_NAME="$SET_ALIAS_base" ;; esac
+SET_MEMBERS=(); _o=$(resolve_set "$SET_NAME") && [ -n "$_o" ] && mapfile -t SET_MEMBERS <<< "$_o"
+[ "${#SET_MEMBERS[@]}" -gt 0 ] || {
+  {
+    echo "STOP: --set '$SET' does not resolve against $SETS_CONF"
+    resolve_set "$SET_NAME" 2>&1 >/dev/null | sed 's/^/      /'
+    echo "      available: $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}' | tr '\n' ' ')base"
+  } >&2; exit 1; }
+
+# A 1.1 medium's base packages (make dist's userland: $L11_IN/base/sets, a name alone on its line is
+# one every set takes) are installed by l11_base, so a stock set member of the same name (cdfs, make
+# dist's 1.1.0-1 since amix f517676) is not a stock member as well: it leaves the set orders and the
+# disc's pkgs/, and a set needs it there no longer to be offered.
+L11_PROVIDES=" "
+_l11b="${L11_IN:-$repo/work/l11}/base/sets"
+if [ -f "$_l11b" ]; then
+  for _p in "${PROFILES[@]}"; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" = 1.1 ] || continue
+    L11_PROVIDES=" $(awk 'NF == 1 { printf "%s ", tolower($1) }' "$_l11b")"; break
+  done
+fi
+l11_filter() {   # l11_filter NAME... -> the names a 1.1 base package does not provide, one per line
+  local n
+  for n in "$@"; do
+    case "$L11_PROVIDES" in *" ${n,,} "*) ;; *) printf '%s\n' "$n" ;; esac
+  done
+}
+_drop=""
+for _m in "${SET_MEMBERS[@]}"; do case "$L11_PROVIDES" in *" ${_m,,} "*) _drop="$_drop $_m" ;; esac; done
+if [ -n "$_drop" ]; then
+  mapfile -t SET_MEMBERS < <(l11_filter "${SET_MEMBERS[@]}")
+  echo "build-install-iso: from the 1.1 base packages (make dist), not stock set members:$_drop"
+fi
+
+# A 1.1 medium's base carries m4: the 2.1c syslogd reads /etc/syslog.conf only through
+# /usr/ccs/bin/m4 (the m4 package; Cdev ships the same file) and files nothing without
+# it. install.sh refuses a 1.1 order with neither.
+for _p in "${PROFILES[@]}"; do
+  case "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" in
+    1.1)
+      case " $(printf '%s ' "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"} | tr 'A-Z' 'a-z')" in
+        *" m4 "*|*" cdev "*) ;;
+        *) EXTRA_PKGS+=(m4)
+           echo "build-install-iso: profile $_p is INSTALL_LAYOUT=1.1 -- m4 joins the set (/usr/ccs/bin/m4 for syslogd)" ;;
+      esac ;;
+  esac
+done
+
+_o=$(set_tokens "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}) || { echo "STOP: set '$SET_NAME': see above" >&2; exit 1; }
+mapfile -t SELECTED <<< "$_o"
+[ "${#SELECTED[@]}" -gt 0 ] || { echo "STOP: set '$SET_NAME' resolved to nothing" >&2; exit 1; }
+
+# The medium's inventory, as catalog names -- the set of packages that will be ON
+# the disc. A named set is only OFFERED by the interview when this contains all of
+# it: an order file naming a package the disc does not carry would fail the driver
+# at pkgadd time, which is far too late to learn the disc was mis-mastered.
+MEDIA_NAMES=" $(printf '%s ' "${SET_MEMBERS[@]}" ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"} | tr 'A-Z' 'a-z')"
+set_satisfiable() {   # set_satisfiable NAME
+  local m
+  for m in $(l11_filter $(resolve_set "$1")); do
+    case "$MEDIA_NAMES" in *" ${m,,} "*) ;; *) return 1 ;; esac
+  done
+  return 0
+}
+set_attested() {      # set_attested NAME -> y|n
+  local a
+  for a in $ATTESTED_SETS; do [ "$a" = "$1" ] && { echo y; return 0; }; done
+  echo n
+}
+
+echo "build-install-iso: set '$SET' = sets.conf '$SET_NAME' (${#SELECTED[@]} package(s))"
+echo "  ${SELECTED[*]}"
+
+# ---------------------------------------------------------------------------
+# 1. stage /install/
+# ---------------------------------------------------------------------------
+echo "build-install-iso: staging /install/ at $STAGE"
+rm -rf "${STAGE:?}"
+mkdir -p "$STAGE/bin" "$STAGE/admin" "$STAGE/profiles" "$STAGE/firstboot" "$STAGE/boot"
+
+# engine + shim + sum + contents-fsck (the CD-resident static DB integrity checker
+# the driver runs after the pkgadd loop; statically linked, so it runs on the thin
+# miniroot with no libc/libnsl dependency).
+cp -p "$STATIC"/bin/{pkgadd,pkgtrans,pkginfo,pkgchk,contents-fsck} "$STAGE/bin/"
+cp -p "$STATIC/sadm-helpers/pkginstall" "$STAGE/bin/pkginstall"
+cp -p "$CORE_T/usr/bin/sum" "$STAGE/bin/sum"
+chmod 0755 "$STAGE"/bin/*
+# every pkgtools binary staged here is the one the round's inputs built: a default must never beat the pin
+_in="${L11_IN:-$repo/work/l11}/pkgtools/heirloom/build-amix-static"
+for _b in bin/pkgadd:bin/pkgadd bin/pkgtrans:bin/pkgtrans bin/pkginfo:bin/pkginfo bin/pkgchk:bin/pkgchk \
+          bin/contents-fsck:bin/contents-fsck sadm-helpers/pkginstall:bin/pkginstall bin/apkg:bin/apkg; do
+  [ -f "$STAGE/${_b#*:}" ] || continue
+  cmp -s "$_in/${_b%%:*}" "$STAGE/${_b#*:}" || {
+    echo "STOP: staged ${_b#*:} is not the inputs' ${_b%%:*} ($_in)" >&2; exit 1; }
+done
+
+# the DosEnvec Mask per disk controller (tools/lib/dmamask.py, the one table): install.sh
+# stamps the authored target's partitions with its controller's row (TARGET_HBA)
+python3 "$here/dmamask.py" medium --out "$STAGE/dmamask" || { echo "STOP: cannot write /install/dmamask" >&2; exit 1; }
+
+# the static apkg (built separately): the disc's client for the repository, never a disc without it
+if [ -f "$STATIC/bin/apkg" ]; then
+  cp -p "$STATIC/bin/apkg" "$STAGE/bin/apkg"; chmod 0755 "$STAGE/bin/apkg"
+  echo "build-install-iso: included static apkg (present)"
+  APKG_NOTE="apkg: present"
+else
+  echo "STOP: no static apkg at $STATIC/bin/apkg" >&2; exit 1
+fi
+
+# the driver + the interview + first-boot payload
+#
+# --- STRIP_INSTALLER_COMMENTS (the 040 ISSUE-10 parse-wall dodge) -------------
+# The 68040 lane walls at PARSE time inside /bin/sh's own allocator
+# (`User BUS ERROR at 4AFC0003, PC:800023FC` ... `no space`) -- the 040/060
+# port's ISSUE-10, whose measured trigger is ARENA GROWTH DISTANCE, not file
+# size. These two scripts are ~2/3 comment by volume, so dropping full-line
+# comments and blank lines AT STAGING TIME shrinks the parse arena without
+# touching one line of executable shell.
+#
+# DEFAULT OFF. Every 030 profile omits the key, so every existing medium stages
+# byte-identical copies exactly as before -- this cannot move a proven digest by
+# accident. It is opt-in per profile (the 040 profiles set it), and the base
+# profile (PROFILES[0], the one written to /install/profiles/BASE) is what
+# decides, because that is the profile this medium is mastered for.
+#
+# The stripping is done by tools/strip-sh-comments.py, which LEXES rather than
+# greps -- these scripts quote the stock 1991 screens verbatim, and a blank line
+# inside a multi-line "..." string is DATA. It refuses outright on constructs it
+# cannot lex safely (here-docs, `$(...)`), and every strip passes seven gates,
+# the load-bearing one being an INDEPENDENT `shlex` token-stream comparison. A
+# refusal or a failed gate is fatal here: never ship a half-stripped installer.
+STRIP_COMMENTS=""
+_base_profile_file="$PROFILE_DIR/${PROFILES[0]}.profile"
+if [ -f "$_base_profile_file" ]; then
+  STRIP_COMMENTS="$(python3 -c '
+import sys
+d={}
+for ln in open(sys.argv[1]):
+    ln=ln.strip()
+    if not ln or ln.startswith("#") or "=" not in ln: continue
+    k,v=ln.split("=",1); v=v.strip()
+    if len(v)>=2 and v[0]=="\"" and v[-1]=="\"": v=v[1:-1]
+    d[k.strip()]=v
+print(d.get("STRIP_INSTALLER_COMMENTS",""))' "$_base_profile_file")"
+fi
+case "$STRIP_COMMENTS" in
+  [yY]|[yY][eE][sS]|1) STRIP_COMMENTS=1 ;;
+  *)                   STRIP_COMMENTS=  ;;
+esac
+
+if [ -n "$STRIP_COMMENTS" ]; then
+  echo "build-install-iso: STRIP_INSTALLER_COMMENTS=y (profile ${PROFILES[0]}) -- staging comment-stripped /install/bin scripts"
+  echo "  (the 040 ISSUE-10 parse-wall dodge; src/installer/*.sh are NOT modified)"
+  for _s in install.sh setup.sh; do
+    python3 "$here/strip-sh-comments.py" "$repo/src/installer/$_s" "$STAGE/bin/$_s" \
+      || { echo "STOP: strip-sh-comments refused $_s -- refusing to ship a half-stripped installer" >&2; exit 1; }
+    chmod 0755 "$STAGE/bin/$_s"
+  done
+else
+  cp -p "$repo/src/installer/install.sh" "$STAGE/bin/install.sh"; chmod 0755 "$STAGE/bin/install.sh"
+  cp -p "$repo/src/installer/setup.sh"   "$STAGE/bin/setup.sh";   chmod 0755 "$STAGE/bin/setup.sh"
+fi
+# stage_sh SRC DST -- a script that ships: without its comments when the profile strips them
+stage_sh() {
+  if [ -n "$STRIP_COMMENTS" ]; then
+    python3 "$here/strip-sh-comments.py" "$1" "$2" \
+      || { echo "STOP: strip-sh-comments refused $1" >&2; exit 1; }
+  else
+    cp -p "$1" "$2"
+  fi
+  chmod --reference="$1" "$2"
+}
+stage_sh "$repo/payload/firstboot/firstboot.sh" "$STAGE/firstboot/firstboot.sh"
+# the netinstall's second stage (install.sh arms it on a network install of a set beyond minimal)
+stage_sh "$repo/payload/firstboot/netset.sh" "$STAGE/firstboot/netset.sh"
+# The root hash a medium seeds. A published medium's profile says FB_ROOT_SHADOW=none: no hash at all, the first boot
+# locks root until the dialog sets a password (firstboot.sh). A bench medium's hash is the rig's input, MEDIA_ROOT_SHADOW,
+# never part of this tree; a showcase profile's FB_ROOT_SEED_PW makes a throwaway instead. Firstboot still forces a new
+# password at first boot, so either is only the seed. A profile with none of these stops.
+_seed_pw="$(python3 -c '
+import sys
+d={}
+for ln in open(sys.argv[1]):
+    ln=ln.strip()
+    if not ln or ln.startswith("#") or "=" not in ln: continue
+    k,v=ln.split("=",1); v=v.strip()
+    if len(v)>=2 and v[0]=="\"" and v[-1]=="\"": v=v[1:-1]
+    d[k.strip()]=v
+print(d.get("FB_ROOT_SEED_PW",""))' "$_base_profile_file" 2>/dev/null)"
+rm -f "${STAGE:?}/firstboot/root.shadow"
+if grep -q '^FB_ROOT_SHADOW=none$' "$_base_profile_file" 2>/dev/null; then
+  [ -z "$_seed_pw" ] || { echo "STOP: profile ${PROFILES[0]} sets both FB_ROOT_SHADOW=none and FB_ROOT_SEED_PW" >&2; exit 1; }
+  echo "build-install-iso: FB_ROOT_SHADOW=none (profile ${PROFILES[0]}) -- the medium carries no root password hash"
+elif [ -n "$_seed_pw" ]; then
+  command -v perl >/dev/null || { echo "STOP: FB_ROOT_SEED_PW set but perl (for crypt) is unavailable" >&2; exit 1; }
+  _seed_hash="$(perl -e 'print crypt($ARGV[0], "aB")' "$_seed_pw")"
+  [ -n "$_seed_hash" ] || { echo "STOP: crypt of FB_ROOT_SEED_PW produced no hash" >&2; exit 1; }
+  printf 'root:%s:::::::\n' "$_seed_hash" > "$STAGE/firstboot/root.shadow"
+  chmod 0600 "$STAGE/firstboot/root.shadow"
+  echo "build-install-iso: FB_ROOT_SEED_PW set (profile ${PROFILES[0]}) -- regenerated root.shadow (throwaway seed; firstboot still forces a new password)"
+elif [ -f "${MEDIA_ROOT_SHADOW:-}" ]; then
+  cp -p "$MEDIA_ROOT_SHADOW" "$STAGE/firstboot/root.shadow"
+else
+  echo "STOP: profile ${PROFILES[0]} doesn't say FB_ROOT_SHADOW=none, and no root hash was given (MEDIA_ROOT_SHADOW)" >&2; exit 1
+fi
+
+# --- /install/syslog/syslogd: the 2.1c daemon -------------------------------
+# install.sh's 1.1 path lays it over core's 2.1 copy; no package carries it. It comes from the system tree.
+SYSLOGD_21C="${MEDIA_SYSTEM:-$repo/../../amix-system}/usr/sbin/syslogd"
+SYSLOGD_SHA=cca917299e395098e3ece13d06005074e3461904f0b71d9c84b62cf529d8b17b
+[ "$(sha256sum < "$SYSLOGD_21C" 2>/dev/null | cut -d' ' -f1)" = "$SYSLOGD_SHA" ] \
+  || { echo "STOP: $SYSLOGD_21C is missing or isn't the 2.1c daemon (sha256 $SYSLOGD_SHA)" >&2; exit 1; }
+mkdir -p "$STAGE/syslog"
+cp "$SYSLOGD_21C" "$STAGE/syslog/syslogd"
+chmod 0644 "$STAGE/syslog/syslogd"
+
+# --- /install/fpfix (BLIZZARD; installed-tree ufs FP patch) -------------
+# The 040/060 line runs a UFS root, and on an FPU-less 68060 (the LC060) the
+# target's OWN /usr/lib/fs/ufs/{mkfs,fsck} die at a display-only FP expression
+# (fsck at its summary, upstream of "STATE SET TO OKAY"), so a shipped image cannot
+# fsck its own root. MINIROOT_FP_PATCH already patches the MINIROOT'S copies at
+# build time; this stages a host-PATCHED copy of the INSTALLED pair too, which
+# install.sh (§5b) cp's over the target after pkgadd and verifies by sum. Source of
+# truth = core's own usr/lib/fs/ufs/{mkfs,fsck} (the exact bytes the install lays
+# down -- 20092 / 111580 B). patch-ufs-fp.py preserves every length, so
+# the installed sizes and the altroot-attest digest do not move; the only reader
+# that notices is pkgchk (a cksum mismatch on these two paths -- the same declared
+# exception miniroot.proto already carries). Gated on the BASE profile's
+# MINIROOT_FP_PATCH: a medium that does not set it stages no fpfix and §5b is inert,
+# so every existing medium is byte-unchanged.
+FP_PATCH="$(python3 -c '
+import sys
+d={}
+for ln in open(sys.argv[1]):
+    ln=ln.strip()
+    if not ln or ln.startswith("#") or "=" not in ln: continue
+    k,v=ln.split("=",1); v=v.strip()
+    if len(v)>=2 and v[0]=="\"" and v[-1]=="\"": v=v[1:-1]
+    d[k.strip()]=v
+print(d.get("MINIROOT_FP_PATCH",""))' "$_base_profile_file" 2>/dev/null)"
+case "$FP_PATCH" in
+  [yY]|[yY][eE][sS]|1) FP_PATCH=1 ;;
+  *)                   FP_PATCH=  ;;
+esac
+if [ -n "$FP_PATCH" ]; then
+  echo "build-install-iso: MINIROOT_FP_PATCH=yes (profile ${PROFILES[0]}) -- staging FP-patched installed ufs tools at /install/fpfix"
+  mkdir -p "$STAGE/fpfix"
+  : > "$STAGE/fpfix/SUMS"
+  for pair in "mkfs:usr/lib/fs/ufs/mkfs" "fsck:usr/lib/fs/ufs/fsck"; do
+    _nm="${pair%%:*}"; _src="$CORE_T/${pair#*:}"
+    need_file "$_src" "core ${pair#*:} (FP-patch source)"
+    # -o writes the patched copy WITHOUT touching core's tree; the tool asserts the
+    # stock bytes and refuses anything else, so a wrong/already-patched source fails.
+    python3 "$here/patch-ufs-fp.py" -o "$STAGE/fpfix/$_nm" "$_src" \
+      || { echo "STOP: patch-ufs-fp refused to patch $_src -- not shipping an unpatched or mis-patched ufs tool" >&2; exit 1; }
+    # length preserved -> installed size unchanged -> digest unmoved
+    if [ "$(wc -c < "$STAGE/fpfix/$_nm")" != "$(wc -c < "$_src")" ]; then
+      echo "STOP: FP-patched $_nm changed length -- refusing (would move the attested digest)" >&2; exit 1
+    fi
+    # the BSD `sum -r` CHECKSUM (first field) is portable to the box's SVR4 sum -r;
+    # only the block column differs (512 vs 1024), so install.sh compares field 1.
+    printf '%s %s\n' "$_nm" "$(sum -r "$STAGE/fpfix/$_nm" | awk '{print $1}')" >> "$STAGE/fpfix/SUMS"
+  done
+  echo "  staged $STAGE/fpfix/{mkfs,fsck} + SUMS ($(awk '{printf "%s=%s ",$1,$2}' "$STAGE/fpfix/SUMS"))"
+fi
+
+# --- /install/UNATTENDED (v3 demo-card auto-run marker) -----------------------
+# Written IFF the base profile sets INSTALL_UNATTENDED=yes. It is one half of the
+# double gate the miniroot's /etc/profile checks: the marker PLUS the on-slice base
+# profile (raw.profile) declaring INSTALL_UNATTENDED=yes. Both are produced only by
+# an unattended profile, so an interactive medium can never carry a live marker and
+# the interview runs as always. The marker names the medium and the profile for the
+# operator; the runtime reads the profile ARG from /install/profiles/BASE, so the
+# content is informational.
+UNATTENDED="$(python3 -c '
+import sys
+d={}
+for ln in open(sys.argv[1]):
+    ln=ln.strip()
+    if not ln or ln.startswith("#") or "=" not in ln: continue
+    k,v=ln.split("=",1); v=v.strip()
+    if len(v)>=2 and v[0]=="\"" and v[-1]=="\"": v=v[1:-1]
+    d[k.strip()]=v
+print(d.get("INSTALL_UNATTENDED",""))' "$_base_profile_file" 2>/dev/null)"
+case "$UNATTENDED" in
+  [yY]|[yY][eE][sS]|1) UNATTENDED=1 ;;
+  *)                   UNATTENDED=  ;;
+esac
+if [ -n "$UNATTENDED" ]; then
+  {
+    echo "# amix-installng unattended demo-card marker (v3)"
+    echo "# Presence here + INSTALL_UNATTENDED=yes in the on-slice base profile makes"
+    echo "# the miniroot auto-run install.sh with the BASE profile, then halt."
+    echo "profile ${PROFILES[0]}"
+  } > "$STAGE/UNATTENDED"
+  echo "build-install-iso: INSTALL_UNATTENDED=yes (profile ${PROFILES[0]}) -- wrote /install/UNATTENDED (demo-card auto-run)"
+fi
+
+# --- /install/updbootpart ---------------------------------------------
+# The on-box boot-slice reframe tool the driver lays down at /usr/sbin/updbootpart
+# on every target. It used to travel INSIDE install.sh as a quoted here-doc -- and
+# the 1991 SVR4 sh materializes every here-doc body into a REAL FILE under /tmp the
+# moment it PARSES the script. On the miniroot /tmp IS the 880-block install floppy
+# with 46 free blocks, so 15,427 bytes of updbootpart sat on it for the whole
+# install, taking blocks the static pkgadd needs for its packaging directory. It
+# rides the MEDIUM now (this file), and the driver copies it: the floppy pays
+# nothing, and payload/updbootpart stays the single tracked master. The staged copy
+# is proven byte-identical to that master here -- the drift lock the here-doc used
+# to give us for free (installer-selftest audit O keeps the other half).
+stage_sh "$repo/payload/updbootpart" "$STAGE/updbootpart"
+chmod 0755 "$STAGE/updbootpart"
+if [ -z "$STRIP_COMMENTS" ]; then
+  cmp -s "$repo/payload/updbootpart" "$STAGE/updbootpart" || {
+    echo "STOP: staged /install/updbootpart is not byte-identical to payload/updbootpart" >&2; exit 1; }
+fi
+echo "build-install-iso: staged /install/updbootpart ($(wc -c <"$STAGE/updbootpart") B, from payload/updbootpart)"
+
+# --- /install/LICENSES: the licence texts of what the medium runs ------------
+# The package engine in /install/bin and apkg, from the pkgtools the inputs pin. build-iso.sh puts
+# them beside /LICENSING; the netinstall's RAM disk takes them from this stage.
+mkdir -p "$STAGE/LICENSES"
+for _l in heirloom/LICENSE/OPENSOLARIS.LICENSE heirloom/LICENSE/CALDERA.LICENSE heirloom/LICENSE/FNMATCH.LIC \
+          heirloom/LICENSE/SNPRINTF.LIC; do
+  need_file "$PKGMGR/$_l" "the licence text $_l"
+  cp "$PKGMGR/$_l" "$STAGE/LICENSES/"
+done
+need_file "$PKGMGR/LICENSE" "apkg's licence text"
+cp "$PKGMGR/LICENSE" "$STAGE/LICENSES/APKG.LICENSE"
+# the kernels' libgcc helpers and zz9ksvc (tools/lib/licensing-text.sh says which is which)
+cp "$repo/payload/licences/GPL-2" "$repo/payload/licences/GPL-3" "$STAGE/LICENSES/"
+chmod 0644 "$STAGE"/LICENSES/*
+
+# --- /install/zenmac (address-by-card) -----------------------------------
+# The zen0 MAC reader install.sh lays down at /usr/amiga/bin/zenmac on a zen0
+# flavor; S99zen runs it at every boot to pick the card's address out of
+# /etc/inet/zen.conf (docs/address-by-card.md). A build artefact (vendor crt bytes,
+# gitignored), built from src/zenmac by tools/build-zenmac.sh when missing. Always staged.
+# The tool is built by the toolchain in the media image; another compiler's bytes are refused, not shipped.
+ZENMAC_SHA=2275dfcc0f1d95f00465936bdcba3a13d7d89b129a9250b2576dd48b8b71e37e
+[ -f "$repo/payload/zenmac" ] || "$here/build-zenmac.sh" || { echo "STOP: payload/zenmac cannot be built (tools/build-zenmac.sh)" >&2; exit 1; }
+_zm_got="$(sha256sum "$repo/payload/zenmac" | cut -c1-64)"
+[ "$_zm_got" = "$ZENMAC_SHA" ] || {
+  echo "STOP: payload/zenmac sha256 $_zm_got != pinned $ZENMAC_SHA (build it in the media image with tools/build-zenmac.sh, or re-pin deliberately)" >&2; exit 1; }
+cp -p "$repo/payload/zenmac" "$STAGE/zenmac"
+chmod 0755 "$STAGE/zenmac"
+cmp -s "$repo/payload/zenmac" "$STAGE/zenmac" || {
+  echo "STOP: staged /install/zenmac is not byte-identical to payload/zenmac" >&2; exit 1; }
+echo "build-install-iso: staged /install/zenmac (${ZENMAC_SHA:0:16}... == pin)"
+
+# --- MONSW (the monitor switch) ------------------------------------------------
+# On 1.1 the kernel-space set's monsw package carries monswctl, its boot step and
+# /dev/monsw; the profile's MONSW only becomes /etc/display's monsw line (l11_admin).
+# Nothing is staged for it. A 1.0 profile can no longer set it: its files came from
+# amix-kerntools' 1.0 pipeline, which is retired.
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^MONSW=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  _l="$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    ''|none) ;;
+    0|1|2|3|16|17|18|19|32|33|34|35|48|49|50|51)
+      [ "$_l" = 1.1 ] || { echo "STOP: profile $_p: MONSW=$_v on a 1.0 install -- 1.0 media no longer carry the monitor-switch files (the monsw package does, on 1.1)" >&2; exit 1; } ;;
+    *) echo "STOP: profile $_p: MONSW='$_v' is not a bit sum of 1 2 16 32 (or 'none')" >&2; exit 1 ;;
+  esac
+done
+
+# --- /install/x11kit (K1 RTG desktop kit, X11KIT=rtg) -------------------------
+# The kit install.sh lays down for X11KIT=rtg (its "LAY DOWN the RTG X11 kit" block).
+# Cut 4: the RTG project's own manifest amix-z3660rtg/x11/KIT.sha256 is the pin for
+# its four files (server, rtg-kbdback, startx-rtg, xinitrc-rtg), all taken from
+# amix-z3660rtg/build/out/; KIT.sha256 itself is pinned HERE, so a new kit is a
+# deliberate re-pin. zz9k_monsw (the fallback switch) is not in the kit and keeps
+# its own pin. A missing file or any mismatch STOPS the build. Staged only when a
+# requested profile sets X11KIT=rtg, so every other medium is unchanged.
+X11KIT_RTG="$repo/../../amix-z3660rtg"
+X11KIT_KIT="$X11KIT_RTG/x11/KIT.sha256"
+X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d   # the published kit (s14rt04)
+# The 1.0 media carry kit 8beaa7bf (startx-rtg e948dbf4, xinitrc-rtg 69f6b68c); the published kit
+# (startx-rtg 5ec6a2fa, xinitrc-rtg 8f867980) differs from those files in comments only.
+X11KIT_MONSW="$X11KIT_RTG/build/tools/zz9k_monsw"
+X11KIT_MONSW_SHA=8149544a8e563cda0e2ec8b177e5999170c8013ed820c4f84f8adc15898c96bf   # the fallback switch
+# 1.1 media: the server is x11r63's and the RTG tools and nodes are the z3660rtg package's, so
+# the installer lays only the launcher (x11/1.1/startx-rtg: the x11r63 server, no -ac, its log in /var/adm, pinned
+# here) and root's session file; staged as x11kit/1.1/ when a requested 1.1 profile sets X11KIT=rtg
+X11KIT_L11_STARTX="$X11KIT_RTG/x11/1.1/startx-rtg"
+X11KIT_L11_STARTX_SHA=4c0173a3c001f68a9bbdaa122171e672da725a3fd4b99e3323918ee4aadf61a4
+_want_x11kit=
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^X11KIT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    ''|none) ;;
+    rtg) _want_x11kit="$_want_x11kit $_p" ;;
+    *) echo "STOP: profile $_p: X11KIT='$_v' is not 'rtg' (or 'none')" >&2; exit 1 ;;
+  esac
+done
+if [ -n "$_want_x11kit" ]; then
+  [ -f "$X11KIT_KIT" ] || { echo "STOP: X11KIT=rtg requested by${_want_x11kit} but $X11KIT_KIT is missing" >&2; exit 1; }
+  _kit_got="$(sha256sum "$X11KIT_KIT" | cut -c1-64)"
+  [ "$_kit_got" = "$X11KIT_KIT_SHA" ] || {
+    echo "STOP: $X11KIT_KIT sha256 $_kit_got != pinned $X11KIT_KIT_SHA (a new RTG kit: re-pin deliberately)" >&2; exit 1; }
+  [ "$(awk 'END{print NR}' "$X11KIT_KIT")" = 4 ] || { echo "STOP: $X11KIT_KIT does not list exactly four files" >&2; exit 1; }
+  (cd "$X11KIT_RTG/build/out" && sha256sum --quiet -c "$X11KIT_KIT") || {
+    echo "STOP: amix-z3660rtg/build/out does not match x11/KIT.sha256" >&2; exit 1; }
+  [ -f "$X11KIT_MONSW" ] || { echo "STOP: X11KIT=rtg requested by${_want_x11kit} but $X11KIT_MONSW is not built" >&2; exit 1; }
+  [ "$(sha256sum "$X11KIT_MONSW" | cut -c1-64)" = "$X11KIT_MONSW_SHA" ] || { echo "STOP: zz9k_monsw sha256 != pinned $X11KIT_MONSW_SHA" >&2; exit 1; }
+  rm -rf "${STAGE:?}/x11kit"; mkdir -p "$STAGE/x11kit"
+  _kit_list=
+  while read -r _sha _name; do
+    case "$_name" in
+      Xzz9000-*) _dst=Xzz9000 ;;
+      rtg-kbdback|startx-rtg|xinitrc-rtg) _dst="$_name" ;;
+      *) echo "STOP: $X11KIT_KIT names an unknown kit file '$_name'" >&2; exit 1 ;;
+    esac
+    cp "$X11KIT_RTG/build/out/$_name" "$STAGE/x11kit/$_dst"
+    [ "$(sha256sum "$STAGE/x11kit/$_dst" | cut -c1-64)" = "$_sha" ] || { echo "STOP: staged x11kit/$_dst != $_sha" >&2; exit 1; }
+    _kit_list="$_kit_list $_dst=${_sha:0:8}"
+  done < "$X11KIT_KIT"
+  for _f in Xzz9000 rtg-kbdback startx-rtg xinitrc-rtg; do
+    [ -f "$STAGE/x11kit/$_f" ] || { echo "STOP: the kit did not provide $_f" >&2; exit 1; }
+  done
+  cp "$X11KIT_MONSW" "$STAGE/x11kit/zz9k_monsw"
+  chmod 0755 "$STAGE/x11kit/Xzz9000" "$STAGE/x11kit/rtg-kbdback" "$STAGE/x11kit/startx-rtg" "$STAGE/x11kit/zz9k_monsw"
+  chmod 0644 "$STAGE/x11kit/xinitrc-rtg"
+  echo "build-install-iso: staged /install/x11kit for${_want_x11kit}: KIT.sha256 ${X11KIT_KIT_SHA:0:16}... ==${_kit_list}, zz9k_monsw=${X11KIT_MONSW_SHA:0:8} (all == pins)"
+  for _p in $_want_x11kit; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" | tail -1 | tr -d '"')" = 1.1 ] || continue
+    [ -f "$X11KIT_L11_STARTX" ] && [ "$(sha256sum "$X11KIT_L11_STARTX" | cut -c1-64)" = "$X11KIT_L11_STARTX_SHA" ] \
+      || { echo "STOP: $X11KIT_L11_STARTX is missing or not the pinned ${X11KIT_L11_STARTX_SHA:0:16}..." >&2; exit 1; }
+    mkdir -p "$STAGE/x11kit/1.1"
+    cp "$X11KIT_L11_STARTX" "$STAGE/x11kit/1.1/startx-rtg"; chmod 0755 "$STAGE/x11kit/1.1/startx-rtg"
+    echo "build-install-iso: staged /install/x11kit/1.1/startx-rtg (${X11KIT_L11_STARTX_SHA:0:16}...) for the 1.1 profiles"
+    break
+  done
+else
+  echo "build-install-iso: no requested profile sets X11KIT -- /install/x11kit not staged"
+fi
+
+# --- /install/setclk (IN-rtc, RTC=setclk -- the default) ------------------------
+# Our Y2K-fixed, plausibility-gated setclk, which install.sh copies over the stock
+# /usr/amiga/bin/setclk. A build artefact (the stock Commodore source never enters
+# git): tools/build-setclk.sh makes it when missing, deterministically, and it is
+# pinned HERE by sha256 -- a different binary is a different product, re-pin
+# deliberately. Staged when any requested profile leaves RTC at its default or
+# sets RTC=setclk; RTC=none profiles alone stage nothing.
+SETCLK_SHA=9e8df3d70ec85e33e550bc022c3358d83a0df28be1a7be4b5772471cded2b05c
+_want_setclk=
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^RTC=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    ''|setclk) _want_setclk="$_want_setclk $_p" ;;
+    none) ;;
+    *) echo "STOP: profile $_p: RTC='$_v' is not 'setclk' or 'none'" >&2; exit 1 ;;
+  esac
+done
+if [ -n "$_want_setclk" ]; then
+  if [ ! -f "$repo/payload/setclk" ]; then
+    "$here/build-setclk.sh" || { echo "STOP: RTC=setclk requested by${_want_setclk} and payload/setclk cannot be built (tools/build-setclk.sh)" >&2; exit 1; }
+  fi
+  _sc_got="$(sha256sum "$repo/payload/setclk" | cut -c1-64)"
+  [ "$_sc_got" = "$SETCLK_SHA" ] || {
+    echo "STOP: payload/setclk sha256 $_sc_got != pinned $SETCLK_SHA (build it in the media image with tools/build-setclk.sh, or re-pin deliberately)" >&2; exit 1; }
+  cp "$repo/payload/setclk" "$STAGE/setclk"; chmod 0755 "$STAGE/setclk"
+  cmp -s "$repo/payload/setclk" "$STAGE/setclk" || { echo "STOP: staged /install/setclk is not byte-identical to payload/setclk" >&2; exit 1; }
+  echo "build-install-iso: staged /install/setclk (${SETCLK_SHA:0:16}... == pin) for${_want_setclk}"
+else
+  echo "build-install-iso: every requested profile sets RTC=none -- /install/setclk not staged"
+fi
+
+# --- /install/tz (IN-rtc-2, TZFILES=tzdata -- the default) ----------------------
+# Every zone file Amix ships, regenerated from current tzdata in the 1991 layout by
+# tools/build-tzfile.py (the 1991 files end EU summer time in September, US DST on
+# the pre-2007 rule, ...); install.sh lays the set over /usr/lib/locale/TZ. Pinned
+# by the sha256 of the set's MANIFEST. TZFILES=stock profiles alone stage nothing.
+TZSET_SHA=07a54a87dfdfff81d6f48fcf89f0305b1daa4800d4015a83394606b9fc309d06
+_want_tz=
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^TZFILES=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    ''|tzdata) _want_tz="$_want_tz $_p" ;;
+    stock) ;;
+    *) echo "STOP: profile $_p: TZFILES='$_v' is not 'tzdata' or 'stock'" >&2; exit 1 ;;
+  esac
+done
+if [ -n "$_want_tz" ]; then
+  if [ ! -f "$repo/payload/tz/MANIFEST" ]; then
+    python3 "$here/build-tzfile.py" || { echo "STOP: TZFILES=tzdata requested by${_want_tz} and payload/tz cannot be built (tools/build-tzfile.py)" >&2; exit 1; }
+  fi
+  _tz_got="$(sha256sum "$repo/payload/tz/MANIFEST" | cut -c1-64)"
+  [ "$_tz_got" = "$TZSET_SHA" ] || {
+    echo "STOP: payload/tz/MANIFEST sha256 $_tz_got != pinned $TZSET_SHA (rebuild with tools/build-tzfile.py, or re-pin deliberately)" >&2; exit 1; }
+  (cd "$repo/payload/tz" && sha256sum --quiet -c <(awk '{print $1"  "$3}' MANIFEST)) || {
+    echo "STOP: payload/tz does not match its MANIFEST (rebuild with tools/build-tzfile.py)" >&2; exit 1; }
+  rm -rf "${STAGE:?}/tz"; cp -r "$repo/payload/tz" "$STAGE/tz"; chmod -R a+rX "$STAGE/tz"
+  diff -r "$repo/payload/tz" "$STAGE/tz" >/dev/null || { echo "STOP: staged /install/tz is not identical to payload/tz" >&2; exit 1; }
+  echo "build-install-iso: staged /install/tz ($(awk 'END{print NR}' "$repo/payload/tz/MANIFEST") zones, ${TZSET_SHA:0:16}... == pin) for${_want_tz}"
+else
+  echo "build-install-iso: every requested profile sets TZFILES=stock -- /install/tz not staged"
+fi
+
+# --- /install/l11: the 1.1 disk layout (INSTALL_LAYOUT=1.1, amix-dlm spec 40) -------
+# The driver's 1.1 half (src/installer/l11.sh) and what it runs: the static apkg 0.3
+# and the FILE source with the kbootset, loader-amix and kernel packages (the box's
+# kbootset and loader are those packages' files, installed on the target). All of it
+# comes from work/l11 (tools/build-l11-inputs.sh: clean exports at named revisions,
+# INPUTS records them); each staged file is cmp'd against its source.
+L11_IN="${L11_IN:-$repo/work/l11}"
+_want_l11=
+for _p in "${PROFILES[@]}"; do
+  _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
+  case "$_v" in
+    1.1) _want_l11="$_want_l11 $_p" ;;
+    *) echo "STOP: profile $_p: INSTALL_LAYOUT='$_v': this builder makes 1.1 media only" >&2; exit 1 ;;
+  esac
+done
+if [ -n "$_want_l11" ]; then
+  for _f in apkg/apkg kpkg/catalog INPUTS; do
+    [ -f "$L11_IN/$_f" ] || { echo "STOP: INSTALL_LAYOUT=1.1 requested by${_want_l11} but $L11_IN/$_f is missing (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  done
+  for _p in kbootset loader-amix; do
+    grep -q "^$_p|\|^#kpkg $_p " "$L11_IN/kpkg/catalog" \
+      || { echo "STOP: $L11_IN/kpkg/catalog carries no $_p package (every 1.1 disk installs it)" >&2; exit 1; }
+  done
+  # each profile's kernel, and for a module kernel modtools and its modules:
+  # rows of the medium's catalog, of the kernel's line
+  _kkey() { grep -m1 "^#kpkg $1 " "$L11_IN/kpkg/catalog" | tr ' ' '\n' | sed -n "s/^$2=//p"; }
+  for _p in $_want_l11; do
+    _pf="$PROFILE_DIR/$_p.profile"
+    _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_pf" | tail -1 | tr -d '"')"
+    _km="$(sed -n 's/^KERNEL_MODPKGS=//p' "$_pf" | tail -1 | tr -d '"')"
+    [ "$(_kkey "$_kk" role)" = kernel ] \
+      || { echo "STOP: profile $_p: KERNEL_KPKG=$_kk is not a kernel row of $L11_IN/kpkg/catalog" >&2; exit 1; }
+    _kl="$(_kkey "$_kk" line)"
+    if [ "$(_kkey "$_kk" kabi)" != static ]; then
+      grep -q "^modtools|" "$L11_IN/kpkg/catalog" \
+        || { echo "STOP: profile $_p: $_kk is a module kernel but $L11_IN/kpkg/catalog carries no modtools" >&2; exit 1; }
+    elif [ -n "$_km" ]; then
+      echo "STOP: profile $_p: KERNEL_MODPKGS='$_km' with the static kernel $_kk" >&2; exit 1
+    fi
+    for _m in $_km; do
+      [ "$(_kkey "$_m" role)" = module ] && [ "$(_kkey "$_m" line)" = "$_kl" ] \
+        || { echo "STOP: profile $_p: $_m is not a role=module row of line $_kl in $L11_IN/kpkg/catalog" >&2; exit 1; }
+    done
+  done
+  rm -rf "${STAGE:?}/l11"; mkdir -p "$STAGE/l11/bin" "$STAGE/l11/kpkg"
+  if [ -n "$STRIP_COMMENTS" ]; then
+    python3 "$here/strip-sh-comments.py" "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
+      || { echo "STOP: strip-sh-comments refused l11.sh" >&2; exit 1; }
+  else
+    cp "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh"
+  fi
+  cp "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg"
+  # the set's box kbootset: l11.sh asks it which controller drives the disk the user picked
+  # (`kbootset cards DISK`); one without `cards` answers nothing and the profile's TARGET_HBA stands
+  if [ -f "$L11_IN/dlm/build/box/kbootset" ]; then
+    cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"; chmod 0755 "$STAGE/l11/bin/kbootset"
+  fi
+  cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
+  # the medium's copy names every input relative to the workspace: the build host's own paths
+  # (its user and directories) are no business of a published disc
+  sed "s|$(dirname "$(dirname "$repo")")/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
+  # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
+  if [ -n "$CDBOOT" ]; then
+    echo "cd-boot ${CDBOOT#$(dirname "$(dirname "$repo")")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
+  else
+    echo "# cd-boot: none -- the install kernel boots from the floppy pair" >> "$STAGE/l11/INPUTS"
+  fi
+  stage_sh "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"
+  # /sbin/bcheckrc with `kbootset retry` before each of the three reboots of its root
+  # fsck block (amix-dlm C2-4 v5 §7): a repair reboot must not spend a trial's single
+  # attempt. Made here from core's own file (2.1, pinned) by inserting one line before
+  # each `/sbin/uadmin 1 1`; install.sh writes it over the target's only while that is
+  # still the stock file (bcheckrc.stock: its `sum -r`).
+  _bc="$CORE_T/sbin/bcheckrc"
+  [ "$(md5sum < "$_bc" | cut -c1-32)" = bff26ae7c4a0e5c23aeba6044d3421d2 ] \
+    || { echo "STOP: $_bc is not the 2.1 bcheckrc (md5 bff26ae7...)" >&2; exit 1; }
+  [ "$(grep -c "^		/sbin/uadmin 1 1\$" "$_bc")" = 3 ] \
+    || { echo "STOP: $_bc does not carry exactly three root-fsck reboots" >&2; exit 1; }
+  sed 's|^		/sbin/uadmin 1 1$|		[ -x /sbin/kbootset ] \&\& /sbin/kbootset retry >/dev/console 2>\&1\n&|' \
+    "$_bc" > "$STAGE/l11/bcheckrc"
+  [ "$(grep -c '^		\[ -x /sbin/kbootset \] && /sbin/kbootset retry >/dev/console 2>&1$' "$STAGE/l11/bcheckrc")" = 3 ] \
+    && [ "$(wc -l < "$STAGE/l11/bcheckrc")" = "$(( $(wc -l < "$_bc") + 3 ))" ] \
+    || { echo "STOP: the bcheckrc retry patch did not insert exactly three lines" >&2; exit 1; }
+  sum -r "$_bc" | awk '{print $1}' > "$STAGE/l11/bcheckrc.stock"
+  # the base packages: l11_base adds them under the target's chroot after
+  # core and the base set. base/order is the pkginsts every set takes, in the set's order;
+  # base/o.<set> those only that set takes (staged below, once the offered sets are known,
+  # and only for a set this medium offers); <pkginst>.pkg the
+  # datastream, <pkginst>.cf the paths of its pkgmap's `e conffile` lines (what the class acts
+  # on, so the seed reads what the bytes install); seed.sh the baseline rule. The names fit
+  # s5's 14 characters: the netinstall miniroot is s5 (amxbase-1.0-10.pkg was
+  # cut short there).
+  [ -f "$L11_IN/base/catalog.lines" ] \
+    || { echo "STOP: no $L11_IN/base/catalog.lines -- the set's base-pkg lines (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
+  [ -x "$_pt" ] || { echo "STOP: no host pkgtrans at $_pt (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-base.XXXXXX")"
+  rm -rf "${STAGE:?}/l11/base"; mkdir -p "$STAGE/l11/base"
+  # base/sets: each pkginst and the sets that take it (no set: every set); older inputs lack it
+  _bsets="$L11_IN/base/sets"
+  if [ ! -f "$_bsets" ]; then
+    cut -d'|' -f3 "$L11_IN/base/catalog.lines" > "$_bw/sets"; _bsets="$_bw/sets"
+  fi
+  awk 'NF == 1 { print $1 }' "$_bsets" > "$STAGE/l11/base/order"
+  while IFS='|' read -r _bn _bv _bi _bf _bm _bz _; do
+    grep -qx "$_bi" "$STAGE/l11/base/order" || continue
+    [ "$(md5sum < "$L11_IN/base/$_bf" | cut -c1-32)" = "$_bm" ] \
+      || { echo "STOP: $L11_IN/base/$_bf is not its catalog line's md5 $_bm" >&2; exit 1; }
+    [ "${#_bi}" -le 9 ] || { echo "STOP: base package $_bi: a pkginst over 9 characters" >&2; exit 1; }
+    cp "$L11_IN/base/$_bf" "$STAGE/l11/base/$_bi.pkg"
+    "$_pt" "$L11_IN/base/$_bf" "$_bw" "$_bi" >/dev/null 2>&1 \
+      || { echo "STOP: pkgtrans could not unpack $_bf" >&2; exit 1; }
+    awk '$2 == "e" && $3 == "conffile" { print $4 }' "$_bw/$_bi/pkgmap" > "$STAGE/l11/base/$_bi.cf"
+  done < "$L11_IN/base/catalog.lines"
+  grep -qx amxbase "$STAGE/l11/base/order" && [ -s "$STAGE/l11/base/amxbase.cf" ] \
+    || { echo "STOP: the set's base packages lack amix-base (amxbase) or its conffiles" >&2; exit 1; }
+  cp "$repo/payload/l11-seed.sh" "$STAGE/l11/base/seed.sh"
+  # /etc/inittab as the target holds it once amix-base is in: amix-base's default, with
+  # C3-5 §5's dlm line once, as the first sysinit entry (l11_inittab compares the target's)
+  _it="$_bw/amxbase/root/etc/inittab"
+  [ -f "$_it" ] || { echo "STOP: amix-base's datastream has no /etc/inittab" >&2; exit 1; }
+  [ "$(grep -c '^dlm:' "$_it")" = 1 ] \
+    && [ "$(awk -F: '$3 == "sysinit" { print $1; exit }' "$_it")" = dlm ] \
+    && grep -qx 'dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1' "$_it" \
+    || { echo "STOP: amix-base's inittab does not carry the one dlm line as its first sysinit entry" >&2; exit 1; }
+  cp "$_it" "$STAGE/l11/inittab"
+  rm -rf "${_bw:?}"
+  # core's 1992 kernel, which stays when install.sh removes the name /stand/unix
+  sum -r "$CORE_T/stand/2.1_unix" | awk '{print $1}' > "$STAGE/l11/2.1_unix.sum"
+  # apkg's conf for finishing a target's pending transaction from the repair path
+  # (install.sh names it when it stops on one): the medium's engine and kernel space
+  printf '%s\n' "# apkg 0.3 -R /mnt recover, from the repair path (install.sh, l11.sh)" \
+    "repo=file:///cdrom/install/l11/kpkg" "cachedir=/mnt/tmp/kpkgcache" \
+    "admin=/cdrom/install/admin/pkgadd" "pkgadd=/cdrom/install/bin/pkgadd" \
+    "kbootset=/mnt/sbin/kbootset" > "$STAGE/l11/recover.conf"
+  chmod 0755 "$STAGE/l11/bin/apkg" "$STAGE/l11/updbootpart"
+  chmod 0744 "$STAGE/l11/bcheckrc"
+  chmod 0644 "$STAGE/l11/l11.sh" "$STAGE/l11/INPUTS" "$STAGE/l11/recover.conf" "$STAGE/l11/bcheckrc.stock" \
+    "$STAGE/l11/inittab" "$STAGE/l11/2.1_unix.sum" "$STAGE/l11"/base/*
+  chmod 0755 "$STAGE/l11/base/seed.sh"
+  { [ -n "$STRIP_COMMENTS" ] || { cmp -s "$repo/src/installer/l11.sh" "$STAGE/l11/l11.sh" \
+      && cmp -s "$repo/payload/updbootpart-l11" "$STAGE/l11/updbootpart"; }; } \
+    && cmp -s "$L11_IN/apkg/apkg" "$STAGE/l11/bin/apkg" \
+    && diff -r "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/pkgs" >/dev/null \
+    || { echo "STOP: staged /install/l11 is not byte-identical to $L11_IN" >&2; exit 1; }
+  echo "build-install-iso: staged /install/l11 for${_want_l11}: apkg $(sha256sum "$STAGE/l11/bin/apkg" | cut -c1-16)..., $(grep -c '^#kpkg ' "$STAGE/l11/kpkg/catalog") kernel-space and $(grep -c '^[a-z][^#]*|' "$STAGE/l11/kpkg/catalog") userland package(s)"
+else
+  echo "build-install-iso: no requested profile sets INSTALL_LAYOUT=1.1 -- /install/l11 not staged"
+fi
+
+# admin(4): the permissive install-time policy + the 183-B stock default
+cat >"$STAGE/admin/pkgadd" <<'EOF'
+mail=
+instance=overwrite
+partial=nocheck
+runlevel=nocheck
+idepend=nocheck
+rdepend=nocheck
+space=nocheck
+setuid=nocheck
+conflict=nocheck
+action=nocheck
+basedir=default
+EOF
+cp -p "$CORE_T/var/sadm/install/admin/default" "$STAGE/admin/default"
+
+# profiles verbatim. MEDIUM_PROFILES (read off the BASE profile, PROFILES[0]):
+#   all (default) -- every tracked profile (each through lab_localize: the bench's
+#                    real addresses from bench/local.env, tools/lib/lab-env.sh);
+#   requested     -- ONLY the --profile names. A public disc must not carry the
+#                    LAN profiles beside its own: they name the bench's addresses,
+#                    zone and card MACs, and they would grep straight off the disc.
+_mp="$(sed -n 's/^MEDIUM_PROFILES=//p' "$PROFILE_DIR/${PROFILES[0]}.profile" 2>/dev/null | tail -1 | tr -d '"')"
+case "$_mp" in
+  ''|all)    for _f in "$PROFILE_DIR"/*.profile; do
+               lab_localize < "$_f" > "$STAGE/profiles/${_f##*/}" && touch -r "$_f" "$STAGE/profiles/${_f##*/}"; done ;;
+  requested) for _p in "${PROFILES[@]}"; do
+               lab_localize < "$PROFILE_DIR/$_p.profile" > "$STAGE/profiles/$_p.profile" \
+                 && touch -r "$PROFILE_DIR/$_p.profile" "$STAGE/profiles/$_p.profile"; done
+             echo "build-install-iso: MEDIUM_PROFILES=requested -> /install/profiles carries only: ${PROFILES[*]}" ;;
+  *) echo "STOP: profile ${PROFILES[0]}: MEDIUM_PROFILES='$_mp' is not 'all' or 'requested'" >&2; exit 1 ;;
+esac
+
+# C4-1: on a CD-boot disc the install kernel is the line's kernel package, and a four-card
+# one (its sidecar's sdcards=4) numbers the controllers by class: each staged 1.1 profile of
+# that line gets the names that move appended (tools/sdnames.py; the tracked profile keeps
+# the two-card values). A floppy-booted 1.1 disc installs under fd0unix (two-card), so
+# nothing moves there; the installed system names its root as its own kernel does
+# (firstboot, /etc/devnm).
+if { [ -n "$CDBOOT" ] || [ -n "$FOURCARD" ]; } && [ -n "$_want_l11" ]; then
+  for _f in "$STAGE"/profiles/*.profile; do
+    [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$_f" | tail -1 | tr -d '"')" = 1.1 ] || continue
+    _kk="$(sed -n 's/^KERNEL_KPKG=//p' "$_f" | tail -1 | tr -d '"')"
+    _row="$(grep -m1 "^#kpkg $_kk " "$L11_IN/kpkg/catalog" || true)"
+    [ -n "$_row" ] || continue
+    _kl="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^line=//p')"
+    _kf="$(echo "$_row" | tr ' ' '\n' | sed -n 's/^file=//p')"
+    [ -n "$FOURCARD" ] || [ -d "$CDBOOT/BOOT/$(echo "$_kl" | tr a-z A-Z)" ] || continue
+    _sc="$(python3 "$here/sdnames.py" --datastream "$L11_IN/kpkg/pkgs/$_kf" --line "$_kl")" \
+      || { echo "STOP: cannot read the sd cards of $_kk's sidecar" >&2; exit 1; }
+    _mv="$(python3 "$here/sdnames.py" "$_f" --sdcards "$_sc")" \
+      || { echo "STOP: profile ${_f##*/}: no controller numbers under $_kk's $_sc cards" >&2; exit 1; }
+    if [ -n "$_mv" ]; then
+      printf '%s\n' "$_mv" >> "$_f"
+      echo "build-install-iso: ${_f##*/}: four-card install kernel $_kk -- $(echo "$_mv" | grep -v '^#' | tr '\n' ' ')"
+    fi
+  done
+fi
+
+# --- /install/profiles/BASE: the medium's own declaration of which profile it -
+# was mastered for. A medium carries ONE boot slice per family, so "which rig is
+# this disc for" is a mastering-time fact, not something the operator should have
+# to retype: setup.sh launched with no argument reads this file, which is what
+# lets the miniroot hand off with a bare
+#     exec sh /cdrom/install/bin/setup.sh
+# The FIRST --profile wins (it is the one whose boot slice the driver defaults
+# to); an explicit argument still overrides it, so every existing runbook and
+# matrix invocation is unaffected.
+printf '%s\n' "${PROFILES[0]}" > "$STAGE/profiles/BASE"
+echo "build-install-iso: /install/profiles/BASE -> ${PROFILES[0]} (setup.sh's default base profile)"
+# /install/profiles/BASE.k30 and BASE.k46: one disc, two CPU lines (the RAM-disk CD boots
+# either line's generation). setup.sh prefers BASE.<line> of the running kernel (its kinfo
+# line) and falls back to BASE. The first --profile of each line wins; the line is the
+# profile's INSTALL_CPU (030 -> k30, 040/060 -> k46).
+for _p in "${PROFILES[@]}"; do
+  _cpu="$(sed -n 's/^INSTALL_CPU=//p' "$PROFILE_DIR/$_p.profile" | tail -1 | tr -d '"')"
+  case "${_cpu:-030}" in 030) _ln=k30 ;; *) _ln=k46 ;; esac
+  [ -f "$STAGE/profiles/BASE.$_ln" ] && continue
+  printf '%s\n' "$_p" > "$STAGE/profiles/BASE.$_ln"
+  echo "build-install-iso: /install/profiles/BASE.$_ln -> $_p"
+done
+
+# ---------------------------------------------------------------------------
+# INSTALL ORDER(S) -- /install/order + one /install/order.<set> per offered set
+# ---------------------------------------------------------------------------
+# /install/order is the medium's DEFAULT order (the mastered set). It keeps its
+# name and its meaning: install.sh reads it when no INSTALL_ORDER key is set, so
+# every existing profile, runbook line and matrix cell is unaffected by the named sets.
+#
+# /install/order.<set> is one file per NAMED SET this medium can satisfy in full.
+# The interview's tier menu points at them by name and the driver's INSTALL_ORDER
+# key consumes them; the custom screen reads order.standard for its `standard`
+# keyword. All the ordering intelligence stays HERE, host-side -- a subset of a
+# topological order is still topological, so the on-box custom screen only has to
+# FILTER one of these files, never to solve anything.
+python3 "$here/gen-install-order.py" --deps "$DEPS" --set "$SET_NAME" \
+        --out "$STAGE/order" "${SELECTED[@]}"
+
+OFFERED_SETS=()
+for s in $(python3 "$SETS_PY" -f "$SETS_CONF" | awk '{print $1}'); do
+  # An EMPTY set is not an installer set, and "satisfiable" is the wrong question
+  # to ask about one: a medium carries all zero of its packages, so set_satisfiable
+  # says yes and gen-install-order then -- correctly -- refuses a selection with no
+  # `core` (its Gate 13). sets.conf declares exactly one such set on purpose:
+  # `extra`, "the named handle for the packages amix-packages publishes",
+  # deliberately empty, disjoint from the five installer sets "now and always",
+  # and installed with `apkg install $(sets.py extra)` on a box that is already up.
+  # It is not a smaller install, it is a different mechanism -- so it is skipped
+  # here by the one property that distinguishes it, rather than by name. Without
+  # this, adding any empty set to sets.conf breaks EVERY re-master (it did:
+  # `extra` landed 2026-08-28 in packagemanager fdf299e; the previous re-master was
+  # 2026-08-14, so this is the first master since, and it broke on the first try).
+  # NB: set_tokens ends in `printf '%s\n' <array>`, and printf applies its format
+  # ONCE even with no arguments -- so an empty set comes back as one EMPTY line,
+  # i.e. an array of length 1, not 0. Count real tokens, and pass only those on.
+  # (a process substitution's status is lost: a set with a package missing used to read as an empty one)
+  _rawout=$(set_tokens $(l11_filter $(resolve_set "$s")) 2>"${STAGE:?}/.set_tokens.err") \
+    || { echo "build-install-iso: set '$s' NOT offered ($(cat "$STAGE/.set_tokens.err"))"; rm -f "${STAGE:?}/.set_tokens.err"; continue; }
+  rm -f "${STAGE:?}/.set_tokens.err"
+  mapfile -t _raw <<< "$_rawout"
+  stoks=()
+  for _t in ${_raw[@]+"${_raw[@]}"}; do [ -n "$_t" ] && stoks+=("$_t"); done
+  if [ "${#stoks[@]}" -eq 0 ]; then
+    echo "build-install-iso: set '$s' NOT offered (declared EMPTY -- not an installer set)"
+    continue
+  fi
+  set_satisfiable "$s" || { echo "build-install-iso: set '$s' NOT offered (this medium does not carry all of it)"; continue; }
+  python3 "$here/gen-install-order.py" --deps "$DEPS" --set "$s" \
+          --out "$STAGE/order.$s" "${stoks[@]}"
+  OFFERED_SETS+=("$s")
+done
+[ "${#OFFERED_SETS[@]}" -gt 0 ] || {
+  echo "STOP: this medium satisfies NO named set -- the interview would have nothing to offer" >&2
+  exit 1; }
+
+# --- /install/l11/base/o.<set>: the set-only userland packages, for the sets this medium offers --
+# (rows 1 and 2: the offered sets and the set it is mastered for). A package no offered set takes
+# stays off the medium: x11r63 is 34 MB, the netinstall RAM disk 5 MB.
+if [ -d "$STAGE/l11/base" ] && [ -f "$L11_IN/base/sets" ] && awk 'NF > 1 { f = 1 } END { exit !f }' "$L11_IN/base/sets"; then
+  _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-sets.XXXXXX")"
+  _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
+  for _s in ${OFFERED_SETS[@]+"${OFFERED_SETS[@]}"} "$SET_NAME"; do
+    for _bi in $(awk -v s="$_s" 'NF > 1 { for (i = 2; i <= NF; i++) if ($i == s) print $1 }' "$L11_IN/base/sets"); do
+      _line="$(awk -F'|' -v i="$_bi" '$3 == i' "$L11_IN/base/catalog.lines")"
+      IFS='|' read -r _bn _bv _ _bf _bm _bz _ <<< "$_line"
+      [ -n "$_bf" ] || { echo "STOP: base/sets names $_bi, which base/catalog.lines lacks" >&2; exit 1; }
+      [ "${#_bi}" -le 9 ] || { echo "STOP: set package $_bi: a pkginst over 9 characters" >&2; exit 1; }
+      if [ ! -f "$STAGE/l11/base/$_bi.pkg" ]; then
+        [ "$(md5sum < "$L11_IN/base/$_bf" | cut -c1-32)" = "$_bm" ] \
+          || { echo "STOP: $L11_IN/base/$_bf is not its catalog line's md5 $_bm" >&2; exit 1; }
+        cp "$L11_IN/base/$_bf" "$STAGE/l11/base/$_bi.pkg"
+        "$_pt" "$L11_IN/base/$_bf" "$_bw" "$_bi" >/dev/null 2>&1 \
+          || { echo "STOP: pkgtrans could not unpack $_bf" >&2; exit 1; }
+        awk '$2 == "e" && $3 == "conffile" { print $4 }' "$_bw/$_bi/pkgmap" > "$STAGE/l11/base/$_bi.cf"
+        rm -rf "${_bw:?}/${_bi:?}"
+      fi
+      grep -qx "$_bi" "$STAGE/l11/base/o.$_s" 2>/dev/null || echo "$_bi" >> "$STAGE/l11/base/o.$_s"
+      echo "build-install-iso: l11/base/o.$_s: $_bn $_bv ($_bi)"
+    done
+    # every offered set has its list, empty when it takes nothing of its own: a reader (netset-check, the
+    # netinstall's second stage) then never has to tell "no extras" from "the file is missing"
+    [ -f "$STAGE/l11/base/o.$_s" ] || { > "$STAGE/l11/base/o.$_s"; echo "build-install-iso: l11/base/o.$_s: none of its own"; }
+  done
+  rm -rf "${_bw:?}"
+fi
+
+# ---------------------------------------------------------------------------
+# /install/sets -- the interview's three-tier menu, as data
+# ---------------------------------------------------------------------------
+# amixpkg's menu is three rows and always was (plan §2.7, screen frozen in
+# docs/installer.md): row 1 the default install, row 2 everything on the medium,
+# row 3 Custom. Rows 1 and 2 are MEDIA FACTS, so they are authored here rather
+# than derived on the box:
+#
+#   <setname> <orderfile> <attested> <label...>
+#
+#   row 1  the `standard` set when this medium carries all of it -- that is what
+#          "Standard Amiga UNIX installation" MEANT on the tape -- otherwise the
+#          medium's own mastered set (on a base-8 disc there is no larger truth).
+#   row 2  everything on the disc, which IS the mastered set: build-iso.sh puts
+#          exactly this set's packages on the medium and refuses a base/ package
+#          the set does not name.
+#
+# On a minimal medium the two rows are the same set, and the menu says so twice
+# rather than hiding a row -- a menu whose numbering depends on the medium is a
+# menu the blind-console matrix cannot type into.
+ROW1_SET="$SET_NAME"; ROW1_ORD=order
+if set_satisfiable standard; then
+  ROW1_SET=standard
+  [ -f "$STAGE/order.standard" ] && ROW1_ORD=order.standard
+fi
+ROW2_SET="$SET_NAME"
+if [ "${#EXTRA_PKGS[@]}" -gt 0 ]; then
+  # --pkg put packages on the disc that the named set does not contain, so
+  # "everything on the disc" is no longer that named set and cannot borrow its
+  # attestation. Fail SAFE: it becomes an unattested media-specific selection.
+  ROW2_SET=media
+fi
+{
+  echo "# amix-installng package-set table (generated by build-install-iso.sh)"
+  echo "# <num> <setname> <orderfile> <attested> <label...>  -- label runs to end of line"
+  echo "# attested=y means a REFERENCE INSTALLED-TREE DIGEST exists for this set."
+  echo "# attested=n runs with the digest gate explicitly waived (plan §5.7) and is"
+  echo "# marked \"unattested selection\" on the confirmation screen and in the log."
+  echo "1 $ROW1_SET $ROW1_ORD `set_attested "$ROW1_SET"` Standard Amiga UNIX installation"
+  echo "2 $ROW2_SET order `set_attested "$ROW2_SET"` Everything on the disc"
+} > "$STAGE/sets"
+echo "build-install-iso: /install/sets -> (1) $ROW1_SET [$ROW1_ORD, attested=`set_attested "$ROW1_SET"`]" \
+     "/ (2) $ROW2_SET [order, attested=`set_attested "$ROW2_SET"`]"
+echo "build-install-iso: per-set order files: ${OFFERED_SETS[*]}"
+
+# ---------------------------------------------------------------------------
+# 2. per-profile boot slice (extract + gate + manifest)
+# ---------------------------------------------------------------------------
+for p in "${PROFILES[@]}"; do
+  # a 1.1 profile carries no framed chain: kbootset composes its store from the kernel package in /install/l11
+  echo; echo "build-install-iso: profile '$p' is INSTALL_LAYOUT=1.1 -- no boot slice; the store comes from /install/l11"
+done
+
+echo
+echo "=== staged /install/ tree ==="
+( cd "$STAGE" && find . -type f | LC_ALL=C sort | sed 's/^/  install\//' )
+
+# staged-engine sum table -- the frozen CD engine set (incl. the static
+# contents-fsck: sum -r 23366, 29468 bytes). `sum -r` is the BSD algorithm, and its
+# checksum field == the on-box SVR4 `sum -r` first field, so a re-master's table is
+# directly comparable to a value read on the box. (Byte count avoids the SVR4-vs-GNU
+# 512/1024 block-size difference in the second column.)
+echo
+echo "=== staged /install/bin engine sums (sum -r checksum | bytes) ==="
+for b in pkgadd pkgtrans pkginfo pkgchk contents-fsck pkginstall sum apkg; do
+  f="$STAGE/bin/$b"
+  [ -f "$f" ] || continue
+  s="$(sum -r "$f" | awk '{print $1}')"
+  z="$(wc -c <"$f")"
+  printf '  %-14s sum-r %-7s %9s bytes\n' "$b" "$s" "$z"
+done
+
+# ---------------------------------------------------------------------------
+# 3. master the ISO with the payload  (skipped for --stage-only)
+# ---------------------------------------------------------------------------
+if [ "$STAGE_ONLY" -eq 1 ]; then
+  echo
+  echo "build-install-iso: --stage-only -- staged /install/ tree at $STAGE (no ISO mastered)."
+  echo "  $APKG_NOTE"
+  echo "  (tools/build-raw-source.sh consumes this tree onto the RAW source disk's payload slice.)"
+  exit 0
+fi
+
+echo
+# everything the 1.1 installer reads from its medium is on this one
+if grep -q '^INSTALL_LAYOUT=1\.1$' "$_base_profile_file"; then
+  python3 "$here/install-reads-check.py" "$STAGE" || { echo "STOP: the installer reads what this medium doesn't have" >&2; exit 1; }
+fi
+
+echo "=== mastering install CD (build-iso.sh --install-src) ==="
+BIARGS=(--set "$SET" --install-src "$STAGE")
+[ -n "$OUT" ] && BIARGS+=(--out "$OUT")
+[ -n "$CDBOOT" ] && BIARGS+=(--cd-boot "$CDBOOT")
+for x in ${EXTRA_PKGS[@]+"${EXTRA_PKGS[@]}"}; do BIARGS+=(--pkg "$x"); done
+PKGMGR="$PKGMGR" STAGING="$STAGING" BI_L11_PROVIDES="$L11_PROVIDES" "$here/build-iso.sh" "${BIARGS[@]}"
+
+echo
+echo "build-install-iso: done. $APKG_NOTE"
+[ "$KEEP_STAGE" -eq 1 ] || echo "(staged tree kept at $STAGE -- gitignored; pass --keep-stage is default here)"

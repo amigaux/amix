@@ -1,0 +1,4 @@
+# tools/known-bad-modules.txt -- modules no 1.1 artefact may carry (tools/known-bad-scan.py).
+# sha256 size name: why. The bytes themselves stay out of git: build/pins/known-bad/<sha256>.bin, for the
+# raw scan of disk images (a module inside an image is found by its bytes, not by a file name).
+15f0769ad23f78efe74602d449734d8ea0df96a63ac749222cc7a0a58ecb30ea 14006 z3660scsi: writes its signature into the Z3660 fixed window at 0x10000000, which on an A1200 with a DKB card is the kernel's RAM (before amix 1a3fa61's window gate; the 11-02 08:42 rehearsal set)
