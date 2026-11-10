@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-10 — distfiles kept in out/cache; TOOLS names xorriso (971b4f4)
+
+make tools keeps the build images' distfiles (the two base packages, amitools) in out/cache, so a second run doesn't need the Ubuntu snapshot service. The media image's TOOLS begins with xorriso's version line.
+
 ## 2026-11-07 — gcc14 tree digest with amix-system debb2e1 (4e73603)
 
 gcc14-cross-amix.tree is d1964ac8, the GCC 14 build with amix-system debb2e1's in.ftpd in its sysroot; CI's image check passes again.

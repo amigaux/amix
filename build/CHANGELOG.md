@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-10 — relative paths from the checkout's top; SOURCE_DATE_EPOCH dates the media (5a775c1, b2d70dd)
+
+make dist reads a relative SYSTEM, LOCK, STOCK, RELEASE_PREVIOUS, ROM_MANIFEST, PRIVACY_PATTERNS or AMIX_DISTFILES from the top of the checkout, so `make tools SYSTEM=../amix-system` works as documented (it looked inside build/). SOURCE_DATE_EPOCH reaches the media step, and only it; the media's dates follow it, else the commit's time, and the lock's head gains a `media-epoch` line.
+
 ## 2026-11-07 — make tools checks the gcc14 tree digest (03886a3)
 
 make tools checks the build container's GCC 14 against toolchain/gcc14-cross-amix.tree, as CI does, and stops before the media image when the digest differs. A new amix-system pin moves that digest too.
