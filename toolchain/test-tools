@@ -254,6 +254,11 @@ refused "container-build: a base package with other bytes" "not the pinned" buil
 snapshot=$(sed -n 's/^ARG SNAPSHOT=//p' "$here/Containerfile")
 check "Containerfile: the base packages come from the snapshot apt uses after them" \
 	sh -c "[ -n '$snapshot' ] && grep -q '/ubuntu/$snapshot/' '$here/base-ca-certificates.distfile' && grep -q '/ubuntu/$snapshot/' '$here/base-openssl.distfile'"
+day=${snapshot%%T*}
+for d in ca-certificates openssl; do
+	check "fetch: base-$d.distfile names the snapshot first, our copy of that day second, under the same name" \
+		sh -c "[ -n '$day' ] && awk '{n=split(\$1,u,\"/\"); exit !(NF==3 && \$3==\"https://github.com/amigaux/amix-distfiles/releases/download/toolchain-base-$day/\" u[n])}' '$here/base-$d.distfile'"
+done
 check "Containerfile: the base image's own archive list is gone before apt reads any" \
 	sh -c "awk '/ubuntu.sources/&&!s{s=NR} /try upd/&&!u{u=NR} END{exit !(s&&u&&s<u)}' '$here/Containerfile'"
 
