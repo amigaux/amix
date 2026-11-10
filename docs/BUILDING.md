@@ -40,7 +40,11 @@ out/` and exits 0.
   package sources' own sites. Every download is pinned by commit or sha256.
   `AMIX_DISTFILES=<dir>` names a directory of distfiles to take first. What is
   fetched is kept in `out/cache`. The snapshot service answers 5xx at times, for
-  minutes or longer; `make tools` then stops, and running it again later goes on.
+  minutes or longer. The two packages fetched before the image build fall back
+  to our copy on amix-distfiles; apt inside the image build tries 4 times, 2
+  minutes apart. If the service is down longer than that, `make tools` stops,
+  and running it again later goes on. Docker's layer cache keeps a built step,
+  so after the first `make tools` on a machine apt is rarely run again.
 - Nothing else on the host: no cross compiler, no Amiga, no Kickstart.
 
 ## The system files: amix-system
