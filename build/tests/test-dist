@@ -98,6 +98,18 @@ try:
     rc, out = run("media")
     check("media: media/build.sh runs, and its exit 3 is the step's",
           rc == 3 and "hook %s" % os.path.realpath(top) in out, out)
+    write(os.path.join(top, "media", "build.sh"), 'echo "epoch $SOURCE_DATE_EPOCH"\n')
+    ct = subprocess.run(["git", "log", "-1", "--format=%ct"], cwd=top, stdout=subprocess.PIPE).stdout.decode().strip()
+    me = os.path.join(top, "out", "build", "media-epoch")
+    rc, out = run("media", SOURCE_DATE_EPOCH=None)
+    check("media: its dates are the commit's time by default, and out/build/media-epoch says so",
+          rc == 0 and "epoch %s\n" % ct in out and open(me).read() == ct + "\n", out)
+    rc, out = run("media", SOURCE_DATE_EPOCH="1794044172")
+    check("media: SOURCE_DATE_EPOCH sets them",
+          rc == 0 and "epoch 1794044172\n" in out and open(me).read() == "1794044172\n", out)
+    rc, out = run("media", SOURCE_DATE_EPOCH="yesterday")
+    check("media: a SOURCE_DATE_EPOCH that is not seconds is refused",
+          rc == 1 and "SOURCE_DATE_EPOCH 'yesterday' is not seconds" in out and not os.path.exists(me), out)
     os.remove(os.path.join(top, "media", "build.sh"))
     rc, out = run("recipes/nosuch")
     check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
@@ -688,6 +700,15 @@ clean:
     args = open(argf).read().split("\n") if os.path.exists(argf) else []
     check("media: its own image, not AMIX_IMAGE",
           rc == 0 and "amix-toolchain:testmedia" in args and "amix-toolchain:test" not in args, out + " ".join(args))
+    rc, out = run("media", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  AMIX_MEDIA_IMAGE="amix-toolchain:testmedia", SOURCE_DATE_EPOCH="1794044172")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("media: SOURCE_DATE_EPOCH goes in by name", rc == 0 and "SOURCE_DATE_EPOCH=1794044172" in args, " ".join(args))
+    rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  AMIX_IMAGE="amix-toolchain:test", SOURCE_DATE_EPOCH="1794044172")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("but not into another step: a recipe's epoch is its own", rc == 0 and
+          not any(x.startswith("SOURCE_DATE_EPOCH") for x in args), " ".join(args))
     os.remove(os.path.join(top, "media", "build.sh"))
     reg = os.path.join(tmp, "rom-register")
     write(reg, "")

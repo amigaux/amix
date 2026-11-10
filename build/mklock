@@ -122,6 +122,11 @@ def lock(top, out):
     tools = os.path.join(out, "build", "media-tools")
     if os.path.isfile(tools):
         head.append("media-tools %s" % sha256(tools))
+    # the media's epoch: every date on them
+    epoch = os.path.join(out, "build", "media-epoch")
+    if os.path.isfile(epoch):
+        with open(epoch) as fp:
+            head.append("media-epoch %s" % fp.read().strip())
     # the published tree the release was built on
     previous = os.path.join(out, "build", "release-previous")
     if os.path.isfile(previous):

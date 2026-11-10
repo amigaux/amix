@@ -209,11 +209,14 @@ try:
     carried = os.path.join(top, "release/carried-1.1")
     write(carried, "# a table\nkold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("old")))
     write(os.path.join(out, "build/release-previous"), "9" * 64 + "\n")
+    write(os.path.join(out, "build/media-epoch"), "1794044172\n")
     rc, o, e = run(top, out)
     lock = open(os.path.join(out, "lock")).read().splitlines()
     check("the older versions match the table: the lock names the table and the published tree's digest",
           rc == 0 and "system release/carried-1.1 " + sha("# a table\nkold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("old"))) in lock
           and "previous " + "9" * 64 in lock[:7], e + "\n".join(lock[:7]))
+    check("the media's epoch is a line of the head", "media-epoch 1794044172" in lock[:7], "\n".join(lock[:7]))
+    os.remove(os.path.join(out, "build/media-epoch"))
     write(carried, "kold-1.pkg %s c\nold-1-1.pkg %s c\n" % (sha("kold"), sha("other")))
     rc, o, e = run(top, out)
     check("an older version with other bytes than the table's is refused",

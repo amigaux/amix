@@ -66,8 +66,8 @@
 # compiler, which cannot remap one), its git directory where git expects it,
 # and SYSTEM read-only at /system. A step gets only its own inputs: STOCK,
 # STOCK_URL, RELEASE_PREVIOUS, ROM_MANIFEST, PRIVACY_PATTERNS and RELEASE_PUBLIC
-# reach the release step (the last three the media step too), LOCK the lock
-# step, so a name a kernel's recipe reads for itself is never set by accident.
+# reach the release step (the last three the media step too, with
+# SOURCE_DATE_EPOCH, the media's dates), LOCK the lock step, so a name a kernel's recipe reads for itself is never set by accident.
 # DIST_HOST=1 runs the steps on this host instead, for development; a release
 # is built in the container. A relative path in any of these names is from the
 # top of the checkout, wherever dist.sh is run.
@@ -202,7 +202,7 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	inputs= settings=
 	case $step in
 	release) inputs="STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS"; settings="STOCK_URL RELEASE_PUBLIC" ;;
-	media) inputs="ROM_MANIFEST PRIVACY_PATTERNS"; settings=RELEASE_PUBLIC ;;
+	media) inputs="ROM_MANIFEST PRIVACY_PATTERNS"; settings="RELEASE_PUBLIC SOURCE_DATE_EPOCH" ;;
 	lock) inputs=LOCK ;;
 	esac
 	for v in $inputs; do
@@ -685,12 +685,21 @@ missing_input() {	# missing_input <what>
 }
 
 # media: media/build.sh, into out/media/. The hook exits 3 for an input it lacks;
-# what the image holds goes to out/build/media-tools, for the lock
+# what the image holds goes to out/build/media-tools, and the media's epoch (every
+# date on them: SOURCE_DATE_EPOCH, else this commit's time) to
+# out/build/media-epoch, for the lock
 step_media() {
-	rm -rf "${out:?}/media" "${out:?}/build/media-tools"
+	rm -rf "${out:?}/media" "${out:?}/build/media-tools" "${out:?}/build/media-epoch"
 	[ -f "$top/media/build.sh" ] || missing media
 	mkdir -p "$out/media" "$out/build"
 	[ ! -f /opt/amix-media/TOOLS ] || cp /opt/amix-media/TOOLS "$out/build/media-tools"
+	SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(git -C "$top" log -1 --format=%ct)}
+	echo "$SOURCE_DATE_EPOCH" | grep -Eqx '[0-9]+' || {
+		echo "[FAIL] media: SOURCE_DATE_EPOCH '$SOURCE_DATE_EPOCH' is not seconds since 1970" >&2
+		exit 1
+	}
+	echo "$SOURCE_DATE_EPOCH" > "$out/build/media-epoch"
+	export SOURCE_DATE_EPOCH
 	AMIX_TOP=$top sh "$top/media/build.sh"
 }
 
