@@ -6,10 +6,10 @@
 #   tools/sidecar-path-check.sh --self-test
 #
 # A path here is an absolute one under a home, a mount or a scratch directory, or under this
-# workspace. Paths on the installed system (/opt/amix, /var/sadm ...) are not machine paths.
+# checkout. Paths on the installed system (/opt/amix, /var/sadm ...) are not machine paths.
 set -u
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-ws="$(cd "$here/../../.." && pwd)"
+ws="$(cd "$here/../.." && pwd)"
 check() {
 	local n=0 hits r1 r2
 	for f in "$@"; do

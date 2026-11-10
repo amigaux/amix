@@ -1,5 +1,12 @@
 # Address by card: one Amix image, several Z3660 machines
 
+> **The test bench.** Where this document names `tools/install-matrix.sh`, `mkroot.sh`,
+> `build-miniroot.sh`, `build-ramdisk-miniroot.sh`, `build-raw-source.sh`, `miniroot/miniroot.proto`,
+> `configs/*.uae`, `profiles/cards`, `cards/`, `floppies/`, `work/…` or a sibling repository (`../amix-*`), it
+> names the test bench's tools, configurations and run records. They are not in this repository: the
+> bench authors the RAM-disk miniroot, runs the install matrix and keeps the evidence. This repository
+> builds the media with `media/build.sh` (`media/README.md`), a step of make dist.
+
 Amix has no DHCP client, and this project keeps it free of DNS. Before this change,
 a machine's network address was written into the installed image itself, so an image
 belonged to one machine. With address by card, **the image picks its address at boot

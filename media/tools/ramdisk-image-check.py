@@ -23,6 +23,8 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib"))
+# ufs.py is amix's tools/lib (one copy, shared with the release check)
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools", "lib"))
 import dmamask  # noqa: E402
 import s5   # noqa: E402
 import ufs  # noqa: E402

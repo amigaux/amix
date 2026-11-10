@@ -46,15 +46,16 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
+. "$here/lib/media-paths.sh"
 PROFILE_DIR="${MEDIA_PROFILE_DIR:-$repo/profiles}"   # a rig run names its bench profiles
-LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # bench/local.env: the bench's real addresses
+LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # LAB_ENV: a test bench's own addresses (none in a release build)
 
-# amix userland/pkgtools at the set's revision, built by tools/build-l11-inputs.sh
+# amix userland/pkgtools at the checkout's HEAD, built into the inputs by media/build.sh
 # (nothing in 1.1 reads the frozen amix-packagemanager)
-PKGMGR="${PKGMGR:-${L11_IN:-$repo/work/l11}/pkgtools}"
+PKGMGR="${PKGMGR:-$L11_IN/pkgtools}"
 STATIC="${STATIC:-$PKGMGR/heirloom/build-amix-static}"
-CORE_T="${CORE_T:-$repo/build/core/root}"   # tools/build-core-tree.sh
-STAGING="${STAGING:-${L11_IN:-$repo/work/l11}/staging}"
+CORE_T="${CORE_T:-$MEDIA_SCRATCH/core/root}"   # tools/build-core-tree.sh
+STAGING="${STAGING:-$L11_IN/staging}"
 # Authored metadata comes from the sibling's REPO TREE, never its build staging:
 # the staging copy of deps.conf has been observed lagging (it predates the kernel-
 # package edges), and sets.conf/cats.conf are not staged there at all. Same rule as
@@ -111,7 +112,7 @@ SET=base
 EXTRA_PKGS=()
 OUT=""
 CDBOOT="" FOURCARD=""
-STAGE="${STAGE:-$repo/work/install-tree}"
+STAGE="${STAGE:-$MEDIA_SCRATCH/install-tree}"
 KEEP_STAGE=0
 STAGE_ONLY=0
 BSLICE_ARGS=()
@@ -155,9 +156,9 @@ usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
   --stage DIR       /install/ staging dir (default: $STAGE)
   --keep-stage      keep the staged tree after mastering
   --stage-only      build the /install/ payload tree and STOP -- do NOT master an
-                    ISO. This is the reusable staging half: tools/build-raw-source.sh
-                    calls it to populate the RAW source disk's payload slice with
-                    the identical /install/ tree. Implies --keep-stage.
+                    ISO. This is the reusable staging half: the test bench's raw
+                    source-disk builder calls it to populate that disk's payload
+                    slice with the identical /install/ tree. Implies --keep-stage.
   --source-hdf P=H  override a profile's BOOTSLICE_SOURCE_HDF (repeatable)
   --no-require-gate do NOT require the kerntools bootchain-verify round-trip
                     (default: required -- a missing sibling is fatal)
@@ -298,7 +299,7 @@ SET_MEMBERS=(); _o=$(resolve_set "$SET_NAME") && [ -n "$_o" ] && mapfile -t SET_
 # dist's 1.1.0-1 since amix f517676) is not a stock member as well: it leaves the set orders and the
 # disc's pkgs/, and a set needs it there no longer to be offered.
 L11_PROVIDES=" "
-_l11b="${L11_IN:-$repo/work/l11}/base/sets"
+_l11b="$L11_IN/base/sets"
 if [ -f "$_l11b" ]; then
   for _p in "${PROFILES[@]}"; do
     [ "$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')" = 1.1 ] || continue
@@ -372,7 +373,7 @@ cp -p "$STATIC/sadm-helpers/pkginstall" "$STAGE/bin/pkginstall"
 cp -p "$CORE_T/usr/bin/sum" "$STAGE/bin/sum"
 chmod 0755 "$STAGE"/bin/*
 # every pkgtools binary staged here is the one the round's inputs built: a default must never beat the pin
-_in="${L11_IN:-$repo/work/l11}/pkgtools/heirloom/build-amix-static"
+_in="$L11_IN/pkgtools/heirloom/build-amix-static"
 for _b in bin/pkgadd:bin/pkgadd bin/pkgtrans:bin/pkgtrans bin/pkginfo:bin/pkginfo bin/pkgchk:bin/pkgchk \
           bin/contents-fsck:bin/contents-fsck sadm-helpers/pkginstall:bin/pkginstall bin/apkg:bin/apkg; do
   [ -f "$STAGE/${_b#*:}" ] || continue
@@ -492,7 +493,7 @@ fi
 
 # --- /install/syslog/syslogd: the 2.1c daemon -------------------------------
 # install.sh's 1.1 path lays it over core's 2.1 copy; no package carries it. It comes from the system tree.
-SYSLOGD_21C="${MEDIA_SYSTEM:-$repo/../../amix-system}/usr/sbin/syslogd"
+SYSLOGD_21C="${MEDIA_SYSTEM:-${AMIX_SYSTEM:?build-install-iso: AMIX_SYSTEM (or MEDIA_SYSTEM) must name the amix-system checkout}}/usr/sbin/syslogd"
 SYSLOGD_SHA=cca917299e395098e3ece13d06005074e3461904f0b71d9c84b62cf529d8b17b
 [ "$(sha256sum < "$SYSLOGD_21C" 2>/dev/null | cut -d' ' -f1)" = "$SYSLOGD_SHA" ] \
   || { echo "STOP: $SYSLOGD_21C is missing or isn't the 2.1c daemon (sha256 $SYSLOGD_SHA)" >&2; exit 1; }
@@ -620,16 +621,18 @@ chmod 0644 "$STAGE"/LICENSES/*
 # The zen0 MAC reader install.sh lays down at /usr/amiga/bin/zenmac on a zen0
 # flavor; S99zen runs it at every boot to pick the card's address out of
 # /etc/inet/zen.conf (docs/address-by-card.md). A build artefact (vendor crt bytes,
-# gitignored), built from src/zenmac by tools/build-zenmac.sh when missing. Always staged.
+# gitignored), built from src/zenmac by tools/build-zenmac.sh into out/build/media/payload when
+# missing. Always staged.
 # The tool is built by the toolchain in the media image; another compiler's bytes are refused, not shipped.
 ZENMAC_SHA=2275dfcc0f1d95f00465936bdcba3a13d7d89b129a9250b2576dd48b8b71e37e
-[ -f "$repo/payload/zenmac" ] || "$here/build-zenmac.sh" || { echo "STOP: payload/zenmac cannot be built (tools/build-zenmac.sh)" >&2; exit 1; }
-_zm_got="$(sha256sum "$repo/payload/zenmac" | cut -c1-64)"
+ZENMAC="$MEDIA_SCRATCH/payload/zenmac"
+[ -f "$ZENMAC" ] || "$here/build-zenmac.sh" --out "$ZENMAC" || { echo "STOP: payload/zenmac cannot be built (tools/build-zenmac.sh)" >&2; exit 1; }
+_zm_got="$(sha256sum "$ZENMAC" | cut -c1-64)"
 [ "$_zm_got" = "$ZENMAC_SHA" ] || {
   echo "STOP: payload/zenmac sha256 $_zm_got != pinned $ZENMAC_SHA (build it in the media image with tools/build-zenmac.sh, or re-pin deliberately)" >&2; exit 1; }
-cp -p "$repo/payload/zenmac" "$STAGE/zenmac"
+cp -p "$ZENMAC" "$STAGE/zenmac"
 chmod 0755 "$STAGE/zenmac"
-cmp -s "$repo/payload/zenmac" "$STAGE/zenmac" || {
+cmp -s "$ZENMAC" "$STAGE/zenmac" || {
   echo "STOP: staged /install/zenmac is not byte-identical to payload/zenmac" >&2; exit 1; }
 echo "build-install-iso: staged /install/zenmac (${ZENMAC_SHA:0:16}... == pin)"
 
@@ -651,13 +654,13 @@ done
 
 # --- /install/x11kit (K1 RTG desktop kit, X11KIT=rtg) -------------------------
 # The kit install.sh lays down for X11KIT=rtg (its "LAY DOWN the RTG X11 kit" block).
-# Cut 4: the RTG project's own manifest amix-z3660rtg/x11/KIT.sha256 is the pin for
-# its four files (server, rtg-kbdback, startx-rtg, xinitrc-rtg), all taken from
-# amix-z3660rtg/build/out/; KIT.sha256 itself is pinned HERE, so a new kit is a
+# Cut 4: the RTG project's own manifest x11/KIT.sha256 is the pin for its four files
+# (server, rtg-kbdback, startx-rtg, xinitrc-rtg), all taken from its build/out/: MEDIA_X11KIT
+# names a built amix-z3660rtg tree (no 1.1 profile sets X11KIT, so make dist passes none); KIT.sha256 itself is pinned HERE, so a new kit is a
 # deliberate re-pin. zz9k_monsw (the fallback switch) is not in the kit and keeps
 # its own pin. A missing file or any mismatch STOPS the build. Staged only when a
 # requested profile sets X11KIT=rtg, so every other medium is unchanged.
-X11KIT_RTG="$repo/../../amix-z3660rtg"
+X11KIT_RTG="${MEDIA_X11KIT:-/nonexistent}"
 X11KIT_KIT="$X11KIT_RTG/x11/KIT.sha256"
 X11KIT_KIT_SHA=afd7068c9c89fbec829f950b07ff1882ee65d778c3387e34335f3f80222f5f9d   # the published kit (s14rt04)
 # The 1.0 media carry kit 8beaa7bf (startx-rtg e948dbf4, xinitrc-rtg 69f6b68c); the published kit
@@ -728,6 +731,7 @@ fi
 # deliberately. Staged when any requested profile leaves RTC at its default or
 # sets RTC=setclk; RTC=none profiles alone stage nothing.
 SETCLK_SHA=9e8df3d70ec85e33e550bc022c3358d83a0df28be1a7be4b5772471cded2b05c
+SETCLK="$MEDIA_SCRATCH/payload/setclk"
 _want_setclk=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^RTC=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
@@ -738,14 +742,14 @@ for _p in "${PROFILES[@]}"; do
   esac
 done
 if [ -n "$_want_setclk" ]; then
-  if [ ! -f "$repo/payload/setclk" ]; then
-    "$here/build-setclk.sh" || { echo "STOP: RTC=setclk requested by${_want_setclk} and payload/setclk cannot be built (tools/build-setclk.sh)" >&2; exit 1; }
+  if [ ! -f "$SETCLK" ]; then
+    "$here/build-setclk.sh" --out "$SETCLK" || { echo "STOP: RTC=setclk requested by${_want_setclk} and payload/setclk cannot be built (tools/build-setclk.sh)" >&2; exit 1; }
   fi
-  _sc_got="$(sha256sum "$repo/payload/setclk" | cut -c1-64)"
+  _sc_got="$(sha256sum "$SETCLK" | cut -c1-64)"
   [ "$_sc_got" = "$SETCLK_SHA" ] || {
     echo "STOP: payload/setclk sha256 $_sc_got != pinned $SETCLK_SHA (build it in the media image with tools/build-setclk.sh, or re-pin deliberately)" >&2; exit 1; }
-  cp "$repo/payload/setclk" "$STAGE/setclk"; chmod 0755 "$STAGE/setclk"
-  cmp -s "$repo/payload/setclk" "$STAGE/setclk" || { echo "STOP: staged /install/setclk is not byte-identical to payload/setclk" >&2; exit 1; }
+  cp "$SETCLK" "$STAGE/setclk"; chmod 0755 "$STAGE/setclk"
+  cmp -s "$SETCLK" "$STAGE/setclk" || { echo "STOP: staged /install/setclk is not byte-identical to payload/setclk" >&2; exit 1; }
   echo "build-install-iso: staged /install/setclk (${SETCLK_SHA:0:16}... == pin) for${_want_setclk}"
 else
   echo "build-install-iso: every requested profile sets RTC=none -- /install/setclk not staged"
@@ -767,17 +771,17 @@ for _p in "${PROFILES[@]}"; do
   esac
 done
 if [ -n "$_want_tz" ]; then
-  if [ ! -f "$repo/payload/tz/MANIFEST" ]; then
+  if [ ! -f "$MEDIA_SCRATCH/payload/tz/MANIFEST" ]; then
     python3 "$here/build-tzfile.py" || { echo "STOP: TZFILES=tzdata requested by${_want_tz} and payload/tz cannot be built (tools/build-tzfile.py)" >&2; exit 1; }
   fi
-  _tz_got="$(sha256sum "$repo/payload/tz/MANIFEST" | cut -c1-64)"
+  _tz_got="$(sha256sum "$MEDIA_SCRATCH/payload/tz/MANIFEST" | cut -c1-64)"
   [ "$_tz_got" = "$TZSET_SHA" ] || {
     echo "STOP: payload/tz/MANIFEST sha256 $_tz_got != pinned $TZSET_SHA (rebuild with tools/build-tzfile.py, or re-pin deliberately)" >&2; exit 1; }
-  (cd "$repo/payload/tz" && sha256sum --quiet -c <(awk '{print $1"  "$3}' MANIFEST)) || {
+  (cd "$MEDIA_SCRATCH/payload/tz" && sha256sum --quiet -c <(awk '{print $1"  "$3}' MANIFEST)) || {
     echo "STOP: payload/tz does not match its MANIFEST (rebuild with tools/build-tzfile.py)" >&2; exit 1; }
-  rm -rf "${STAGE:?}/tz"; cp -r "$repo/payload/tz" "$STAGE/tz"; chmod -R a+rX "$STAGE/tz"
-  diff -r "$repo/payload/tz" "$STAGE/tz" >/dev/null || { echo "STOP: staged /install/tz is not identical to payload/tz" >&2; exit 1; }
-  echo "build-install-iso: staged /install/tz ($(awk 'END{print NR}' "$repo/payload/tz/MANIFEST") zones, ${TZSET_SHA:0:16}... == pin) for${_want_tz}"
+  rm -rf "${STAGE:?}/tz"; cp -r "$MEDIA_SCRATCH/payload/tz" "$STAGE/tz"; chmod -R a+rX "$STAGE/tz"
+  diff -r "$MEDIA_SCRATCH/payload/tz" "$STAGE/tz" >/dev/null || { echo "STOP: staged /install/tz is not identical to payload/tz" >&2; exit 1; }
+  echo "build-install-iso: staged /install/tz ($(awk 'END{print NR}' "$MEDIA_SCRATCH/payload/tz/MANIFEST") zones, ${TZSET_SHA:0:16}... == pin) for${_want_tz}"
 else
   echo "build-install-iso: every requested profile sets TZFILES=stock -- /install/tz not staged"
 fi
@@ -786,9 +790,8 @@ fi
 # The driver's 1.1 half (src/installer/l11.sh) and what it runs: the static apkg 0.3
 # and the FILE source with the kbootset, loader-amix and kernel packages (the box's
 # kbootset and loader are those packages' files, installed on the target). All of it
-# comes from work/l11 (tools/build-l11-inputs.sh: clean exports at named revisions,
+# comes from $L11_IN (media/build.sh: make dist's out/ and builds from this checkout,
 # INPUTS records them); each staged file is cmp'd against its source.
-L11_IN="${L11_IN:-$repo/work/l11}"
 _want_l11=
 for _p in "${PROFILES[@]}"; do
   _v="$(sed -n 's/^INSTALL_LAYOUT=//p' "$PROFILE_DIR/$_p.profile" 2>/dev/null | tail -1 | tr -d '"')"
@@ -799,7 +802,7 @@ for _p in "${PROFILES[@]}"; do
 done
 if [ -n "$_want_l11" ]; then
   for _f in apkg/apkg kpkg/catalog INPUTS; do
-    [ -f "$L11_IN/$_f" ] || { echo "STOP: INSTALL_LAYOUT=1.1 requested by${_want_l11} but $L11_IN/$_f is missing (tools/build-l11-inputs.sh)" >&2; exit 1; }
+    [ -f "$L11_IN/$_f" ] || { echo "STOP: INSTALL_LAYOUT=1.1 requested by${_want_l11} but $L11_IN/$_f is missing (media/build.sh)" >&2; exit 1; }
   done
   for _p in kbootset loader-amix; do
     grep -q "^$_p|\|^#kpkg $_p " "$L11_IN/kpkg/catalog" \
@@ -840,12 +843,12 @@ if [ -n "$_want_l11" ]; then
     cp "$L11_IN/dlm/build/box/kbootset" "$STAGE/l11/bin/kbootset"; chmod 0755 "$STAGE/l11/bin/kbootset"
   fi
   cp -r "$L11_IN/kpkg/catalog" "$L11_IN/kpkg/catalog.md5" "$L11_IN/kpkg/pkgs" "$STAGE/l11/kpkg/"
-  # the medium's copy names every input relative to the workspace: the build host's own paths
+  # the medium's copy names every input relative to the checkout: the build host's own paths
   # (its user and directories) are no business of a published disc
-  sed "s|$(dirname "$(dirname "$repo")")/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
-  # the CD boot tree is the medium's, not work/l11's: say which, or why there is none
+  sed "s|$MEDIA_TOP/||g" "$L11_IN/INPUTS" > "$STAGE/l11/INPUTS"
+  # the CD boot tree is the medium's, not the inputs': say which, or why there is none
   if [ -n "$CDBOOT" ]; then
-    echo "cd-boot ${CDBOOT#$(dirname "$(dirname "$repo")")/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
+    echo "cd-boot ${CDBOOT#"$MEDIA_TOP"/}, BOOT/amix-cdboot sha256 $(sha256sum < "$CDBOOT/BOOT/amix-cdboot" | cut -c1-64)" >> "$STAGE/l11/INPUTS"
   else
     echo "# cd-boot: none -- the install kernel boots from the floppy pair" >> "$STAGE/l11/INPUTS"
   fi
@@ -875,9 +878,9 @@ if [ -n "$_want_l11" ]; then
   # s5's 14 characters: the netinstall miniroot is s5 (amxbase-1.0-10.pkg was
   # cut short there).
   [ -f "$L11_IN/base/catalog.lines" ] \
-    || { echo "STOP: no $L11_IN/base/catalog.lines -- the set's base-pkg lines (tools/build-l11-inputs.sh)" >&2; exit 1; }
+    || { echo "STOP: no $L11_IN/base/catalog.lines -- the set's base-pkg lines (media/build.sh)" >&2; exit 1; }
   _pt="$PKGMGR/heirloom/build-host/bin/pkgtrans"
-  [ -x "$_pt" ] || { echo "STOP: no host pkgtrans at $_pt (tools/build-l11-inputs.sh)" >&2; exit 1; }
+  [ -x "$_pt" ] || { echo "STOP: no host pkgtrans at $_pt (media/build.sh)" >&2; exit 1; }
   _bw="$(mktemp -d "${TMPDIR:-/tmp}/build-install-iso-base.XXXXXX")"
   rm -rf "${STAGE:?}/l11/base"; mkdir -p "$STAGE/l11/base"
   # base/sets: each pkginst and the sets that take it (no set: every set); older inputs lack it
@@ -1177,7 +1180,7 @@ if [ "$STAGE_ONLY" -eq 1 ]; then
   echo
   echo "build-install-iso: --stage-only -- staged /install/ tree at $STAGE (no ISO mastered)."
   echo "  $APKG_NOTE"
-  echo "  (tools/build-raw-source.sh consumes this tree onto the RAW source disk's payload slice.)"
+  echo "  (the test bench's raw source-disk builder takes this tree onto that disk's payload slice.)"
   exit 0
 fi
 

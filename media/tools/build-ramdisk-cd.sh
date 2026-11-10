@@ -16,19 +16,19 @@
 #   --k46, --k30  the line's RAM-disk image (tools/build-ramdisk-miniroot.sh): ufs on k46,
 #                 s5 on k30 -- the rootfs record follows the line
 #   --out         the tree to write (BOOT/K30, BOOT/K46, BOOT/amix-cdboot, S/Startup-Sequence)
-#   --work        staging roots and specs (default: work/ramdisk-cd)
+#   --work        staging roots and specs (default: out/build/media/ramdisk-cd)
 #
 # The staging roots and the per-line modules: tools/lib/ramdisk-media.sh. Each generation is
 # `kbootset -R ROOT media --cd ... --ramdisk IMAGE`, members raw; each image is then gated
 # against its generation (tools/ramdisk-image-check.py: every boot- and demand-class record's
 # object in the image byte for byte, a ufs image's block size at least 4096).
 set -euo pipefail
-here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"; ws="$(dirname "$(dirname "$repo")")"
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"; . "$here/lib/media-paths.sh"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-ramdisk-cd: STOP: $*" >&2; exit 1; }
 . "$here/lib/ramdisk-media.sh"
 
-I46= I30= OUT= WD="$repo/work/ramdisk-cd" BMODS=
+I46= I30= OUT= WD="$MEDIA_SCRATCH/ramdisk-cd" BMODS=
 while [ $# -gt 0 ]; do case "$1" in
   --boot-mods) BMODS="$2"; shift 2;;
   --k46) I46="$2"; shift 2;;

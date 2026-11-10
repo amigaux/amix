@@ -91,7 +91,7 @@ grep -q "'AMIXBOOT'.*DOS1/0x444f5301.*auto.*boot($PRI)" <<< "$show" || { echo "$
 mv "${W:?}/disk.hdf" "${OUT:?}"
 {
 	echo "# $(basename "$OUT") -- the RAM-disk installer's boot disk (AmigaDOS FFS, the CD boot tree)"
-	echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ) by tools/build-ramdisk-hdf.sh, installng $(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet || echo +dirty)"
+	echo "built: $(date -u -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y-%m-%dT%H:%M:%SZ) by media/tools/build-ramdisk-hdf.sh, amix $(git -C "$repo" rev-parse --short HEAD)$(git -C "$repo" diff --quiet -- . || echo +dirty)"
 	echo "bytes: $(stat -c %s "$OUT") ($DISK_MB MiB)"
 	echo "sha256: $(sha256sum < "$OUT" | cut -c1-64)"
 	echo "crc32: $(python3 -c 'import sys,zlib
@@ -101,7 +101,7 @@ with open(sys.argv[1],"rb") as f:
 print("%08X" % c)' "$OUT")"
 	echo "partition: AMIXBOOT, volume AmixBoot, DOS\\1 (FFS), ${PART_MB} MiB, bootable at priority $PRI, Mask $MASK ($HBA)"
 	echo "boot: Kickstart boots the volume; S/Startup-Sequence runs SYS:BOOT/amix-cdboot (the line by CPU)"
-	echo "tree: $TREE"
+	echo "tree: ${TREE#"$(cd "$repo/.." && pwd)"/}"
 	echo "# the files (sha256)"
 	while read -r f; do echo "$(sha256sum < "$TREE/$f" | cut -c1-64)  $f"; done < "$W/files"
 } > "$OUT.MANIFEST"

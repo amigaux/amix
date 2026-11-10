@@ -34,7 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 TZDATA = os.path.join(REPO, "src", "tz", "tzdata.zi")
 TZDATA_SHA = "af5c1d3bebe136d372c131bb1a45725f955a8cc2a5ae2fc5a31d3b372e145f49"   # 2026c
-OUT = os.path.join(REPO, "payload", "tz")
+# the zone files are a build output: out/build/media/payload/tz of the checkout (MEDIA_SCRATCH)
+OUT = os.path.join(os.environ.get("MEDIA_SCRATCH") or os.path.join(os.path.dirname(REPO), "out", "build", "media"),
+                   "payload", "tz")
 
 T_MAX_TIMES, T_MAX_TYPES, T_MAX_CHARS = 370, 10, 50
 LO, HI = 0, 2 ** 31            # 1970-01-01 .. 2038-01-19 (32-bit time_t)

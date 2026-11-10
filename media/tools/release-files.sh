@@ -8,18 +8,15 @@
 # under 2 GiB (a release host's file cap); `zipinfo -v` must show no zip64 extra field, and
 # `unzip -t` must pass. Then DIR/SHA256SUMS over the zips and the images, and the content check
 # (amix's tools/release-check: no Kickstart or board ROM, no private address, local name or secret,
-# no build trace; the ROM register roms/MANIFEST.sha256 and $PRIVACY_PATTERNS, the bench's names)
+# no build trace; the ROM register $ROM_MANIFEST and $PRIVACY_PATTERNS, never in this repository)
 # over every image and every --media file (an ISO, whose .sha256 beside it is checked too), and
-# tools/known-bad-scan.py over the same files (no module of tools/known-bad-modules.txt).
+# amix's tools/known-bad-modules.txt with it (no known-bad module).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
 KIND=4g   # --kind: the images' name suffix, amix-1.1-<line>-<kind>.img
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-# the workspace: the directory holding this repository's git directory (a worktree's too); amix's
-# tools/release-check is the one content check every release file passes
-ws="$(cd "$(dirname "$(git -C "$(dirname "$here")" rev-parse --path-format=absolute --git-common-dir)")/.." && pwd)"
-# the pinned content check (amix tools/ at the set's revision, tools/build-l11-inputs.sh), not the checkout's tip
-RC="${L11_IN:-$(dirname "$here")/work/l11}/amix-tools/release-check"
+# amix's tools/release-check is the one content check every release file passes: this checkout's
+RC="$(cd "$here/../.." && pwd)/tools/release-check"
 # not_release_files FILE...: names a file of the release set must not have (a raw k30 netinstall image is a
 # bench medium, build-netinstall.sh --raw-k30), by its name and by the rows of a SHA256SUMS. 0 when none.
 # missing_lines DIR: the kernel lines with no image in DIR; one line's image is not a release set. 0 when none.
@@ -116,10 +113,8 @@ for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do
 	fi
 	say "medium $(basename "$m"): $(stat -c %s "$m") bytes, sha256 $(sha256sum < "$m" | cut -c1-64)"
 done
-python3 "$RC" --rom-register "$ws/roms/MANIFEST.sha256" --private-patterns "$PRIVACY_PATTERNS" \
+python3 "$RC" --rom-register "${ROM_MANIFEST:?release-files: ROM_MANIFEST names the ROM register}" --private-patterns "$PRIVACY_PATTERNS" \
 	"${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
-[ "${PIPESTATUS[0]}" = 0 ] || bad=1
-python3 "$here/known-bad-scan.py" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 bash "$here/medium-address-check.sh" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1

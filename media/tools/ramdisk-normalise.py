@@ -13,6 +13,8 @@ import argparse, os, struct, sys, tempfile
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(HERE, "lib"))
+# ufs.py is amix's tools/lib (one copy, shared with the release check)
+sys.path.insert(1, os.path.join(HERE, "..", "..", "tools", "lib"))
 import s5, ufs
 
 FS_OKAY = 0x7c269d38
