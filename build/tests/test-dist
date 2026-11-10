@@ -77,12 +77,12 @@ try:
             if not k.startswith(("AMIX_", "GIT_")) and k not in ("SYSTEM", "GCA", "G14", "DIST_HOST", "STOCK",
                                                                  "RELEASE_PREVIOUS", "ROM_MANIFEST", "PRIVACY_PATTERNS")}
 
-    def run(*steps, where=dist, **env):
+    def run(*steps, where=dist, cwd=None, **env):
         e = dict(base, SYSTEM=sysdir, DIST_HOST="1", GCA="/nonexistent/gca")
         e.update(env)
         for k in [k for k, v in e.items() if v is None]:
             del e[k]
-        p = subprocess.run(["sh", where] + list(steps), env=e,
+        p = subprocess.run(["sh", where] + list(steps), env=e, cwd=cwd,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         return p.returncode, p.stdout.decode("utf-8", "replace")
 
@@ -709,6 +709,14 @@ clean:
     args = open(argf).read().split("\n") if os.path.exists(argf) else []
     check("lock: LOCK goes in read-only, wherever it lies",
           rc == 0 and "LOCK=/release-in/LOCK" in args and "%s:/release-in/LOCK:ro" % lockf in args, " ".join(args))
+    # make runs dist.sh in build/: a relative path is from the top of the checkout
+    rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
+                  cwd=os.path.join(top, "build"), SYSTEM=os.path.relpath(sysdir, top),
+                  ROM_MANIFEST=os.path.relpath(reg, top), AMIX_IMAGE="amix-toolchain:test")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("a relative SYSTEM or ROM_MANIFEST is from the top of the checkout, wherever it is run",
+          rc == 0 and "%s:/system:ro" % os.path.realpath(sysdir) in args
+          and "%s:/release-in/ROM_MANIFEST:ro" % os.path.realpath(reg) in args, out + " ".join(args))
     rc, out = run("release", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf,
                   STOCK_URL="https://example.invalid/s", RELEASE_PUBLIC="1", AMIX_IMAGE="amix-toolchain:test")
     args = open(argf).read().split("\n") if os.path.exists(argf) else []

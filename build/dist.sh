@@ -69,7 +69,8 @@
 # reach the release step (the last three the media step too), LOCK the lock
 # step, so a name a kernel's recipe reads for itself is never set by accident.
 # DIST_HOST=1 runs the steps on this host instead, for development; a release
-# is built in the container.
+# is built in the container. A relative path in any of these names is from the
+# top of the checkout, wherever dist.sh is run.
 #
 # Before any step: SYSTEM (or AMIX_SYSTEM; default the amix-system checkout
 # beside the main working tree) must match system/MANIFEST.sha256, and the
@@ -91,6 +92,16 @@ for s; do
 	case $s in
 	dist|tools|kit|kernel-k30|kernel-k46|modules|drivers|drivers/?*|kspace|userland|apkg|recipes/?*|catalogs|release|media|lock) ;;
 	*) echo "[FAIL] unknown step: $s" >&2; usage ;;
+	esac
+done
+
+# a relative path is from the top of the checkout, as the top Makefile is
+# called there (make runs this in build/): SYSTEM=../amix-system is beside it
+for v in SYSTEM AMIX_SYSTEM LOCK STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS AMIX_DISTFILES; do
+	eval "p=\${$v:-}"
+	case $p in
+	''|/*) ;;
+	*) eval "$v=\$top/\$p"; export "${v:?}" ;;
 	esac
 done
 
@@ -197,8 +208,6 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	for v in $inputs; do
 		eval "p=\${$v:-}"
 		[ -n "$p" ] || continue
-		# LOCK is the checkout's: a relative one is from its top
-		[ "$v" != LOCK ] || case $p in /*) ;; *) p=$top/$p ;; esac
 		[ -e "$p" ] || { echo "[FAIL] make dist: $v=$p does not exist" >&2; exit 1; }
 		p=$(cd "$(dirname "$p")" && pwd)/$(basename "$p")
 		set -- -e "$v=/release-in/$v" -v "$p:/release-in/$v:ro" "$@"
