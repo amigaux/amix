@@ -27,13 +27,13 @@ out/` and exits 0.
   make dist reads the history and refuses a shallow clone.
 - **docker or podman.** `CONTAINER=podman` uses podman. Your user must be able to
   run containers; the steps run in them as you, not as root.
-- **Disk**: about 6 GB once built: the two images 3 GB (the media image shares
-  all but 30 MB with the build container), `out/` 2.4 GB, the checkout and
-  amix-system 0.4 GB. Docker's build cache needs room on top while `make tools`
+- **Disk**: about 7 GB once built: the two images 3 GB (the media image shares
+  all but 30 MB with the build container), `out/` 3.2 GB, the checkout and
+  amix-system 0.5 GB. Docker's build cache needs room on top while `make tools`
   runs.
 - **Time**: on a 32-thread x86-64 machine, `make tools` took 19 minutes with no
   docker cache, 9 of them downloading the image's packages from the Ubuntu
-  snapshot service, and `make dist` 27 minutes. Fewer cores take longer.
+  snapshot service, and `make dist` 28 minutes. Fewer cores take longer.
 - **Network** (https) for the first run: GitHub (amix-system, the toolchain
   sources, the pinned forks, the release assets that hold the stock packages and
   distfiles), `snapshot.ubuntu.com` (the image's packages, by date), and the
@@ -200,11 +200,16 @@ A release is three things, and each can be checked:
   with a `SHA256SUMS` of every file. Every date on the media (the ISOs' file and
   volume dates, the boot store's set ids, the disk's file system) is the media's
   epoch: `SOURCE_DATE_EPOCH` if you set it, else the time of the commit built. The
-  lock's `media-epoch` line says which. Build with the release's epoch, then:
+  lock's `media-epoch` line says which. After a build, `make media` with the
+  release's epoch remakes only the media, in a minute or two:
 
   ```sh
+  make media SYSTEM=../amix-system RELEASE_PUBLIC=1 SOURCE_DATE_EPOCH=<the release's epoch>
   cd out/media && sha256sum -c --ignore-missing <the release's SHA256SUMS>
   ```
+
+  `--ignore-missing` skips the release files make dist does not build (below);
+  a file whose bytes differ is named `FAILED`.
 
 ## Building a past release
 
@@ -228,19 +233,21 @@ installer project before it moved into `media/` (commit 3cd5fa0 there, 8767589
 here; `media/HISTORY-MAP.txt` maps every old commit to its new one). At `1.1`,
 `media` is a gap: the lock check passes, and make dist names that gap (exit 3,
 which `make` reports as 2).
-Its packages are 1.1's, so make dist from the commit that added `media/build.sh`
-rebuilds the 1.1 media, with 1.1's epoch (the time of the tag's commit):
+Its packages are 1.1's, so make dist at `1b7d979`, the first commit whose make
+dist builds the media and takes `SOURCE_DATE_EPOCH` for them, rebuilds the 1.1
+media with 1.1's epoch, the time of the tag's commit:
 
 ```sh
-git checkout $(git log --diff-filter=A --format=%H master -- media/build.sh)
-make dist SYSTEM=$PWD/../amix-system RELEASE_PUBLIC=1 SOURCE_DATE_EPOCH=1794044172
+git checkout 1b7d979
+make dist SYSTEM=$PWD/../amix-system RELEASE_PUBLIC=1 SOURCE_DATE_EPOCH=$(git log -1 --format=%ct 1.1)
+cd out/media && sha256sum -c --ignore-missing <amix-media 1.1's SHA256SUMS>
 ```
 
 Six of the seven files are then byte for byte those of the amix-media 1.1
 release: the netinstall CD, the four boot floppies and the Z3660 boot disk. The
-install CD differs in one file, `/install/l11/INPUTS`, the record of what it was
-built from: 1.1's names the earlier builder's inputs, a rebuild's names make
-dist's by sha256.
+install CD is named `FAILED`: it differs in one file, `/install/l11/INPUTS`, the
+record of what it was built from: 1.1's names the earlier builder's inputs, a
+rebuild's names make dist's by sha256.
 
 ## The SD card kit and the ready installed disk images
 
