@@ -4030,7 +4030,7 @@ def audit_w3b_metadata():
             fail("build-install-iso: MISSING -- %s (no /%s/)" % (why, pat))
 
     if not (os.path.isfile(SETS_CONF) and os.path.isfile(SETS_PY)):
-        skip("work/l11/pkgtools/tools/repo/sets.{conf,py} absent (tools/build-l11-inputs.sh) -- the set "
+        skip("userland/pkgtools/tools/repo/sets.{conf,py} absent -- the set "
              "memberships are not cross-checked (not a pass)")
     else:
         bad = 0

@@ -156,9 +156,9 @@ usage: $(basename "$0") [--profile NAME]... [--set NAME] [--pkg NAME]...
   --stage DIR       /install/ staging dir (default: $STAGE)
   --keep-stage      keep the staged tree after mastering
   --stage-only      build the /install/ payload tree and STOP -- do NOT master an
-                    ISO. This is the reusable staging half: tools/build-raw-source.sh
-                    calls it to populate the RAW source disk's payload slice with
-                    the identical /install/ tree. Implies --keep-stage.
+                    ISO. This is the reusable staging half: the test bench's raw
+                    source-disk builder calls it to populate that disk's payload
+                    slice with the identical /install/ tree. Implies --keep-stage.
   --source-hdf P=H  override a profile's BOOTSLICE_SOURCE_HDF (repeatable)
   --no-require-gate do NOT require the kerntools bootchain-verify round-trip
                     (default: required -- a missing sibling is fatal)
@@ -1180,7 +1180,7 @@ if [ "$STAGE_ONLY" -eq 1 ]; then
   echo
   echo "build-install-iso: --stage-only -- staged /install/ tree at $STAGE (no ISO mastered)."
   echo "  $APKG_NOTE"
-  echo "  (tools/build-raw-source.sh consumes this tree onto the RAW source disk's payload slice.)"
+  echo "  (the test bench's raw source-disk builder takes this tree onto that disk's payload slice.)"
   exit 0
 fi
 
