@@ -1,0 +1,13 @@
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [known issues](https://amigaux.org/docs/known-issues/) and the [existing issues](https://github.com/amigaux/amix/issues) first; for a package, say which program and what you would use it for.
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What you would like, and what it would let you do.
+    validations:
+      required: true

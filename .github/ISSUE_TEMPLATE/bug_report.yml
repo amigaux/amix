@@ -1,0 +1,89 @@
+name: Bug report
+description: Something in Amix 1.1 does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [known issues](https://amigaux.org/docs/known-issues/) and the [existing issues](https://github.com/amigaux/amix/issues) first. If the system did not install or did not start the first time, use the install problem form instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected to happen instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: machine
+    attributes:
+      label: Machine
+      options:
+        - A1200
+        - A3000
+        - A4000
+        - A4000T
+        - An emulator
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: emulator
+    attributes:
+      label: Emulator
+      description: If it runs in an emulator, which one and its version.
+      placeholder: Amiberry 7.1, WinUAE 6.0
+  - type: input
+    id: accelerator
+    attributes:
+      label: Accelerator and its firmware
+      description: The card and CPU, and the firmware version; for a Z3660, the firmware's CRC32.
+      placeholder: Z3660 with a 68060, firmware CRC32 CDEB9618
+  - type: dropdown
+    id: kernel
+    attributes:
+      label: Kernel line
+      options:
+        - k46 (68040/68060)
+        - k30 (68030)
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: installed-from
+    attributes:
+      label: Installed from
+      description: The release file, as named on the Downloads page.
+      options:
+        - Install CD (amix-1.1-install.iso)
+        - Network-install CD (amix-1.1-netinstall.iso)
+        - Boot floppies, 68040/68060 (amix-1.1-boot-k46-*.adf)
+        - Boot floppies, 68030 (amix-1.1-boot-k30-*.adf)
+        - Z3660 boot disk (amix-1.1-boot-z3660.hdf)
+        - 68060 disk image (amix-1.1-k46-4g.zip)
+        - 68030 disk image (amix-1.1-k30-4g.zip)
+        - IDE image, 68040/68060 (amix-1.1-k46-ide-2g.zip)
+        - IDE image, 68030 (amix-1.1-k30-ide-2g.zip)
+        - Z3660 SD card kit (amix-1.1-z3660-sd-kit.zip)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: Version
+      description: The output of `uname -a`, and of `apkg version` if it is about packages.
+      render: text
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to repeat it
+      placeholder: |
+        1.
+        2.
+        3.
+  - type: textarea
+    id: output
+    attributes:
+      label: Console or serial output
+      description: Paste the text around the problem; it is shown as a code block.
+      render: text

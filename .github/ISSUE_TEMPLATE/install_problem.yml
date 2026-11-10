@@ -1,0 +1,66 @@
+name: Install problem
+description: The installer or the first boot of a new system stopped or went wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [known issues](https://amigaux.org/docs/known-issues/) and the [existing issues](https://github.com/amigaux/amix/issues) first.
+  - type: dropdown
+    id: release-file
+    attributes:
+      label: Release file
+      description: What you installed from, as named on the Downloads page.
+      options:
+        - Install CD (amix-1.1-install.iso)
+        - Network-install CD (amix-1.1-netinstall.iso)
+        - 68060 disk image (amix-1.1-k46-4g.zip)
+        - 68030 disk image (amix-1.1-k30-4g.zip)
+        - IDE image, 68040/68060 (amix-1.1-k46-ide-2g.zip)
+        - IDE image, 68030 (amix-1.1-k30-ide-2g.zip)
+        - Z3660 SD card kit (amix-1.1-z3660-sd-kit.zip)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: boot-route
+    attributes:
+      label: How it was started
+      options:
+        - From the CD
+        - From the boot floppies
+        - From the Z3660 boot disk
+        - Over the network
+        - A disk image, booted directly
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Machine and accelerator
+      description: The Amiga (or emulator and version), the accelerator and CPU, and its firmware.
+      placeholder: A4000T, Z3660 with a 68060, firmware CRC32 CDEB9618
+    validations:
+      required: true
+  - type: input
+    id: disk
+    attributes:
+      label: Controller and disk
+      description: Where Amix was going, and its size.
+      placeholder: Z3660 SCSI unit 6, 4 GB file on the SD card
+    validations:
+      required: true
+  - type: textarea
+    id: where
+    attributes:
+      label: Where it stopped
+      description: The step or the last thing you saw, and what you did just before.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Screen or serial text
+      description: Paste the text around where it stopped; it is shown as a code block. A photo of the screen helps too.
+      render: text

@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions
+    url: https://github.com/amigaux/amix/discussions/categories/q-a
+    about: Ask how to do something in the Q&A discussions.
+  - name: Ideas
+    url: https://github.com/amigaux/amix/discussions/categories/ideas
+    about: Suggest something new in the Ideas discussions.
+  - name: Package requests
+    url: https://github.com/amigaux/amix/discussions/categories/ideas
+    about: Ask for a package in the Ideas discussions.
+  - name: Documentation
+    url: https://amigaux.org
+    about: Installing, using and looking after Amix.
+  - name: Known issues
+    url: https://amigaux.org/docs/known-issues/
+    about: Problems we know of in 1.1, and what to do about them.

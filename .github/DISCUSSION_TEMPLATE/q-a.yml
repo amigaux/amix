@@ -1,0 +1,26 @@
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [known issues](https://amigaux.org/docs/known-issues/) and the [existing issues](https://github.com/amigaux/amix/issues) first.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Machine
+      description: The Amiga or emulator, and the accelerator.
+      placeholder: A4000T with a Z3660 and a 68060
+  - type: dropdown
+    id: kernel
+    attributes:
+      label: Kernel line
+      options:
+        - k46 (68040/68060)
+        - k30 (68030)
+        - Not sure

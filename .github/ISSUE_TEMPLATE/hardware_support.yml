@@ -1,0 +1,36 @@
+name: Hardware support
+description: Ask for a machine, card or accelerator that Amix does not support yet.
+labels: ["hardware"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the [known issues](https://amigaux.org/docs/known-issues/) and the [existing issues](https://github.com/amigaux/amix/issues) first; someone may have asked already.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine
+      placeholder: A1200, A3000, A4000, A4000T
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Card or accelerator
+      description: Its maker and model, and its revision if you know it.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What is known about it
+      description: Zorro autoconfig manufacturer and product ids, links to documentation or drivers for other systems, anything that helps.
+  - type: dropdown
+    id: can-test
+    attributes:
+      label: Can you test it?
+      options:
+        - Yes, I have the hardware and can try test builds
+        - "No, but I can answer questions about it"
+    validations:
+      required: true
