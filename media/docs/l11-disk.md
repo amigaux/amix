@@ -1,5 +1,12 @@
 # The 1.1 disk
 
+> **The test bench.** Where this document names `tools/install-matrix.sh`, `mkroot.sh`,
+> `build-miniroot.sh`, `build-ramdisk-miniroot.sh`, `build-raw-source.sh`, `miniroot/miniroot.proto`,
+> `configs/*.uae`, `profiles/cards`, `cards/`, `floppies/`, `work/…` or a sibling repository (`../amix-*`), it
+> names the test bench's tools, configurations and run records. They are not in this repository: the
+> bench authors the RAM-disk miniroot, runs the install matrix and keeps the evidence. This repository
+> builds the media with `media/build.sh` (`media/README.md`), a step of make dist.
+
 amix-dlm `docs/spec/40-generations-and-composer.md` §2 defines it; this repository
 implements it as `INSTALL_LAYOUT=1.1` (`src/installer/l11.sh`, sourced by `install.sh`).
 

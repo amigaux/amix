@@ -1,5 +1,12 @@
 # Universal-SCSI install boot floppy
 
+> **The test bench.** Where this document names `tools/install-matrix.sh`, `mkroot.sh`,
+> `build-miniroot.sh`, `build-ramdisk-miniroot.sh`, `build-raw-source.sh`, `miniroot/miniroot.proto`,
+> `configs/*.uae`, `profiles/cards`, `cards/`, `floppies/`, `work/…` or a sibling repository (`../amix-*`), it
+> names the test bench's tools, configurations and run records. They are not in this repository: the
+> bench authors the RAM-disk miniroot, runs the install matrix and keeps the evidence. This repository
+> builds the media with `media/build.sh` (`media/README.md`), a step of make dist.
+
 `tools/build-universal-bootfloppy.sh` frames the driver-augmented Amix 2.1 install
 kernel into a bootable `boot.adf`. It is a thin wrapper around the proven host-side
 framer `../grimoire-amix/tools/build-bootfloppy.sh`; it **does not build or modify the

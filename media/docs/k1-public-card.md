@@ -1,5 +1,12 @@
 # The public K1 card (the workspace's `cards/k1-public`)
 
+> **The test bench.** Where this document names `tools/install-matrix.sh`, `mkroot.sh`,
+> `build-miniroot.sh`, `build-ramdisk-miniroot.sh`, `build-raw-source.sh`, `miniroot/miniroot.proto`,
+> `configs/*.uae`, `profiles/cards`, `cards/`, `floppies/`, `work/…` or a sibling repository (`../amix-*`), it
+> names the test bench's tools, configurations and run records. They are not in this repository: the
+> bench authors the RAM-disk miniroot, runs the install matrix and keeps the evidence. This repository
+> builds the media with `media/build.sh` (`media/README.md`), a step of make dist.
+
 The distributable Amix card for an A4000/A4000T with a Z3660 and a real 68060. The card
 directory is gitignored (it holds the disk images); this file and `profiles/cards/k1-public.card`
 are its tracked record. Publishing the card or any file on it is decided per artefact.

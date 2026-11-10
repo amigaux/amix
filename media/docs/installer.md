@@ -1,5 +1,12 @@
 # The Installer-NG driver
 
+> **The test bench.** Where this document names `tools/install-matrix.sh`, `mkroot.sh`,
+> `build-miniroot.sh`, `build-ramdisk-miniroot.sh`, `build-raw-source.sh`, `miniroot/miniroot.proto`,
+> `configs/*.uae`, `profiles/cards`, `cards/`, `floppies/`, `work/…` or a sibling repository (`../amix-*`), it
+> names the test bench's tools, configurations and run records. They are not in this repository: the
+> bench authors the RAM-disk miniroot, runs the install matrix and keeps the evidence. This repository
+> builds the media with `media/build.sh` (`media/README.md`), a step of make dist.
+
 The driver is what turns a booted install miniroot + an install CD into a
 running Amix system on the target disk. It replaces the stock interactive Amix
 install script with a spec-driven, non-interactive transplant. The first stage built
@@ -67,13 +74,10 @@ The disk itself: `docs/l11-disk.md`. The removed upgrade install
 
 The installer lays the 1.1 system down from packages; it writes only what no package owns.
 
-- **Tools.** Nothing in 1.1 reads the frozen amix-packagemanager: `build-l11-inputs.sh`
-  builds amix `userland/pkgtools` at the set's `pkgtools` revision (the host pkgtrans,
-  the miniroot's static pkgadd set, apkg, `make dist`'s APKG and APKGENG, held to their
-  md5) into `work/l11/pkgtools`, which every 1.1 tool reads.
-- **The set.** Each round's set file (`tools/l11-set-final16.conf`): make dist's kernel space,
-  held to its lock, and the base packages rolled at the set's `dist` amix revision
-  (reproducible; their sha256 pinned to the candidate's bytes).
+- **Tools.** `media/build.sh` builds amix `userland/pkgtools` at the checkout's `HEAD` (the host
+  pkgtrans, the miniroot's static pkgadd set, apkg); APKG and APKGENG are make dist's.
+- **The set.** make dist's kernel space and release tree, and the base packages of
+  `media/conf/base-packages.conf` (until the 1.1 media, a set file of the earlier builder named them).
 - **The install.** After core and the base set, the base packages under the target's
   chroot (seeded baselines, `removef core`); the admin files `/etc/inet/interfaces`,
   `/etc/rc.conf`, `/etc/display`; no S99zen, S20monsw, syslog unit, S89rootswap,
@@ -5122,14 +5126,14 @@ The 1.1 half of the driver is `src/installer/l11.sh`, staged on the medium at `/
 apkg 0.3 and the kernel-space FILE source. The disk is described in `docs/l11-disk.md`. (The upgrade install of a
 1.0 disk described there until 2026-10-31 is removed: 1.1 requires a fresh install.)
 
-What a 1.1 medium carries is one tracked file, `tools/l11-set.conf`:
-- the amix-dlm and amix-packagemanager revisions;
-- the package staging and the APKG datastream that replaces its own;
-- one `pkg NAME VERSION` line per package: kbootset, modtools, loader-amix, the kernels and the module packages.
+What a 1.1 medium carries comes from make dist (`media/build.sh`, `media/README.md`):
+- the kernel-space packages and their catalog as make dist's `kspace` step leaves them (kbootset, modtools,
+  loader-amix, the kernels and the module packages), and its CD boot program;
+- the package staging: the stock set from the release tree, APKG and APKGENG from the `apkg` step;
+- the base packages `media/conf/base-packages.conf` names, with their release-tree rows;
+- the package tools built from this checkout's `userland/pkgtools` and `kernel/dlm`.
 
-`tools/build-l11-inputs.sh --set tools/l11-set.conf` takes each package from amix-packages' `build/kspace`. The
-catalog is gen-catalog's (amix-packagemanager at the set's revision), never hand-written rows. `INPUTS` records
-every revision and hash, and whether gen-catalog's rows equal amix-packages' own. `tools/build-install-iso.sh`
+`INPUTS` records every input by its sha256 and goes on the disc (`/install/l11/INPUTS`). `tools/build-install-iso.sh`
 refuses a 1.1 profile whose `KERNEL_KPKG` is not a kernel row of the medium's catalog. For a module kernel
 (`kabi=` not `static`) it also refuses one without modtools, or with a `KERNEL_MODPKGS` entry that is not a
 `role=module` row of the kernel's line.
@@ -5137,7 +5141,7 @@ refuses a 1.1 profile whose `KERNEL_KPKG` is not a kernel row of the medium's ca
 A 1.1 medium's stock set is `minimal` plus **m4** (2026-10-26). The 2.1c syslogd reads `/etc/syslog.conf` only
 through `/usr/ccs/bin/m4` (23,004 B). Without it the conf parses empty and syslogd files nothing, kernel lines
 included. The m4 package (amix-packagemanager b70500c, 26,112 B) is that one file of Cdev's, with the same pkgmap
-row, so either package or both may be installed. `tools/l11-set.conf` adds it to the staging (`stock-pkg`),
+row, so either package or both may be installed. The release tree carries it in its stock set,
 `build-install-iso.sh` adds it to the set of a medium with a 1.1 profile, and `install.sh` refuses a 1.1 install
 order with neither m4 nor Cdev. Until m4 existed, the 1.1 base carried the whole of Cdev (10,370,048 B on the
 disc).
