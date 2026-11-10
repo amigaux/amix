@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-10 — the media are a make dist step (7a95a7b..9482884)
+
+media/build.sh builds the install CD, the netinstall CD, both floppy pairs and the Z3660 boot disk from make dist's out/, with MEDIA.txt and SHA256SUMS in out/media. The four RAM-disk images are inputs pinned by sha256 (media/inputs). Built from the 1.1 inputs with the 1.1 epoch, six media are byte-identical to 1.1; the install CD differs only in /install/l11/INPUTS. The test bench's checks, tools and set files stay in the bench repository; amix's tools/release-check does the known-bad search, and tools/lib/ufs.py is the one ufs reader.
+
 ## 2026-11-08 — 1.1 notes: network install timing, modadmin and kbootset (5d669ca..d6d9d07)
 
 The 1.1 notes say a network install finishes at the first boot, which fetches the rest of the chosen set and can take over an hour with the full set over the internet; and that the loaded modules are shown with `modadmin -s` and `kbootset status` (there is no kinfo command). The notes are on no medium.
