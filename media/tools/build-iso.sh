@@ -103,9 +103,10 @@ set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 repo="$(cd "$here/.." && pwd)"
+. "$here/lib/media-paths.sh"
 
-PKGMGR="${PKGMGR:-${L11_IN:-$repo/work/l11}/pkgtools}"
-STAGING="${STAGING:-${L11_IN:-$repo/work/l11}/staging}"
+PKGMGR="${PKGMGR:-$L11_IN/pkgtools}"
+STAGING="${STAGING:-$L11_IN/staging}"
 GEN_CATALOG="${GEN_CATALOG:-$PKGMGR/tools/repo/gen-catalog.py}"
 # Authored metadata, read from the sibling's REPO TREE (never its build staging).
 SETS_PY="${SETS_PY:-$PKGMGR/tools/repo/sets.py}"
@@ -237,7 +238,7 @@ fi
   } >&2; exit 1; }
 
 stamp="$(date -u +%Y%m%d)"
-[ -n "$OUT" ] || OUT="$repo/work/iso/amix21-install-$SET-$stamp.iso"
+[ -n "$OUT" ] || OUT="$MEDIA_SCRATCH/iso/amix21-install-$SET-$stamp.iso"
 
 # ===========================================================================
 # RELEASE GATE — mechanical, enforced on ourselves, before anything is built

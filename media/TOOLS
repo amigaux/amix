@@ -1,0 +1,21 @@
+# media/TOOLS -- what media/build.sh runs, for the media container (toolchain/Containerfile.media).
+#
+# <tool>  <where it comes from>  <whether its version moves the media's bytes>
+#
+# Bytes move with:
+xorriso          xorriso (1.1: 1.5.6)              the ISOs' Preparer field names its version; the layout is its own
+amitools         rdbtool, xdftool (1.1: 0.8.1)    the Z3660 boot disk's RDB and FFS
+gcc-cross-amix   $GCA (toolchain/gcc-cross-amix.pin)   zenmac, setclk, the static package engine, apkg: held to sha256 pins
+zic              libc-bin                          the zone files on the install CD (/install/tz), held to a sha256 pin
+# Bytes do not move with (host tools whose output is checked or is not on a medium):
+bash             bash
+python3          python3 (standard library only, plus amitools)
+cc, make         gcc, make: the host kbootset/mkstore/lsstore (kernel/dlm make tools) and pkgtools' host build
+zlib             zlib1g-dev: kernel/dlm's host tools link -lz
+git, tar         git, tar: git archive of kernel/dlm and userland/pkgtools at HEAD
+patch            patch: setclk's Y2K patch
+strings, objdump binutils: setclk's and zenmac's gates
+file             file
+coreutils        sha256sum, md5sum, sum (BSD sum -r), od, cmp, stat, date (GNU: date -d @N)
+diffutils        diff, cmp
+awk, sed, find   mawk or gawk, sed, findutils

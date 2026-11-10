@@ -54,10 +54,11 @@
 # Publication: unpublished; publishing it is a separate decision for each medium.
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
+. "$here/lib/media-paths.sh"
 . "$here/lib/media-epoch.sh"; media_epoch || exit 1
 die() { echo "build-netinstall: STOP: $*" >&2; exit 1; }
 
-I46= I30= ISO= W="$repo/work/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA= RAWK30=
+I46= I30= ISO= W="$MEDIA_SCRATCH/netinstall" VOLID=AMIX_NETINSTALL MFROM= MDIR= BMODS= RAW= RAWHBA= RAWK30=
 while [ $# -gt 0 ]; do case "$1" in
   --boot-mods) BMODS="$2"; shift 2;;
   --raw) RAW="$2"; shift 2;;
@@ -72,7 +73,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --mirror) MDIR="$2"; shift 2;;
   *) sed -n '2,47p' "$0"; exit 2;;
 esac; done
-L11="${L11_IN:-$repo/work/l11}"
+L11="$L11_IN"
 # the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them): every disk
 # controller driver the installed generation carries (so the cards number as at the first boot),
 # and z3660eth for the network the packages come over
@@ -80,7 +81,6 @@ export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660
 export K30_MODS="ramdisk-k30 a4091-k30 z3660scsi-k30 a4kt710-k30 gayle-k30 z3660eth-k30"
 if [ -n "$BMODS" ]; then
   # step 2: stage each line as its generation will be, and hand out the boot- and demand-class objects
-  ws="$(dirname "$(dirname "$repo")")"
   . "$here/lib/ramdisk-media.sh"
   mkdir -p "$W"; rd_init "$W/cd"   # rd_init makes W the staging dir
   for l in k46 k30; do
@@ -244,7 +244,7 @@ if [ -n "$MFROM" ]; then
   # repository serves them), with the datastreams the CD's base/ carries -- the installed
   # system's second stage takes a set's own base packages (x11r63) from here
   UL="$L11/base"
-  [ -f "$UL/catalog.lines" ] || die "no $UL/catalog.lines (tools/build-l11-inputs.sh)"
+  [ -f "$UL/catalog.lines" ] || die "no $UL/catalog.lines (media/build.sh)"
   while IFS='|' read -r un uv ui uf um us _; do
     [ -f "$UL/$uf" ] && [ "$(md5sum < "$UL/$uf" | cut -c1-32)" = "$um" ] && [ "$(wc -c < "$UL/$uf")" = "$us" ] \
       || die "$UL/$uf is not its catalog row ($un $uv)"

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# build-core-tree.sh -- the stock core package extracted host-side into build/core/root, the
+# build-core-tree.sh -- the stock core package extracted host-side into out/build/media/core/root, the
 # tree tools/build-install-iso.sh reads as CORE_T (/usr/bin/sum, the 183-B admin default,
 # /stand/boot1.boot, /sbin/bcheckrc, /etc/inittab, /stand/2.1_unix).
 #
 #   tools/build-core-tree.sh [--pkg FILE] [--out DIR]
 #
-#   --pkg   core-2.1.pkg (default build/pins/staging/stock/core-2.1.pkg); refused unless its
+#   --pkg   core-2.1.pkg (default: the inputs' staging/stock, make dist's release tree); refused unless its
 #           sha256 is CORE_SHA256 below
-#   --out   default build/core (gitignored): DIR/root is the tree, DIR/pkgmap and
+#   --out   default out/build/media/core (gitignored): DIR/root is the tree, DIR/pkgmap and
 #           DIR/pkginfo the package's own
 #
-# The host heirloom pkgtrans (amix userland/pkgtools, built into work/l11 by build-l11-inputs.sh) writes
+# The host heirloom pkgtrans (amix userland/pkgtools, built into the inputs by media/build.sh) writes
 # the package's files and directories; its l (hard link) and s (symlink) entries are made
 # here from the pkgmap, as an installed core has them. Until 2026-10-30 this tree was the
 # sibling's build/repo-staging/stock/.t/core, which stayed in the frozen workspace.
@@ -19,11 +19,11 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
-ws="$(cd "$repo/../.." && pwd)"
+. "$here/lib/media-paths.sh"
 
 CORE_SHA256=12cfa10323048a2149959932d4444f656a5881d1d198e1f35bf22ed0d28610f1
-PKG="$repo/build/pins/staging/stock/core-2.1.pkg"
-OUT="$repo/build/core"
+PKG="$L11_IN/staging/stock/core-2.1.pkg"
+OUT="$MEDIA_SCRATCH/core"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--pkg)	PKG="$2"; shift 2;;
@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
 done
 die() { echo "build-core-tree: $*" >&2; exit 1; }
 
-PKGTRANS="${L11_IN:-$repo/work/l11}/pkgtools/heirloom/build-host/bin/pkgtrans"
+PKGTRANS="$L11_IN/pkgtools/heirloom/build-host/bin/pkgtrans"
 [ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
 [ -f "$PKG" ] || die "no $PKG"
 got="$(sha256sum < "$PKG" | cut -d' ' -f1)"

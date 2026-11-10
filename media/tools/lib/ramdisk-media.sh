@@ -2,7 +2,7 @@
 # the staging roots the RAM-disk media's generations are composed from (amix-dlm C4-3).
 #
 # Per line, a staging root gets the loader, the kernel and the line's modules from the
-# medium's kernel-space catalog (work/l11/kpkg, tools/build-l11-inputs.sh), installed by the
+# medium's kernel-space catalog ($L11_IN/kpkg, media/build.sh), installed by the
 # host apkg of that build through a pkgadd that only unpacks (device nodes are not needed to
 # compose). The caller then runs `kbootset -R stage-LINE media --cd|--floppy ... --ramdisk`.
 #   k46: ramdisk, z3660scsi, a4091, gayle and a4kt710 (root class: the disc sits on an A4091 or
@@ -21,12 +21,11 @@
 # rd_init WORKDIR -- the inputs checked, the unpacking pkgadd and the admin file written
 rd_init() {
 	mkdir -p "$1"; W="$(cd "$1" && pwd)"	# absolute: the composers run kbootset from inside it
-	L11="${L11_IN:-$repo/work/l11}"
+	L11="$L11_IN"
 	B="$L11/dlm/build"; APKG="$L11/apkg/apkg-host"
 	local f
-	for f in "$B/kbootset" "$B/mkstore" "$B/lsstore" "$B/amix-cdboot" "$B/boot1.img" "$B/boot2.bin" \
-	         "$APKG" "$L11/kpkg/catalog"; do
-		[ -e "$f" ] || die "$f missing (tools/build-l11-inputs.sh --set tools/l11-set.conf)"
+	for f in "$B/kbootset" "$B/mkstore" "$B/lsstore" "$B/amix-cdboot" "$APKG" "$L11/kpkg/catalog"; do
+		[ -e "$f" ] || die "$f missing (media/build.sh lays out the inputs)"
 	done
 	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"

@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
-# build-setclk.sh -- build the Y2K-fixed setclk (IN-rtc) into payload/setclk.
+# build-setclk.sh -- build the Y2K-fixed setclk (IN-rtc) into out/build/media/payload/setclk.
 #
 # The stock Amix 2.1 /usr/amiga/bin/setclk formats the year with %02d and has
 # 11-byte buffers, so from 2000 on it reads the battery clock wrong and hands
 # date(1) a bad argument ("date: bad conversion"). The community fixed it in the
 # source (src/setclk/setclk-y2k.patch has the provenance). The source itself is
 # Commodore's and is NEVER committed: this tool lifts it out of the user-supplied
-# stock amigasrc package (sha-pinned), applies our patch, and cross-builds it with
-# gcc-cross-amix. Output payload/setclk is a build artefact (gitignored).
+# stock amigasrc package (sha-pinned; make dist's release tree carries it), applies our patch, and cross-builds it with
+# gcc-cross-amix. The output is a build artefact, under out/ (gitignored).
 #
 # Usage: tools/build-setclk.sh [--pkg amigasrc-2.1.pkg] [--out FILE] [--keep-src DIR]
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"; repo="$(dirname "$here")"
-PKG="$repo/build/pins/staging/stock/amigasrc-2.1.pkg"
+. "$here/lib/media-paths.sh"
+PKG="$L11_IN/staging/stock/amigasrc-2.1.pkg"
 PKG_SHA=01de21f232828acb8e4bf4e266e6c069ab3db81ac3240fb03868c1b132626ed0
 SRC_SHA=03a00a434cff9137eaca276dab073cacd1003c0a0e2eff9493c058086b104901
 PATCH="$repo/src/setclk/setclk-y2k.patch"
-OUT="$repo/payload/setclk"; KEEP=""
+OUT="$MEDIA_SCRATCH/payload/setclk"; KEEP=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --pkg) PKG="$2"; shift 2;;
@@ -31,7 +32,7 @@ die() { echo "build-setclk: STOP: $*" >&2; exit 1; }
 
 # the toolchain's env.sh: the compiler and AMIX_USER_CFLAGS. $GCA is the media image's; a compiler on PATH alone
 # would build without the target's defines
-envsh="${AMIX_CROSS_ENV:-${GCA:-$repo/../../gcc-cross-amix/build}/env.sh}"
+envsh="${AMIX_CROSS_ENV:-${GCA:?build-setclk: GCA or AMIX_CROSS_ENV must name gcc-cross-amix}/env.sh}"
 if [ -z "${AMIX_USER_CFLAGS:-}" ]; then
   [ -f "$envsh" ] || die "no AMIX_USER_CFLAGS and no $envsh"
   # shellcheck disable=SC1090

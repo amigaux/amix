@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-zenmac.sh -- cross-build src/zenmac/zenmac.c into payload/zenmac.
+# build-zenmac.sh -- cross-build src/zenmac/zenmac.c into out/build/media/payload/zenmac.
 #
 # zenmac prints the Z3660 ethernet MAC as the z3660eth driver sees it (the address
 # of a DLPI DL_BIND_ACK -- see the header of src/zenmac/zenmac.c for why a program
@@ -12,21 +12,22 @@
 # crt objects and dynamically against /usr/lib/libc.so.1, so it carries vendor
 # startup bytes and is never committed. Rebuild it from the tracked source.
 #
-# Toolchain: ../gcc-cross-amix (m68k-cbm-sysv4, gcc 2.7.2.3 + binutils 2.8.1). Its
-# build/env.sh is sourced when present; AMIX_CROSS_ENV overrides the path.
+# Toolchain: gcc-cross-amix (m68k-cbm-sysv4, gcc 2.7.2.3 + binutils 2.8.1), pinned in
+# toolchain/gcc-cross-amix.pin: $GCA/env.sh is sourced; AMIX_CROSS_ENV overrides the path.
 #
-# Usage: tools/build-zenmac.sh [--out FILE]      (default payload/zenmac)
+# Usage: tools/build-zenmac.sh [--out FILE]      (default out/build/media/payload/zenmac)
 set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 repo="$(dirname "$here")"
+. "$here/lib/media-paths.sh"
 src="$repo/src/zenmac/zenmac.c"
-out="$repo/payload/zenmac"
+out="$MEDIA_SCRATCH/payload/zenmac"
 if [ "${1:-}" = --out ]; then out="$2"; fi
 
-envsh="${AMIX_CROSS_ENV:-$repo/../../gcc-cross-amix/build/env.sh}"
+envsh="${AMIX_CROSS_ENV:-${GCA:+$GCA/env.sh}}"
 if ! command -v m68k-cbm-sysv4-gcc >/dev/null 2>&1; then
-  [ -f "$envsh" ] || { echo "build-zenmac: STOP: no m68k-cbm-sysv4-gcc on PATH and no $envsh" >&2; exit 1; }
+  [ -n "$envsh" ] && [ -f "$envsh" ] || { echo "build-zenmac: STOP: no m68k-cbm-sysv4-gcc on PATH and no GCA/env.sh ($envsh)" >&2; exit 1; }
   # shellcheck disable=SC1090
   . "$envsh"
 fi
