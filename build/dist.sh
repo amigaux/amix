@@ -54,8 +54,10 @@
 #
 # and `dist` (all of them: a step that exits 3 is a gap, named at the end, and
 # the others still run, the lock too; one that fails stops it), `tools` (the
-# build containers, toolchain/container-build.sh, extract-g14.sh --check and
-# container-media.sh),
+# build containers: the published ones toolchain/image.ref names, pulled and
+# checked by toolchain/image-pull, else built here by container-build.sh,
+# extract-g14.sh --check and container-media.sh; TOOLS_FROM_SOURCE=1 builds
+# them here and compares them with the published ones),
 # `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
 # `drivers/<name>`.
 #
@@ -142,13 +144,36 @@ dist_loop() {
 
 # --- outside the container: preconditions, then run there --------------------
 if [ "${1:-}" = tools ]; then
+	img=${AMIX_IMAGE:-amix-toolchain:dist} mimg=${AMIX_MEDIA_IMAGE:-amix-toolchain:media}
+	# the published images, by digest (toolchain/image.ref), unless
+	# TOOLS_FROM_SOURCE=1; any failure there builds them here instead
+	refs=$top/toolchain/image.ref
+	if [ "${TOOLS_FROM_SOURCE:-}" = 1 ]; then
+		echo "make tools: building the images from source (TOOLS_FROM_SOURCE=1)"
+	elif [ ! -f "$refs" ]; then
+		echo "make tools: building the images from source (no toolchain/image.ref)"
+	elif "$top/toolchain/image-pull" "$refs" "$img" "$mimg"; then
+		echo "make tools: $img and $mimg are the published images (toolchain/image.ref)"
+		exit 0
+	else
+		echo "make tools: [WARN] the published images were not taken (above); building them from source" >&2
+	fi
 	sys=${SYSTEM:-${AMIX_SYSTEM:-}}
 	[ -n "$sys" ] || { AMIX_TOP=$top; . "$here/pkg/layout.sh"; sys=$AMIX_SYSTEM; }
-	"$top/toolchain/container-build.sh" "$sys" "${AMIX_IMAGE:-amix-toolchain:dist}"
+	"$top/toolchain/container-build.sh" "$sys" "$img"
 	# its gcc14 against toolchain/gcc14-cross-amix.tree, as CI checks it: the
 	# sysroot holds amix-system's usr, so a system pin moves that digest too
-	"$top/toolchain/extract-g14.sh" --check "${AMIX_IMAGE:-amix-toolchain:dist}"
-	exec "$top/toolchain/container-media.sh" "${AMIX_IMAGE:-amix-toolchain:dist}" "${AMIX_MEDIA_IMAGE:-amix-toolchain:media}"
+	"$top/toolchain/extract-g14.sh" --check "$img"
+	"$top/toolchain/container-media.sh" "$img" "$mimg"
+	# TOOLS_FROM_SOURCE=1 is also the check of the published images
+	if [ "${TOOLS_FROM_SOURCE:-}" = 1 ] && [ -f "$refs" ]; then
+		"$top/toolchain/image-pull" --compare "$refs" "$img" "$mimg" || {
+			echo "[FAIL] make tools: the images built here are not the published ones, or those could not be pulled" >&2
+			exit 1
+		}
+	fi
+	echo "make tools: $img and $mimg built from source"
+	exit 0
 fi
 if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	sys=${SYSTEM:-${AMIX_SYSTEM:-}}

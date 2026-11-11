@@ -1,0 +1,64 @@
+#!/bin/sh
+# publish-image: push the build images make tools built, and print the lines
+# of toolchain/image.ref that name them.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: toolchain/publish-image [REPOSITORY]
+#   REPOSITORY  where they go (default ghcr.io/amigaux/amix-toolchain); log in
+#               to its registry first (`docker login ghcr.io`)
+# Environment:
+#   CONTAINER         docker (default) or podman
+#   AMIX_IMAGE        the build container (default amix-toolchain:dist)
+#   AMIX_MEDIA_IMAGE  the media image (default amix-toolchain:media)
+#
+# The images are checked first, as image-pull checks a pulled pair: this
+# checkout's pins, the pinned gcc14, and the media image's toolchains. Each is
+# pushed under its name (dist, media) and under its name and the pins it was
+# built from (dist-<gcc-cross-amix>-<gcc14-cross-amix>-<amix-system>, each the
+# commit's first 7 digits). The digest is what make tools pulls; the tags only
+# help a reader find them. docker pushes the linux/amd64 image alone, not the
+# index around it: the build's provenance attestation in that index names the
+# directory the image was built in.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(dirname "$here")
+tool=${CONTAINER:-docker}
+repo=${1:-ghcr.io/amigaux/amix-toolchain}
+dist=${AMIX_IMAGE:-amix-toolchain:dist}
+media=${AMIX_MEDIA_IMAGE:-amix-toolchain:media}
+
+"$here/check-image" "$dist"
+"$here/extract-g14.sh" --check "$dist"
+"$here/container-media.sh" --check "$dist" "$media"
+
+pin() { read -r _u c < "$1"; printf %.7s "$c"; }
+pins=$(pin "$here/gcc-cross-amix.pin")-$(pin "$here/gcc14-cross-amix.pin")-$(pin "$top/system/amix-system.pin")
+
+work=$(mktemp -d)
+trap 'rm -rf "${work:?}"' EXIT INT TERM
+push() {	# push REF: the digest the registry holds it under, into $work/digest
+	case ${tool##*/} in
+	podman) "$tool" push --digestfile "$work/digest" "$1" ;;
+	*)	"$tool" push --platform linux/amd64 "$1" | tee "$work/out"
+		sed -n 's/.*: digest: \(sha256:[0-9a-f]\{64\}\) .*/\1/p' "$work/out" | tail -1 > "$work/digest" ;;
+	esac
+}
+lines=
+for n in dist media; do
+	if [ $n = dist ]; then img=$dist; else img=$media; fi
+	d=
+	for t in "$n" "$n-$pins"; do
+		"$tool" tag "$img" "$repo:$t"
+		push "$repo:$t"
+		g=$(cat "$work/digest")
+		echo "$g" | grep -Eqx 'sha256:[0-9a-f]{64}' || { echo "[FAIL] publish-image: no digest for $repo:$t" >&2; exit 1; }
+		[ -z "$d" ] || [ "$d" = "$g" ] || { echo "[FAIL] publish-image: $repo:$t is $g, $repo:$n $d" >&2; exit 1; }
+		d=$g
+	done
+	lines="$lines$n $repo@$d
+"
+done
+echo "publish-image: pushed; toolchain/image.ref:"
+printf '%s' "$lines"

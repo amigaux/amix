@@ -254,6 +254,64 @@ refused "container-build: a base package with other bytes" "not the pinned" buil
 snapshot=$(sed -n 's/^ARG SNAPSHOT=//p' "$here/Containerfile")
 check "Containerfile: the base packages come from the snapshot apt uses after them" \
 	sh -c "[ -n '$snapshot' ] && grep -q '/ubuntu/$snapshot/' '$here/base-ca-certificates.distfile' && grep -q '/ubuntu/$snapshot/' '$here/base-openssl.distfile'"
+# --- image-pull and publish-image ----------------------------------------------
+ip=$T/ip
+mkdir -p "$ip/toolchain" "$ip/system"
+cp "$here/image-pull" "$here/publish-image" "$ip/toolchain/"
+for p in gcc-cross-amix gcc14-cross-amix; do
+	echo "https://example.invalid/$p.git $(printf '%040d' 1 | tr 0 a)" > "$ip/toolchain/$p.pin"
+done
+echo "https://example.invalid/amix-system.git $(printf '%040d' 1 | tr 0 b)" > "$ip/system/amix-system.pin"
+for t in check-image extract-g14.sh container-media.sh; do
+	printf '#!/bin/sh\necho "%s $*" >> "%s/log"\nexit ${CHECK_RC:-0}\n' "$t" "$ip" > "$ip/toolchain/$t"
+	chmod 755 "$ip/toolchain/$t"
+done
+# docker: pull fails with PULL_RC; run prints the sum $ip/sums names for an
+# image and file; push says the digest the registry holds
+cat > "$ip/docker" <<DOCKER
+#!/bin/sh
+echo "docker \$*" >> "$ip/log"
+case \$1 in
+pull) exit \${PULL_RC:-0} ;;
+run) awk -v i="\$3" -v f="\$5" '\$1 == i && \$2 == f { print \$3 "  " f }' "$ip/sums" ;;
+push) echo "\${4#*:}: digest: sha256:$(printf '%064d' 0 | tr 0 c) size: 1" ;;
+esac
+DOCKER
+chmod 755 "$ip/docker"
+dref=r.example/t@sha256:$(printf '%064d' 0 | tr 0 a)
+mref=r.example/t@sha256:$(printf '%064d' 0 | tr 0 b)
+printf 'dist %s\nmedia %s\n' "$dref" "$mref" > "$ip/image.ref"
+pull() { rm -f "$ip/log"; CONTAINER=$ip/docker sh "$ip/toolchain/image-pull" "$@"; }
+check "image-pull: pulls both by digest, checks them as built ones are, then tags them" \
+	sh -c "CONTAINER='$ip/docker' sh '$ip/toolchain/image-pull' '$ip/image.ref' l:dist l:media > /dev/null && [ \"\$(grep -v '^docker run' '$ip/log')\" = \"\$(printf '%s\n' \
+		'docker pull $dref' 'docker pull $mref' 'check-image $dref' 'extract-g14.sh --check $dref' \
+		'container-media.sh --check $dref $mref' 'docker tag $dref l:dist' 'docker tag $mref l:media')\" ]"
+refused "image-pull: a pull that fails tags nothing" "could not pull $dref" env PULL_RC=1 sh -c "
+	CONTAINER='$ip/docker' sh '$ip/toolchain/image-pull' '$ip/image.ref' l:dist l:media; r=\$?; ! grep -q 'docker tag' '$ip/log' && exit \$r"
+rm -f "$ip/log"
+refused "image-pull: a check that fails tags nothing" "check-image" env CHECK_RC=1 sh -c "
+	CONTAINER='$ip/docker' sh '$ip/toolchain/image-pull' '$ip/image.ref' l:dist l:media; r=\$?; cat '$ip/log'; ! grep -q 'docker tag' '$ip/log' && exit \$r"
+printf 'dist %s\nmedia r.example/t:media\n' "$dref" > "$ip/tag.ref"
+refused "image-pull: a reference not by digest is refused" "has no 'media <name>@sha256:<digest>' line" \
+	pull "$ip/tag.ref" l:dist l:media
+for f in /opt/amix/TOOLCHAIN.sha256 /opt/amix-media/TOOLS; do
+	for i in "$dref" "$mref" l:dist l:media; do echo "$i $f $(printf '%064d' 0 | tr 0 d)"; done
+done > "$ip/sums"
+check "image-pull --compare: the same lists are equal" pull --compare "$ip/image.ref" l:dist l:media
+sed -i "s|^l:media /opt/amix-media/TOOLS .*|l:media /opt/amix-media/TOOLS $(printf '%064d' 0 | tr 0 e)|" "$ip/sums"
+refused "image-pull --compare: a list that differs is named" "/opt/amix-media/TOOLS: l:media has eeee" \
+	pull --compare "$ip/image.ref" l:dist l:media
+rm -f "$ip/log"
+check "publish-image: checks, then pushes each by name and pins, and prints image.ref's lines" \
+	sh -c "CONTAINER='$ip/docker' AMIX_IMAGE=l:dist AMIX_MEDIA_IMAGE=l:media sh '$ip/toolchain/publish-image' r.example/t > '$ip/out' &&
+		grep -q '^docker push --platform linux/amd64 r.example/t:dist-aaaaaaa-aaaaaaa-bbbbbbb$' '$ip/log' &&
+		grep -q '^docker push --platform linux/amd64 r.example/t:media$' '$ip/log' &&
+		[ \"\$(grep -n 'check-image' '$ip/log' | cut -d: -f1)\" -lt \"\$(grep -n 'docker push' '$ip/log' | head -1 | cut -d: -f1)\" ] &&
+		grep -qx 'dist r.example/t@sha256:cccc[c]*' '$ip/out' && grep -qx 'media r.example/t@sha256:cccc[c]*' '$ip/out'"
+rm -f "$ip/log"
+refused "publish-image: an image that fails its checks is not pushed" "check-image" env CHECK_RC=1 sh -c "
+	CONTAINER='$ip/docker' sh '$ip/toolchain/publish-image' r.example/t; r=\$?; cat '$ip/log'; ! grep -q 'docker push' '$ip/log' && exit \$r"
+
 day=${snapshot%%T*}
 for d in ca-certificates openssl; do
 	check "fetch: base-$d.distfile names the snapshot first, our copy of that day second, under the same name" \

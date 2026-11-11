@@ -1,0 +1,72 @@
+#!/bin/sh
+# image-pull: take the published build images by digest, instead of building
+# them, or compare them with images built here.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: toolchain/image-pull [--compare] REFS DIST_TAG MEDIA_TAG
+#   REFS       toolchain/image.ref: a line `dist <name>@sha256:<digest>` and a
+#              line `media <name>@sha256:<digest>` (toolchain/publish-image
+#              prints them)
+#   DIST_TAG   the build container's local tag (make tools: amix-toolchain:dist)
+#   MEDIA_TAG  the media image's (amix-toolchain:media)
+#   --compare  tag nothing: compare the published images' /opt/amix/TOOLCHAIN.sha256,
+#              and the media image's /opt/amix-media/TOOLS, with DIST_TAG's and
+#              MEDIA_TAG's
+# Environment:
+#   CONTAINER  docker (default) or podman
+#
+# A pull by digest gets those bytes or fails. The pulled images are then checked
+# as built ones are: check-image (this checkout's pins), extract-g14.sh --check
+# (the pinned gcc14) and container-media.sh --check (the media image's toolchains
+# are the build container's). Only then are they tagged, so a failure leaves the
+# local tags as they were. Exit 0 tagged (or, with --compare, equal); 1 not.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+tool=${CONTAINER:-docker}
+compare=
+[ "${1:-}" != --compare ] || { compare=1; shift; }
+refs=${1:?usage: image-pull [--compare] REFS DIST_TAG MEDIA_TAG}
+dtag=${2:?usage: image-pull [--compare] REFS DIST_TAG MEDIA_TAG}
+mtag=${3:?usage: image-pull [--compare] REFS DIST_TAG MEDIA_TAG}
+
+ref() {	# ref NAME: NAME's reference in REFS, which must be by digest
+	r=$(awk -v n="$1" '$1 == n { print $2; exit }' "$refs")
+	echo "$r" | grep -Eqx '[a-z0-9./_:-]+@sha256:[0-9a-f]{64}' || {
+		echo "[FAIL] image-pull: $refs has no '$1 <name>@sha256:<digest>' line" >&2
+		return 1
+	}
+	echo "$r"
+}
+dref=$(ref dist) && mref=$(ref media) || exit 1
+for r in "$dref" "$mref"; do
+	echo "image-pull: $tool pull $r"
+	"$tool" pull "$r" || { echo "[FAIL] image-pull: could not pull $r" >&2; exit 1; }
+done
+
+if [ -n "$compare" ]; then
+	sum() { "$tool" run --rm "$1" sha256sum "$2" | cut -c1-64; }
+	same=1
+	for c in "$dref $dtag /opt/amix/TOOLCHAIN.sha256" "$mref $mtag /opt/amix/TOOLCHAIN.sha256" \
+	         "$mref $mtag /opt/amix-media/TOOLS"; do
+		set -- $c
+		a=$(sum "$1" "$3") b=$(sum "$2" "$3")
+		if [ "$a" = "$b" ]; then
+			echo "image-pull: $3: $2 is the published image's ($a)"
+		else
+			echo "[FAIL] image-pull: $3: $2 has $b, the published image $1 has $a" >&2
+			same=
+		fi
+	done
+	[ -n "$same" ] || exit 1
+	echo "image-pull: the images built here are the published ones"
+	exit 0
+fi
+
+"$here/check-image" "$dref" || exit 1
+"$here/extract-g14.sh" --check "$dref" || exit 1
+"$here/container-media.sh" --check "$dref" "$mref" || exit 1
+"$tool" tag "$dref" "$dtag"
+"$tool" tag "$mref" "$mtag"
+echo "image-pull: $dtag and $mtag are the published images, checked"

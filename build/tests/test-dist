@@ -132,20 +132,47 @@ try:
     # media image; a digest the check refuses stops it before the media image
     seen = os.path.join(tmp, "tools.seen")
     for t, rcode in (("container-build.sh", 0), ("extract-g14.sh", "${G14_RC:-0}"),
-                     ("container-media.sh", 0)):
+                     ("container-media.sh", 0), ("image-pull", "${PULL_RC:-0}")):
         write(os.path.join(top, "toolchain", t),
               '#!/bin/sh\necho "%s $*" >> "%s"\nexit %s\n' % (t, seen, rcode), 0o755)
-    rc, out = run("tools", DIST_HOST=None, AMIX_IMAGE="amix-toolchain:t")
-    got = open(seen).read() if os.path.exists(seen) else ""
-    check("tools: container-build, then extract-g14 --check on that image, then container-media",
-          rc == 0 and got == "container-build.sh %s amix-toolchain:t\nextract-g14.sh --check amix-toolchain:t\n"
-          "container-media.sh amix-toolchain:t amix-toolchain:media\n" % sysdir, got + out)
-    os.remove(seen)
-    rc, out = run("tools", DIST_HOST=None, AMIX_IMAGE="amix-toolchain:t", G14_RC="1")
-    got = open(seen).read() if os.path.exists(seen) else ""
+    built = ("container-build.sh %s amix-toolchain:t\nextract-g14.sh --check amix-toolchain:t\n"
+             "container-media.sh amix-toolchain:t amix-toolchain:media\n" % sysdir)
+
+    def tools(**env):
+        if os.path.exists(seen):
+            os.remove(seen)
+        rc, out = run("tools", DIST_HOST=None, AMIX_IMAGE="amix-toolchain:t", **env)
+        return rc, out, open(seen).read() if os.path.exists(seen) else ""
+
+    rc, out, got = tools()
+    check("tools: no toolchain/image.ref: container-build, then extract-g14 --check on that image, "
+          "then container-media, and it says it built them",
+          rc == 0 and got == built and "building the images from source (no toolchain/image.ref)" in out, got + out)
+    rc, out, got = tools(G14_RC="1")
     check("tools: a gcc14 digest the check refuses stops it before the media image",
           rc != 0 and "extract-g14.sh --check" in got and "container-media" not in got, got + out)
-    for t in ("container-build.sh", "extract-g14.sh", "container-media.sh"):
+    refs = os.path.join(top, "toolchain", "image.ref")
+    write(refs, "dist r@sha256:%s\nmedia r@sha256:%s\n" % ("a" * 64, "b" * 64))
+    rc, out, got = tools()
+    check("tools: with toolchain/image.ref, the published images are pulled and nothing is built",
+          rc == 0 and got == "image-pull %s amix-toolchain:t amix-toolchain:media\n" % os.path.realpath(refs)
+          and "are the published images" in out, got + out)
+    rc, out, got = tools(PULL_RC="1")
+    check("tools: a pull that fails builds them from source, and says so",
+          rc == 0 and got.startswith("image-pull ") and got.endswith(built)
+          and "were not taken (above); building them from source" in out, got + out)
+    rc, out, got = tools(TOOLS_FROM_SOURCE="1")
+    check("tools: TOOLS_FROM_SOURCE=1 builds them, then compares them with the published ones",
+          rc == 0 and got == built + "image-pull --compare %s amix-toolchain:t amix-toolchain:media\n"
+          % os.path.realpath(refs) and "(TOOLS_FROM_SOURCE=1)" in out, got + out)
+    rc, out, got = tools(TOOLS_FROM_SOURCE="1", PULL_RC="1")
+    check("tools: TOOLS_FROM_SOURCE=1 fails when they differ, or cannot be pulled to compare",
+          rc == 1 and "are not the published ones" in out, got + out)
+    os.remove(refs)
+    rc, out, got = tools(TOOLS_FROM_SOURCE="1")
+    check("tools: TOOLS_FROM_SOURCE=1 with no toolchain/image.ref builds them and compares nothing",
+          rc == 0 and got == built, got + out)
+    for t in ("container-build.sh", "extract-g14.sh", "container-media.sh", "image-pull"):
         os.remove(os.path.join(top, "toolchain", t))
     os.remove(seen)
 

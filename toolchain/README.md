@@ -83,8 +83,39 @@ images whatever their ids:
 python3 -I toolchain/image-manifest amix-toolchain:<tag> > a.manifest
 ```
 
-The image holds the AMIX sysroot, so it is built locally from a checkout of
-`amix-system` and not published to a registry.
+### The published images
+
+Both images can also be taken ready-built from
+`ghcr.io/amigaux/amix-toolchain`. `image.ref` names them by digest, one line each:
+
+```
+dist ghcr.io/amigaux/amix-toolchain@sha256:<digest>
+media ghcr.io/amigaux/amix-toolchain@sha256:<digest>
+```
+
+When it is there, `make tools` runs `image-pull`. That pulls both by digest, so
+it gets those bytes or nothing. It then checks them as a build is checked:
+`check-image` for this checkout's pins, `extract-g14.sh --check` for the pinned
+gcc14, and `container-media.sh --check` for the media image's toolchains, which
+must be the build container's. Only then are they tagged `amix-toolchain:dist` and
+`:media`. If a pull or a check fails, or there is no `image.ref`, `make tools`
+builds them here instead and says which it did. The file is not a `.pin`:
+those go into the image (`/opt/amix/PINS`), and an image cannot name its own digest.
+
+`make tools TOOLS_FROM_SOURCE=1` builds both here, then
+`image-pull --compare` pulls the published ones and compares their
+`/opt/amix/TOOLCHAIN.sha256`, and the media image's `/opt/amix-media/TOOLS`,
+with the images just built. It fails if they differ, so anyone can check the
+published images against the pins. `image-manifest` compares the rest of
+an image.
+
+`publish-image` puts them there. It runs the same checks on the local pair,
+then pushes each under its name (`dist`, `media`) and under its name and pins
+(`dist-<gcc-cross-amix>-<gcc14-cross-amix>-<amix-system>`, each the first 7
+digits). It prints the two lines for `image.ref`. docker pushes the linux/amd64
+image alone, without the index around it, because the build's provenance
+attestation in that index names the directory the image was built in. Pushing
+needs a login to the registry with a token that may write packages.
 
 ### Layout inside the image
 
