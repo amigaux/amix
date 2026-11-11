@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — make tools can take the build images ready-built (66798f35)
+
+image.ref names the published images by digest. image-pull pulls them and checks them (check-image, extract-g14.sh --check, container-media.sh --check, new) before tagging, or compares them with images built here. publish-image pushes the checked pair (the linux/amd64 image alone, without the provenance index) and prints image.ref's lines.
+
 ## 2026-11-10 — the base packages fall back to our copy on amix-distfiles (73085f7f)
 
 base-ca-certificates.distfile and base-openssl.distfile name a second source, our copy in the amix-distfiles release toolchain-base-20261028 under the upstream file name, so a first make tools gets past a snapshot.ubuntu.com outage; the sha256 decides. test-tools checks that the release's date is the Containerfile's snapshot.

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — make tools pulls the published images (66798f35)
+
+make tools pulls the published build images when toolchain/image.ref is present, and builds them on any failure, saying which it did. TOOLS_FROM_SOURCE=1 builds them and compares them with the published pair.
+
 ## 2026-11-10 — relative paths from the checkout's top; SOURCE_DATE_EPOCH dates the media (5a775c1, b2d70dd)
 
 make dist reads a relative SYSTEM, LOCK, STOCK, RELEASE_PREVIOUS, ROM_MANIFEST, PRIVACY_PATTERNS or AMIX_DISTFILES from the top of the checkout, so `make tools SYSTEM=../amix-system` works as documented (it looked inside build/). SOURCE_DATE_EPOCH reaches the media step, and only it; the media's dates follow it, else the commit's time, and the lock's head gains a `media-epoch` line.
