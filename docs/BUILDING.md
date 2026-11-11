@@ -34,12 +34,14 @@ out/` and exits 0.
   all but 30 MB with the build container), `out/` 3.2 GB, the checkout and
   amix-system 0.5 GB. Docker's build cache needs room on top while `make tools`
   runs.
-- **Time**: on a 32-thread x86-64 machine, `make tools` took 19 minutes with no
-  docker cache, 9 of them downloading the image's packages from the Ubuntu
-  snapshot service, and `make dist` 28 minutes. Fewer cores take longer.
+- **Time**: on a 32-thread x86-64 machine, building the images (`make tools`
+  without published images) took 19 minutes with no docker cache, 9 of them
+  downloading the image's packages from the Ubuntu snapshot service, and
+  `make dist` 28 minutes. Fewer cores take longer.
 - **Network** (https) for the first run: GitHub (amix-system, the toolchain
   sources, the pinned forks, the release assets that hold the stock packages and
-  distfiles), `snapshot.ubuntu.com` (the image's packages, by date), and the
+  distfiles, and `ghcr.io` for the published images), `snapshot.ubuntu.com`
+  (the image's packages, by date, when the images are built here), and the
   package sources' own sites. Every download is pinned by commit or sha256.
   `AMIX_DISTFILES=<dir>` names a directory of distfiles to take first. What is
   fetched is kept in `out/cache`. The snapshot service answers 5xx at times, for
@@ -62,7 +64,21 @@ make dist looks for `amix-system` beside the main working tree.
 
 ## make tools: the build containers
 
-`make tools SYSTEM=…` builds two images.
+`make tools SYSTEM=…` gets two images, `amix-toolchain:dist` and
+`amix-toolchain:media`, in one of two ways.
+
+- **Pulled.** When `toolchain/image.ref` names the published images
+  (`ghcr.io/amigaux/amix-toolchain`, by digest), `make tools` pulls them:
+  about 0.9 GB to download. A pull by digest gets those bytes or nothing. The
+  images are then checked as built ones are (below) before they are tagged.
+- **Built.** Without `toolchain/image.ref`, when a pull or its checks fail, or
+  with `TOOLS_FROM_SOURCE=1`, `make tools` builds them from the pins, as
+  described below. It says which way it took.
+
+`make tools SYSTEM=… TOOLS_FROM_SOURCE=1` also checks the published images: it
+builds both, then pulls the published ones and compares their
+`/opt/amix/TOOLCHAIN.sha256` and `/opt/amix-media/TOOLS` with the images it
+built. It fails if they differ (`toolchain/README.md`).
 
 - **`amix-toolchain:dist`**, the build container (`toolchain/Containerfile`,
   `toolchain/container-build.sh`). It is Ubuntu from a dated snapshot, with the
