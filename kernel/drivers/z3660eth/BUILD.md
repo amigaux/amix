@@ -14,7 +14,7 @@ two-tier routine is spelled out in §7).
 - Build box up: your own Amix box (real, or an Amiberry/WinUAE config with an a2065 NIC on tap0) +
   the grimoire `amix-lan-up.sh` bridge. Verify: `python3 ../../k30/tools/amixsync.py ls /usr/sys`.
 - Tools: `../../k30/tools/amixsync.py` (FTP push/pull), `../../../../grimoire-amix/tools/host-net/amixsh.py`
-  (run commands; the [grimoire-amix](https://github.com/jusii/grimoire-amix) clone beside the amix checkout).
+  (run commands; the [grimoire-amix](https://github.com/amigaux/grimoire) clone beside the amix checkout).
 
 ## 1. Push the driver subtree
 Create `/usr/sys/amiga/driver/z3660eth/` and push `src/z3660eth.c`, `src/z3660eth.h`,
@@ -49,7 +49,7 @@ the empty `/*51*/` row (`…,notty,nostr,nullflag,`) before writing, then replac
 > collision, 1992). Slots **7, 38, 39, 44, 45** are traps (reserved markers, or
 > `KERNEL_DEBUGGER`-only), and **≥ 70 does not exist** — `CDEVSIZE` is 70, so a higher major
 > needs the array extended. That leaves 51–67 and 69; we take the lowest.
-> Convention and full cross-tree evidence: **`docs/reference/major-number-registry.md`** in [grimoire-amix](https://github.com/jusii/grimoire-amix)
+> Convention and full cross-tree evidence: **`docs/reference/major-number-registry.md`** in [grimoire-amix](https://github.com/amigaux/grimoire)
 > (the Major-Number Registry — "take 51–67 or 69; respect an existing community claim, even a
 > weak one"). Renumbering was cheap for us and free for them: only the `/dev/zen0` node and the
 > cdevsw row move. **48 is vacated — do not reuse it.**
