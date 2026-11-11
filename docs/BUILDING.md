@@ -34,10 +34,11 @@ out/` and exits 0.
   all but 30 MB with the build container), `out/` 3.2 GB, the checkout and
   amix-system 0.5 GB. Docker's build cache needs room on top while `make tools`
   runs.
-- **Time**: on a 32-thread x86-64 machine, building the images (`make tools`
-  without published images) took 19 minutes with no docker cache, 9 of them
-  downloading the image's packages from the Ubuntu snapshot service, and
-  `make dist` 28 minutes. Fewer cores take longer.
+- **Time**: on a 32-thread x86-64 machine, `make tools` took 39 seconds to pull
+  the published images into an empty docker; building them instead
+  (`TOOLS_FROM_SOURCE=1`) took 19 minutes with no docker cache, 9 of them
+  downloading the image's packages from the Ubuntu snapshot service. `make dist`
+  took 28 to 30 minutes. Fewer cores take longer; a slower line pulls slower.
 - **Network** (https) for the first run: GitHub (amix-system, the toolchain
   sources, the pinned forks, the release assets that hold the stock packages and
   distfiles, and `ghcr.io` for the published images), `snapshot.ubuntu.com`
