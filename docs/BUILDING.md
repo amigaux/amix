@@ -22,11 +22,14 @@ out/` and exits 0.
 
 ## What you need
 
+- **Linux on x86-64, with docker.** That is the supported build host. podman
+  (`CONTAINER=podman`) and other hosts, macOS included, are untested. The build
+  itself runs in an Ubuntu container, so the host's Linux distribution does not
+  matter. Your user must be able to run containers; the steps run in them as
+  you, not as root.
 - **A full clone**, not a shallow one (no `--depth`). A package's epoch, the time
   of every time stamp in it, is the last commit that changed its directory, so
   make dist reads the history and refuses a shallow clone.
-- **docker or podman.** `CONTAINER=podman` uses podman. Your user must be able to
-  run containers; the steps run in them as you, not as root.
 - **Disk**: about 7 GB once built: the two images 3 GB (the media image shares
   all but 30 MB with the build container), `out/` 3.2 GB, the checkout and
   amix-system 0.5 GB. Docker's build cache needs room on top while `make tools`
