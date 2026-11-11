@@ -23,10 +23,12 @@ make dist  SYSTEM=../amix-system RELEASE_PUBLIC=1
 ```
 
 You need Linux on x86-64 with docker (podman and other hosts are untested), a
-full clone (not shallow), network for the first run, about 7 GB of disk, and time: on a 32-thread machine `make tools` took
-19 minutes and `make dist` 28. Everything lands in `out/`. If `make tools`
-stops on a download, run it again later: every download is pinned, and what
-was fetched is kept.
+full clone (not shallow), network for the first run, about 7 GB of disk, and
+time. `make tools` downloads the published build images (about 0.9 GB); with
+`TOOLS_FROM_SOURCE=1`, or when the download fails, it builds them, in about 19
+minutes on a 32-thread machine. `make dist` took 28 minutes there. Everything
+lands in `out/`. If `make tools` stops on a download, run it again later:
+every download is pinned, and what was fetched is kept.
 [docs/BUILDING.md](docs/BUILDING.md) explains each step, what it builds, and how
 to check a build against a release; [docs/RELEASING.md](docs/RELEASING.md) how
 releases are made.
