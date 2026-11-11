@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — README links the grimoire at amigaux/grimoire (90d267b7)
+
+The grimoire moved to github.com/amigaux/grimoire; the "moving to" wording is dropped.
+
 ## 2026-11-04 — a4kt710 package 1.0.0-8 (eb2efd0)
 
 The copyright note drops process wording and says what is known: the 68030 form has run only under emulation; with module 1.0.0-1 the A4000T + Z3660 booted from the onboard bus and 16 MiB raw reads matched the host's checksum. Module 1.0.0-4, objects unchanged.
