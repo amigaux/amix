@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — BUILD.md links the grimoire at amigaux/grimoire (985e3f07)
+
+The grimoire moved to github.com/amigaux/grimoire; its site is https://grimoire.amigaux.org.
+
 ## 2026-11-02 — module 1.0.0-7, packages 1.0.0-13: the cache block leaves the module form (856f2ae)
 
 The 040/060 cache-maintenance block is compiled out of the module form, where nothing could arm it (module 13657 -> 12345 bytes); the static driver keeps it. Two kmem-only diagnostics (z3660eth_last_off, z3660eth_last_rc) and an unused DELAY macro removed. No change in behaviour. Packages zeth30 9966780b, zeth46 b6334e4e.
