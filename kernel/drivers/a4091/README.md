@@ -118,8 +118,8 @@ which is what a real **Amiga A4000** needs, since the A4000 has no built-in SCSI
 
 This directory is `kernel/drivers/a4091` of the amix monorepo. The build harness, clean-gate, the
 FTP/telnet bridges and the golden build image live in amix's **[`kernel/k30`](../../k30)** build hub;
-the host network bridge lives in **[grimoire-amix](https://github.com/jusii/grimoire-amix)** (moving to
-`amigaux/grimoire`), cloned beside the amix checkout. The 040/060 arm (`tools/build-a4091-040.sh`) also
+the host network bridge lives in **[grimoire](https://github.com/amigaux/grimoire)**, cloned beside
+the amix checkout. The 040/060 arm (`tools/build-a4091-040.sh`) also
 needs the 68040/68060 port at [`kernel/port/port.pin`](../../port/port.pin) and the gcc-cross-amix
 toolchain at [`toolchain/gcc-cross-amix.pin`](../../../toolchain/gcc-cross-amix.pin), as checkouts beside
 the amix checkout (see [`toolchain/README.md`](../../../toolchain/README.md)). Kernel family names in the
@@ -138,8 +138,8 @@ The loadable module ([`module/`](module/README.md)) builds inside amix against
 
 You need a working Amix 2.1 install in **Amiberry**, the A4091 autoboot ROM, and a spare hardfile for
 the A4091 disk. (None of these are in this repo — see Legal.) amix's
-[`kernel/k30`](../../k30) and the [grimoire-amix](https://github.com/jusii/grimoire-amix) repo (moving
-to `amigaux/grimoire`; clone it beside the amix checkout) provide the harness; set
+[`kernel/k30`](../../k30) and the [grimoire](https://github.com/amigaux/grimoire) repo (clone it beside
+the amix checkout) provide the harness; set
 `AMIX_HOST`/`AMIX_USER`/`AMIX_PASS` for your box.
 
 The sample `.uae` configs here were captured on **Amiberry 8.1.6** (`config_version=8.1.6`, line 4 of
