@@ -22,8 +22,8 @@ make tools SYSTEM=../amix-system
 make dist  SYSTEM=../amix-system RELEASE_PUBLIC=1
 ```
 
-You need docker or podman, a full clone (not shallow), network for the first
-run, about 7 GB of disk, and time: on a 32-thread machine `make tools` took
+You need Linux on x86-64 with docker (podman and other hosts are untested), a
+full clone (not shallow), network for the first run, about 7 GB of disk, and time: on a 32-thread machine `make tools` took
 19 minutes and `make dist` 28. Everything lands in `out/`. If `make tools`
 stops on a download, run it again later: every download is pinned, and what
 was fetched is kept.
