@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-11 — make tools pulls the published build images (630e5f71)
+
+image.ref names the published build images, ghcr.io/amigaux/amix-toolchain dist @sha256:2fa480cf… and media @sha256:5e063fef…, so make tools pulls and checks them instead of building them; TOOLS_FROM_SOURCE=1 builds them and compares.
+
 ## 2026-11-11 — make tools can take the build images ready-built (66798f35)
 
 image.ref names the published images by digest. image-pull pulls them and checks them (check-image, extract-g14.sh --check, container-media.sh --check, new) before tagging, or compares them with images built here. publish-image pushes the checked pair (the linux/amd64 image alone, without the provenance index) and prints image.ref's lines.
