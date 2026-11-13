@@ -1,4 +1,4 @@
-# C4-1 — `sd_register` and the four-card contract, version 8
+# C4-1 — `sd_register` and the four-card contract, version 9
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the generic 060 target): an A3000 with a
@@ -15,7 +15,10 @@
   controller's record names it by its motherboard id (§5.2); version 7
   (2026-10-27, from amix-installng): what `pkgchk core` says
   about the nodes is limited to `/dev` (§2.4); version 8 (2026-11-02): the
-  A1200 IDE is motherboard id 2, `gayle`, as the A4000 IDE is (§5.2).
+  A1200 IDE is motherboard id 2, `gayle`, as the A4000 IDE is (§5.2);
+  version 9 (2026-11-13): class 4 holds the IDE controllers, the
+  Buddha and the Catweasel Z-II beside the Gayle, since a class follows
+  the controller's kind, not its bus (§4).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §5.2–§5.3 (four cards, the
@@ -250,12 +253,21 @@ class, compacted over the controllers present:
 | 1 | `z3660` | Z3660 SCSI (piscsi) |
 | 2 | `zorro` | Zorro SCSI boards: A4091, A4092, A2091, A2090 |
 | 3 | `mobo` | the motherboard SCSI controller: the A3000 WD33C93 or the A4000T 53C710 |
-| 4 | `ide` | Gayle IDE |
+| 4 | `ide` | IDE controllers: Gayle IDE, Buddha (and the Catweasel Z-II, the same IDE logic) |
 
 A box with one controller always has it as card 0, so the stock
 single-controller names (`c6d0` for SCSI id 6) are kept. Adding a
 higher-ranked controller moves the names of the lower-ranked ones; the
 root is found by identity regardless (30 §3, §5.2).
+
+A class follows the controller's kind, not its bus (version 9). The
+Buddha is a Zorro II board, but an IDE controller: it sorts with the
+Gayle, after every SCSI controller, so adding one renames no SCSI disk.
+Within class 4 the order is by base, so a box with both numbers the Gayle
+(0xDD2020, or 0xDA0000 on an A1200) before a Buddha in the Zorro II I/O
+space (0xE90000–0xEFFFFF). Ranked `zorro`, a Buddha would sort before every
+Zorro III board and every motherboard controller, and renumber their
+disks. The driver's units and root record are C4-2 §8.2.
 
 ### 4.1 The `.moddata` `rank` key
 
@@ -421,7 +433,8 @@ three expectations:
    + Zorro SCSI; on k46, A3000 onboard + Zorro SCSI): exactly the new names
    listed per set in the measurement record and the release notes;
 3. **three and four controllers, and sets with a controller 1.0 did not
-   drive** (the A4000T 53C710): the names this contract gives.
+   drive** (the A4000T 53C710, the Buddha): the names this contract
+   gives.
 
 ## 7. Not in this contract
 
