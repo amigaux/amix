@@ -258,7 +258,7 @@
         "kind": "name-based",
         "status": "REFUSE",
         "origin": "the Amix 2.1 install media",
-        "diagnosis": "This is the Amix 2.1 install-media loader. It is NAME-based: it resolves the kernel by segment names (.kvsysseg/.kvsegmap/.kvsegu/.uvblock) and CANNOT relocate this project's standard FLAGS-based ET_REL kernels. On metal it fires Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru at boot, before the kernel ever executes.",
+        "diagnosis": "This is the Amix 2.1 install-media loader. Under Amiberry it boots the stock 2.1 and 2.1c kernels (both m68k ET_REL, neither carrying the segments .kvsysseg/.kvsegmap/.kvsegu/.uvblock). On metal, with this project's combined kernels, it fired Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru at boot, before the kernel executed; why it refuses those kernels is not established, so it stays refused for them.",
         "must": "Any build that finds this loader on disk MUST fail closed and MUST print this diagnosis. reltest/relsim validate rel.c SOURCE semantics and green a kernel regardless of which loader is on disk -- this identity check is the only thing that closes that blind spot."
       }
     ],

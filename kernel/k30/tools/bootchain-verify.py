@@ -4,7 +4,8 @@
 #
 # The PERMANENT, fail-closed boot-chain gate. Run host-side against a BUILT golden
 # image, AFTER rdb-verify.sh, to prove the on-disk second-stage loader (boot2) is the
-# metal-proven flags-based loader -- NOT the foreign install-media loader that D245s.
+# metal-proven flags-based loader -- NOT the foreign install-media loader that D245s
+# this project's kernels on metal.
 #
 # THE LAYOUT AND THE CHECKSUM ARE NOT DEFINED HERE. They are read from
 # ../contracts/bootchain-v1.json, which is this repo's authoritative, machine-readable
@@ -21,12 +22,13 @@
 #
 # WHY THIS GATE EXISTS -- the D245/RELA trap:
 #   A from-scratch base image can ship a FOREIGN /stand/boot2.boot copied from the Amix
-#   2.1 install media. That install-media boot2 (8192 B, sha256 prefix 5ab360b1) is
-#   NAME-based: it resolves the kernel by segment names (.kvsysseg/.kvsegmap/.kvsegu/
-#   .uvblock) and CANNOT relocate this project's standard FLAGS-based ET_REL kernels. On
-#   metal it fires Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru at boot, before the
-#   kernel ever executes. The PROVEN loader (flags-based, matches the sysroot boot2.c/
-#   rel.c) is 8192 B, sha256 f287ff3a...; the pipeline now installs it during lamination.
+#   2.1 install media. That install-media boot2 (8192 B, sha256 prefix 5ab360b1) boots
+#   the stock 2.1 and 2.1c kernels under Amiberry (both m68k ET_REL, neither carrying
+#   the segments .kvsysseg/.kvsegmap/.kvsegu/.uvblock), but on metal, with this
+#   project's combined kernels, it fired Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru
+#   at boot, before the kernel executed. Why it refuses them is not established, so it
+#   stays refused for this project's kernels. The PROVEN loader (flags-based, matches
+#   the sysroot boot2.c/rel.c) is 8192 B, sha256 f287ff3a...; the pipeline now installs it during lamination.
 #   reltest/relsim validate rel.c SOURCE semantics, so they green a kernel regardless of
 #   which loader is on disk -- this gate closes that blind spot by checking the LOADER.
 #
@@ -268,9 +270,9 @@ def verify_bootpart(img, img_path, c, expect_boot2_sha, identity=None):
                             "wrong loader for this chain (not a corruption)"
                             % (other, expect_boot2_sha[:8] + "..."))
         elif hit is not None:
-            print("  *** KNOWN-FOREIGN boot2: this is the Amix 2.1 install-media loader (sha %s...) that" % hit["sha256_prefix"])
-            print("      D245s on metal -- it is NAME-based and cannot relocate flags-based ET_REL kernels")
-            print("      (Alert 'RELA'|AT_DeadEnd = the D245 4C41 Guru).")
+            print("  *** KNOWN-FOREIGN boot2: this is the Amix 2.1 install-media loader (sha %s...)." % hit["sha256_prefix"])
+            print("      It boots the stock 2.1 and 2.1c kernels under Amiberry, but on metal it D245s")
+            print("      this project's combined kernels (Alert 'RELA'|AT_DeadEnd = the D245 4C41 Guru).")
             problems.append("boot2 is the KNOWN-FOREIGN install-media loader (sha prefix %s) -- D245/RELA on metal"
                             % hit["sha256_prefix"])
         else:

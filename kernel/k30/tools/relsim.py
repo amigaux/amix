@@ -8,7 +8,7 @@
 # "are THIS kernel's relocation records relocatable under rel.c's source semantics?"
 # It does NOT and cannot answer "will this disk boot".  The second-stage loader actually
 # installed at /stand/boot2.boot is a free variable entirely outside its scope: a FOREIGN
-# name-based loader (e.g. the Amix 2.1 install-media boot2, sha256 5ab360b1...) fires the
+# loader (e.g. the Amix 2.1 install-media boot2, sha256 5ab360b1...) fired the
 # D245/RELA Guru on a perfectly valid flags-based ET_REL kernel that this tool greens --
 # correctly.  (Such a boot failure was once blamed on this tool "false-greening" a
 # host-cross kernel; a single-variable splice showed the real loader's rel.c relocates
