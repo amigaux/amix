@@ -187,11 +187,24 @@ for l in k30 k46; do
 		refused "a block major on a demand module" $l "$W/$l-ramdisk/out/mod.d/ramdisk" "a block major needs a root-class module"
 	mkbad $l zkey "$WRAP"'MOD_MISC_WRAPPER(zkey, l, u, "x");\n' "$M0"'$match zorro:0000:01\nzkey\tzkey\n' &&
 		refused "a zero manufacturer in a match key" $l "$W/$l-zkey/out/mod.d/zkey" "manufacturer may not be zero"
+	# a product-00 key (C3-1 v7, C3-2 v5): a kit at minor 5 accepts it, a
+	# kit at minor 4 (the 1.1 kernels') refuses it, needing minor 5
 	mkbad $l zprod "$WRAP"'MOD_MISC_WRAPPER(zprod, l, u, "x");\n' "$R0"'$match zorro:1212:00\n$rank ide\nzprod\tzprod\n' &&
-		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zprod/out/mod.d/zprod" > "$W/zprod.out" 2>&1; then
+		if [ "${KABI##*.}" -lt 5 ]; then
+			refused "a match key with product 00 on a minor-${KABI##*.} kit" $l "$W/$l-zprod/out/mod.d/zprod" "needs kabi minor 5"
+		elif python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zprod/out/mod.d/zprod" > "$W/zprod.out" 2>&1; then
 			pass "$l: a match key with product 00 (zorro:1212:00) is accepted"
 		else
 			fail "$l: a match key with product 00"; cat "$W/zprod.out"
+		fi
+	# the Buddha's stand-in for the 1.1 kernels (C4-2 v11 section 8.2 item
+	# 7): mobo:buddha is a registered name, and the tag comes from imports
+	mkbad $l zstand "$WRAP"'MOD_MISC_WRAPPER(zstand, l, u, "x");\n' "$R0"'$match zorro:1212:2a,mobo:buddha\n$rank ide\nzstand\tzstand\n' &&
+		if [ "$(python3 "$K/tools/modcheck.py" -k "$K" --kabi "$W/$l-zstand/src/Driver.o" "$W/$l-zstand/src/Master")" = "$KABI_MIN" ] &&
+		   python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zstand/out/mod.d/zstand" > "$W/zstand.out" 2>&1; then
+			pass "$l: the stand-in match zorro:1212:2a,mobo:buddha is accepted, tagged $KABI_MIN"
+		else
+			fail "$l: the stand-in match"; cat "$W/zstand.out"
 		fi
 	PIN_OVERRIDE=gcc-2.95.3-0000000 mkbad $l pin "$WRAP"'MOD_MISC_WRAPPER(pin, l, u, "x");\n' "$M0"'pin\tpin\n' &&
 		refused "another compiler pin" $l "$W/$l-pin/out/mod.d/pin" "the kit's pin is"
@@ -262,8 +275,10 @@ for l in k30 k46; do
 		else fail "$l: the demand-class filesystem module's tag"; cat "$W/dfs.out"; fi
 	KABI_OVERRIDE=$l.1.3 mkbad $l dfs3 "$WRAP"'MOD_MISC_WRAPPER(dfs3, l, u, "x");\n' "$M0"'$fs dfs3\ndfs3\tdfs3\n' &&
 		refused "a 1.3 tag on a demand-class filesystem module" $l "$W/$l-dfs3/out/mod.d/dfs3" "needs kabi minor 4"
-	# minor 5 (C3-2 v5 section 3): a module with a product-00 zorro key is
-	# tagged 1.5 from its Master, passes at 1.5, and is refused at 1.4
+	# minor 5 (C3-2 v5 section 3): on a kit at minor 5, a module with a
+	# product-00 zorro key is tagged 1.5 from its Master, passes at 1.5,
+	# and is refused at 1.4 (a kit at minor 4 refuses the key itself, above)
+	if [ "${KABI##*.}" -ge 5 ]; then
 	mkbad $l zp5 "$WRAP"'MOD_MISC_WRAPPER(zp5, l, u, "x");\n' "$R0"'$match zorro:1212:2a,zorro:1212:00\n$rank ide\nzp5\tzp5\n' &&
 		if [ "$(python3 "$K/tools/modcheck.py" -k "$K" --kabi "$W/$l-zp5/src/Driver.o" "$W/$l-zp5/src/Master")" = "$l.1.5" ] &&
 		   python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zp5/out/mod.d/zp5" > "$W/zp5.out" 2>&1; then
@@ -271,6 +286,7 @@ for l in k30 k46; do
 		else fail "$l: the product-00 module's tag"; cat "$W/zp5.out"; fi
 	KABI_OVERRIDE=$l.1.4 mkbad $l zp4 "$WRAP"'MOD_MISC_WRAPPER(zp4, l, u, "x");\n' "$R0"'$match zorro:1212:00\n$rank ide\nzp4\tzp4\n' &&
 		refused "a 1.4 tag on a module with a product-00 zorro key" $l "$W/$l-zp4/out/mod.d/zp4" "needs kabi minor 5"
+	fi
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do

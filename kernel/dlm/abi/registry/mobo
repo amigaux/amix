@@ -5,3 +5,7 @@ a3000-wd
 a4000t-710
 gayle
 z3660-window
+# buddha: a stand-in, no probe.  On kernels whose core lacks patch 0055
+# the Buddha's module lists it in place of zorro:1212:00; its _load finds
+# the board itself.  Removed when kernels with that patch ship (C4-2 8.2).
+buddha
