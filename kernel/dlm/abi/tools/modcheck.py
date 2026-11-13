@@ -11,7 +11,9 @@
 #       the names it imports (their ddi.list or core.list line), but not
 #       below the kit's KABI_MIN (kit.conf; the kit's own minor in a kit
 #       without one).  So a module that imports no newer name loads on
-#       the kernels it loaded on before (C3-2 section 2)
+#       the kernels it loaded on before (C3-2 section 2).  With MASTER, at
+#       least the minor its keys need: 4 for a demand-class filesystem,
+#       5 for a zorro match key with product 00 (C3-2 section 3)
 #   modcheck.py [-k KIT] --kernel KABI
 #       the kit against a kernel's sidecar KABI (/stand/<line>/kabi, C3-3):
 #       the same line and pin, the kabi's family and major, the kit's minor
@@ -163,11 +165,20 @@ def names(path):
 
 
 FSDEMAND = 4		# the minor whose core loads a filesystem at its first mount
+ZPROD = 5		# the minor whose core takes a zorro key with product 00
 
 
-def master_fsdemand(path):
-    """a Master that says $class demand and names an $fs"""
+def zprod(match):
+    """a match= list with a zorro key whose product is 00 (core patch 0055)"""
+    return any(re.fullmatch(r'zorro:[0-9a-f]{4}:00', k) for k in match.split(','))
+
+
+def master_minor(path):
+    """the least minor a Master's own keys ask for: 4 for a demand-class
+    filesystem ($class demand with $fs), 5 for a $match key with product
+    00, else 0"""
     cls = fs = None
+    match = ''
     with open(path) as f:
         for line in f:
             w = line.split()
@@ -175,7 +186,9 @@ def master_fsdemand(path):
                 cls = w[1]
             elif len(w) >= 2 and w[0] == '$fs':
                 fs = w[1]
-    return cls == 'demand' and bool(fs)
+            elif len(w) >= 2 and w[0] == '$match':
+                match = w[1]
+    return max(FSDEMAND if cls == 'demand' and fs else 0, ZPROD if zprod(match) else 0)
 
 
 def minors(kit):
@@ -287,6 +300,9 @@ def moddata(e, path, c, reg, kit, depnames):
         if keys.get('class') == 'demand' and keys.get('fs') and int(m.group(3)) < FSDEMAND:
             bad('kabi=%s: a demand-class filesystem loads at its first mount, which needs '
                 'kabi minor %d (C3-2 section 3)' % (keys['kabi'], FSDEMAND))
+        if m and zprod(keys.get('match', '')) and int(m.group(3)) < ZPROD:
+            bad('kabi=%s: a zorro match key with product 00 needs kabi minor %d, whose core '
+                'takes it (C3-2 section 3)' % (keys['kabi'], ZPROD))
     if 'cc' in keys and keys['cc'] != c['PIN']:
         bad('cc=%s: the kit\'s pin is %s' % (keys['cc'], c['PIN']))
     if 'cpu' in keys and keys['cpu'] not in CPUS:
@@ -570,8 +586,8 @@ def main(argv):
         except (ValueError, OSError) as x:
             sys.exit('modcheck: %s: %s' % (rest[0], x))
         need = max([low] + [since[n] for n in imported(e, since)])
-        if len(rest) == 2 and master_fsdemand(rest[1]):
-            need = max(need, FSDEMAND)	# loads at its first mount (C3-2 section 3)
+        if len(rest) == 2:
+            need = max(need, master_minor(rest[1]))	# C3-2 section 3, minors 4 and 5
         print('%s.%s.%d' % (fam, major, min(need, int(top))))
         return 0
     while len(argv) > 1 and argv[0] in ('-k', '-d', '-w'):

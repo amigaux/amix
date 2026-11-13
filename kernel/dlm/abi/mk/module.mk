@@ -38,7 +38,9 @@
 # KABI_MIN (modcheck.py --kabi): a module that imports no name newer than
 # that loads on the kernels it loaded on before.  A demand-class filesystem
 # module ($class demand with $fs) is tagged minor 4 at least: it needs a
-# kernel whose core loads it at its first mount.  A step that fails
+# kernel whose core loads it at its first mount.  A module whose $match
+# has a zorro key with product 00 is tagged minor 5 at least: only a
+# kernel whose core has patch 0055 takes such a key.  A step that fails
 # removes the file it was making (.DELETE_ON_ERROR), so a module modcheck
 # refused is never left in mod.d for the next make to take as built.  The
 # cross tools (m68k-cbm-sysv4-*) must be on PATH.
