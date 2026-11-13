@@ -152,7 +152,7 @@ not enough.
 | Names | `c<card*8+unit>` in hexadecimal as today: cards 0–1 → `c0`–`cf`, cards 2–3 → `c10`–`c1f`; every tool that assumes one hex digit (`updbootpart`, the installer, `/etc/devnm` readers, the RTH1 kernel half's one-byte `bo_name` rewrite) moves to the general form |
 | Minor encoding | unit = bits 0–2, card low bit = bit 3, slice = bits 4–6, card high bit = bit 7. The RTH1 kernel half today builds the root minor as `card << 3 | unit` with `SDCARDS 2` (`amix-040-060-port/src/rth1.c:31,99,195`), which for cards 2–3 would land in the slice bits; it moves to `(card & 1) << 3 | (card >> 1) << 7 | slice << 4 | unit` and loops over four cards |
 | Drivers rebuilt for four cards | everything indexed by the sd card: `sd` (the slot table, `sdopen`'s bound), `dd` and `ct` (their per-card tables and every card decode, including ct's decode of a table index), `sdcardbase`, `kinfo`'s card loop, every driver array indexed by `cp->card`, and the RTH1 kernel half above. The `card[]`/`info[]` arrays of `a2091` and `a2090` are indexed by a board's ordinal among boards of its product, not by the sd card, and stay (corrected 2026-10-26 from the port's enumeration, C4-1 §2.3). On the 030 line from the relink kit's source; on the 040/060 line by the port's in-place patch in stage 4 |
-| Order | **one rule on both lines** (release decision 11), by rank key, compacted over the controllers present: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A3000 WD33C93 or A4000T 53C710), (4) Gayle IDE — the 1.0 040/060 order extended. A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept |
+| Order | **one rule on both lines** (release decision 11), by rank key, compacted over the controllers present: (1) Z3660 SCSI, (2) Zorro SCSI boards by board address, (3) the motherboard SCSI controller (A3000 WD33C93 or A4000T 53C710), (4) IDE controllers: Gayle IDE, Buddha (and the Catweasel Z-II) — the 1.0 040/060 order extended. The class follows the controller's kind, not its bus: the Buddha is a Zorro II board, but sorts with the Gayle, after every SCSI controller (C4-1 version 9 §4). A box with one controller always has it as card 0, so the stock single-controller names (`c6d0` for a disk at SCSI id 6) are kept |
 | Registration | `sd_register(queuefn, c, base, name, rank)` is accepted only before sd's first open; afterwards `EBUSY` and a console line. `c` is the board index handed back to `queuefn`, as in today's table; there is no probe function, because a module probes in its own `_load` before it registers (changed after the freeze, 2026-10-26; C4-1 §3). The floor's static controllers enter through sd's own table, ranked by product (C4-1 §4.2) |
 | Rank keys | four classes, `z3660`, `zorro`, `mobo`, `ide`, in the order below; within a class by base address (C4-1 §4). A module's `rank` key in `.moddata` names its class, and `sd_register` refuses another |
 | Card-number gate | over the board sets of record (§5.3): see there (`80-stages-and-proof.md` §2, stage 4) |
@@ -182,7 +182,8 @@ A4000T 53C710 + A4092 (+ Gayle IDE); Gayle IDE alone; and without a Z3660
 2026-10-26): A3000 onboard alone; A3000 onboard + A4091/A4092; A4091/A4092
 alone; Gayle IDE + A4091/A4092; A4000T 53C710 alone; A4000T 53C710 + A4092;
 on the 030 line A3000 onboard alone; A3000 onboard + A4091; A4091 alone; A2091 alone; Gayle IDE
-alone; Gayle IDE + A4091. The list is kept with the measurement rows (M-SD1)
+alone; Gayle IDE + A4091. Added 2026-11-13 for the Buddha (C4-2 version 10 §8.2), on both lines:
+Buddha alone; Gayle IDE + Buddha; A4091 + Buddha; and on the 040/060 line Z3660 + Buddha. The list is kept with the measurement rows (M-SD1)
 and grows only by adding rows.
 
 The stage-4 gate judges each set against one of three expectations:
@@ -196,8 +197,11 @@ The stage-4 gate judges each set against one of three expectations:
    1: `c6d0` becomes `ced0`); all by release decision 11. The new names are listed per
    set in the measurement record and in the release notes.
 3. **Three and four controllers** (1.0 dropped the third controller), and
-   sets with a controller 1.0 did not drive (the A4000T 53C710): judged
-   against the contract's expected names, not against 1.0.
+   sets with a controller 1.0 did not drive (the A4000T 53C710, the
+   Buddha): judged against the contract's expected names, not against 1.0.
+   Adding a Buddha renames no other controller's disk: its card comes
+   after every SCSI card, and after the Gayle's, whose base lies below
+   the Zorro II I/O space (0xE90000–0xEFFFFF) a Buddha is configured in.
 
 On the 040/060 line, Gayle IDE + A4091/A4092 keeps its 1.0 names: 1.0's
 IDE glue gave the IDE the sort key 0xfffffff0, after every board, and the

@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 9
+# C4-2 — what a root-class driver changes, version 10
 
 - **Status:** agreed 2026-10-26, version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -12,7 +12,7 @@
   dirty copyback line written back over the board's data; version 6
   (2026-10-27): the A4000T onboard 53C710's gate is the running
   Kickstart's `NCR scsi.device` resident (§8.1); version 7 (2026-11-02):
-  what the root-context confirmation covers, line by line (§2.1). Version 8 (2026-11-02): the Gayle IDE's gate takes the A1200 (§8). Version 9 (2026-11-02): the Gayle IDE's gate reads the Kickstart's resident tags, and the `board` parameter (§8).
+  what the root-context confirmation covers, line by line (§2.1). Version 8 (2026-11-02): the Gayle IDE's gate takes the A1200 (§8). Version 9 (2026-11-02): the Gayle IDE's gate reads the Kickstart's resident tags, and the `board` parameter (§8). Version 10 (2026-11-13): the Buddha and Catweasel Z-II IDE driver, its units and its root record (§8, §8.2).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -25,7 +25,8 @@
   register rule on its own schedule.
 - **Read by:** the root-class drivers' repositories: amix-z3660scsi (z3660scsi),
   amix-a4091 (A4091/A4092 and the A4000T onboard 53C710 as its second
-  target), amix-gayle-ide (Gayle IDE), kernel/modules (`ramdisk`)
+  target), amix-gayle-ide (Gayle IDE; Buddha and Catweasel Z-II IDE),
+  kernel/modules (`ramdisk`)
 - **Depends on:** C4-1 (`sd_register`), C4-3 (the RAM-disk hand-off),
   C4-4 (the arena), C4-5 (DDI v1.2 DMA); core patches 0029–0034
 
@@ -166,6 +167,7 @@ before the kernel halts or reboots, newest module first (core patch
 - A4091/A4092 and the 53C710: stop SCRIPTS and mask the chip's
   interrupt (M-HALT1);
 - Gayle IDE: mask its interrupt;
+- Buddha and Catweasel Z-II: nIEN on every drive (§8.2 item 6);
 - z3660scsi: leave the mailbox idle;
 - the ramdisk: nothing.
 
@@ -196,6 +198,7 @@ nothing for it, and `_load` cannot tell the difference.
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` (gated in `_load`, before any local-I/O access: AGA in VPOSR, then the Kickstart ROM's resident tags at 0xF80000–0xFFFFFF. `card.resource` resident means the A1200 row: base 0xDA0000, probe on ALTSTAT 0xDA101A, registered `A1200 IDE`. Otherwise the A4000 row: 0xDD2020, `A4000 IDE`. The parameter `board` overrides it: 0 auto, 1 A4000, 2 A1200, -1 never probe; versions 8 and 9) | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
+| Buddha / Catweasel Z-II IDE (`buddha`) | amix-gayle-ide (a build flavour of the Gayle driver's source) | `zorro:1212:00,zorro:1212:2a` | `ide` | INT2 through `root_defer` | nIEN on every drive | §8.2; tested in emulation only, untested on the real cards |
 | ramdisk | amix `kernel/modules` | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
 
 ### 8.1 The A4000T onboard 53C710's gate (version 6)
@@ -235,6 +238,50 @@ Kickstart on hardware without the chip (an A4000 running a T ROM): item 1
 passes there. Whether the ROM's own init then hangs before boot1 depends
 on how it probes, which is not measured. `declared=0` is the override for
 such a box.
+
+### 8.2 The Buddha and the Catweasel Z-II (version 10)
+
+The module `buddha` drives the Individual Computers Buddha
+(`zorro:1212:00`, every revision with product 0) and the Catweasel Z-II
+(`zorro:1212:2a`, product 0x2A) through the IDE logic they share: two ATA
+ports on a Buddha, three on a Catweasel Z-II.
+
+1. **The gate is the key.** The core links the module only when one of
+   its keys is in the board list (C4-4 §2). `_load` finds its boards with
+   `autocon` and probes each port, ALTSTAT and then a task-file readback
+   (on k30 `bprobe` does not catch an empty window, §2.1).
+2. **One card per board.** `sd_register` is called once per board found,
+   with `base` the board's AutoConfig address (`cd_BoardAddr`,
+   identity-mapped below 1 GiB), never a port's address: RTH1 finds the
+   card by that base (C4-1 §3, §5). `c` is the board's index among the
+   boards the module drives. kinfo's controller id is the AutoConfig
+   board's (C2-1 §2.1), `12120000` or `12122a00`.
+3. **Units**, fixed per port and drive, whatever drives are present:
+
+   | Port | Master | Slave |
+   |---|---|---|
+   | 0 | 6 | 5 |
+   | 1 | 3 | 2 |
+   | 2 (Catweasel Z-II only) | 1 | 0 |
+
+   A lone Buddha is card 0, so its port-0 master is `c6d0`, as on the
+   Gayle. Units 4 and 7 are not used.
+4. **The root record.** A generation that roots on a Buddha always
+   carries one: `root sd id=12120000 base=00000000 unit=<U> slice=1`
+   (`id=12122a00` on a Catweasel Z-II). RTH1 takes the AmigaOS unit only
+   when the record has none, and `buddha.device` numbers its units its
+   own way, so without the record the root is not found. With base 0
+   RTH1 matches by id, wherever Kickstart configured the board.
+5. **Two boards of one kind.** With base 0 both cards answer the id, and
+   RTH1 keeps the built-in root (`c6d0s1`), since exactly one card may
+   answer. On such a box the record names the root's board by its base,
+   `base=<cd_BoardAddr>`, which RTH1 compares with `sdcardbase`; that base
+   holds while the boards and their slots stay as they are. A Buddha and
+   a Catweasel Z-II differ by id, so base 0 serves them.
+6. **The interrupt.** INT2 through `root_defer` and `intr_attach` (§3), as
+   the Gayle's. The board's interrupt enable (a write at board + 0xFC0)
+   stays set until reset, so the driver masks each drive with nIEN in
+   its device-control register, at attach and in `_halt`.
 
 ## 9. Not in this contract
 
