@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — C2-4 version 29: the bootset file's facts, and a disk moved to another controller (b501b553)
+
+C2-4 says when /etc/default/bootset's bootdev and rootdev are read (only where kinfo does not give them), and how to name a new controller after a disk moves: cards, then build with --bootdev, --rootdev, --root and --swap, then commit.
+
 ## 2026-11-13 — the Buddha's stand-in key for the 1.1 kernels; kbootset -44 (194311ec, 6d8a9749)
 
 The Buddha's module lists the stand-in mobo:buddha in place of zorro:1212:00, which the 1.1 kernels' core refuses (C4-2 version 11). mobo:buddha joins the kit's registry with no probe. kbootset 1.1.0.261113-44 composes a root on zorro:1212:00 with a module listing it. The stand-in is removed when kernels with core patch 0055 ship. The kit tests follow the kit's kabi minor.
