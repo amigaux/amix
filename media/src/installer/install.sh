@@ -2690,8 +2690,10 @@ else
 # ===========================================================================
 # 6. OVERWRITE /stand/boot2.boot WITH THE FLAGS-BASED LOADER
 # ===========================================================================
-# core ships the NAME-BASED loader (sha256 5ab360b1...) at /stand/boot2.boot --
-# it cannot relocate the project's flags-based ET_REL kernels (D245/RELA Guru).
+# core ships the Amix 2.1 install-media loader (sha256 5ab360b1...) at
+# /stand/boot2.boot. Under Amiberry it boots the stock 2.1 and 2.1c kernels; on
+# metal, with this project's combined kernels, it fired Alert('RELA') (the D245
+# Guru) before the kernel ran, for a reason not established.
 # Replace it with the flags-based loader (f287ff3a..., shipped on the CD, gated
 # at build time). This is what the pipeline does before rebuilding a boot part;
 # it matters when the user later runs `make bootpart` on the installed system.
