@@ -28,9 +28,10 @@
 #   project's combined kernels, it fired Alert('RELA'|AT_DeadEnd) -> the D245 4C41 Guru
 #   at boot, before the kernel executed. Why it refuses them is not established, so it
 #   stays refused for this project's kernels. The PROVEN loader (flags-based, matches
-#   the sysroot boot2.c/rel.c) is 8192 B, sha256 f287ff3a...; the pipeline now installs it during lamination.
-#   reltest/relsim validate rel.c SOURCE semantics, so they green a kernel regardless of
-#   which loader is on disk -- this gate closes that blind spot by checking the LOADER.
+#   the sysroot boot2.c/rel.c) is 8192 B, sha256 f287ff3a...; the pipeline now installs
+#   it during lamination. reltest/relsim validate rel.c SOURCE semantics, so they green
+#   a kernel regardless of which loader is on disk -- this gate closes that blind spot
+#   by checking the LOADER.
 #
 # WHICH PROVEN LOADER. The contract names more than one metal-proven
 #   identity: `good` (f287ff3a) for the 030 line -- the contract's default_identity and
