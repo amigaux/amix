@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — the Buddha's stand-in key for the 1.1 kernels; kbootset -44; the kit stays at kabi 1.4 (818dff6a, 7c0d3e2e, 0c9cec6e)
+
+The Buddha's module lists the stand-in mobo:buddha in place of zorro:1212:00, which the 1.1 kernels' core refuses (C4-2 version 11). mobo:buddha joins the kit's registry with no probe. kbootset 1.1.0.261113-44 composes a root on zorro:1212:00 with a module listing it. The stand-in is removed when kernels with core patch 0055 ship. The 1.1 line's kit stays at kabi 1.4, the 1.1 kernels' minor: the checker refuses a product-00 key there. The kit tests follow the kit's kabi minor.
+
 ## 2026-11-13 — kabi 1.5: a product-00 zorro key needs a kernel that takes it (3d1f245c)
 
 C3-2 version 5. A kernel at minor 5 has core patch 0055 and takes a zorro match key with product 00. The kit tags a module with such a key 1.5, so kbootset and apkg refuse it on an older kernel instead of the boot failing. No new name. The bench guide describes the double panic after a failed root mount on 1.1 kernels.
