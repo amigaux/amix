@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — boot-chain contract: the 2.1 install-media boot2 (9569010f, 031125d6, 25da0415)
+
+The boot-chain contract and bootchain-verify no longer say that the Amix 2.1 install-media boot2 (5ab360b1) cannot relocate ET_REL kernels or that it is name-based. Under Amiberry it boots the stock 2.1 and 2.1c kernels. Its contract kind is now "install-media". It stays refused for this project's combined kernels, with which it raised Alert('RELA') on metal. Gate behaviour unchanged.
+
 ## 2026-11-06 — cut 68030-261106-77, kern30m k30.1.4.261106-77 (28107ac, d9db6ac, bf9e723, 7f6d9f1, f31a797)
 
 /dev/audio answers each AUDIO_VOLUME/AUDIO_PERIOD request once, so a refused request no longer reports success. A request with no data (ic_len 0) is refused with EINVAL instead of panicking the kernel through pullupmsg(NULL). A write longer than the free channel buffer plays once instead of replaying (tools/patch_audio_replies.py, after amix-paula's patchers, shared with the 040/060 line). Cut -76's TCP close linger was reverted before release; the TCP close defect stays open in KNOWN-ISSUES, whose workaround is a half-close (shutdown(fd,1), read to EOF, close). Also: kernel/k30/tests/audio (aurep2, audioctl2); KNOWN-ISSUES lists the shutdown stall and two open stock audio defects.
