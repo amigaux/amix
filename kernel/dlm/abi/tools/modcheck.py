@@ -311,8 +311,8 @@ def moddata(e, path, c, reg, kit, depnames):
         if key == 'always':
             continue
         if z:
-            if int(z.group(1), 16) == 0 or int(z.group(2), 16) == 0:
-                bad('match key %s: neither the manufacturer nor the product may be zero' % key)
+            if int(z.group(1), 16) == 0:
+                bad('match key %s: the manufacturer may not be zero (C3-1 section 3)' % key)
         elif key.startswith('mobo:') and key[5:] in mobo:
             continue
         elif not z:

@@ -1,4 +1,4 @@
-# C3-1 — the module object and `.moddata` version 2, version 6
+# C3-1 — the module object and `.moddata` version 2, version 7
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): the text form of parameter values (§3); version 3
@@ -8,7 +8,9 @@
   module): `fs` is required of every module that calls `vfs_register`,
   boot class too (§3); version 6 (2026-10-31): a demand-class module
   may load by its `fs` instead of `majors`, at the first mount of its
-  filesystem type (§3). Other repositories build against this text; a
+  filesystem type (§3); version 7 (2026-11-13): a `zorro` key's product
+  may be 00, its manufacturer never 0000 (§3). Other repositories build
+  against this text; a
   change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.1, §2, §3;
   `30-module-core.md` §2 patches 4 and 14
@@ -86,7 +88,7 @@ offset 8   ...       NUL-terminated "key=value" strings, ending with an empty st
 | `cc` | the compiler pin id (20 §3.2), equal to the kernel sidecar's `pin=` | always | `kbootset`, apkg, core |
 | `cpu` | lowest CPU: `68020`, `68030`, `68040` or `68060` | always | `kbootset` |
 | `class` | `boot` or `demand`; `root` from stage 4 | always | core, `kbootset` |
-| `match` | comma-separated keys: `zorro:MMMM:PP` (4 and 2 lowercase hex digits, neither all zero), `mobo:<probe>` from the registry, `always` | root class; optional for boot and demand | core |
+| `match` | comma-separated keys: `zorro:MMMM:PP` (4 and 2 lowercase hex digits; the manufacturer never 0000, since the board list ends at a zero manufacturer; the product may be 00, as the Buddha's `zorro:1212:00` is; a kernel whose core lacks patch 0055 refuses product 00 at load, version 7), `mobo:<probe>` from the registry, `always` | root class; optional for boot and demand | core |
 | `rank` | the sd rank key (30 §5) | root-class disk controllers | core |
 | `majors` | comma-separated `c:<n>` / `b:<n>`, each in the registry (20 §6) | when the module registers a device; a demand-class module has `majors` or `fs`, not both | core, `kbootset` |
 | `fs` | the filesystem name for `vfs_register` | every module that calls `vfs_register`, of any class (C4-6 §3); a demand-class one loads at the first mount of this type, on a kernel at kabi minor 4 or later (C4-6 §5) | core, `kbootset` |
