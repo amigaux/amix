@@ -249,7 +249,9 @@ ports on a Buddha, three on a Catweasel Z-II.
 1. **The gate is the key.** The core links the module only when one of
    its keys is in the board list (C4-4 §2). `_load` finds its boards with
    `autocon` and probes each port, ALTSTAT and then a task-file readback
-   (on k30 `bprobe` does not catch an empty window, §2.1).
+   (on k30 `bprobe` does not catch an empty window, §2.1). The Buddha's
+   key has product 00, which only a kernel whose core has patch 0055
+   accepts (C3-1 version 7 §3); an older one refuses the module at load.
 2. **One card per board.** `sd_register` is called once per board found,
    with `base` the board's AutoConfig address (`cd_BoardAddr`,
    identity-mapped below 1 GiB), never a port's address: RTH1 finds the

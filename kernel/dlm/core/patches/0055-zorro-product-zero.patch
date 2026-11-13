@@ -1,0 +1,62 @@
+Subject: a zorro match key may have product 00
+
+0003 refused a zorro:MMMM:PP key when either field was zero.  A zero
+manufacturer stays refused: the board list ends at one, so the key could
+never match.  Product 00 is a real product (the Individual Computers
+Buddha, zorro:1212:00), and plat_match compares it as any other.  The
+state harness's product-00 case loads now; a manufacturer-0000 case with
+a nonzero product joins the refusals.  Contract C3-1 section 3.
+
+--- a/dlm_ld.c
++++ b/dlm_ld.c
+@@ -236,7 +236,8 @@
+ 	return n > 0;
+ }
+ 
+-/* zorro:MMMM:PP (neither all zero), mobo:<probe>, always */
++/* zorro:MMMM:PP (manufacturer not 0000: the board list ends at a zero
++ * manufacturer; product 00 is a real one, the Buddha's), mobo:<probe>, always */
+ static int
+ okmatch(s)
+ 	char *s;
+@@ -252,7 +253,7 @@
+ 	for (i = 6; i < 13; i++)
+ 		if (i != 10 && !ishex(s[i]))
+ 			return 0;
+-	return strncmp(s + 6, "0000", 4) != 0 && strncmp(s + 11, "00", 2) != 0;
++	return strncmp(s + 6, "0000", 4) != 0;
+ }
+ 
+ /* c:<n> or b:<n>, n 0..255 */
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -307,7 +307,8 @@
+ mod('mdnocl', md=['name=mdnocl', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020'])
+ mod('mdroot', md=['name=mdroot', 'kabi=' + KABI, 'cc=' + PIN, 'cpu=68020', 'class=root'])
+ mod('mdzero', extra=['match=zorro:0000:00'])
+-mod('mdzpr', extra=['match=zorro:144b:00'])
++mod('mdzmf', extra=['match=zorro:0000:01'])
++mod('mdzpr', extra=['match=zorro:1212:00'])                # product 00: loads
+ mod('mdcrit', extra=['!future=1'])
+ mod('mdunkn', extra=['future=1'])                           # ignored: loads
+ mod('mddup', extra=['class=boot'])
+--- a/test/state.c
++++ b/test/state.c
+@@ -345,7 +345,7 @@
+ 	REFUSED("mdnocl", ECONFIG, "no class key -> ECONFIG");
+ 	REFUSED("mdroot", ECONFIG, "root class outside the arena -> ECONFIG");
+ 	REFUSED("mdzero", ECONFIG, "zorro:0000:00 match key -> ECONFIG");
+-	REFUSED("mdzpr", ECONFIG, "zorro key with product 00 -> ECONFIG");
++	REFUSED("mdzmf", ECONFIG, "zorro key with manufacturer 0000 -> ECONFIG");
+ 	REFUSED("mdcrit", ECONFIG, "unknown critical key -> ECONFIG");
+ 	REFUSED("mddup", ECONFIG, "a key given twice -> ECONFIG");
+ 	REFUSED("mdtier", ECONFIG, "core tier without build -> ECONFIG");
+@@ -357,6 +357,8 @@
+ #undef	REFUSED
+ 	check(modload("mdmok", &id) == 0 && byname("mdmok"), "kabi minor 0 on a minor-3 kernel loads");
+ 	check(modload("mdunkn", &id) == 0 && byname("mdunkn"), "an unknown key is ignored");
++	check(modload("mdzpr", &id) == 0 && byname("mdzpr"),
++	    "a zorro key with product 00 and a manufacturer loads");
+ 	check(modload("mdtok", &id) == 0 && byname("mdtok"),
+ 	    "core tier with this kernel's build loads");
+ 	check(modload("mdkeys", &id) == 0 && byname("mdkeys"),

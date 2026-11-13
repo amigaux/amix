@@ -131,6 +131,20 @@ for l in k30 k46; do
 	else
 		fail "$l: the font module"; cat "$d/make.log"
 	fi
+	# a module modcheck refuses is not left behind for the next make
+	d=$W/$l-left
+	mkdir -p "$d"
+	printf '%b' "$WRAP"'MOD_MISC_WRAPPER(left, l, u, "x");\n' > "$d/left.c"
+	printf '%b' "$M0"'$match zorro:0000:01\nleft\tleft\n' > "$d/Master"
+	printf 'KIT = %s\nMODULE = left\nOBJS = left.o\ninclude $(KIT)/mk/module.mk\n' "$K" > "$d/Makefile"
+	if (cd "$d" && make > make1.log 2>&1); then
+		fail "$l: a module modcheck refuses was built"
+	elif [ ! -e "$d/build/$l/mod.d/left" ] && ! (cd "$d" && make > make2.log 2>&1); then
+		pass "$l: a module modcheck refused is removed, and the next make refuses it again"
+	else
+		fail "$l: a refused module was left in mod.d"; cat "$d/make1.log" "$d/make2.log" 2>/dev/null
+	fi
+	d=$W/$l-font
 	if (cd "$d" && make LOCALIZE_OBJCOPY=no-such-objcopy > nolocal.log 2>&1); then
 		fail "$l: LOCALIZE without its objcopy was not refused"
 	elif grep -q "LOCALIZE needs no-such-objcopy" "$d/nolocal.log"; then
@@ -172,7 +186,13 @@ for l in k30 k46; do
 	mkbad $l ramdisk "$WRAP"'MOD_MISC_WRAPPER(ramdisk, l, u, "x");\n' "$M0"'$majors b:20\nramdisk\tramdisk\n' &&
 		refused "a block major on a demand module" $l "$W/$l-ramdisk/out/mod.d/ramdisk" "a block major needs a root-class module"
 	mkbad $l zkey "$WRAP"'MOD_MISC_WRAPPER(zkey, l, u, "x");\n' "$M0"'$match zorro:0000:01\nzkey\tzkey\n' &&
-		refused "a zero match key" $l "$W/$l-zkey/out/mod.d/zkey" "may be zero"
+		refused "a zero manufacturer in a match key" $l "$W/$l-zkey/out/mod.d/zkey" "manufacturer may not be zero"
+	mkbad $l zprod "$WRAP"'MOD_MISC_WRAPPER(zprod, l, u, "x");\n' "$R0"'$match zorro:1212:00\n$rank ide\nzprod\tzprod\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zprod/out/mod.d/zprod" > "$W/zprod.out" 2>&1; then
+			pass "$l: a match key with product 00 (zorro:1212:00) is accepted"
+		else
+			fail "$l: a match key with product 00"; cat "$W/zprod.out"
+		fi
 	PIN_OVERRIDE=gcc-2.95.3-0000000 mkbad $l pin "$WRAP"'MOD_MISC_WRAPPER(pin, l, u, "x");\n' "$M0"'pin\tpin\n' &&
 		refused "another compiler pin" $l "$W/$l-pin/out/mod.d/pin" "the kit's pin is"
 	other=$([ $l = k30 ] && echo k46.1.2 || echo k30.1.2)
