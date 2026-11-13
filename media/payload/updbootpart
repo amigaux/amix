@@ -42,9 +42,9 @@
 #   * makeiblk is invoked as ./makeiblk (it is /stand/makeiblk, not on PATH).
 #   * the boot slice is s3 of the ROOT disk: root cNd0s1 -> boot cNd0s3, with N
 #     DERIVED from the real root device in /etc/vfstab -- never hardcoded.
-#   * /stand/boot2.boot MUST be the flags-based loader (sum -r 14193). The
-#     name-based loader D245s the flags-based ET_REL kernels; we refuse anything
-#     but 14193 before we write a single block.
+#   * /stand/boot2.boot MUST be a proven flags-based loader (sum -r 14193 or
+#     27860). The 2.1 install-media loader D245'd this project's combined kernels
+#     on metal; we refuse anything else before we write a single block.
 #
 # =============================================================================
 # MODES
@@ -72,16 +72,17 @@ PROG=updbootpart
 STAND=/stand
 VFSTAB=/etc/vfstab
 
-# The flags-based /stand/boot2.boot fingerprint (sum -r). The name-based install-
-# media loader has a different sum and CANNOT relocate the flags-based ET_REL
-# kernels (D245/RELA Guru on metal); refuse anything but this.
+# The flags-based /stand/boot2.boot fingerprint (sum -r). The 2.1 install-media
+# loader has a different sum; on metal, with this project's combined kernels, it
+# fired Alert('RELA') (the D245 Guru) before the kernel ran, for a reason not
+# established. Refuse anything but the proven loaders.
 # The two CONTRACT-PROVEN flags-based loaders (amix-kerntools
 # contracts/bootchain-v1.json, its 'proven' list): good is the 68030 line's
 # loader and good_040 the 68040/68060 one. BOTH are legitimate here -- which one
 # is correct depends on the KERNEL LINE this disk boots, and that is the caller's
 # business, not ours: we frame a slice, we do not choose a lineage. What must be
-# refused is a loader that is NEITHER, because the name-based install-media
-# loader cannot relocate a flags-based ET_REL kernel (D245/RELA).
+# refused is a loader that is NEITHER: the 2.1 install-media loader D245'd this
+# project's kernels on metal, and any other loader is unproven.
 BOOT2_SUMR=14193                # good      -- 68030 line
 BOOT2_SUMR_040=27860            # good_040  -- 68040/68060 line
 
@@ -282,8 +283,8 @@ else
 	die "kernel identity gate FAILED: $STAND/unix sum -r '$kunix' != expected '$EXPECT_KSUM' -- refusing to frame the wrong kernel"
 fi
 
-# 5c. the boot2 loader gate: it MUST be the flags-based loader (sum -r 14193). The
-# name-based loader cannot relocate the flags-based ET_REL kernels (D245/RELA).
+# 5c. the boot2 loader gate: it MUST be a proven flags-based loader (sum -r 14193
+# or 27860). The 2.1 install-media loader D245'd this project's kernels on metal.
 kboot2=`sumr "$STAND/boot2.boot"`
 b2name=""
 if is_num "$kboot2"; then
@@ -294,8 +295,8 @@ if [ -n "$b2name" ]; then
 	msg "gate BOOT2   : $STAND/boot2.boot sum -r $kboot2 == flags-based $b2name  OK"
 else
 	# State what is known and no more. This loader is neither proven flags-based
-	# one; it MAY be the name-based install-media loader (which D245s on a
-	# flags-based kernel) or something nobody has characterised. Naming one culprit
+	# one; it MAY be the 2.1 install-media loader (which D245'd this project's
+	# kernels on metal) or something nobody has characterised. Naming one culprit
 	# as fact is the failure the contract's unknown_policy warns about -- an
 	# unrecognised loader is UNPROVEN, which is a different claim.
 	die "boot2 loader gate FAILED: $STAND/boot2.boot sum -r '$kboot2' is neither proven flags-based loader ($BOOT2_SUMR good, $BOOT2_SUMR_040 good_040) -- unproven loader, refusing to frame"

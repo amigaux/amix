@@ -735,10 +735,13 @@ The miniroot's `/usr/apkg/sadm/install/bin/pkginstall` shim exec's
 7. **boot2** — overwrite `<root>/stand/boot2.boot` with the flags-based loader
    the medium carries (`f287ff3a…` on the 030 line; the 68040/68060 line's media
    carry `fd7dacf6…`, the contract identity `good_040`, selected per-profile with
-   `BOOTSLICE_BOOT2_IDENTITY` — see `profiles/README.md`). core ships the
-   name-based `5ab360b1…` loader, which D245/RELA-Guros flags-based ET_REL
-   kernels — the same swap the kerntools pipeline does before rebuilding a boot
-   partition. The driver copies whatever `build-bootslice.py` gated and shipped;
+   `BOOTSLICE_BOOT2_IDENTITY` — see `profiles/README.md`). core ships the Amix 2.1
+   install-media loader `5ab360b1…`. Under Amiberry it boots the stock 2.1 and 2.1c
+   kernels (both m68k ET_REL, neither carrying the segments `.kvsysseg`/`.kvsegmap`/
+   `.kvsegu`/`.uvblock`); on metal, with this project's combined kernels, it fired
+   `Alert('RELA')` (the D245 Guru) before the kernel ran. Why it refuses those is not
+   established, so it is replaced — the same swap the kerntools pipeline does before
+   rebuilding a boot partition. The driver copies whatever `build-bootslice.py` gated and shipped;
    the identity decision is made once, host-side, at assembly time.
 8. **boot slice** — `dd` the pre-built, gated chain image onto the target's
    UNI\0 boot slice. No chain reconstruction in sh.
@@ -1410,7 +1413,7 @@ why they presented as a tool politely refusing rather than as a bug:
 | # | defect | what it looked like |
 |---|---|---|
 | A | the controller regex was **decimal-only**: `c\([0-9][0-9]*\)d0s1` | `ced0s1` yielded an EMPTY `CN`, so the tool refused with *"root device … is not /dev/dsk/cNd0s1 — refusing to guess the boot slice"*. Correct behaviour on a wrong reading, which is exactly why it read as a missing device rather than a parse bug |
-| B | the boot2 gate pinned **only** `good` (`sum -r` 14193) | a `good_040` slice (27860) — i.e. every 68040/68060 image — was refused, **and the message named the wrong culprit as fact**: *"the name-based loader D245s"* |
+| B | the boot2 gate pinned **only** `good` (`sum -r` 14193) | a `good_040` slice (27860) — i.e. every 68040/68060 image — was refused, **and the message named a culprit as fact**: it blamed the 2.1 install-media loader for a loader it had only failed to recognise |
 | C | the `--pkg` ROOTDEV gate compared a `hexval`'d id (14) against the **CN string** (`"e"`) | a mismatch that can never be satisfied |
 
 **N is one HEX digit, not decimal.** It carries the CARD INDEX, which the kernel packs into
@@ -1491,8 +1494,9 @@ sync; sync
 Traps the tool **owns** (each proven on-box): `makeiblk` is invoked
 `./makeiblk` (it is `/stand/makeiblk`, not on `PATH`); the boot slice is **s3 of the
 root disk** with **N derived** from the `/` line of `/etc/vfstab` (root `cNd0s1` →
-boot `cNd0s3`), *never* hardcoded; and `/stand/boot2.boot` must be the **flags-based
-loader** — the name-based loader D245s the flags-based ET_REL kernels.
+boot `cNd0s3`), *never* hardcoded; and `/stand/boot2.boot` must be a proven **flags-based
+loader** — the 2.1 install-media loader fired `Alert('RELA')` (the D245 Guru) on metal with
+this project's combined kernels, for a reason not established.
 
 ### Fail-closed gates (before a single block is written)
 
@@ -1500,7 +1504,7 @@ loader** — the name-based loader D245s the flags-based ET_REL kernels.
 |------|-------|-----|
 | kernel identity | `sum -r /stand/unix` == expected `KSUM_R` (from `--ksum N`, a bare `N`, or `pkgparam <PKG> KSUM_R`) | never frame the wrong kernel; refuse without an expected sum |
 | kernel identity, **rollback** | `sum -r /stand/OLDunix` == the same expected `KSUM_R`, **before** the copy | never *restore* the wrong kernel either: on a refusal `/stand/unix` must be byte-untouched (see above) |
-| boot2 loader | `sum -r /stand/boot2.boot` == **14193** | the name-based loader D245s; refuse anything else |
+| boot2 loader | `sum -r /stand/boot2.boot` == **14193** (`good`) or **27860** (`good_040`) | only the proven flags-based loaders; the 2.1 install-media loader D245'd this project's kernels on metal; refuse anything else |
 | rootdev | `pkgparam <PKG> ROOTDEV` decodes (minor `= (slice<<4)\|id`) to the derived root `cNd0s1` | the kernel's baked-in rootdev must name *this* disk |
 | readback | frame → temp file → `dd` to the slice → `sync;sync` → `dd` the slice **back through the raw node** → `cmp` | trust the write only when the *disk* is byte-identical to the frame |
 
