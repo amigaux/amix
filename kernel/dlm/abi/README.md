@@ -43,12 +43,13 @@ Paula module needs (`AllocMem`, `FreeMem`, `displaytype`, `paula_busy`,
 `audio_nopen`); only a kernel whose cut patches the stock audio driver
 exports it. 1.4 adds no name: its kernels' module core loads a
 demand-class filesystem module at the first mount of its type, so such a
-module carries 1.4 whatever it imports (C3-2 §3, C4-6 §5). 1.5 adds no
-name either: its kernels' core takes a `zorro` match key with product 00,
-so a module with one (the Buddha's `zorro:1212:00`) carries 1.5 (C3-2 §3,
-C3-1 §3). A module carries the highest minor among the names it
-imports, and never less than `KABI_MIN` (1.2), and it loads on a kernel
-of that minor or later (C3-2 §2).
+module carries 1.4 whatever it imports (C3-2 §3, C4-6 §5). Minor 5
+(C3-2 §3) is for the kernels after 1.1, whose core takes a `zorro` match
+key with product 00. This kit stays at 1.4, the 1.1 kernels' minor, so
+the checker refuses such a key here; the Buddha's module lists the
+stand-in `mobo:buddha` (C4-2 §8.2 item 7). A module carries the highest
+minor among the names it imports, and never less than `KABI_MIN` (1.2),
+and it loads on a kernel of that minor or later (C3-2 §2).
 
 Every name in the kit is at most 14 bytes, so it unpacks on an s5
 filesystem too.
