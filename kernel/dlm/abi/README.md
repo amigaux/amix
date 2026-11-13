@@ -43,7 +43,10 @@ Paula module needs (`AllocMem`, `FreeMem`, `displaytype`, `paula_busy`,
 `audio_nopen`); only a kernel whose cut patches the stock audio driver
 exports it. 1.4 adds no name: its kernels' module core loads a
 demand-class filesystem module at the first mount of its type, so such a
-module carries 1.4 whatever it imports (C3-2 §3, C4-6 §5). A module carries the highest minor among the names it
+module carries 1.4 whatever it imports (C3-2 §3, C4-6 §5). 1.5 adds no
+name either: its kernels' core takes a `zorro` match key with product 00,
+so a module with one (the Buddha's `zorro:1212:00`) carries 1.5 (C3-2 §3,
+C3-1 §3). A module carries the highest minor among the names it
 imports, and never less than `KABI_MIN` (1.2), and it loads on a kernel
 of that minor or later (C3-2 §2).
 

@@ -1,6 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 4
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 5
 
-- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4). Version 5 (2026-11-13): minor 5, a kernel whose core takes a `zorro` match key with product 00 (§3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -173,6 +173,16 @@ mount of that type (C4-6 §5). A demand-class filesystem module is tagged
 minor 4 whatever it imports, so `kbootset` gate 2 and apkg's pre-flight
 refuse it on an older kernel, whose core would never load it. Every
 module of minor 3 or below still fits a minor-4 kernel.
+
+**Minor 5, product 00** (version 5). No new DDI name: minor 5 says that
+the kernel's module core has patch 0055, which takes a `zorro:MMMM:00`
+match key (C3-1 version 7 §3); an older core refuses such a module at
+load, `ECONFIG`, so a root-class one is never linked and its root is not
+found. A module with such a key, the Buddha's `zorro:1212:00`, is tagged
+minor 5 whatever it imports, so `kbootset` gate 2 and apkg's pre-flight
+refuse it on an older kernel instead of the boot failing. A cut claims
+1.5 only with core patch 0055. Every module of minor 4 or below still
+fits a minor-5 kernel.
 
 The two exclusion flags stay data names, and are not replaced by a
 `paula_claim()`/`paula_release()` pair (2026-10-28). No rule here

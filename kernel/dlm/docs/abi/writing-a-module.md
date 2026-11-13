@@ -93,7 +93,7 @@ of `[a-z0-9_-]`. The prefix is the one the wrapper macro uses
 | `$class` | `boot` (loaded after the root is mounted), `demand` (at the first open of one of its majors, or for a filesystem with `$fs`, at the first mount of its type, on a kabi 1.4 kernel) or `root` (placed by the loader and linked before the root is mounted: a disk controller, a root filesystem, the RAM disk; `docs/contracts/C4-2-root-class-driver.md`) |
 | `$cpu` | the lowest CPU it runs on: `68020`, `68030`, `68040`, `68060`. Leave it out and the make fragment gives the line's (68030 on k30, 68040 on k46, or `MODCPU`), so one Master serves both kits |
 | `$majors` | `c:<n>` per character major and `b:<n>` per block major, each registered to this module's name in the kit's `registry/majors`. A block major needs a root-class, pinned module |
-| `$match` | for a boot module that needs a board, and always for a root module: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated |
+| `$match` | for a boot module that needs a board, and always for a root module: `zorro:MMMM:PP`, `mobo:<probe>` or `always`, comma-separated. A `zorro` key with product 00 (the Buddha's `zorro:1212:00`) tags the module kabi 1.5: it loads only on a kernel whose core takes such a key |
 | `$rank` | a root-class disk controller's sd class: `z3660`, `zorro`, `mobo` or `ide` (C4-1 §4.1). A root filesystem and the RAM disk have none |
 | `$fs` | a filesystem module's type name, the one `vfs_register` takes (C4-6 §3); the module is then pinned (no `$unload allowed`) |
 | `$depend` | modules whose globals it uses (one line per name). Build those first and name their objects in the Makefile's `DEPS`: without them modfix stops at `modfix: undefined: <symbol>` |

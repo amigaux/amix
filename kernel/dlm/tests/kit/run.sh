@@ -262,6 +262,15 @@ for l in k30 k46; do
 		else fail "$l: the demand-class filesystem module's tag"; cat "$W/dfs.out"; fi
 	KABI_OVERRIDE=$l.1.3 mkbad $l dfs3 "$WRAP"'MOD_MISC_WRAPPER(dfs3, l, u, "x");\n' "$M0"'$fs dfs3\ndfs3\tdfs3\n' &&
 		refused "a 1.3 tag on a demand-class filesystem module" $l "$W/$l-dfs3/out/mod.d/dfs3" "needs kabi minor 4"
+	# minor 5 (C3-2 v5 section 3): a module with a product-00 zorro key is
+	# tagged 1.5 from its Master, passes at 1.5, and is refused at 1.4
+	mkbad $l zp5 "$WRAP"'MOD_MISC_WRAPPER(zp5, l, u, "x");\n' "$R0"'$match zorro:1212:2a,zorro:1212:00\n$rank ide\nzp5\tzp5\n' &&
+		if [ "$(python3 "$K/tools/modcheck.py" -k "$K" --kabi "$W/$l-zp5/src/Driver.o" "$W/$l-zp5/src/Master")" = "$l.1.5" ] &&
+		   python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zp5/out/mod.d/zp5" > "$W/zp5.out" 2>&1; then
+			pass "$l: a module with a product-00 zorro key is tagged $l.1.5 from its Master and passes"
+		else fail "$l: the product-00 module's tag"; cat "$W/zp5.out"; fi
+	KABI_OVERRIDE=$l.1.4 mkbad $l zp4 "$WRAP"'MOD_MISC_WRAPPER(zp4, l, u, "x");\n' "$R0"'$match zorro:1212:00\n$rank ide\nzp4\tzp4\n' &&
+		refused "a 1.4 tag on a module with a product-00 zorro key" $l "$W/$l-zp4/out/mod.d/zp4" "needs kabi minor 5"
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do

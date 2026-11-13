@@ -1130,6 +1130,16 @@ its static driver.
   negative control, -71): `RTH1: root c6d0s1 built in (controller not
   present)`, then `PANIC: vfs_mountroot: cannot mount root: errno 89`,
   and the next boot is the loader's L8 fallback to the good generation.
+- `PANIC: vfs_mountroot: cannot mount root: errno <n>`, then a second
+  panic (`DOUBLE PANIC`, an access fault in `ufs_update`) and a hang with
+  no reboot: a kernel that names `rootfstype` (the manifest's `rootfs`
+  through the loader record) keeps ufs's operations on the root vfs whose
+  mount failed, and the panic path's `sync()` reads its empty
+  `vfs_data`. Measured on the 1.1 k46 kernel (2026-11-13); the k30
+  kernels name `rootfstype` the same way, not measured. The
+  root failure is the first line's; the second is the kernel's panic
+  path. Power-cycle: L8 then falls back on that boot. A kernel cut with
+  the panic-path fix reboots by itself, as M-GEN5's trial kernels did.
 - `dlm: root module z3660scsi is not the booted manifest's; not linked`:
   the manifest copy and the directory disagree (a boot2 and kbootset
   from different revisions).
