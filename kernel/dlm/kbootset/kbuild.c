@@ -937,6 +937,17 @@ named(const char *list, const char *name)
 	}
 	return 0;
 }
+/*
+ * a module's match= names the controller whose key is key: the key itself,
+ * or its stand-in.  The Buddha is zorro:1212:00, a key a core without
+ * patch 0055 refuses, so its module lists mobo:buddha instead until
+ * kernels with that patch ship (C4-2 section 8.2)
+ */
+static int
+names_ctl(const char *match, const char *key)
+{
+	return listed(match, key) || (listed("zorro:1212:00", key) && listed(match, "mobo:buddha"));
+}
 
 /*
  * The modules for kernel kk, gates 1-3 (C3-5 section 2); their records,
@@ -962,7 +973,7 @@ covered(const char *keys, const char *key, int n, char (*match)[KB_RMATCH])
 	if (listed(keys, key))
 		return 1;
 	for (i = 0; i < n; i++)
-		if (listed(match[i], key))
+		if (names_ctl(match[i], key))
 			return 1;
 	return 0;
 }
@@ -1265,7 +1276,7 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 	 * block major 20 (C4-3 section 1) */
 	for (i = 0; i < nmods && rc == KS_OK; i++)
 		if (!strcmp(mods[i].i.cls, "root") &&
-		    (listed(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs) ||
+		    (names_ctl(mods[i].i.match, f->rootdev) || !strcmp(mods[i].i.name, rootfs) ||
 		     (!strcmp(f->root, "ramdisk") && named(mods[i].i.majors, "b:20"))))
 			mods[i].safe = 1;
 	/* and every controller module ranked at or before the root's class,
@@ -1277,7 +1288,7 @@ modules(struct ks *k, const char *root, const struct kb_kernel *kk, ax_u32 id, c
 		int rk = 0;
 
 		for (i = 0; i < nmods && !rk; i++)
-			if (!strcmp(mods[i].i.cls, "root") && listed(mods[i].i.match, f->rootdev))
+			if (!strcmp(mods[i].i.cls, "root") && names_ctl(mods[i].i.match, f->rootdev))
 				rk = rankof(mods[i].i.rank);
 		if (!rk)
 			rk = !strncmp(f->rootdev, "zorro:", 6) ? 2 : !strcmp(f->rootdev, "mobo:gayle") ? 4 :

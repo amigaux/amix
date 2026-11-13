@@ -411,6 +411,13 @@ and
 .BR zorro:144b:01 ,
 .BR mobo:gayle ,
 .BR mobo:a4000t-710 .
+A Buddha's key is
+.BR zorro:1212:00 ;
+on the 1.1 kernels its module lists the stand-in
+.B mobo:buddha
+instead, and
+.B build
+takes such a module as the driver of that key.
 Given a disk node
 .RB ( /dev/dsk/c8d0s1 ,
 .BR /dev/dsk/ced0s1 ,

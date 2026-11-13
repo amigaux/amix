@@ -1,4 +1,4 @@
-# C4-2 — what a root-class driver changes, version 10
+# C4-2 — what a root-class driver changes, version 11
 
 - **Status:** agreed 2026-10-26, version 1: its own
   contract beside C3-6, and `root_defer` a DDI call (core patch 0036);
@@ -12,7 +12,7 @@
   dirty copyback line written back over the board's data; version 6
   (2026-10-27): the A4000T onboard 53C710's gate is the running
   Kickstart's `NCR scsi.device` resident (§8.1); version 7 (2026-11-02):
-  what the root-context confirmation covers, line by line (§2.1). Version 8 (2026-11-02): the Gayle IDE's gate takes the A1200 (§8). Version 9 (2026-11-02): the Gayle IDE's gate reads the Kickstart's resident tags, and the `board` parameter (§8). Version 10 (2026-11-13): the Buddha and Catweasel Z-II IDE driver, its units and its root record (§8, §8.2).
+  what the root-context confirmation covers, line by line (§2.1). Version 8 (2026-11-02): the Gayle IDE's gate takes the A1200 (§8). Version 9 (2026-11-02): the Gayle IDE's gate reads the Kickstart's resident tags, and the `board` parameter (§8). Version 10 (2026-11-13): the Buddha and Catweasel Z-II IDE driver, its units and its root record (§8, §8.2). Version 11 (2026-11-13): on the 1.1 kernels the Buddha's module lists the stand-in `mobo:buddha` in place of `zorro:1212:00`, until kernels with core patch 0055 ship (§8, §8.2 item 7).
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
 - **Implements:** `docs/spec/30-module-core.md` §3 (`marc_root` and its
@@ -198,7 +198,7 @@ nothing for it, and `_load` cannot tell the difference.
 | A4091 / A4092 / A4770 | amix-a4091 | `zorro:0202:54,zorro:c0de:01,zorro:c0de:02` (the A4770 as its `driver.conf` has it; untested on hardware) | `zorro` | none in v1: the driver is synchronous and polled (C4-2 §3 allows it); INT2 through `root_defer` when it is added | stop SCRIPTS (the init path's abort and soft reset) | the per-card arrays a constant 4 (C4-1 §2.3); its chip-visible structures in one `dma_alloc` area, DMA through C4-5; the A4092 needs the kernel's unsigned-autocon fix in every family |
 | A4000T onboard 53C710 | amix-a4091 (second target, `a4kt710`) | `mobo:a4000t-710` (gated in `_load`, §8.1; M-A4T1) | `mobo` | through `root_defer` | stop SCRIPTS | the cardless A4000T's only SCSI root |
 | Gayle IDE | amix-gayle-ide | `mobo:gayle` (gated in `_load`, before any local-I/O access: AGA in VPOSR, then the Kickstart ROM's resident tags at 0xF80000–0xFFFFFF. `card.resource` resident means the A1200 row: base 0xDA0000, probe on ALTSTAT 0xDA101A, registered `A1200 IDE`. Otherwise the A4000 row: 0xDD2020, `A4000 IDE`. The parameter `board` overrides it: 0 auto, 1 A4000, 2 A1200, -1 never probe; versions 8 and 9) | `ide` | INT2 through `root_defer` (its own interrupt-table search goes) | mask | `amix-gayle-ide/docs/module-form.md` |
-| Buddha / Catweasel Z-II IDE (`buddha`) | amix-gayle-ide (a build flavour of the Gayle driver's source) | `zorro:1212:00,zorro:1212:2a` | `ide` | INT2 through `root_defer` | nIEN on every drive | §8.2; tested in emulation only, untested on the real cards |
+| Buddha / Catweasel Z-II IDE (`buddha`) | amix-gayle-ide (a build flavour of the Gayle driver's source) | `zorro:1212:2a,mobo:buddha` on the 1.1 kernels (kabi minor 4); `zorro:1212:00,zorro:1212:2a` once kernels with core patch 0055 (minor 5) ship (§8.2 item 7) | `ide` | INT2 through `root_defer` | nIEN on every drive | §8.2; tested in emulation only, untested on the real cards |
 | ramdisk | amix `kernel/modules` | `always` | — | none | none | block row `b:20`; unit 0 the loader's image (C4-3) |
 
 ### 8.1 The A4000T onboard 53C710's gate (version 6)
@@ -251,7 +251,8 @@ ports on a Buddha, three on a Catweasel Z-II.
    `autocon` and probes each port, ALTSTAT and then a task-file readback
    (on k30 `bprobe` does not catch an empty window, §2.1). The Buddha's
    key has product 00, which only a kernel whose core has patch 0055
-   accepts (C3-1 version 7 §3); an older one refuses the module at load.
+   accepts (C3-1 version 7 §3); an older one refuses the module at load,
+   so on those kernels the module carries the stand-in of item 7.
 2. **One card per board.** `sd_register` is called once per board found,
    with `base` the board's AutoConfig address (`cd_BoardAddr`,
    identity-mapped below 1 GiB), never a port's address: RTH1 finds the
@@ -284,6 +285,28 @@ ports on a Buddha, three on a Catweasel Z-II.
    the Gayle's. The board's interrupt enable (a write at board + 0xFC0)
    stays set until reset, so the driver masks each drive with nIEN in
    its device-control register, at attach and in `_halt`.
+
+7. **The stand-in (version 11), temporary.** The 1.1 kernels (kabi
+   minor 4) have no core patch 0055, so the module built for them lists
+   `$match zorro:1212:2a,mobo:buddha`, never `zorro:1212:00`: a
+   product-00 key would make their core refuse the whole module, and the
+   kit would tag it minor 5 (C3-2 §3).
+   - `mobo:buddha` is in the kit's registry (20 §6) with no platform
+     probe: the core passes every `mobo:` key (C4-4 §2), so the module is
+     linked on any box whose generation carries it, and `_load` finds
+     the boards with `autocon` as item 1 says, returning `ENXIO`
+     silently without one.
+   - `kbootset` (-44 and later) takes a root or boot controller whose key
+     is `zorro:1212:00`, the key `kbootset cards` gives a Buddha, as
+     named by a module listing `mobo:buddha`: gate 3's closure, the root
+     module's place first in the arena and the safe set (C4-4 §1.1). A
+     generation with a Buddha root needs that `kbootset`. The root record
+     stays `sd id=12120000 base=00000000 …` (item 4).
+   - Its tag comes from what it imports, so one build loads on minor-4 and
+     minor-5 kernels alike.
+   - The stand-in goes when kernels with patch 0055 ship: the module then
+     lists `zorro:1212:00,zorro:1212:2a`, and the alias and the registry
+     line are removed.
 
 ## 9. Not in this contract
 

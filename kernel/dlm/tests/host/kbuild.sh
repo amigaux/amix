@@ -579,6 +579,27 @@ sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
 safeset mobo:a3000-wd zscsi a4091 ufs
 sed -i '/^root=/d' $R/stand/k46/kabi; record
 sed -i 's/^kabi static$/kabi k46.1.0/' $R/var/apkg/kpkg/kernel-kd060a
+# the Buddha's stand-in (C4-2 section 8.2): a root on zorro:1212:00 is
+# covered by a module that lists mobo:buddha, which is the root's module
+# and ranks ide, so the safe set holds every controller module, Gayle's
+# too; a module listing only zorro:1212:2a, the Catweasel, covers nothing
+rootset; modpkg gayle class=root match=mobo:gayle rank=ide
+modpkg buddha class=root match=zorro:1212:2a,mobo:buddha rank=ide
+$KB build --line 46 --bootdev zorro:1212:00 --rootdev zorro:1212:00 --rootfs ufs --mem 16777216 > $T/out ||
+	{ echo "kbuild: the Buddha root through mobo:buddha was not built" >&2; cat $T/out >&2; exit 1; }
+id=$(ls $R/stand/gen | sort -n | tail -1)
+for m in buddha gayle zscsi a4091 ufs; do
+	grep -q "^module $m root .* safe=1$" $R/stand/gen/$id/build ||
+		{ echo "kbuild: $m not in the safe set of a Buddha root" >&2; cat $R/stand/gen/$id/build >&2; exit 1; }
+done
+grep -q "^module buddha root .* match=zorro:1212:2a,mobo:buddha safe=1$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+rootset; modpkg buddha class=root match=zorro:1212:2a rank=ide
+refused 3 $KB build --line 46 --bootdev zorro:1212:00 --rootdev zorro:1212:00 --rootfs ufs --mem 16777216
+grep -q "boot disk's controller zorro:1212:00 .* no root-class module names it" $T/out
+rootset; modpkg buddha class=root match=mobo:buddha rank=ide
+refused 3 $KB build --line 46 --bootdev zorro:1212:2a --rootdev zorro:1212:2a --rootfs ufs --mem 16777216
+grep -q "boot disk's controller zorro:1212:2a .* no root-class module names it" $T/out
 # gate 7: a store whose loader is version 2 cannot place root-class
 # modules, so the generation is refused when it is composed
 head -c 8454144 /dev/zero > $T/v2.img
