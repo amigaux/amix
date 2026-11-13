@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — kabi 1.5: a product-00 zorro key needs a kernel that takes it (3d1f245c)
+
+C3-2 version 5. A kernel at minor 5 has core patch 0055 and takes a zorro match key with product 00. The kit tags a module with such a key 1.5, so kbootset and apkg refuse it on an older kernel instead of the boot failing. No new name. The bench guide describes the double panic after a failed root mount on 1.1 kernels.
+
 ## 2026-11-13 — a zorro match key may have product 00 (abe66ca9)
 
 Core patch 0055, C3-1 version 7 and modcheck accept a zorro key whose product is 00, so the Buddha's zorro:1212:00 is valid; manufacturer 0000 is still refused. A kernel must be cut with this core before it loads such a module. The kit's module.mk removes a module that modcheck refused, so the next make does not take it as built.
