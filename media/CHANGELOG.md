@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — the 2.1 install-media loader, said no wider than known (a4738d45)
+
+The installer, updbootpart and docs/installer.md no longer call the Amix 2.1 install-media boot2 (5ab360b1…) name-based or say it cannot relocate ET_REL kernels. Under Amiberry it boots the stock 2.1 and 2.1c kernels; on metal, with this project's combined kernels, it fired Alert('RELA') (the D245 Guru) before the kernel ran, for a reason not established. Every place that replaces or refuses it still does; comments and docs only.
+
 ## 2026-11-10 — the media are a make dist step (7a95a7b..9482884)
 
 media/build.sh builds the install CD, the netinstall CD, both floppy pairs and the Z3660 boot disk from make dist's out/, with MEDIA.txt and SHA256SUMS in out/media. The four RAM-disk images are inputs pinned by sha256 (media/inputs). Built from the 1.1 inputs with the 1.1 epoch, six media are byte-identical to 1.1; the install CD differs only in /install/l11/INPUTS. The test bench's checks, tools and set files stay in the bench repository; amix's tools/release-check does the known-bad search, and tools/lib/ufs.py is the one ufs reader.
