@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — a zorro match key may have product 00 (abe66ca9)
+
+Core patch 0055, C3-1 version 7 and modcheck accept a zorro key whose product is 00, so the Buddha's zorro:1212:00 is valid; manufacturer 0000 is still refused. A kernel must be cut with this core before it loads such a module. The kit's module.mk removes a module that modcheck refused, so the next make does not take it as built.
+
 ## 2026-11-13 — the Buddha and Catweasel Z-II IDE enter the contracts (ff0bd9b0)
 
 C4-1 version 9 puts IDE controllers in rank class 4 whatever their bus. C4-2 version 10 adds the `buddha` row and §8.2: units per port and drive, one card per board at its AutoConfig base, a root record by id, and two boards of one kind. Spec 30 adds four board sets of record. No code change.
