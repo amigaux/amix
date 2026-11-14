@@ -3,6 +3,10 @@
 Changes to the shared kernel/drivers README and the fork pins. Each source driver keeps its own CHANGELOG in its
 directory.
 
+## 2026-11-14 — README rows for xsurf and the buddha flavour (1ffc4613)
+
+The README lists xsurf among the source drivers, and gayle-ide as the A4000 and A1200 Gayle IDE plus the Buddha / Catweasel Z-II flavour (buddha).
+
 ## 2026-11-01 — paula and z3660rtg rolled from amix (b63a859, b05fb92)
 
 - paula-k30/-k46 1.1.0-2: the module 1.1.0-1 (amix-paula a111e57) on the gcc-2.7.2.3-33ebadc kit: /dev/paula (c 54 0, 0660 root audio), /usr/include/paula.h, depend on amix-base.

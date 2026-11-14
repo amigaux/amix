@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — kdrv rolls a recipe once its pinned source has the module (187b934e)
+
+kdrv.sh takes KM_ONLY_IF_FILE, a file the pinned source holds once it has the recipe's module. While that file is absent, the recipe is said not to be in the pinned source yet, rolls nothing and is no gap; once it is there, a missing object is [MISSING] as usual. test-kdrv 11/11.
+
 ## 2026-11-14 — the drivers step builds xsurf (209969f0, e9338dad)
 
 make dist's drivers step builds kernel/drivers/xsurf/module on both lines, beside a4091, z3660scsi and z3660eth, and kspace rolls xsurf30/xsurf46-1.0.0-1 from it. CI runs xsurf's host tests (docs/ci.md), and BUILDING.md's drivers row names it.
