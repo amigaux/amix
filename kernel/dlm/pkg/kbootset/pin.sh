@@ -12,7 +12,7 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
-# -45 (2026-11-14): amix cb64131 -- kbootset knows character major 56,
+# -45 (2026-11-14): amix 92c8712 -- kbootset knows character major 56,
 # the xsurf module's (the X-Surf and X-Surf-100 ethernet, interface xsf0):
 # its registry copy gives the row to gate 3 and to the major table every
 # module-kernel generation carries (core patch 0051), so xsurf loads on the
@@ -304,7 +304,7 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=cb64131
+KB_DLM_COMMIT=92c8712
 KB_SHA=87f824a3bb2828fc4bafd3a011c4fd855ff97c3383bb48a12998f30568d653db
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
 KB_MAN_SHA=a3aa96c2a5ed9b2d550dd92ce5c783bafb80686506751e84cb05b6d4655960c6
