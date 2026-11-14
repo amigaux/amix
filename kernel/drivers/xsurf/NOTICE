@@ -1,0 +1,19 @@
+xsurf -- notices
+
+The wording Amiga Corporation asked us to carry:
+
+This project and its developers are not affiliated with, endorsed by, or sponsored by Amiga Corporation. Amiga is a registered trademark of Amiga Corporation.
+
+This directory is source code only and ships no Amiga or Amiga UNIX binaries; AmigaOS and Amiga UNIX are trademarks of their respective owners, and UNIX is a registered trademark of The Open Group. X-Surf and X-Surf-100 are products of Individual Computers.
+
+Credit: the STREAMS/DLPI skeleton
+
+The STREAMS/DLPI skeleton of src/xsurf.c (the minor-number open scheme, the put-procedure dispatch and the shape of the DLPI primitive handling) descends from Commodore's stock Amix ethernet driver aen.c (usr/sys/amiga/driver/aen; Copyright 1989-1992 Commodore Business Machines, written by Keith Gabryelski), by way of Ignacio Soriano's hydra-amix driver (https://github.com/isoriano1968/hydra-amix) and this tree's z3660eth driver. Whatever of aen.c remains in that shape is Commodore-derived: the MIT licence in LICENSE covers the authors' own work here, not it, and all rights in it remain with their holders. It is redistributed under the approval Amiga Corporation gave this project in September 2026 (see the disclaimer at https://amigaux.org/about/).
+
+Credit: the X-Surf-100
+
+The X-Surf-100 support follows ales9030's X-Surf-100 port for Amix, itself based on isoriano1968's Hydra AMIX driver; both are MIT-licensed and credited in LICENSE. The code here is new.
+
+Sources read, no code taken
+
+The board facts are from Individual Computers' documentation of the X-Surf and the X-Surf-100. Linux's 8390 drivers (drivers/net/ethernet/8390: xsurf100.c, ax88796.c, zorro8390.c, lib8390.c; GPL) were read for how the hardware behaves; no Linux code is in this directory. docs/facts.md names the source of each fact.
