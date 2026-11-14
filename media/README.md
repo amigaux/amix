@@ -4,7 +4,7 @@ The installer of an Amix release and the tools that master its media:
 
 | Medium | What it is |
 |---|---|
-| `amix-<v>-install.iso` | the install CD for every target, both kernel lines (68030; 68040/68060): it boots the installer into a RAM disk and carries the stock set, the base packages and the kernel-space packages. Targets: the Z3660 SCSI, an A4091 or A4092, the A3000's and the A4000T's SCSI, the A4000's or A1200's IDE port, a Buddha's or Catweasel Z-II's IDE ports |
+| `amix-<v>-install.iso` | the install CD for every target, both kernel lines (68030; 68040/68060): it boots the installer into a RAM disk and carries the stock set, the base packages and the kernel-space packages. Targets: the Z3660 SCSI, an A4091 or A4092, the A3000's and the A4000T's SCSI, the A4000's or A1200's IDE port, a Buddha's or Catweasel Z-II's IDE ports (the new controllers tested in emulation only; the Catweasel on the 68040/68060 line) |
 | `amix-<v>-netinstall.iso` | the network installer: the same boot, with the packages read over the network from the package repository |
 | `amix-<v>-boot-k30-1.adf`, `-2.adf` | the floppy pair that boots the installer on a 68030 machine without a bootable CD drive |
 | `amix-<v>-boot-k46-1.adf`, `-2.adf` | the same for the 68040/68060 line |
