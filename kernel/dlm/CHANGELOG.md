@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — C2-4 version 30: a disk root needs no swap record (1c6c2f94)
+
+A disk root's swap is slice 2 of the root disk RTH1 chose, and the swap record is read only for a RAM-disk root's `swap none`, so the pristine build and the moved-disk step pass no --swap. Spec 10's manifest table says the same.
+
 ## 2026-11-14 — C3-6 versions 11 and 12: when a driver may default to interrupts (3062e83d, 060c6f29)
 
 A driver with a polled mode may default to interrupts when its interrupt path is enabled only after a self-test with a real board interrupt and it falls back to polling, saying so, when interrupts stop; the buddha and xsurf modules do. The Gayle IDE module as of 1.1 does not fall back, a known gap for its next version. Spec 30 §4 says the same. Docs only.
