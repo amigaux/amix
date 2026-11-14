@@ -284,6 +284,19 @@ static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
 #error "z3660eth: an offset has a bit its arming register lacks (ZS-05)"
 #endif
 
+#ifdef Z3660ETH_HOSTTEST
+/*
+ * The host tests (module/host/) build this file for the host: there the
+ * board's register file is a model behind two functions, and the three
+ * access forms keep their meaning (write; write and read the result; read).
+ */
+extern unsigned long	zz_host_rd();
+extern void		zz_host_wr();
+#define Z3660ETH_WRA(r_, a_, o_, x_)	zz_host_wr((o_), (unsigned long)(x_))
+#define Z3660ETH_WRV(r_, o_, x_, res_)	\
+	((res_) = (zz_host_wr((o_), (unsigned long)(x_)), zz_host_rd(o_)))
+#define Z3660ETH_RDA(r_, o_, res_)	((res_) = zz_host_rd(o_))
+#else
 #define Z3660ETH_WRA(r_, a_, o_, x_) do { unsigned long z_sr_, z_t_;		\
 	__asm__ __volatile__("mov.w %%sr,%0\n\tor.w &0x700,%%sr\n\tmov.l (%2),%1\n\tmov.l %4,(%3)\n\tmov.w %0,%%sr" \
 	    : "=&d" (z_sr_), "=&d" (z_t_)					\
@@ -299,6 +312,7 @@ static unsigned char z3660eth_bcast[ETH_ADDRESS_SIZE] = {
 	    : "=&d" (z_sr_), "=&d" (z_t_)					\
 	    : "a" ((r_) + (o_)) : "memory");				\
 	(res_) = z_t_; } while (0)
+#endif /* Z3660ETH_HOSTTEST */
 
 /* the board's interrupt control, and the RX strobe: always armed */
 #define Z3660ETH_CONFIG(r_, x_)	Z3660ETH_WRA((r_), ZZ_ARM_CONFIG, ZZ_CONFIG, (x_))
@@ -1079,7 +1093,8 @@ register mblk_t *mp;
 	 * a mask here would hold IPL 4 across the ~1 ms TX trigger.  The few
 	 * sections that race the poll callout mask themselves (NOTES.md).
 	 */
-	(void)z3660ethproto(q, mp);
+	if (q->q_first || !z3660ethproto(q, mp))
+	    putq(q, mp);		/* behind what waits, in order */
 	break;
 
     case M_IOCTL:
@@ -1100,9 +1115,13 @@ queue_t *q;
 {
     mblk_t *mp;
 
-    /* drain anything deferred by xmit; no TX-completion IRQ exists */
+    /*
+     * Run what waits: deferred transmits and requests whose answer found no
+     * memory.  No TX-completion IRQ exists; the poll tick calls
+     * z3660eth_tx_drain too, so nothing depends on a back-enable.
+     */
     while ((mp = getq(q)) != NULL) {
-	if (!z3660ethxmit(q, mp)) {
+	if (!z3660ethproto(q, mp)) {
 	    putbq(q, mp);
 	    break;
 	}
@@ -1132,6 +1151,27 @@ mblk_t *mp;
     mblk_t *m;
     int s, n, pktsize;
     unsigned long rc;
+
+    /*
+     * The request first: a destination of 6 bytes inside the request block
+     * (the offset and length come from whoever sent it), and a bound stream
+     * (the frame's type is the bound SAP).  Anything else is dropped and
+     * counted, never read past.
+     */
+    if (blklen(mp) < (int)sizeof(dl_unitdata_req_t) ||
+	dp->dl_dest_addr_length < ETH_ADDRESS_SIZE ||
+	dp->dl_dest_addr_offset > (ulong)(blklen(mp) - ETH_ADDRESS_SIZE)) {
+	board->z3660eth_status.tx_bad_req++;
+	board->ifstats.ifs_oerrors++;
+	freemsg(mp);
+	return 1;
+    }
+    if (zp->state != DL_IDLE) {
+	board->z3660eth_status.tx_unbound++;
+	board->ifstats.ifs_oerrors++;
+	freemsg(mp);
+	return 1;
+    }
 
     s = splz3660eth();			/* M1: atomic claim of txwin + tmp[] */
     if (info->tx_busy || info->regs == 0) {
@@ -1541,7 +1581,7 @@ int board_index;
 	if (zp->q) {
 	    queue_t *wrq = WR(zp->q);
 	    while ((mp = getq(wrq)) != NULL) {
-		if (!z3660ethxmit(wrq, mp)) {
+		if (!z3660ethproto(wrq, mp)) {
 		    putbq(wrq, mp);
 		    break;		/* this stream only -- try the next */
 		}
@@ -1588,109 +1628,151 @@ z3660ethintr()
 #endif /* !Z3660ETH_MODULE: the module's level-6 handler is z3660eth_int6 */
 
 /* ----------------------------------------------------------------------------
- * DLPI protocol engine -- the seven primitives, copied from hydra (Style-1
- * connectionless ethernet).  DL_UNITDATA_REQ feeds z3660ethxmit.
+ * DLPI protocol engine -- the seven primitives (Style-1 connectionless
+ * ethernet), from hydra.  DL_UNITDATA_REQ feeds z3660ethxmit.
+ *
+ * Returns 1 when the request is done with (answered, sent or dropped), 0
+ * when it must wait and stays the caller's, untouched: both transmit paths
+ * busy, or no memory for the answer.  The caller queues it (wput) or puts it
+ * back (wsrv, z3660eth_tx_drain), and the poll tick runs the queues again, so
+ * a request whose answer found no memory is answered later instead of never
+ * (slink, ifup and dhcpc wait for the answer).  A state changes only once its
+ * answer exists, so a retried request acts once.
  * ------------------------------------------------------------------------- */
+
+/* DL_OK_ACK for `prim'; 0 when there is no memory */
+static int
+z3660eth_ok_ack(q, mp, prim)
+queue_t *q;
+mblk_t *mp;
+ulong prim;
+{
+    mblk_t *a;
+    dl_ok_ack_t *okp;
+
+    if (!(a = allocb(sizeof(dl_ok_ack_t), BPRI_MED)))
+	return 0;
+    okp = (dl_ok_ack_t *)a->b_wptr;
+    a->b_datap->db_type = M_PCPROTO;
+    okp->dl_primitive = DL_OK_ACK;
+    okp->dl_correct_primitive = prim;
+    a->b_wptr += sizeof(dl_ok_ack_t);
+    freemsg(mp);
+    qreply(q, a);
+    return 1;
+}
+
+/*
+ * DL_ERROR_ACK naming the offending primitive; 0 when there is no memory.
+ * Unknown primitives get DL_BADPRIM: silently freeing them (the inherited
+ * behaviour) left the DLS user waiting for an ack that never came.
+ */
+static int
+z3660eth_error_ack(q, mp, prim, err)
+queue_t *q;
+mblk_t *mp;
+ulong prim, err;
+{
+    mblk_t *a;
+    dl_error_ack_t *ep;
+
+    if (!(a = allocb(sizeof(dl_error_ack_t), BPRI_MED)))
+	return 0;
+    ep = (dl_error_ack_t *)a->b_wptr;
+    a->b_datap->db_type = M_PCPROTO;
+    ep->dl_primitive = DL_ERROR_ACK;
+    ep->dl_error_primitive = prim;
+    ep->dl_errno = err;
+    ep->dl_unix_errno = 0;
+    a->b_wptr += sizeof(dl_error_ack_t);
+    freemsg(mp);
+    qreply(q, a);
+    return 1;
+}
+
 static int
 z3660ethproto(q, mp)
 queue_t *q;
 mblk_t *mp;
 {
-    register union DL_primitives *p = (union DL_primitives *)mp->b_rptr;
     register z3660eth_t *zp = (z3660eth_t *)q->q_ptr;
-    z3660eth_board_t *board = &z3660eth_board[zp->board_index];
+    z3660eth_board_t *board;
+    ulong prim;
 
-    switch (p->dl_primitive) {
+    /* a message too short to hold a primitive is dropped unread */
+    if (zp == NULL || blklen(mp) < (int)sizeof(ulong)) {
+	freemsg(mp);
+	return 1;
+    }
+    board = &z3660eth_board[zp->board_index];
+    prim = ((union DL_primitives *)mp->b_rptr)->dl_primitive;
+
+    switch (prim) {
     case DL_UNITDATA_REQ:
-	if (q->q_first || !z3660ethxmit(q, mp))
-	    putq(q, mp);
-	break;
+	return z3660ethxmit(q, mp);
 
     case DL_ATTACH_REQ:
-    {
-	dl_ok_ack_t *okp;
-	freemsg(mp);
-	if (!(mp = allocb(sizeof(dl_ok_ack_t), BPRI_MED)))
-	    return 1;
-	okp = (dl_ok_ack_t *)mp->b_wptr;
-	mp->b_datap->db_type = M_PCPROTO;
-	okp->dl_primitive = DL_OK_ACK;
-	okp->dl_correct_primitive = DL_ATTACH_REQ;
-	mp->b_wptr += sizeof(dl_ok_ack_t);
+	if (!z3660eth_ok_ack(q, mp, prim))
+	    return 0;
 	zp->state = DL_UNBOUND;
-	qreply(q, mp);
 	return 1;
-    }
 
     case DL_DETACH_REQ:
-    {
-	dl_ok_ack_t *okp;
-	freemsg(mp);
-	if (!(mp = allocb(sizeof(dl_ok_ack_t), BPRI_MED)))
-	    return 1;
-	okp = (dl_ok_ack_t *)mp->b_wptr;
-	mp->b_datap->db_type = M_PCPROTO;
-	okp->dl_primitive = DL_OK_ACK;
-	okp->dl_correct_primitive = DL_DETACH_REQ;
-	mp->b_wptr += sizeof(dl_ok_ack_t);
+	if (!z3660eth_ok_ack(q, mp, prim))
+	    return 0;
 	zp->state = DL_UNATTACHED;
-	qreply(q, mp);
 	return 1;
-    }
+
+    case DL_UNBIND_REQ:
+	if (!z3660eth_ok_ack(q, mp, prim))
+	    return 0;
+	zp->state = DL_UNBOUND;
+	zp->sap = 0;
+	return 1;
 
     case DL_BIND_REQ:
     {
 	dl_bind_req_t *reqp = (dl_bind_req_t *)mp->b_rptr;
 	dl_bind_ack_t *ackp;
+	mblk_t *a;
+	ulong sap;
 
-	zp->sap = reqp->dl_sap;
-	board->z3660eth_status.last_bound_sap = zp->sap;
-	zp->state = DL_IDLE;
-
-	freemsg(mp);
-	if (!(mp = allocb(sizeof(*ackp) + ETH_ADDRESS_SIZE, BPRI_MED)))
-	    return 1;
-	mp->b_datap->db_type = M_PCPROTO;
-	ackp = (dl_bind_ack_t *)mp->b_wptr;
+	if (blklen(mp) < (int)sizeof(dl_bind_req_t))
+	    return z3660eth_error_ack(q, mp, prim, (ulong)DL_BADPRIM);
+	sap = reqp->dl_sap;
+	if (sap > 0xFFFF)		/* an ethertype is 16 bits */
+	    return z3660eth_error_ack(q, mp, prim, (ulong)DL_BADSAP);
+	if (!(a = allocb(sizeof(*ackp) + ETH_ADDRESS_SIZE, BPRI_MED)))
+	    return 0;
+	a->b_datap->db_type = M_PCPROTO;
+	ackp = (dl_bind_ack_t *)a->b_wptr;
 	ackp->dl_primitive = DL_BIND_ACK;
-	ackp->dl_sap = zp->sap;
+	ackp->dl_sap = sap;
 	ackp->dl_addr_length = ETH_ADDRESS_SIZE;
 	ackp->dl_addr_offset = sizeof(*ackp);
 	ackp->dl_max_conind = 0;
 	ackp->dl_growth = 0;
-	mp->b_wptr += sizeof(*ackp);
-	bcopy((caddr_t)board->z3660eth_info.paddress, (caddr_t)mp->b_wptr,
+	a->b_wptr += sizeof(*ackp);
+	bcopy((caddr_t)board->z3660eth_info.paddress, (caddr_t)a->b_wptr,
 	      ETH_ADDRESS_SIZE);
-	mp->b_wptr += ETH_ADDRESS_SIZE;
-	qreply(q, mp);
-	return 1;
-    }
-
-    case DL_UNBIND_REQ:
-    {
-	dl_ok_ack_t *okp;
+	a->b_wptr += ETH_ADDRESS_SIZE;
+	zp->sap = (unsigned short)sap;
+	zp->state = DL_IDLE;
+	board->z3660eth_status.last_bound_sap = zp->sap;
 	freemsg(mp);
-	if (!(mp = allocb(sizeof(dl_ok_ack_t), BPRI_MED)))
-	    return 1;
-	okp = (dl_ok_ack_t *)mp->b_wptr;
-	mp->b_datap->db_type = M_PCPROTO;
-	okp->dl_primitive = DL_OK_ACK;
-	okp->dl_correct_primitive = DL_UNBIND_REQ;
-	mp->b_wptr += sizeof(dl_ok_ack_t);
-	zp->state = DL_UNBOUND;
-	zp->sap = 0;
-	qreply(q, mp);
+	qreply(q, a);
 	return 1;
     }
 
     case DL_INFO_REQ:
     {
 	dl_info_ack_t *ackp;
-	freemsg(mp);
-	if (!(mp = allocb(sizeof(dl_info_ack_t) + ETH_ADDRESS_SIZE, BPRI_MED)))
-	    return 1;
-	mp->b_datap->db_type = M_PCPROTO;
-	ackp = (dl_info_ack_t *)mp->b_wptr;
+	mblk_t *a;
+
+	if (!(a = allocb(sizeof(dl_info_ack_t) + ETH_ADDRESS_SIZE, BPRI_MED)))
+	    return 0;
+	a->b_datap->db_type = M_PCPROTO;
+	ackp = (dl_info_ack_t *)a->b_wptr;
 	ackp->dl_primitive = DL_INFO_ACK;
 	ackp->dl_max_sdu = ETH_MAXDATA;
 	ackp->dl_min_sdu = 1;
@@ -1708,46 +1790,22 @@ mblk_t *mp;
 	ackp->dl_growth = 0;
 	if (zp->state == DL_IDLE) {
 	    ackp->dl_addr_offset = sizeof(dl_info_ack_t);
-	    mp->b_wptr += sizeof(dl_info_ack_t);
-	    bcopy((caddr_t)board->z3660eth_info.paddress, (caddr_t)mp->b_wptr,
+	    a->b_wptr += sizeof(dl_info_ack_t);
+	    bcopy((caddr_t)board->z3660eth_info.paddress, (caddr_t)a->b_wptr,
 		  ETH_ADDRESS_SIZE);
-	    mp->b_wptr += ETH_ADDRESS_SIZE;
+	    a->b_wptr += ETH_ADDRESS_SIZE;
 	} else {
 	    ackp->dl_addr_offset = 0;
-	    mp->b_wptr += sizeof(dl_info_ack_t);
+	    a->b_wptr += sizeof(dl_info_ack_t);
 	}
-	qreply(q, mp);
-	return 1;
-    }
-
-    /*
-     * Anything else: DLPI requires an explicit DL_ERROR_ACK naming the offending
-     * primitive (dl_errno = DL_BADPRIM, "primitive not known by the provider").
-     * Silently freeing the message -- the inherited behaviour -- left the DLS
-     * user waiting for an ack that would never arrive.  Built the same way as the
-     * other acks above: the primitive is saved first, because `p` points into the
-     * message we are about to free.
-     */
-    default:
-    {
-	dl_error_ack_t *ep;
-	unsigned long bad_primitive = p->dl_primitive;
-
 	freemsg(mp);
-	if (!(mp = allocb(sizeof(dl_error_ack_t), BPRI_MED)))
-	    return 1;
-	ep = (dl_error_ack_t *)mp->b_wptr;
-	mp->b_datap->db_type = M_PCPROTO;
-	ep->dl_primitive = DL_ERROR_ACK;
-	ep->dl_error_primitive = bad_primitive;
-	ep->dl_errno = DL_BADPRIM;
-	ep->dl_unix_errno = 0;
-	mp->b_wptr += sizeof(dl_error_ack_t);
-	qreply(q, mp);
+	qreply(q, a);
 	return 1;
     }
+
+    default:
+	return z3660eth_error_ack(q, mp, prim, (ulong)DL_BADPRIM);
     }
-    return 0;
 }
 
 /* ----------------------------------------------------------------------------
@@ -2120,8 +2178,13 @@ z3660ethinit()
 #define Z3660ETH_SELFTEST_SPIN	200000	/* polls of the level-6 test flag */
 #define Z3660ETH_SELFTEST_TICKS	4	/* one-tick sleeps for the level-2 flag */
 
+#ifdef Z3660ETH_HOSTTEST
+extern void	zz_host_raise();
+#define RAISE_INTREQ(bits)	zz_host_raise(bits)
+#else
 #define RAISE_INTREQ(bits) \
 	(*(volatile unsigned short *)AMIGA_INTREQ = (unsigned short)(INTREQ_SETCLR | (bits)))
+#endif
 
 /*
  * Level 6, called on every INT6 (CIA-B and the firmware alike) with the board
@@ -2429,6 +2492,7 @@ z3660eth_halt()
  * reads as nodev (nodev itself is not DDI); d_open/d_close are the core's
  * trampolines.  drv_cmajor is the .moddata major.
  */
+#ifndef Z3660ETH_HOSTTEST
 struct mod_drv_data z3660eth_drvdata[] = {
     {
 	{ 0 }, 0, 0,
@@ -2439,4 +2503,5 @@ struct mod_drv_data z3660eth_drvdata[] = {
 
 MOD_DRV_WRAPPER(z3660eth, z3660eth_load, z3660eth_unload, z3660eth_halt,
 		"Z3660 ethernet (zen)");
+#endif /* !Z3660ETH_HOSTTEST */
 #endif /* Z3660ETH_MODULE */

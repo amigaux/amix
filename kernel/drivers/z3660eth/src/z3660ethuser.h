@@ -55,6 +55,9 @@ typedef struct
     unsigned int	if_opackets;
     unsigned int	if_ierrors;
     unsigned int	if_oerrors;
+    /* from 1.0.0-8, appended: a reader of the older, shorter record is unaffected */
+    unsigned int	tx_bad_req;	/* DL_UNITDATA_REQ with no usable destination */
+    unsigned int	tx_unbound;	/* DL_UNITDATA_REQ on an unbound stream */
 } z3660eth_status_t;
 
 typedef struct

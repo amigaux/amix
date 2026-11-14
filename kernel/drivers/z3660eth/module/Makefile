@@ -8,8 +8,9 @@
 #   make -C module static     the static object of each line compiled against
 #                             the kit's headers, and its sha256 (the static
 #                             driver must not change: BUILD.md section 9)
-#   make -C module test       the host tests of the _load parameter parser
-#                             and of the probe's MAC_HI shape check
+#   make -C module test       the host tests of the _load parameter parser,
+#                             of the probe's MAC_HI shape check, and of the
+#                             STREAMS/DLPI side against a model (module/host/)
 #   make -C module zs05       both lines and both forms, then the ZS-05 gate
 #                             (check-zs05.py: every board register access is
 #                             an armed IPL-7 block; NOTES.md "ZS-05")
@@ -42,6 +43,7 @@ $(LINES:%=static-%): static-%:
 test:
 	sh $(TOP)/module/test-params.sh
 	sh $(TOP)/module/test-mac.sh
+	sh $(TOP)/module/host/run.sh
 
 zs05: all static
 	for l in $(LINES); do \

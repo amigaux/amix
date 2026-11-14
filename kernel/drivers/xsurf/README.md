@@ -13,8 +13,9 @@ The interface is `xsf0` (then `xsf1`, … in board order) and the device node is
 `/dev/xsf0`. `ifup` brings it up from `/etc/inet/interfaces`, as it does every
 interface.
 
-**Status: in development.** The board facts the driver is built on, and
-where each was checked, are in [docs/facts.md](docs/facts.md).
+**Status: tested in emulation, not on a real card** (see Tested). The board
+facts the driver is built on, and where each was checked, are in
+[docs/facts.md](docs/facts.md).
 
 ## Support
 
@@ -82,7 +83,58 @@ registry has `c 56 xsurf` (1.1.0.261114-45 or later) first:
 `apkg update; apkg upgrade`. Then configure `xsf0` in
 `/etc/inet/interfaces`, for example `xsf0 dhcp`.
 
-## Testing
+## Status
+
+`userland/xsf.c` reads the driver's status record: card, Zorro mode,
+interrupt mode and every receive and transmit counter, one per line. Build
+it on the box with `cc -o xsf xsf.c`, with `src/xsurfuser.h` beside it.
+
+- `xsf` prints `/dev/xsf0`'s record;
+- `xsf 1` prints the second board's;
+- `xsf -S` exits 0 when the board is there and 1 when it is not.
+
+## Tested
+
+**In emulation only.** Nobody working on this driver has either card. The
+rows below ran in the Amiberry emulator (amigaux fork, with its NE2000 receive
+poll), on the released 1.1 disk images and kernels (k30 68030-261106-77, k46
+68060-261106-66), with kbootset 1.1.0.261114-45 and the xsurf packages
+installed by `apkg`, 2026-11-14.
+
+| Card | Mode | k30 (A4000, 68030) | k46 (A4000, 68060 + Z3660) |
+|---|---|---|---|
+| X-Surf-100 | Zorro III | passed | passed |
+| X-Surf-100 | Zorro II | passed | passed |
+| X-Surf | Zorro II, set up through plug-and-play | passed | passed |
+| none | the card absent | passed | passed |
+
+Each card row booted twice: first with interrupts (`intr=2`), then polled
+(`intr=0`). Each boot checked:
+
+- the console line;
+- a static address and a DHCP lease;
+- ping both ways, also with 1472-byte frames;
+- 10 MiB and 100 MiB copied by FTP each way, with checksums compared;
+- the A2065 carrying control traffic at the same time, without a miss;
+- ifdown and ifup three times;
+- hostile frames (runt, oversize, trailer and unknown types) dropped and
+  counted;
+- the status record before and after: no transmit timeout, DMA timeout,
+  ring resync, chip restart or interrupt fallback;
+- no bus error on any boot.
+
+With the card absent, the module is not kept, the console says nothing and
+`ifup` returns at once. A kbootset older than -45 refuses the package at
+gate 3 ("major c:56 is not in the registry") and leaves the boot
+generation as it was.
+
+Throughput **in the emulator** (100 MiB by FTP; it says nothing about a
+real card):
+
+| | interrupts | polled |
+|---|---|---|
+| guest to host | 87–178 s | 319–371 s |
+| host to guest | 78–117 s | 554–579 s |
 
 `make -C module test` runs the host tests. They build the driver's own
 sources for the host against a model kernel and a model DP8390. The model
@@ -98,20 +150,21 @@ injects what the emulator cannot produce:
 
 They also cover every DLPI primitive and hostile frames from the wire.
 
-The Amiberry emulator runs the driver end to end, but a pass there does
-not prove the error paths. Its model of these boards:
+What the emulator's model of these boards cannot show, so no row above
+covers it:
 
-- never overruns the receive ring;
-- keeps its tally counters at zero and never raises their interrupt;
-- always reports a transmit as sent, with no error, collision or abort;
-- always reports a receive as good;
-- returns 0xFF past the 32-byte station-address PROM;
-- has no MII/PHY on the X-Surf-100. Its register 0x14 (MII and EEPROM)
+- it never overruns the receive ring;
+- it keeps its tally counters at zero and never raises their interrupt;
+- it always reports a transmit as sent, with no error, collision or abort;
+- it always reports a receive as good, and drops oversize frames itself;
+- it returns 0xFF past the 32-byte station-address PROM;
+- it has no MII/PHY on the X-Surf-100. Its register 0x14 (MII and EEPROM)
   decodes as the data port there, so the driver never touches it;
-- emulates the X-Surf's plug-and-play only in part. The interrupt always
-  comes through the status register at 0x40.
+- it emulates the X-Surf's plug-and-play only in part, and keeps it
+  configured across a warm reset;
+- no bus timing and no caches.
 
-An A2065 can share a machine with one X-Surf board, but not with both.
+An A2065 can share a machine with one X-Surf board, but not with two.
 
 ## Not confirmed on hardware
 
