@@ -62,12 +62,56 @@ no interrupt has been taken for three ticks, the driver masks the chip,
 polls from then on, and says once `xsfN: interrupts stopped; polled`. The
 tick also restarts a transmit that has not finished in 200 ms.
 
-The kit's driver contract (kernel/dlm C3-6 section 1.3) keeps polling as
-the default for a driver whose interrupt path is unproven. This driver meets
-that rule's purpose in a different way. It never enables a chip interrupt it
-has not seen arrive. It falls back to polling when one stops arriving. For a
-Zorro network card the level-2 interrupt is the usual path; the stock A2065
-driver works that way.
+This default follows the kit's driver contract, kernel/dlm C3-6 version 12
+section 1.3. A driver may enable interrupts by default when two things
+hold: it turns them on only after the board itself has raised one and the
+handler has claimed it, and it falls back to polling, saying so, when they
+stop. This driver does both.
+
+## Installing
+
+The packages are `xsurf-k30` (pkginst `xsurf30`) and `xsurf-k46`
+(`xsurf46`), one for each kernel line. Each installs:
+
+- the module, `/etc/conf/mod.d/xsurf`;
+- the nodes `/dev/xsf0` and `/dev/xsf1` (character major 56);
+- the `ifup` entry, `/etc/inet/link.d/xsurf`.
+
+The major comes from the kbootset registry, so install a kbootset whose
+registry has `c 56 xsurf` (1.1.0.261114-45 or later) first:
+`apkg update; apkg upgrade`. Then configure `xsf0` in
+`/etc/inet/interfaces`, for example `xsf0 dhcp`.
+
+## Testing
+
+`make -C module test` runs the host tests. They build the driver's own
+sources for the host against a model kernel and a model DP8390. The model
+injects what the emulator cannot produce:
+
+- a receive overrun, checking that the documented recovery order was
+  followed before the receiver runs again;
+- tally counters that keep their interrupt set until they are read;
+- transmit aborts, a transmit that never ends, and a remote DMA that never
+  completes;
+- corrupt ring headers and a dead interrupt line;
+- memory shortages.
+
+They also cover every DLPI primitive and hostile frames from the wire.
+
+The Amiberry emulator runs the driver end to end, but a pass there does
+not prove the error paths. Its model of these boards:
+
+- never overruns the receive ring;
+- keeps its tally counters at zero and never raises their interrupt;
+- always reports a transmit as sent, with no error, collision or abort;
+- always reports a receive as good;
+- returns 0xFF past the 32-byte station-address PROM;
+- has no MII/PHY on the X-Surf-100. Its register 0x14 (MII and EEPROM)
+  decodes as the data port there, so the driver never touches it;
+- emulates the X-Surf's plug-and-play only in part. The interrupt always
+  comes through the status register at 0x40.
+
+An A2065 can share a machine with one X-Surf board, but not with both.
 
 ## Not confirmed on hardware
 
