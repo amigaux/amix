@@ -144,7 +144,7 @@ xs_board_t *b;
 unsigned char *buf;
 int len;
 {
-    volatile unsigned long *fifo;
+    volatile unsigned int *fifo;	/* 32 bits */
     int n;
 
     while (len >= 4) {
@@ -152,9 +152,9 @@ int len;
 	if (n > XS100_BLOCK)
 	    n = XS100_BLOCK;
 	len -= n;
-	fifo = (volatile unsigned long *)(b->va + XS100_FIFO_RD);
+	fifo = (volatile unsigned int *)(b->va + XS100_FIFO_RD);
 	for (; n > 0; n -= 4, buf += 4)
-	    *(unsigned long *)buf = *fifo++;
+	    *(unsigned int *)buf = *fifo++;
     }
     if (len & 2) {
 	*(unsigned short *)buf = *(volatile unsigned short *)XS100_REG(b, XS_DATA);
@@ -171,7 +171,7 @@ xs_board_t *b;
 unsigned char *buf;
 int len;
 {
-    volatile unsigned long *fifo;
+    volatile unsigned int *fifo;	/* 32 bits */
     int n;
 
     while (len >= 4) {
@@ -179,9 +179,9 @@ int len;
 	if (n > XS100_BLOCK)
 	    n = XS100_BLOCK;
 	len -= n;
-	fifo = (volatile unsigned long *)(b->va + XS100_FIFO_WR);
+	fifo = (volatile unsigned int *)(b->va + XS100_FIFO_WR);
 	for (; n > 0; n -= 4, buf += 4)
-	    *fifo++ = *(unsigned long *)buf;
+	    *fifo++ = *(unsigned int *)buf;
     }
     if (len & 2)
 	*(volatile unsigned short *)XS100_REG(b, XS_DATA) = *(unsigned short *)buf;
