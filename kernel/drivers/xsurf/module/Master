@@ -1,0 +1,14 @@
+# xsurf: its .moddata keys (kernel/dlm C3-1 section 3, C3-6 section 1) and
+# the definition line, as the ABI kit's mkmod reads a Master.  One Master
+# for both lines: no $cpu, the kit's fragment gives the line's.
+# $match: the X-Surf-100 (1212:64) and the X-Surf (1212:17).
+# $param intr: 2 = the level-2 interrupt after a self-test (polled when it
+# fails), 0 = polled.
+$modtype drv
+$class boot
+$match zorro:1212:64,zorro:1212:17
+$majors c:56
+$unload never
+$param intr:int:2:0:2
+$desc X-Surf and X-Surf-100 ethernet xsf (STREAMS/DLPI)
+xsurf	xsurf

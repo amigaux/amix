@@ -1,0 +1,29 @@
+#
+# prototype -- xsurf-<line>: the module object, the package's defaults, the
+# driver's link.d entry and the nodes of its major (amix-dlm C3-5 sec 1).
+# The same paths on both lines: a box carries the package of its kernel's
+# line.
+#
+# AUTHORED, NOT GENERATED: kmodpkg runs pkgmk on it.
+# PURE FILES (amix-dlm spec 40 sec 6): f/d of class none, i pkginfo/copyright
+# only, no scripts.  /etc and /dev are the stock core's directories, declared
+# with core's attributes; /etc/conf and below are shared by every module
+# package; /etc/inet/link.d is declared as amix-base declares it.  The nodes
+# /dev/xsf0 and /dev/xsf1 (two boards at most: one X-Surf-100, one X-Surf)
+# are device entries in the module's class, xsurf, which pkginfo's CLASSES
+# lists (C3-5 sec 1.2); the class has no action script, so stock pkgadd lays
+# them and pkgrm removes them as none objects.  Mode 0600, as ifup makes a
+# missing node.
+i pkginfo
+i copyright
+d none /etc 0755 root root
+d none /etc/conf 0755 root sys
+d none /etc/conf/mod.d 0755 root sys
+d none /etc/conf/modreg.d 0755 root sys
+f none /etc/conf/mod.d/xsurf 0644 root sys
+f none /etc/conf/modreg.d/xsurf 0644 root sys
+d none /etc/inet/link.d 0755 root sys
+f none /etc/inet/link.d/xsurf 0444 root sys
+d none /dev 0755 bin bin
+c xsurf /dev/xsf0 56 0 0600 root root
+c xsurf /dev/xsf1 56 1 0600 root root

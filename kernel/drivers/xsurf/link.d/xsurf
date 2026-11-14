@@ -1,0 +1,4 @@
+# /etc/inet/link.d/xsurf -- the X-Surf and X-Surf-100 ethernet, for ifup
+# (link.d(4)).  Vendor data shipped by the xsurf package; edit
+# /etc/inet/interfaces, not this.  No major: kbootset major xsurf gives it.
+xsf	/dev/xsf	0

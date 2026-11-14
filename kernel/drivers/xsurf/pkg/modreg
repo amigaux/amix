@@ -1,0 +1,5 @@
+# /etc/conf/modreg.d/xsurf -- the xsurf module package's defaults (amix-dlm
+# C3-5 sec 1): one `param <name>=<value>` per default other than the
+# module's own, `disable` to ship it off.  None: xsurf loads with its own
+# defaults (intr=2).  Local settings belong in /etc/conf/modreg.local.d/xsurf,
+# which no package owns.
