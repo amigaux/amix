@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — KNOWN-ISSUES: the late halt after shutdown, explained (ebb4f233)
+
+A shutdown that returns to the prompt and halts up to five minutes later is explained: after heavy writes on a 16 MB machine, init acts on the run-level request only at its own five-minute timer. Stock 2.1c does the same, so it is not a kernel defect. A second `/sbin/init 0` is acted on at once.
+
 ## 2026-11-13 — boot-chain contract: the 2.1 install-media boot2 (9569010f, 031125d6, 25da0415)
 
 The boot-chain contract and bootchain-verify no longer say that the Amix 2.1 install-media boot2 (5ab360b1) cannot relocate ET_REL kernels or that it is name-based. Under Amiberry it boots the stock 2.1 and 2.1c kernels. Its contract kind is now "install-media". It stays refused for this project's combined kernels, with which it raised Alert('RELA') on metal. Gate behaviour unchanged.
