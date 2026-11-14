@@ -12,6 +12,9 @@
 #   k30: ramdisk, a4091, z3660scsi, gayle and a4kt710 (root class: an A4000 in 030 mode installs
 #        onto its Z3660 or its IDE master), cdfs (demand class; kern30m links no static cdfs since
 #        -17); rootfs s5, 64 MiB assumed (the k30 kernel is held to 64 MiB)
+#   Both lines also carry buddha (root class: the Buddha's and Catweasel Z-II's IDE ports, a target
+#   or the disc on any of their units; amix-dlm C4-2 8.2). A root-class module is placed by the
+#   loader from the store, so the RAM-disk images do not change with it.
 #   Each line carries every disk controller driver the installed generation carries (the 1.1
 #   profiles' KERNEL_MODPKGS), so the kernel numbers the cards at install as at the first boot.
 #   gayle with `param slave=2`: the ATAPI CD on the IDE slave attaches (the install source), an ATA
@@ -29,8 +32,8 @@ rd_init() {
 	done
 	PKGTRANS="$L11/pkgtools/heirloom/build-host/bin/pkgtrans"
 	[ -x "$PKGTRANS" ] || die "no host pkgtrans at $PKGTRANS"
-	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46 gayle-k46 a4kt710-k46}"
-	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30 gayle-k30 a4kt710-k30}"
+	K46_MODS="${K46_MODS:-ramdisk-k46 cdfs-k46 z3660scsi-k46 a4091-k46 gayle-k46 a4kt710-k46 buddha-k46}"
+	K30_MODS="${K30_MODS:-ramdisk-k30 cdfs-k30 a4091-k30 z3660scsi-k30 gayle-k30 a4kt710-k30 buddha-k30}"
 	mkdir -p "$W/bin"
 	# the unpacking pkgadd apkg calls: files and directories into -R, the contents file kept
 	cat > "$W/bin/pkgadd" <<P
