@@ -118,9 +118,13 @@ handler. The core pass installs:
 
 `intr_attach(level, handler, arg, name)` adds to a chain; `intr_detach`
 removes. A handler returns whether it claimed the interrupt. A module that
-cannot attach (or whose self-test of the attached handler fails) runs polled,
-which stays the default for any driver that has a polled mode (Gayle IDE,
-`amix-gayle-ide/docs/module-form.md`; z3660eth). Attachment
+cannot attach (or whose self-test of the attached handler fails) runs polled.
+Polled stays the default for a driver that has a polled mode, unless its
+interrupt path is enabled only after a self-test in which the board itself
+raises a real interrupt, and it falls back to polling when interrupts stop
+(contract C3-6 version 11 §1.3): the Gayle IDE
+(`amix-gayle-ide/docs/module-form.md`), Buddha and X-Surf modules default to
+interrupts that way. Attachment
 during `marc_root` is allowed; enabling the board's interrupt waits until the
 handler's self-test passes.
 

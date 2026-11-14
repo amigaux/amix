@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 10
+# C3-6 — what a driver changes to become a module, version 11
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -26,7 +26,10 @@
   a module prefers `KM_NOSLEEP` with a clean `ENOMEM` (§1.1); version 10
   (2026-11-01, from the z3660rtg review fixes): z3660rtg's parameters
   (`maxarea` defaults to 8192; `fixed` and `kvfb`) and its mapping of a
-  board window above `VSECT1` (§3). The
+  board window above `VSECT1` (§3); version 11 (2026-11-14): a driver
+  whose interrupt path passes a self-test with a real board interrupt
+  and falls back to polling when interrupts stop may default to
+  interrupts (§1.3). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -131,7 +134,7 @@ packages.
 - `/dev` nodes are made by the package or the installer,
   as today.
 
-### 1.3 Interrupts: `intr_attach`, and polled stays the default
+### 1.3 Interrupts: `intr_attach`, and when polled stays the default
 
 - No patch of `int2_tbl`, `p6int` or `aciabintr`. A handler goes on a
   chain with `intr_attach(level, fn, arg, name)` (level 2 or 6) and comes
@@ -141,12 +144,24 @@ packages.
 - The handler is called as `fn(arg)` every time its level fires, whatever
   raised it, and returns nonzero only when its own board did. It must
   return fast when its board did not.
-- **A driver with a polled mode keeps it as the default** (30 §4). It
-  attaches only once its board is set up to interrupt, in process
-  context (the first open, or `_load` if the board is set up there),
-  enables the board's interrupt only after a self-test of the attached
-  handler passes, and stays polled if either fails. The choice is a
-  module parameter (`param intr:int:0:0:6` or as fits: 0 polled).
+- **A driver with a polled mode keeps it as the default** (30 §4),
+  **unless** (version 11) both of these hold, as in the gayle, buddha
+  and xsurf modules:
+  - its interrupt path is enabled only after a self-test in which the
+    board itself raises an interrupt, by a real command (as the Gayle
+    IDE's below), and the attached handler claims it; a software raise
+    alone does not qualify;
+  - it falls back to polling when interrupts stop (a command that
+    completes, or times out, with no interrupt counted) and says so on
+    the console.
+
+  Such a driver may default to interrupts. Either way it attaches only
+  once its board is set up to interrupt, in process context (the first
+  open, or `_load` if the board is set up there), enables the board's
+  interrupt only after the self-test passes, and stays polled if either
+  fails. The choice is a module parameter (`param intr:int:0:0:6` or as
+  fits), whose 0 always means polled; its default is polled unless both
+  conditions above hold.
 - **The self-test** raises the level from software and checks that the
   handler ran and claimed: for level 6, `INTREQ` (0xdff09c) = 0xa000
   (SETCLR | EXTER) with the board's own interrupt-pending state set, as
