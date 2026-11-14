@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — the 1.1.1 locks (75ef713f..75abc4ea)
+
+amix-1.1.1.lock (the public rebuild, sha256 29f765ae…) and amix-1.1.1-published.lock (on the published 1.1 tree, b37fb273…), both from make dist at amix 7d9e944f with every RAM-disk image fetched by URL. The README names xsurf 1.0.0-3 and both locks with their sha256 and how they differ.
+
 ## 2026-11-14 — 1.1.1 on the published 1.1 tree; kbootset -43 carried (a83e00bc)
 
 carried-1.1 lists kbootset 1.1.0.261105-43 (c75f62d5, built at the tag 1.1), which 1.1.1's kbootset -45 moves to the older block. The README says how a point release is built, on the published tree with RELEASE_PREVIOUS, and names 1.1.1's two locks.
