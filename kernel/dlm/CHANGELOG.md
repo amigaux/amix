@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — C3-6 version 12: the modules that fall back to polling, and one that does not (b40a6eed)
+
+The buddha and xsurf modules default to interrupts under version 11's two conditions. The Gayle IDE module as of 1.1 meets the first and does not fall back when interrupts stop, a known gap for its next version. Spec 30 §4 says the same.
+
 ## 2026-11-14 — C3-6 version 11: when a driver may default to interrupts (07894c6d)
 
 A driver with a polled mode may default to interrupts when its interrupt path is enabled only after a self-test with a real board interrupt and it falls back to polling, saying so, when interrupts stop. Spec 30 §4 says the same.
