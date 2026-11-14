@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — the drivers step builds xsurf (209969f0, e9338dad)
+
+make dist's drivers step builds kernel/drivers/xsurf/module on both lines, beside a4091, z3660scsi and z3660eth, and kspace rolls xsurf30/xsurf46-1.0.0-1 from it. CI runs xsurf's host tests (docs/ci.md), and BUILDING.md's drivers row names it.
+
 ## 2026-11-11 — make tools pulls the published images (66798f35)
 
 make tools pulls the published build images when toolchain/image.ref is present, and builds them on any failure, saying which it did. TOOLS_FROM_SOURCE=1 builds them and compares them with the published pair.
