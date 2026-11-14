@@ -82,6 +82,16 @@ registry has `c 56 xsurf` (1.1.0.261114-45 or later) first:
 `apkg update; apkg upgrade`. Then configure `xsf0` in
 `/etc/inet/interfaces`, for example `xsf0 dhcp`.
 
+## Status
+
+`userland/xsf.c` reads the driver's status record: card, Zorro mode,
+interrupt mode and every receive and transmit counter, one per line. Build
+it on the box with `cc -o xsf xsf.c`, with `src/xsurfuser.h` beside it.
+
+- `xsf` prints `/dev/xsf0`'s record;
+- `xsf 1` prints the second board's;
+- `xsf -S` exits 0 when the board is there and 1 when it is not.
+
 ## Testing
 
 `make -C module test` runs the host tests. They build the driver's own
