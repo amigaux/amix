@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — KNOWN-ISSUES: the late halt after shutdown, explained (5bc6ce6e)
+
+A shutdown that returns to the prompt and halts up to five minutes later is explained: after heavy writes on a 16 MB machine, init acts on the run-level request only at its own five-minute timer. Stock 2.1c does the same, so it is not a kernel defect. A second `/sbin/init 0` is acted on at once.
+
 ## 2026-11-06 — cut 68030-261106-77, kern30m k30.1.4.261106-77 (28107ac, d9db6ac, bf9e723, 7f6d9f1, f31a797)
 
 /dev/audio answers each AUDIO_VOLUME/AUDIO_PERIOD request once, so a refused request no longer reports success. A request with no data (ic_len 0) is refused with EINVAL instead of panicking the kernel through pullupmsg(NULL). A write longer than the free channel buffer plays once instead of replaying (tools/patch_audio_replies.py, after amix-paula's patchers, shared with the 040/060 line). Cut -76's TCP close linger was reverted before release; the TCP close defect stays open in KNOWN-ISSUES, whose workaround is a half-close (shutdown(fd,1), read to EOF, close). Also: kernel/k30/tests/audio (aurep2, audioctl2); KNOWN-ISSUES lists the shutdown stall and two open stock audio defects.
