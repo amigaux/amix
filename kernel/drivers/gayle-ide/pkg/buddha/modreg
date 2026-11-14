@@ -1,0 +1,7 @@
+# /etc/conf/modreg.d/buddha -- the buddha module package's defaults
+# (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
+# the module's own, `disable` to ship it off.  None: the package ships the
+# module's own defaults (intr=1, slave=1).  Local settings, such as
+#   param intr=0
+# for polled I/O, belong in /etc/conf/modreg.local.d/buddha, which no package
+# owns, then kbootset build and commit.
