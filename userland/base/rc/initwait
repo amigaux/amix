@@ -1,0 +1,68 @@
+#!/sbin/sh
+# initwait -- ask init for a run level, and see that it acts.
+#
+#   initwait <level>     <level> one of 0 1 2 3 4 5 6 s S
+#
+# Sends /sbin/init <level>, as shutdown's last step did, then watches the run
+# level `who -r` shows. init takes the request at once but, after heavy file
+# writing on a small machine, may act on it only at its next idle alarm,
+# minutes later, while the shell prompt is already back. So: when the level
+# has not changed within INITWAIT_SECS seconds (30), the request is sent once
+# more and one line says so; when it still has not changed after as long
+# again, one line says the system has not changed state yet, and the exit
+# status is 1. Nothing is watched, as before, when the level cannot be read
+# or is already <level>. init's own failure is passed on as it is.
+#
+# The base package's /usr/sbin/shutdown (/sbin/shutdown) is the stock script
+# with its last line, /sbin/init ${initstate}, made /usr/sbin/initwait
+# ${initstate}. Exit 0 when the level changed (or nothing was watched).
+# Page initwait(1M).
+#
+# MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
+# repository).
+
+INITWAIT_INIT=${INITWAIT_INIT:-/sbin/init}
+INITWAIT_WHO=${INITWAIT_WHO:-/sbin/who}
+INITWAIT_SECS=${INITWAIT_SECS:-30}
+
+case "$#$1" in
+1[0-6sS])
+	;;
+*)
+	echo "usage: initwait 0|1|2|3|4|5|6|s|S" >&2
+	exit 1
+	;;
+esac
+
+# the run level `who -r` shows: ". run-level 2 Nov 14 14:02 2 0 S"
+level() {
+	"$INITWAIT_WHO" -r 2>/dev/null |
+		awk '{ for (i = 1; i < NF; i++) if ($i == "run-level") { print $(i + 1); exit } }'
+}
+
+# up to INITWAIT_SECS one-second looks; true as soon as the level moved
+moved() {
+	_iw_n=0
+	while [ $_iw_n -lt "$INITWAIT_SECS" ]
+	do
+		sleep 1
+		[ "`level`" != "$was" ] && return 0
+		_iw_n=`expr $_iw_n + 1`
+	done
+	return 1
+}
+
+was=`level`
+"$INITWAIT_INIT" $1 || exit $?
+case "$was" in
+'' | "$1")
+	exit 0
+	;;
+esac
+[ "$1" = s ] && [ "$was" = S ] && exit 0
+moved && exit 0
+echo "init has not acted on the request for run level $1 in $INITWAIT_SECS seconds: asking again"
+"$INITWAIT_INIT" $1 || exit $?
+moved && exit 0
+echo "init has still not acted on the request for run level $1; it will at its next check, within 5 minutes. Wait for that before you switch off."
+exit 1

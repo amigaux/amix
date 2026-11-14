@@ -40,6 +40,13 @@ stage() {
 	put 0444 net/ntp /etc/init.d/ntp
 	ln "$DEST/etc/init.d/ntp" "$DEST/etc/rc2.d/S77ntp"
 	put 0555 net/ntpsync /usr/sbin/ntpsync
+	# shutdown: the stock script, its request to init seen through
+	# (initwait); /sbin/shutdown is its stock hard link
+	put 0555 rc/initwait /usr/sbin/initwait
+	sh rc/mkshutdown.sh "$AMIX_SYSTEM" "$REPO/system/MANIFEST.sha256" "$DEST/usr/sbin/shutdown"
+	chmod 0755 "$DEST/usr/sbin/shutdown"
+	mkdir -p "$DEST/sbin"
+	ln "$DEST/usr/sbin/shutdown" "$DEST/sbin/shutdown"
 	# the swap step in the stock swap script's place and shape (S90swap the
 	# file, init.d/swap and K05swap linked to it)
 	put 0444 rc/swap /etc/rc2.d/S90swap
@@ -96,6 +103,7 @@ stage() {
 	put 0644 net/ifup.1m /opt/amix/man/1m/ifup
 	put 0644 net/ifdown.1m /opt/amix/man/1m/ifdown
 	put 0644 net/ntpsync.1m /opt/amix/man/1m/ntpsync
+	put 0644 rc/initwait.1m /opt/amix/man/1m/initwait
 	put 0644 rc/rc.conf.4 /opt/amix/man/4/rc.conf
 	put 0644 net/interfaces.4 /opt/amix/man/4/interfaces
 	put 0644 net/link.d.4 /opt/amix/man/4/link.d
