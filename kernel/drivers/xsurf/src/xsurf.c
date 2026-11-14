@@ -31,7 +31,7 @@
 #define blklen(m)	((int)((m)->b_wptr - (m)->b_rptr))
 
 static int	xsopen(), xsclose(), xswput(), xswsrv();
-static int	xs_proto(), xs_xmit(), xs_intr();
+static int	xs_proto(), xs_proto1(), xs_xmit(), xs_intr();
 static void	xs_ioctl(), xs_wdrain(), xs_tick();
 
 static struct module_info xs_minfo = {
@@ -272,6 +272,25 @@ ulong prim, err;
  */
 static int
 xs_proto(q, mp)
+queue_t *q;
+mblk_t *mp;
+{
+    xs_stream_t *sp = (xs_stream_t *)q->q_ptr;
+    ulong prim;
+
+    if (sp && blklen(mp) >= (int)sizeof(ulong))
+	prim = ((union DL_primitives *)mp->b_rptr)->dl_primitive;
+    else
+	prim = DL_UNITDATA_REQ;		/* dropped by xs_proto1 */
+    if (xs_proto1(q, mp))
+	return 1;
+    if (prim != DL_UNITDATA_REQ)	/* an answer waits for memory */
+	xs_board[sp->board].st.ack_retries++;
+    return 0;
+}
+
+static int
+xs_proto1(q, mp)
 queue_t *q;
 mblk_t *mp;
 {
@@ -747,6 +766,26 @@ xs_board_t *b;
  * --------------------------------------------------------------------- */
 
 /*
+ * The station address as 00:80:10:12:34:56, two digits a byte (the kernel's
+ * printf has no field widths), in a static buffer: one line at a time.
+ */
+static char *
+xs_macstr(mac)
+unsigned char *mac;
+{
+    static char buf[3 * XS_ETHERADDRL];
+    static char hex[] = "0123456789abcdef";
+    int i;
+
+    for (i = 0; i < XS_ETHERADDRL; i++) {
+	buf[3 * i] = hex[mac[i] >> 4];
+	buf[3 * i + 1] = hex[mac[i] & 15];
+	buf[3 * i + 2] = i < XS_ETHERADDRL - 1 ? ':' : 0;
+    }
+    return buf;
+}
+
+/*
  * One "name=value" of the manifest's parameter string (separated by spaces;
  * 0 when there are none) as a non-negative decimal, else `dflt'.
  */
@@ -865,10 +904,8 @@ char *params;
 	b->last_claims = b->st.irq_claims;
 	xs_chip_mask(b, intr);
 	splx(s);
-	cmn_err(CE_CONT,
-	    "xsf%d: %s, Zorro %d at 0x%x, %x:%x:%x:%x:%x:%x, %s\n",
-	    b->unit, b->ops->name, (int)b->st.zorro, (int)b->phys,
-	    b->mac[0], b->mac[1], b->mac[2], b->mac[3], b->mac[4], b->mac[5],
+	cmn_err(CE_CONT, "xsf%d: %s, Zorro %d at 0x%x, %s, %s\n",
+	    b->unit, b->ops->name, (int)b->st.zorro, (int)b->phys, xs_macstr(b->mac),
 	    intr ? "interrupt I/O" :
 	    xs_intr_param == 2 ? "polled (interrupt self-test failed)" : "polled");
     }

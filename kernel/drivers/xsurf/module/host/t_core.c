@@ -380,6 +380,7 @@ t_ack_nomem()
     freemsg(expect(&S[0], DL_INFO_ACK));
     CHECK(s_upcount(&S[0]) == 0);
     CHECK(B->s[0].state == DL_IDLE);
+    CHECK(B->st.ack_retries == 1);
     mp = proto(4, 0x55);
     host_alloc_fail = 1;
     s_put(&S[0], mp);
@@ -822,7 +823,7 @@ t_interrupts()
     cur = "intr-selftest-pass";
     boot("");
     CHECK(B->intr == XSURF_MODE_INTR && host_attached());
-    CHECK(strstr(host_console, "xsf0: Model, Zorro 2 at 0xe90000") != NULL);
+    CHECK(strstr(host_console, "xsf0: Model, Zorro 2 at 0xe90000, 00:80:10:12:34:56, interrupt I/O") != NULL);
     CHECK(strstr(host_console, "interrupt I/O") != NULL);
     s_open(&S[0], 0);
     bind(&S[0], 0x800);
