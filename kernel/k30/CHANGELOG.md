@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — amixrun folds telnet CR NUL to CR in transcripts (d98c6440)
+
+amixrun keeps telnet's CR NUL as a plain CR in transcripts, so long outputs no longer carry stray NUL bytes.
+
 ## 2026-11-14 — KNOWN-ISSUES: the late halt after shutdown, explained (ebb4f233)
 
 A shutdown that returns to the prompt and halts up to five minutes later is explained: after heavy writes on a 16 MB machine, init acts on the run-level request only at its own five-minute timer. Stock 2.1c does the same, so it is not a kernel defect. A second `/sbin/init 0` is acted on at once.
