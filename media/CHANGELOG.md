@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — the version shown comes from media/VERSION (c1dc2497)
+
+The install CD's profiles carry @VERSION@ in the text the installer shows, which tools/build-install-iso.sh fills in from media/VERSION when it stages them, so the 1.1.1 CD says "amigaux 1.1.1 install"; the netinstall disc's LICENSING names the same version. A selftest fails when the profiles, that text, the Buddha images' README or the release notes disagree with media/VERSION.
+
 ## 2026-11-14 — the 1.1.1 netinstall: xsurf, buddha, xsf0 (09ea7db9)
 
 The netinstall RAM-disk images are 1.1.1's (ni-k30-1.1.1 be1440fa, ni-k46-1.1.1 2bb885ae, pinned under the amix-distfiles release media-ramdisk-1.1.1), made from the master-line tree with the 1.1.1 installer and DMA table. The netinstall generations carry buddha (root class) and xsurf (boot class, beside z3660eth); the image check also wants /dev/xsf0. The miniroot's network source offers the X-Surf as xsf0, with a static address as for zen0 and aen0.
