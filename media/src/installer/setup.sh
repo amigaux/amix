@@ -1091,8 +1091,9 @@ choose_disk()
 		# and stopping would leave the reader to conclude the disk is broken.
 		echo ""
 		echo "An IDE disk on the A4000's or A1200's own port is used as the"
-		echo "MASTER only: set the disk (or the CF adapter) to master; a CD-ROM"
-		echo "may be the slave.  The IDE port of an A600 is not supported."
+		echo "MASTER only: set the disk (or the CF adapter) to master.  A CD-ROM"
+		echo "may be the slave beside it; a drive alone on the port is found only"
+		echo "as the master.  The IDE port of an A600 is not supported."
 		echo "A Buddha or Catweasel Z-II takes a master or a slave on any port."
 		echo "Otherwise UNIX needs a SCSI host adapter (the A3000 or A4000T"
 		echo "onboard controller, an A4091, or the Z3660's) with a disk on it."
