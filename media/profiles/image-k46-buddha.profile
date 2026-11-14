@@ -1,5 +1,5 @@
 # ============================================================================
-# image-k46-buddha -- the pre-installed 68060 (k46) 1.1.x image for a disk on a Buddha, 1800 MiB
+# image-k46-buddha -- the pre-installed 68060 (k46) @VERSION@ image for a disk on a Buddha, 1800 MiB
 # ============================================================================
 # Built by tools/build-preinstalled.sh --kind buddha: a fresh install of the image set in emulation
 # (an A4000 with a 68040 or 68060, or a Z3660: the Buddha card 1 beside the Z3660, its port-0 master ced0; the disc on the Buddha's port-1 master), halted unbooted with the first-boot dialog armed;
@@ -14,7 +14,7 @@
 # Network: public: no address, so the installer writes `* dhcp` and `hostname dhcp`.
 # ============================================================================
 PROFILE_NAME=image-k46-buddha
-PROFILE_DESC="the pre-installed 68060 (k46) 1.1.x image for a disk on a Buddha, 1800 MiB: root 1671, swap 64, store 64"
+PROFILE_DESC="the pre-installed 68060 (k46) @VERSION@ image for a disk on a Buddha, 1800 MiB: root 1671, swap 64, store 64"
 INSTALL_LAYOUT=1.1
 # the finished disk IS the product: its layout and set are pinned
 IMAGE_KIT=y

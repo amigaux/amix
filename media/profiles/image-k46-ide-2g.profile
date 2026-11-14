@@ -1,5 +1,5 @@
 # ============================================================================
-# image-k46-ide-2g -- the pre-installed 68060 (k46) 1.1.x image for an IDE master, 1800 MiB
+# image-k46-ide-2g -- the pre-installed 68060 (k46) @VERSION@ image for an IDE master, 1800 MiB
 # ============================================================================
 # Built by tools/build-preinstalled.sh --kind ide-2g: a fresh install of the image set in emulation (an emulated
 # A4000 + Z3660, the target the IDE master (card 1), the disc on the slave), halted unbooted with the first-boot dialog armed; the user's choices are made at its
@@ -17,7 +17,7 @@
 # no name: the first boot asks, and an empty answer is DHCP's name, else amix-xxxx.
 # ============================================================================
 PROFILE_NAME=image-k46-ide-2g
-PROFILE_DESC="the pre-installed 68060 (k46) 1.1.x image for an IDE master, 1800 MiB: root 1671, swap 64, store 64"
+PROFILE_DESC="the pre-installed 68060 (k46) @VERSION@ image for an IDE master, 1800 MiB: root 1671, swap 64, store 64"
 INSTALL_LAYOUT=1.1
 # the finished disk IS the product: its layout and set are pinned
 IMAGE_KIT=y
