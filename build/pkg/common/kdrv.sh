@@ -24,6 +24,12 @@
 # for a package-only revision):
 #   KM_K30_OBJ, KM_K46_OBJ  default out/modules/<line>/<KM_NAME>
 #   KM_FILES_COMMON  KM_FILES lines the same on both lines (may be empty)
+#   KM_ONLY_IF_FILE  optional: a file, relative to the checkout, that the
+#                    pinned source holds once it has this recipe's module
+#                    (a fork's module/<name>/VERSION).  While it is not
+#                    there, the recipe is not in the pinned source yet: a
+#                    line says so, nothing is rolled, and it is no gap.  Once
+#                    it is, a missing object is [MISSING] as for any recipe
 #   kdrv_prepare     optional function, run before the rolls: builds what
 #                    KM_FILES names that the drivers step does not (tools),
 #                    in its own compiler environment
@@ -56,12 +62,16 @@ TOOLCHAIN=none AMIX_RECIPE_TOOLCHAINS=none
 kdrv_one() {
 	_d_dir=$1; shift
 	unset -f kdrv_prepare 2>/dev/null || :
-	KM_FILES_COMMON= KM_K30_OBJ= KM_K46_OBJ= KM_PKG_VERSION=
+	KM_FILES_COMMON= KM_K30_OBJ= KM_K46_OBJ= KM_PKG_VERSION= KM_ONLY_IF_FILE=
 	. "$_d_dir/pin.sh"
 	if [ $# -gt 0 ]; then
 		case " $* " in *" $KM_NAME "*) ;; *) return 0 ;; esac
 	fi
 	KM_ROOT=$AMIX_REPO_ROOT
+	if [ -n "$KM_ONLY_IF_FILE" ] && [ ! -f "$KM_ROOT/$KM_ONLY_IF_FILE" ]; then
+		echo "$KM_REPO/pkg: $KM_NAME is not in the pinned source yet (no $KM_ONLY_IF_FILE); not rolled"
+		return 0
+	fi
 	KM_K30_OBJ=${KM_K30_OBJ:-out/modules/k30/$KM_NAME}
 	KM_K46_OBJ=${KM_K46_OBJ:-out/modules/k46/$KM_NAME}
 	_d_space=$AMIX_BUILD_ROOT/kspace
