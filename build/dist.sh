@@ -20,7 +20,7 @@
 #   modules      kernel/modules/*/module on both lines: out/modules/<line>/<name>
 #                (the module directories that hold files git tracks)
 #   drivers      every driver module on both lines, on the kit:
-#                kernel/drivers/{a4091,z3660scsi,z3660eth}/module and
+#                kernel/drivers/{a4091,z3660scsi,z3660eth,xsurf}/module and
 #                the forks at their pins (cdfs, gayle-ide, paula, z3660rtg):
 #                out/modules/<line>/<name>
 #   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
@@ -321,7 +321,7 @@ step_modules() {
 }
 
 # the drivers: ours in kernel/drivers, and the forks at their pins
-DRIVERS="a4091 z3660scsi z3660eth cdfs gayle-ide paula z3660rtg"
+DRIVERS="a4091 z3660scsi z3660eth xsurf cdfs gayle-ide paula z3660rtg"
 
 fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.pin, in out/cache/forks
 	read -r url commit < "$top/kernel/drivers/$1/$1.pin"
@@ -340,7 +340,7 @@ fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.p
 build_driver() {	# build_driver <name>: its module on both lines, built against this checkout's kit
 	dlm=$top/kernel/dlm
 	case $1 in
-	a4091|z3660scsi|z3660eth)
+	a4091|z3660scsi|z3660eth|xsurf)
 		# a4091's module/ builds a4kt710 (the A4000T's onboard 53C710) too;
 		# clean first, so no object of an earlier kit survives
 		make -C "$top/kernel/drivers/$1/module" DLM="$dlm" clean
@@ -370,7 +370,7 @@ build_driver() {	# build_driver <name>: its module on both lines, built against 
 driver_objects() {	# the module objects a driver's build leaves
 	case $1 in
 	a4091) set -- "$top/kernel/drivers/a4091" ;;
-	z3660scsi|z3660eth) set -- "$top/kernel/drivers/$1" ;;
+	z3660scsi|z3660eth|xsurf) set -- "$top/kernel/drivers/$1" ;;
 	*) set -- "$out/cache/forks/$1" ;;
 	esac
 	find "$1" -path '*/build/*' -path '*/mod.d/*' -type f | LC_ALL=C sort
