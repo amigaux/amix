@@ -1,5 +1,5 @@
 # The major-number registry of 1.1, c 54 from 1.3, c 48 from 2026-10-31,
-# c 55 from 2026-11-01
+# c 55 from 2026-11-01, c 56 from 2026-11-14
 # (docs/spec/20-module-format-and-abi.md section 6, confirmed against the
 # kernels of record by M-REG1).  One line
 # per number: c (character) or b (block), the major, the module that owns
@@ -16,5 +16,8 @@ c 53 kinfo
 c 54 paula
 # c 55: the ZZ9000/Z3660 service channel, kernel/modules' zz9ksvc (/dev/zz9ksvcN, minor N)
 c 55 zz9ksvc
+# c 56: the X-Surf and X-Surf-100 ethernet module, kernel/drivers/xsurf
+# (STREAMS, DLPI, interface xsf0)
+c 56 xsurf
 # b 20: the RAM-disk module, kernel/modules' ramdisk
 b 20 ramdisk

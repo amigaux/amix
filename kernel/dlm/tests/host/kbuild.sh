@@ -346,6 +346,7 @@ grep '^major ' $B5 > $T/gotmaj
 cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantmaj $T/gotmaj >&2; exit 1; }
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
+grep -a -q "^major c 56 xsurf$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 echo "param blit=off   # the administrator's" > $R/etc/conf/modreg.local.d/z3660rtg
 $KB build $FACTS > $T/out && id=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
@@ -373,6 +374,7 @@ grep '^major ' $B5 > $T/gotmaj
 cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantmaj $T/gotmaj >&2; exit 1; }
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
+grep -a -q "^major c 56 xsurf$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 # check: a module copy changed, then gone
 cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
