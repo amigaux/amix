@@ -16,14 +16,18 @@
 # counted and the console line's station address printed with leading zeros;
 # tested in emulation on both lines (README, Tested).  Built in
 # amix-toolchain:dist against the kit of amix 1a3e7797.
+# 1.0.0-3 (2026-11-14): module 1.0.0-3, SIOCGIFFLAGS and SIOCSIFFLAGS
+# acknowledged with IP's ifreq, so ifconfig shows xsf0's flags (was flags=0);
+# tested in emulation on both lines (README, Tested).  Built in
+# amix-toolchain:dist against the kit of amix 1a3e7797.
 
 KM_NAME=xsurf
 KM_SHORT=xsurf
 KM_REPO=kernel/drivers/xsurf
-KM_VERSION=1.0.0-2
+KM_VERSION=1.0.0-3
 
-KM_K30_SHA=d5541a4ca3bda1cc3aa11cd072eec301765aaae21ef7e2eaf57571655cddfe45
-KM_K46_SHA=e7fab154950a9e7c968535c0e30f25ddde8efdbb6a814d97694b326ba405ec12
+KM_K30_SHA=eafad2d4226ad4a786b329e102029b2ba64b60726feb33e40f727a26a6827f92
+KM_K46_SHA=e01d1b13de02baa75fcec4614ecbc74f3441ade7b5559fb5b99f1f89515d1805
 KM_K30_DEPS=
 KM_K46_DEPS=
 
