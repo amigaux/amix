@@ -16,6 +16,7 @@ static const struct { int type, n; const char *name; } reg[] = {
 	{ 'c', 53, "kinfo" },
 	{ 'c', 54, "paula" },
 	{ 'c', 55, "zz9ksvc" },
+	{ 'c', 56, "xsurf" },
 	{ 'b', 20, "ramdisk" },
 	{ 0, 0, 0 }
 };

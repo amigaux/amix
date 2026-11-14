@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 23
+# C3-5 — the module package and the per-module manifest record, version 24
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -35,6 +35,7 @@
   (2026-11-01): a module kernel's manifest carries the major table, one
   `major` record per registry row, which the core reads (core patch 0051;
   §3); version 23 (2026-11-02): the gayle row serves the A1200 IDE too
+  (§1.1); version 24 (2026-11-14): short names for buddha and xsurf
   (§1.1).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
@@ -101,6 +102,8 @@ per line**:
 | random | `random` | `random30` / `random46` |
 | zz9ksvc | `zz9ksvc` | `zz9ksvc30` / `zz9ksvc46` |
 | zz9kbus | `zz9kbus` | `zz9kbus30` / `zz9kbus46` |
+| buddha | `buddha` | `buddha30` / `buddha46`: the Buddha and Catweasel Z-II IDE (C4-2 §8.2) (version 24) |
+| xsurf | `xsurf` | `xsurf30` / `xsurf46`: the X-Surf and X-Surf-100 ethernet, character major 56 (version 24) |
 
   A new module gets its row in a version bump of this contract.
 

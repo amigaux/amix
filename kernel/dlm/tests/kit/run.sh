@@ -161,6 +161,16 @@ for l in k30 k46; do
 		refused "an unregistered major" $l "$W/$l-major/out/mod.d/major" "major c:60 is not in the registry"
 	mkbad $l owned "$WRAP"'MOD_MISC_WRAPPER(owned, l, u, "x");\n' "$M0"'$majors c:51\nowned\towned\n' &&
 		refused "another module's major" $l "$W/$l-owned/out/mod.d/owned" "registered to z3660eth"
+	# c 56 is registered to xsurf (2026-11-14): xsurf passes, another module is refused
+	XB='$modtype misc\n$class boot\n$cpu 68020\n$match zorro:1212:64,zorro:1212:17\n'
+	mkbad $l xsurf "$WRAP"'MOD_MISC_WRAPPER(xsurf, l, u, "x");\n' "$XB"'$majors c:56\nxsurf\txsurf\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-xsurf/out/mod.d/xsurf" > "$W/xsurf.out" 2>&1; then
+			pass "$l: xsurf with character major 56 is accepted"
+		else
+			fail "$l: xsurf with character major 56"; cat "$W/xsurf.out"
+		fi
+	mkbad $l xsother "$WRAP"'MOD_MISC_WRAPPER(xsother, l, u, "x");\n' "$M0"'$majors c:56\nxsother\txsother\n' &&
+		refused "xsurf's major on another module" $l "$W/$l-xsother/out/mod.d/xsother" "registered to xsurf"
 	mkbad $l boolp "$WRAP"'MOD_MISC_WRAPPER(boolp, l, u, "x");\n' "$M0"'$param on:bool:yes\nboolp\tboolp\n' &&
 		refused "a bool default other than 0 or 1" $l "$W/$l-boolp/out/mod.d/boolp" "is not a bool value"
 	# a root-class disk controller (C4-2 section 1): accepted, rank= written

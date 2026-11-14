@@ -30,6 +30,7 @@ done
 [ "$($B/kbootset major z3660eth)" = "c 51" ]
 [ "$($B/kbootset major ramdisk)" = "b 20" ]
 [ "$($B/kbootset major kinfo)" = "c 53" ]
+[ "$($B/kbootset major xsurf)" = "c 56" ]
 # -l: the whole registry, its rows in its order, as `NAME c|b N`
 sed 's/#.*//' abi/registry/majors | awk 'NF == 3 { print $3, $1, $2 }' > $T/wantl
 $B/kbootset major -l > $T/gotl
