@@ -1,5 +1,5 @@
 # ============================================================================
-# universal-k46 -- the published 1.1 install CD's 68060 (and 68040) line (amix-1.1-install.iso)
+# universal-k46 -- the published install CD's 68060 (and 68040) line (amix-<version>-install.iso)
 # ============================================================================
 # One medium for every 1.1 target: the Z3660 SCSI, an A4091 or A4092, the A3000's SCSI, the
 # A4000T's SCSI, the A4000's or A1200's IDE port, and a Buddha's or Catweasel Z-II's IDE ports. Nothing here names the machine: the miniroot finds
@@ -11,7 +11,8 @@
 # the first boot asks. The installed generation carries every driver of the line.
 # ============================================================================
 PROFILE_NAME=universal-k46
-PROFILE_DESC="amigaux 1.1 install (68060 (and 68040)): any Z3660, A4091/A4092, A3000, A4000T, IDE, Buddha or Catweasel Z-II target, found at run time"
+# @VERSION@: media/VERSION, put in by tools/build-install-iso.sh when the profile is staged
+PROFILE_DESC="amigaux @VERSION@ install (68060 (and 68040)): any Z3660, A4091/A4092, A3000, A4000T, IDE, Buddha or Catweasel Z-II target, found at run time"
 INSTALL_LAYOUT=1.1
 KERNEL_KPKG=kernel-k46-m
 # the installed generation carries every hardware driver of the line; each loads only when its

@@ -1,5 +1,5 @@
 # ============================================================================
-# image-k30-buddha -- the pre-installed 68030 (k30) 1.1.x image for a disk on a Buddha, 1800 MiB
+# image-k30-buddha -- the pre-installed 68030 (k30) @VERSION@ image for a disk on a Buddha, 1800 MiB
 # ============================================================================
 # Built by tools/build-preinstalled.sh --kind buddha: a fresh install of the image set in emulation
 # (an A2000, A3000 or A4000 with a 68030: the Buddha alone, its port-0 master c6d0; the disc on the Buddha's port-1 master), halted unbooted with the first-boot dialog armed;
@@ -14,7 +14,7 @@
 # Network: public: no address, so the installer writes `* dhcp` and `hostname dhcp`.
 # ============================================================================
 PROFILE_NAME=image-k30-buddha
-PROFILE_DESC="the pre-installed 68030 (k30) 1.1.x image for a disk on a Buddha, 1800 MiB: root 1671, swap 64, store 64"
+PROFILE_DESC="the pre-installed 68030 (k30) @VERSION@ image for a disk on a Buddha, 1800 MiB: root 1671, swap 64, store 64"
 INSTALL_LAYOUT=1.1
 # the finished disk IS the product: its layout and set are pinned
 IMAGE_KIT=y

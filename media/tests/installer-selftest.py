@@ -5901,6 +5901,55 @@ def audit_root_record():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_media_version():
+    head("MV. the version a user is shown is media/VERSION's: the profiles say @VERSION@ and the staging puts it "
+         "in; the netinstall's text, the Buddha images' README and the release notes name the same version")
+    vf = os.path.join(REPO, "VERSION")
+    ver = open(vf).read().split("\n")[0].strip() if os.path.exists(vf) else ""
+    if not re.match(r"^[0-9]+\.[0-9]+(\.[0-9]+)?$", ver):
+        fail("media/VERSION is not a version (%r)" % ver)
+        return
+    ok("media/VERSION = %s" % ver)
+    bad = []
+    pdir = os.path.join(REPO, "profiles")
+    for f in sorted(os.path.join(pdir, n) for n in os.listdir(pdir) if n.endswith(".profile")):
+        for l in open(f, encoding="latin-1"):
+            if l.startswith("PROFILE_DESC=") and ("amigaux " in l or "pre-installed" in l) and "@VERSION@" not in l:
+                bad.append(os.path.basename(f))
+    (fail if bad else ok)("every published profile's PROFILE_DESC takes its version from @VERSION@%s"
+                          % ((": not " + " ".join(bad)) if bad else ""))
+    iso = open(os.path.join(REPO, "tools", "build-install-iso.sh"), encoding="utf-8").read()
+    fn = _extract_func(iso, "stage_profile")
+    if not fn or 'carry @VERSION@ and there is no media/VERSION' not in iso:
+        fail("build-install-iso.sh: no stage_profile() or no stop on a left @VERSION@")
+    else:
+        d = tempfile.mkdtemp(prefix="mver.")
+        try:
+            src = os.path.join(d, "p.profile")
+            open(src, "w").write('PROFILE_DESC="amigaux @VERSION@ install (68030)"\n')
+            r = subprocess.run(["/bin/bash", "-c", 'lab_localize() { cat; }\nMEDIA_VER=%s\n%s\nstage_profile %s %s/out.profile'
+                                % (ver, fn, src, d)], capture_output=True, text=True, timeout=10)
+            got = open(os.path.join(d, "out.profile")).read() if os.path.exists(os.path.join(d, "out.profile")) else r.stderr
+            (ok if got == 'PROFILE_DESC="amigaux %s install (68030)"\n' % ver else fail)(
+                "build-install-iso.sh stages PROFILE_DESC as \"amigaux %s install\": %r" % (ver, got.strip()))
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    ni = open(os.path.join(REPO, "tools", "build-netinstall.sh"), encoding="utf-8").read()
+    (ok if 'NIVER="$(sed -n \'1p\' "$repo/VERSION"' in ni and "boots the Amix $NIVER installer" in ni else fail)(
+        "build-netinstall.sh: the disc's LICENSING names the installer's version from media/VERSION")
+    rd = os.path.join(REPO, "docs", "images", "README-buddha-2g.txt")
+    first = open(rd).readline() if os.path.exists(rd) else ""
+    names = set(re.findall(r"amix-([0-9.]+[0-9])-k[0-9]+-buddha-2g", open(rd).read())) if first else set()
+    (ok if ("Amix %s " % ver) in first and names == {ver} else fail)(
+        "docs/images/README-buddha-2g.txt is the %s README (title %r, image names %s)" % (ver, first.strip(), sorted(names)))
+    rn = os.path.join(REPO, "docs", "releases", "%s.md" % ver)
+    if not os.path.exists(rn):
+        fail("no docs/releases/%s.md" % ver)
+    else:
+        vs = set(re.findall(r"amix-([0-9]+\.[0-9]+(?:\.[0-9]+)?)-", open(rn, encoding="utf-8").read()))
+        (ok if vs <= {ver} else fail)("docs/releases/%s.md names only amix-%s-* files (found %s)" % (ver, ver, sorted(vs)))
+
+
 def audit_boot_pri():
     head("BP. the target's UNIX_Boot boot priority is the profile's TARGET_BOOT_BOOTPRI (default 2, "
          "0-127), checked before the disk is touched; the test disks ship at 20")
@@ -7488,6 +7537,7 @@ def main():
     audit_syspass_confirm()
     audit_kbootset_cards()
     audit_root_record()
+    audit_media_version()
     audit_swap_stepdown()
     audit_universal_cards()
     audit_cd_candidates()
