@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — the netinstall images with xsurf 1.0.0-3; the miniroot names no release (189d4b9f..30c34d63)
+
+The netinstall RAM-disk pins move to ni-k30-1.1.1-2 and ni-k46-1.1.1-2 (xsurf 1.0.0-3). The miniroot's install-disc messages no longer name a release ("an amigaux install disc"), so they stay right at a point release; a selftest keeps them so. The 1.1.1 notes name xsurf 1.0.0-3.
+
 ## 2026-11-14 — the version shown comes from media/VERSION (c1dc2497)
 
 The install CD's profiles carry @VERSION@ in the text the installer shows, which tools/build-install-iso.sh fills in from media/VERSION when it stages them, so the 1.1.1 CD says "amigaux 1.1.1 install"; the netinstall disc's LICENSING names the same version. A selftest fails when the profiles, that text, the Buddha images' README or the release notes disagree with media/VERSION.
