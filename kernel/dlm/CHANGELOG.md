@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — one set of bytes for kbootset -45; kbootset(1M) on moving the root disk (25881832, edbdfcfc)
+
+kbootset -45's pin names commit 92c8712 on both lines, so the package is one set of bytes (5c64f22f). kbootset(1M) describes moving the root disk to another controller, for the next kbootset version; -45's payload is unchanged.
+
 ## 2026-11-14 — C2-4 version 30: a disk root needs no swap record (bee82c42)
 
 A disk root's swap is slice 2 of the root disk RTH1 chose, and the swap record is read only for a RAM-disk root's `swap none`, so the pristine build and the moved-disk step pass no --swap. Spec 10's manifest table says the same.
