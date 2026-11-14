@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — module 1.0.0-8, package 1.0.0-14: DLPI requests are checked (1a879ce0, f906cf9b, 44c2d3b2)
+
+DLPI requests are checked (DL_ERROR_ACK BADPRIM/BADSAP; the unitdata request's length, destination offset and bound state), and an answer that finds no memory waits and is retried instead of lost; two status counters (tx_bad_req, tx_unbound) appended; host tests of the STREAMS/DLPI side against a model firmware. Emulator regression on both lines with zen0 as the only network interface.
+
 ## 2026-11-11 — BUILD.md links the grimoire at amigaux/grimoire (985e3f07)
 
 The grimoire moved to github.com/amigaux/grimoire; its site is https://grimoire.amigaux.org.
