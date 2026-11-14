@@ -25,6 +25,26 @@ make dist SYSTEM=$PWD/../amix-system RELEASE_PUBLIC=1 LOCK=$PWD/../amix-1.1.lock
 The tag is older than this file, so the lock goes in as a copy from outside
 the checkout, and at the tag the paths must be absolute (`docs/BUILDING.md`).
 
+## A point release: 1.1.1
+
+A point release adds to its release's repository; it does not start a new
+one. 1.1.1 is built at its commit on the published 1.1 tree:
+
+```sh
+make dist SYSTEM=… RELEASE_PREVIOUS=<the published 1.1 tree>
+```
+
+The release step keeps every published file byte for byte (a published name
+and version whose bytes differ is refused), adds the new versions, and moves
+a live version that a newer one replaces to the catalog's older block, where
+`carried-1.1` must name it. Against 1.1, 1.1.1 adds buddha-k30 and buddha-k46
+1.1.0-4 and xsurf-k30 and xsurf-k46 1.0.0-2, and kbootset 1.1.0.261114-45
+replaces 1.1.0.261105-43, which `carried-1.1` lists at the tag `1.1`. The
+kernels and every other package are 1.1's. Its locks, written when it is
+built, are as for 1.1: `amix-1.1.1.lock`, the public rebuild at the tag
+`1.1.1`, and `amix-1.1.1-published.lock`, the same build on the published 1.1
+tree, whose `previous` line is the digest of 1.1's catalog.
+
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
 of record, `+` in this build).
