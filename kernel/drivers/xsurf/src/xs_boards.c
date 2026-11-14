@@ -28,10 +28,6 @@ struct xs_card
     int			(*probe)();	/* (b) */
 };
 
-static struct xs_card xs_cards[] = {
-    { 0 },
-};
-
 static int
 xs_map(b, phys, bytes)
 xs_board_t *b;
@@ -94,6 +90,135 @@ xs_board_t *b;
     }
     xs_chip_init(b, 0);
     return 1;
+}
+
+static int	xs100_probe();
+static struct xs_ops xs100_ops;
+
+static struct xs_card xs_cards[] = {
+    { 0x12120064, &xs100_ops, 0x9000, xs100_probe },	/* X-Surf-100 */
+    { 0 },
+};
+
+/* ------------------------------------------------------------------------
+ * X-Surf-100 (AX88796B), Zorro II or Zorro III.  docs/facts.md:
+ *   +0x0040  network interrupt status, bit 7 of a byte read
+ *   +0x0800  chip register r at 0x800 + 4r, byte access (as Linux; the
+ *            maker's page says word access: one place to change, here)
+ *   +0x0840  the data port (register 0x10), word or byte
+ *   +0x8880  long-word FIFO read window, +0x8C80 the write window: each
+ *            long is two 16-bit chip transfers in byte order.  Used in
+ *            blocks of 0x80 bytes from those addresses, inside the maker's
+ *            windows and where the emulator decodes them.
+ * The PHY is powered through GPOC and left to the chip: no MII access.
+ * --------------------------------------------------------------------- */
+#define XS100_IRQ	0x0040
+#define XS100_REGS	0x0800
+#define XS100_FIFO_RD	0x8880
+#define XS100_FIFO_WR	0x8C80
+#define XS100_BLOCK	0x80
+#define XS100_REG(b, r)	((b)->va + XS100_REGS + 4 * (r))
+
+static int
+xs100_rd(b, r)
+xs_board_t *b;
+int r;
+{
+    return *XS100_REG(b, r);
+}
+
+static void
+xs100_wr(b, r, v)
+xs_board_t *b;
+int r, v;
+{
+    *XS100_REG(b, r) = v;
+}
+
+/* `len' bytes from the data port: whole longs through the FIFO window, a
+ * block at a time, then a word and a byte from the data port itself */
+static void
+xs100_bin(b, buf, len)
+xs_board_t *b;
+unsigned char *buf;
+int len;
+{
+    volatile unsigned long *fifo;
+    int n;
+
+    while (len >= 4) {
+	n = len & ~3;
+	if (n > XS100_BLOCK)
+	    n = XS100_BLOCK;
+	len -= n;
+	fifo = (volatile unsigned long *)(b->va + XS100_FIFO_RD);
+	for (; n > 0; n -= 4, buf += 4)
+	    *(unsigned long *)buf = *fifo++;
+    }
+    if (len & 2) {
+	*(unsigned short *)buf = *(volatile unsigned short *)XS100_REG(b, XS_DATA);
+	buf += 2;
+    }
+    if (len & 1)
+	*buf = *XS100_REG(b, XS_DATA);
+}
+
+/* an even `len' to the data port, the same way */
+static void
+xs100_bout(b, buf, len)
+xs_board_t *b;
+unsigned char *buf;
+int len;
+{
+    volatile unsigned long *fifo;
+    int n;
+
+    while (len >= 4) {
+	n = len & ~3;
+	if (n > XS100_BLOCK)
+	    n = XS100_BLOCK;
+	len -= n;
+	fifo = (volatile unsigned long *)(b->va + XS100_FIFO_WR);
+	for (; n > 0; n -= 4, buf += 4)
+	    *fifo++ = *(unsigned long *)buf;
+    }
+    if (len & 2)
+	*(volatile unsigned short *)XS100_REG(b, XS_DATA) = *(unsigned short *)buf;
+}
+
+static int
+xs100_irq(b)
+xs_board_t *b;
+{
+    return (b->va[XS100_IRQ] & 0x80) != 0;
+}
+
+/* GPOC: only ever written with no remote DMA set up (a stopped chip, a
+ * zero remote count), so a model that decodes it as the data port moves
+ * nothing */
+static void
+xs100_phy(b, on)
+xs_board_t *b;
+int on;
+{
+    xs100_wr(b, XS_GPOC, on ? 0 : XS_GPOC_PPDSET);
+}
+
+static struct xs_ops xs100_ops = {
+    "X-Surf-100", XSURF_KIND_XSURF100, 0x40,
+    xs100_rd, xs100_wr, xs100_bin, xs100_bout, xs100_irq, xs100_phy,
+};
+
+static int
+xs100_probe(b)
+xs_board_t *b;
+{
+    if (bprobe((caddr_t)XS100_REG(b, XS_CR), -1)) {
+	cmn_err(CE_NOTE, "xsurf: X-Surf-100 at 0x%x: no answer at its registers",
+	    (int)b->phys);
+	return 0;
+    }
+    return xs_probe_chip(b);
 }
 
 /*

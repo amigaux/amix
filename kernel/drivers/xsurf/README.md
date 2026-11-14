@@ -16,6 +16,25 @@ interface.
 **Status: in development.** The board facts the driver is built on, and
 where each was checked, are in [docs/facts.md](docs/facts.md).
 
+## Support
+
+| Card | Mode | k30 (68030) | k46 (68040/68060) |
+|---|---|---|---|
+| X-Surf-100 | Zorro II | yes | yes |
+| X-Surf-100 | Zorro III | yes | yes |
+
+How each line maps the board:
+
+- **k46.** `dev_kvmap` with the kit's register class (non-cacheable,
+  serialised; kernel/dlm `docs/abi/ddi.md`), in both Zorro modes.
+- **k30.** Zorro II windows are reached through the kernel's identity
+  map. A Zorro III window is mapped with `sptalloc`.
+- **The data cache on k30.** The maker requires that a 68030 in Zorro III
+  mode does not use the data cache for the chip. That rule holds because
+  the k30 kernel runs with the data cache off in supervisor mode, where
+  all of this driver's accesses happen. The page mapping does not make the
+  window uncached. The driver never maps the board into a user process.
+
 ## Interrupts and polling
 
 The module parameter `intr` chooses how the driver hears the chip:
