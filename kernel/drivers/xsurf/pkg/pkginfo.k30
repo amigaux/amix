@@ -1,15 +1,15 @@
 PKG=xsurf30
-NAME=xsurf-k30 1.0.0-1 - X-Surf and X-Surf-100 ethernet driver module, k30 line
+NAME=xsurf-k30 1.0.0-2 - X-Surf and X-Surf-100 ethernet driver module, k30 line
 ARCH=Amiga
-VERSION=1.0.0-1
+VERSION=1.0.0-2
 CATEGORY=system
 CLASSES=none xsurf
 VENDOR=amix
-PSTAMP=amix-xsurf30-1.0.0-1
+PSTAMP=amix-xsurf30-1.0.0-2
 # Kernel space (amix-dlm C2-2, C3-5 sec 1): a role=module entry of the
 # #ext kpkg block (line=k30), never an ordinary entry.  Catalog name
 # xsurf-k30, pkginst xsurf30.  The module's release is
-# kernel/drivers/xsurf/module/VERSION (1.0.0-1), the same on both lines.
+# kernel/drivers/xsurf/module/VERSION (1.0.0-2), the same on both lines.
 # The nodes are in class xsurf (C3-5 sec 1.2).
 APKG_DESC=Individual Computers X-Surf-100 and X-Surf ethernet (xsf0, STREAMS/DLPI) as a boot-class kernel module for the 68030 line module kernel kernel-k30-m: /etc/conf/mod.d/xsurf, /dev/xsf0 and /dev/xsf1, and the link.d entry ifup reads (/etc/inet/link.d/xsurf).
 DESC=The kernel/drivers/xsurf driver built as an amix-dlm kernel module for the 68030 line: boot class, loaded at the first sysinit entry (modadmin -B) when an X-Surf-100 (Zorro II or III) or an X-Surf (Zorro II) is present (match zorro:1212:64, zorro:1212:17), character major 56, its nodes /dev/xsf0 and /dev/xsf1 (c 56 0 and 1, mode 0600) shipped by the package.  /etc/inet/link.d/xsurf (xsf /dev/xsf 0) tells ifup the interface prefix, the node and the first unit; the major comes from kbootset major xsurf.  Configure xsf0 in /etc/inet/interfaces, not there.  /etc/conf/modreg.d/xsurf holds the package's defaults (none; the module's intr=2 is the level-2 interrupt after a self-test, polled when it fails).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  Tested in emulation and host tests only, not on a real card.  MIT.
