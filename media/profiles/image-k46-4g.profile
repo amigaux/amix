@@ -1,5 +1,5 @@
 # ============================================================================
-# image-k46-4g -- the pre-installed 68060 (k46) 1.1.x image, 3600 MiB
+# image-k46-4g -- the pre-installed 68060 (k46) @VERSION@ image, 3600 MiB
 # ============================================================================
 # Built by tools/build-preinstalled.sh: a fresh install of the image set in emulation (an emulated A4000
 # with a Z3660, the target its SCSI unit 6), halted unbooted with the first-boot dialog armed; the user's choices are
@@ -17,7 +17,7 @@
 # no name: the first boot asks, and an empty answer is DHCP's name, else amix-xxxx.
 # ============================================================================
 PROFILE_NAME=image-k46-4g
-PROFILE_DESC="the pre-installed 68060 (k46) 1.1.x image, 3600 MiB: root 2047, swap 64, store 64, /home 1424"
+PROFILE_DESC="the pre-installed 68060 (k46) @VERSION@ image, 3600 MiB: root 2047, swap 64, store 64, /home 1424"
 INSTALL_LAYOUT=1.1
 # the finished disk IS the product: its layout and set are pinned
 IMAGE_KIT=y

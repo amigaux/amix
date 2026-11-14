@@ -108,10 +108,12 @@ find "$root/BOOT" "$root/S" -type d -exec chmod 0755 {} +
 find "$root/BOOT" "$root/S" -type f -exec chmod 0644 {} +
 chmod 0755 "$root/BOOT/amix-cdboot"
 . "$here/lib/licensing-text.sh"
+# the installer's version as the user is told it: media/VERSION (1.1 before the file existed)
+NIVER="$(sed -n '1p' "$repo/VERSION" 2>/dev/null)"; NIVER="${NIVER:-1.1}"
 cat > "$root/LICENSING" <<EOF
 Amix 2.1 netinstall medium -- release-cleared 2026-09-23.
 
-This disc boots the Amix 1.1 installer into memory (68030 and 68040/68060 lines). Its RAM disk
+This disc boots the Amix $NIVER installer into memory (68030 and 68040/68060 lines). Its RAM disk
 carries the base packages the installer needs; the rest of the system's packages are read over
 the network from the package repository.
 
