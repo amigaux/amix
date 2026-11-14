@@ -3704,11 +3704,12 @@ def audit_w2_interview():
         # "A3000 Internal SCSI" on the canonical rig, and those exact strings
         # are what the "modern machine" case below feeds in.
         ("a machine with NO disks at all gets stock's own line AND the IDE pointer: the A4000's "
-         "port takes a master only (a disk not seen is most likely the slave), A1200/A600 not",
+         "port takes a master only (a disk not seen is most likely the slave), A600 not, a Buddha any unit",
          {}, ["", ""], {},
          ["No hard disks are attached to this system.",
-          "An IDE disk on the A4000's own port is used as the MASTER only:",
-          "The IDE port of an A1200 or A600 is not supported.",
+          "An IDE disk on the A4000's or A1200's own port is used as the",
+          "The IDE port of an A600 is not supported.",
+          "A Buddha or Catweasel Z-II takes a master or a slave on any port.",
           "UNIX needs a SCSI host adapter"], ["There is no Amiga UNIX IDE driver"], []),
         ("coverage: a KICKSTART 1.3 machine (romsize 262144) is refused by "
          "name, before any size is asked for",
@@ -5836,6 +5837,70 @@ def audit_kbootset_cards():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_root_record():
+    head("RR. the root record names the target's controller by its id (a Buddha 12120000, a Catweasel Z-II "
+         "12122a00) and its unit; base= is the root board's own base only when two cards carry its key "
+         "(amix-dlm C4-2 8.2 items 4-5)")
+    src = open(os.path.join(REPO, "src", "installer", "l11.sh"), encoding="utf-8").read()
+    fb = _extract_func(src, "l11_rootbase")
+    m = re.search(r'\n(\tL11_CTL="the profile.s KBOOTSET_BOOTDEV"\n.*?\n\tfi\n)\tmsg "layout 1.1', src, re.S)
+    if not fb or not m or "L11_CBASE=\n" not in src:
+        fail("l11.sh: no l11_rootbase() or no root-record block to run")
+        return
+    d = tempfile.mkdtemp(prefix="rootrec_")
+    try:
+        os.makedirs(os.path.join(d, "bin"))
+        def run(disk, cards, hba, sid):
+            kb = os.path.join(d, "bin", "kbootset")
+            if disk is None:
+                if os.path.exists(kb): os.remove(kb)
+            else:
+                open(kb, "w").write('#!/bin/sh\nif [ "$1" = cards ] && [ -n "$2" ]; then echo "%s"; else printf "%%b" "%s"; fi\n'
+                                    % (disk, cards))
+                os.chmod(kb, 0o755)
+            body = ('L11=%s\nTARGET_SCSI_ID=%s\nTARGET_ROOT_SLICE=1\nTARGET_HBA=%s\nKBOOTSET_BOOTDEV=\nKBOOTSET_ROOTDEV=\n'
+                    'KBOOTSET_ROOTREC=\nIDE_CARD=\nL11_CBASE=\nmsg() { :; }\ndie() { echo "DIE $*"; exit 3; }\n%s\n%s\n'
+                    'echo "REC=$KBOOTSET_ROOTREC"\n' % (d, sid, hba, fb, m.group(1)))
+            r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10)
+            return (r.stdout + r.stderr).strip().splitlines()[-1:] or [""]
+        z3660 = "card 0: c0-c7 zorro:144b:01 base 0x40000000\\n"
+        cases = (
+            ("a Buddha's port-0 master beside a Z3660 (ced0)", "zorro:1212:00 base 0x00e90000",
+             z3660 + "card 1: c8-cf zorro:1212:00 base 0x00e90000\\n", "auto", "e",
+             "REC=sd id=12120000 base=00000000 unit=6 slice=1"),
+            ("a lone slave on a Buddha alone (c5d0)", "zorro:1212:00 base 0x00e90000",
+             "card 0: c0-c7 zorro:1212:00 base 0x00e90000\\n", "auto", "5",
+             "REC=sd id=12120000 base=00000000 unit=5 slice=1"),
+            ("a Buddha's port-1 slave (c2d0)", "zorro:1212:00 base 0x00e90000",
+             "card 0: c0-c7 zorro:1212:00 base 0x00e90000\\n", "auto", "2",
+             "REC=sd id=12120000 base=00000000 unit=2 slice=1"),
+            ("a Catweasel Z-II's port-2 master (c1d0)", "zorro:1212:2a base 0x00e90000",
+             "card 0: c0-c7 zorro:1212:2a base 0x00e90000\\n", "auto", "1",
+             "REC=sd id=12122a00 base=00000000 unit=1 slice=1"),
+            ("two A4091s, the root on the second (c9d0): its base", "zorro:0202:54 base 0x40800000",
+             "card 0: c0-c7 zorro:0202:54 base 0x40000000\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n", "auto", "9",
+             "REC=sd id=02025400 base=40800000 unit=1 slice=1"),
+            ("two Buddhas, a short base: padded to eight digits", "zorro:1212:00 base 0xe90000",
+             "card 0: c0-c7 zorro:1212:00 base 0x00e90000\\ncard 1: c8-cf zorro:1212:00 base 0x00ea0000\\n", "auto", "6",
+             "REC=sd id=12120000 base=00e90000 unit=6 slice=1"),
+            ("two boards of one kind and no base for the target's: stop", "zorro:0202:54",
+             "card 0: c0-c7 zorro:0202:54 base 0x40000000\\ncard 1: c8-cf zorro:0202:54 base 0x40800000\\n", "auto", "9",
+             "DIE two cards carry zorro:0202:54, and kbootset cards gives no base for the target's (none); set KBOOTSET_ROOTREC"),
+            ("an A4091 beside a Z3660: one card of the kind, base 0 as in 1.1", "zorro:0202:54 base 0x40800000",
+             z3660 + "card 1: c8-cf zorro:0202:54 base 0x40800000\\n", "auto", "9",
+             "REC=sd id=02025400 base=00000000 unit=1 slice=1"),
+            ("no kbootset: the profile's TARGET_HBA=buddha gives the Buddha's key", None, "", "buddha", "6",
+             "REC=sd id=12120000 base=00000000 unit=6 slice=1"),
+            ("no kbootset: TARGET_HBA=catweasel", None, "", "catweasel", "1",
+             "REC=sd id=12122a00 base=00000000 unit=1 slice=1"),
+        )
+        for what, disk, cards, hba, sid, want in cases:
+            got = run(disk, cards, hba, sid)[0]
+            (ok if got == want else fail)("root record: %s%s" % (what, "" if got == want else " -- got %r" % got))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def audit_boot_pri():
     head("BP. the target's UNIX_Boot boot priority is the profile's TARGET_BOOT_BOOTPRI (default 2, "
          "0-127), checked before the disk is touched; the test disks ship at 20")
@@ -6045,6 +6110,26 @@ def audit_universal_cards():
                                 "NOINQ_KEYS=mobo:a3000-wd\n%s\nread_cards; k=`card_key 0`; b=`card_base 0`; n=`card_name \"$k\" \"$b\"`; "
                                 "u=`card_units`; echo \"$n|$u\"" % (d, pf, body)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
             got = r.stdout.decode().strip()
+            (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
+        # the Buddha and the Catweasel Z-II (one module, buddha): any unit of theirs that answers as a disk is
+        # offered (port 0 master 6 and slave 5, port 1 3/2, the Catweasel's port 2 1/0; C4-2 8.2), named
+        # by its board, and given the word l11.sh's key table and the DMA table know
+        for table, script, want, what in (
+                ("card 0: c0-c7 zorro:144b:01 base 0x40000000\n  unit 6: type 0 ZuluSCSI HARDDRIVE 2.0\n"
+                 "card 1: c8-cf zorro:1212:00 base 0x00e90000\n  unit 5: type 0 UAE IDE -\n  unit 6: type 0 UAE IDE -\n",
+                 'u=`card_units`; for i in d e; do k=`card_key \\`id_card $i\\``; echo "`card_name $k`/`card_hba $k`"; done; echo "|$u"',
+                 "Buddha IDE/buddha Buddha IDE/buddha |6 d e",
+                 "a Buddha beside a Z3660: its port-0 master (ce) and slave (cd) offered, named \"Buddha IDE\""),
+                ("card 0: c0-c7 zorro:1212:00 base 0x00e90000\n  unit 5: type 0 UAE IDE -\n",
+                 'echo "`card_units`"', "5", "a lone slave on a Buddha alone (c5) is offered"),
+                ("card 0: c0-c7 zorro:1212:2a base 0x00e90000\n  unit 1: type 0 UAE IDE -\n  unit 3: type 5 UAE-ATAPI CD-ROM 0.1\n",
+                 'k=`card_key 0`; echo "`card_name $k`/`card_hba $k`|`card_units`"', "Catweasel Z-II IDE/catweasel|1",
+                 "a Catweasel Z-II: its port-2 master (c1) offered, its CD (unit 3) not")):
+            open(pf, "w").write(table.replace("\\n", "\n"))
+            r = subprocess.run(["/usr/bin/dash", "-c", "SETUP_KBOOTSET=/bin/true CARDS_F=%s/cards SETUP_PROBE=%s CARDS_PROBED= "
+                                "NOINQ_KEYS=mobo:a3000-wd\n%s\nread_cards; %s" % (d, pf, body, script)],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=20)
+            got = " ".join(r.stdout.decode().split())
             (ok if got == want else fail)("universal cards: %s%s" % (what, "" if got == want else " -- got %r" % got))
         # the A3000: the WD (mobo:a3000-wd) is not probed, so its units are read as before the probe
         pf = os.path.join(d, "cards.probe")
@@ -6611,11 +6696,12 @@ def audit_l11():
         r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
         rd = lambda *p: open(os.path.join(fr, *p)).read() if os.path.exists(os.path.join(fr, *p)) else ""
         return r.stdout + r.stderr, rd
-    net = "\n".join(_extract_func(fbt, f) for f in ("find_ifs", "ask_network", "ask_repo"))
+    net = "\n".join(_extract_func(fbt, f) for f in ("find_ifs", "if_label", "ask_network", "ask_repo"))
     # the hardware is the test's: an A2065 or none (aen -S), never a Z3660 NIC, and no mknod
-    zen_none = lambda c: c.replace("mknod /dev/zen0 c 51 0", "false").replace("( : < /dev/zen0 )", "false")
-    net_aen, net_none = zen_none(net).replace("/usr/amiga/bin/aen -S", "true"), \
-        zen_none(net).replace("/usr/amiga/bin/aen -S", "false")
+    zen_none = lambda c: (c.replace("mknod /dev/zen0 c 51 0", "false").replace("( : < /dev/zen0 )", "false")
+                          .replace("mknod /dev/xsf$XN c 56 $XN", "false").replace("( : < /dev/xsf$XN )", "xsf_open $XN"))
+    net_aen, net_none = "xsf_open() { false; }\n" + zen_none(net).replace("/usr/amiga/bin/aen -S", "true"), \
+        "xsf_open() { false; }\n" + zen_none(net).replace("/usr/amiga/bin/aen -S", "false")
     show = '\nask_network\necho "MODE=$FB_NET_MODE CONF=$FB_NET_CONFIGURED IP=$FB_IP REPO=$FB_REPO_HOST NOIF=$FB_NET_NOIF I=$i"\n'
     out, rd = fbrun(net_aen + show,
                     answers=("y", "y", "pkg.example", ""), FB_L11="y", FB_IP="", FB_REPO_HOST="", FB_REPO_IP="")
@@ -6625,6 +6711,20 @@ def audit_l11():
     (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=y I=1" in out and "network questions are skipped" in out else fail)(
         "firstboot dialog (1.1), no interface: no network question asked, DHCP recorded for a card fitted later: %r"
         % out.strip()[-120:])
+    # an X-Surf (xsf0) answers the open test: alone it is the interface, beside an A2065 it is the
+    # second entry of a choice built from what was found, and a static address goes on it
+    xsf_on = lambda c: c.replace("xsf_open() { false; }", 'xsf_open() { [ "$1" = 0 ]; }')
+    showif = show.replace('I=$i"', 'I=$i IF=$FB_ETHER_IF"')
+    for what, code, answers, want, menu in (
+            ("an X-Surf alone", xsf_on(net_none), ("y", "n", "192.0.2.7"),
+             "MODE=static", ["Ethernet interface xsf0 found."]),
+            ("an A2065 and an X-Surf, the second chosen", xsf_on(net_aen), ("y", "n", "2", "192.0.2.7"),
+             "MODE=static", ["  1)   aen0\tA2065 Ethernet", "  2)   xsf0\tX-Surf Ethernet"])):
+        out, rd = fbrun(code + showif, answers=answers + ("", "", "", "", "", ""), FB_L11="y", FB_IP="",
+                        FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+        good = want in out and "IF=xsf0" in out and all(m in out for m in menu)
+        (ok if good else fail)("firstboot dialog (1.1), %s: a static address on xsf0: %r"
+                               % (what, " | ".join(out.strip().splitlines()[-3:])))
     out, rd = fbrun(net_none + show, answers=("y",), FB_L11="", FB_IP="192.0.2.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
     (ok if "CONF= " in out and "I=2" in out and "left as the installation set it" in out else fail)(
         "firstboot dialog (1.0), no interface: as before (asked, then left as the installation set it): %r"
@@ -6806,7 +6906,7 @@ def audit_l11():
     kbody = ('msg() { :; }\nwarn() { :; }\ndie() { echo "DIE $*"; exit 3; }\n'
              'is_num() { expr "$1" : "[0-9][0-9]*$" > /dev/null; }\n'
              "INST=%s\nL11=%s\nL11_APKG=%s/bin/apkg\nL11_STORE_MB=64\n" % (kc, kc, kc) +
-             _extract_func(l11, "l11_kpkg_key") + "\n" + _extract_func(l11, "l11_keys") +
+             _extract_func(l11, "l11_kpkg_key") + "\n" + _extract_func(l11, "l11_rootbase") + "\n" + _extract_func(l11, "l11_keys") +
              '\nl11_keys\necho "XPKGS=$L11_XPKGS MODS=$L11_MODS KMOD=$L11_KMOD"\n')
 
     def keys(kernel, mods, hba="z3660scsi", body=None):
@@ -7387,6 +7487,7 @@ def main():
     audit_netset_stage1()
     audit_syspass_confirm()
     audit_kbootset_cards()
+    audit_root_record()
     audit_swap_stepdown()
     audit_universal_cards()
     audit_cd_candidates()
