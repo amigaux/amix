@@ -12,14 +12,18 @@
 # k46.1.2, built in amix-toolchain:dist against the kit of amix 1a3e7797
 # (gcc-cross-amix 33ebadc).  Needs a kbootset whose registry has c 56 xsurf
 # (1.1.0.261114-45 or later); no kbootset= key, no depend.
+# 1.0.0-2 (2026-11-14): module 1.0.0-2, the status record's ack_retries
+# counted and the console line's station address printed with leading zeros;
+# tested in emulation on both lines (README, Tested).  Built in
+# amix-toolchain:dist against the kit of amix 1a3e7797.
 
 KM_NAME=xsurf
 KM_SHORT=xsurf
 KM_REPO=kernel/drivers/xsurf
-KM_VERSION=1.0.0-1
+KM_VERSION=1.0.0-2
 
-KM_K30_SHA=a210f778f15e0ea7cb17bc3680a30dbfc1fc4a296e8ddbe4329f3ab589ac352b
-KM_K46_SHA=ac6078427cfc1cd08d9108a48e0f28632ff74d34ef13cec84a40d09525491e3d
+KM_K30_SHA=d5541a4ca3bda1cc3aa11cd072eec301765aaae21ef7e2eaf57571655cddfe45
+KM_K46_SHA=e7fab154950a9e7c968535c0e30f25ddde8efdbb6a814d97694b326ba405ec12
 KM_K30_DEPS=
 KM_K46_DEPS=
 
