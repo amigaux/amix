@@ -92,11 +92,12 @@ xs_board_t *b;
     return 1;
 }
 
-static int	xs100_probe();
-static struct xs_ops xs100_ops;
+static int	xs100_probe(), xsurf_probe();
+static struct xs_ops xs100_ops, xsurf_ops;
 
 static struct xs_card xs_cards[] = {
     { 0x12120064, &xs100_ops, 0x9000, xs100_probe },	/* X-Surf-100 */
+    { 0x12120017, &xsurf_ops, 0x9000, xsurf_probe },	/* X-Surf */
     { 0 },
 };
 
@@ -217,6 +218,191 @@ xs_board_t *b;
 	cmn_err(CE_NOTE, "xsurf: X-Surf-100 at 0x%x: no answer at its registers",
 	    (int)b->phys);
 	return 0;
+    }
+    return xs_probe_chip(b);
+}
+
+/* ------------------------------------------------------------------------
+ * X-Surf (Realtek, an RTL8019AS in the emulator), Zorro II.  docs/facts.md:
+ *   +0x0040  ethernet interrupt status, bits 7 and 5 (always equal)
+ *   +0x007E  write 0x80: ISA A11 high (adds 0x800 to ISA ports), 0x00: low.
+ *            Never read here: a read can change A11, and bit 7 of it is
+ *            the IDE interrupt.
+ *   +0x8000  ISA I/O space, addresses doubled: port p at 0x8000 + 2p.  The
+ *            chip at ISA 0x300: register r at 0x8600 + 2r, the data port
+ *            (0x310) at 0x8620.
+ * The IDE ports (+0xB000, +0xD000), the clock ports and the expansion port
+ * are never touched.  Register writes are byte writes, as Linux does (the
+ * maker's page says word-wide: one place to change, here).
+ *
+ * Whether the chip comes up at ISA 0x300 by itself (Linux assumes it) or
+ * waits for ISA plug-and-play (the emulator does) is not known, so the
+ * probe looks at 0x300 first and configures the chip through
+ * plug-and-play only when nothing answers there.
+ * --------------------------------------------------------------------- */
+#define XSURF_IRQ	0x0040
+#define XSURF_A11	0x007E
+#define XSURF_ISA	0x8000
+#define XSURF_IO	0x300			/* the chip's ISA I/O base */
+#define XSURF_PORT(b, p) ((b)->va + XSURF_ISA + 2 * (p))
+#define XSURF_REG(b, r)	XSURF_PORT((b), XSURF_IO + (r))
+
+/* ISA plug-and-play ports (the ISA Plug and Play specification 1.0a) */
+#define PNP_ADDRESS	0x279			/* write, A11 low */
+#define PNP_WRITE_DATA	0x279			/* 0xA79: written with A11 high */
+#define PNP_READ_PORT	0x20B			/* the read port we assign */
+
+static int
+xsurf_rd(b, r)
+xs_board_t *b;
+int r;
+{
+    return *XSURF_REG(b, r);
+}
+
+static void
+xsurf_wr(b, r, v)
+xs_board_t *b;
+int r, v;
+{
+    *XSURF_REG(b, r) = v;
+}
+
+/* the data port is 16 bits wide and gives the bytes in memory order */
+static void
+xsurf_bin(b, buf, len)
+xs_board_t *b;
+unsigned char *buf;
+int len;
+{
+    volatile unsigned short *dp =
+	(volatile unsigned short *)XSURF_REG(b, XS_DATA);
+
+    for (; len >= 2; len -= 2, buf += 2)
+	*(unsigned short *)buf = *dp;
+    if (len)
+	*buf = *XSURF_REG(b, XS_DATA);
+}
+
+static void
+xsurf_bout(b, buf, len)
+xs_board_t *b;
+unsigned char *buf;
+int len;
+{
+    volatile unsigned short *dp =
+	(volatile unsigned short *)XSURF_REG(b, XS_DATA);
+
+    for (; len >= 2; len -= 2, buf += 2)
+	*dp = *(unsigned short *)buf;
+}
+
+static int
+xsurf_irq(b)
+xs_board_t *b;
+{
+    return (b->va[XSURF_IRQ] & 0x80) != 0;
+}
+
+static struct xs_ops xsurf_ops = {
+    "X-Surf", XSURF_KIND_XSURF, 0x00,
+    xsurf_rd, xsurf_wr, xsurf_bin, xsurf_bout, xsurf_irq, 0,
+};
+
+static void
+pnp_address(b, v)
+xs_board_t *b;
+int v;
+{
+    *XSURF_PORT(b, PNP_ADDRESS) = v;
+}
+
+static void
+pnp_write(b, reg, v)
+xs_board_t *b;
+int reg, v;
+{
+    pnp_address(b, reg);
+    b->va[XSURF_A11] = 0x80;
+    *XSURF_PORT(b, PNP_WRITE_DATA) = v;
+    b->va[XSURF_A11] = 0x00;
+}
+
+static int
+pnp_read(b)
+xs_board_t *b;
+{
+    return *XSURF_PORT(b, PNP_READ_PORT);
+}
+
+/*
+ * The initiation key: 32 bytes from a linear-feedback shift register that
+ * starts at 0x6A, as the specification defines it.  Exported for the host
+ * tests, which check it against the published sequence.
+ */
+int
+xs_pnp_key(i)
+int i;
+{
+    int k = 0x6a;
+
+    while (i-- > 0)
+	k = (k >> 1) | (((k ^ (k >> 1)) & 1) << 7);
+    return k & 0xff;
+}
+
+/*
+ * Configure the one card behind the bridge: key, card numbers cleared,
+ * isolation (one card wins it alone), card number 1, logical device 0 at
+ * ISA 0x300, activated, back to waiting for the key.  Interrupts from this
+ * board cannot come yet; the level is raised anyway, as the maker asks
+ * while A11 is moved.  About 20 ms, once, at load.
+ */
+static void
+xsurf_pnp(b)
+xs_board_t *b;
+{
+    int i, s;
+
+    s = splxs();
+    b->va[XSURF_A11] = 0x00;
+    pnp_address(b, 0);
+    pnp_address(b, 0);
+    for (i = 0; i < 32; i++)
+	pnp_address(b, xs_pnp_key(i));
+    pnp_write(b, 0x02, 0x04);			/* reset card numbers */
+    pnp_write(b, 0x03, 0x00);			/* wake card 0: isolation */
+    pnp_write(b, 0x00, PNP_READ_PORT >> 2);	/* the read port */
+    pnp_address(b, 0x01);			/* serial isolation */
+    xs_udelay(1000L);
+    for (i = 0; i < 72; i++) {
+	(void)pnp_read(b);
+	(void)pnp_read(b);
+	xs_udelay(250L);
+    }
+    pnp_write(b, 0x06, 0x01);			/* card number 1 */
+    pnp_write(b, 0x07, 0x00);			/* logical device 0 */
+    pnp_write(b, 0x60, (XSURF_IO >> 8) & 0xff);	/* I/O base */
+    pnp_write(b, 0x61, XSURF_IO & 0xff);
+    pnp_write(b, 0x30, 0x01);			/* activate */
+    pnp_write(b, 0x02, 0x02);			/* wait for the key again */
+    splx(s);
+}
+
+static int
+xsurf_probe(b)
+xs_board_t *b;
+{
+    if (bprobe((caddr_t)XSURF_REG(b, XS_CR), -1)) {
+	cmn_err(CE_NOTE, "xsurf: X-Surf at 0x%x: no answer in its ISA window",
+	    (int)b->phys);
+	return 0;
+    }
+    if (!xs_chip_reset(b)) {
+	xsurf_pnp(b);
+	b->st.pnp = 1;
+	cmn_err(CE_NOTE, "xsurf: X-Surf at 0x%x: chip set up through ISA plug-and-play",
+	    (int)b->phys);
     }
     return xs_probe_chip(b);
 }

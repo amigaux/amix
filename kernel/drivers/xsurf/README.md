@@ -22,6 +22,12 @@ where each was checked, are in [docs/facts.md](docs/facts.md).
 |---|---|---|---|
 | X-Surf-100 | Zorro II | yes | yes |
 | X-Surf-100 | Zorro III | yes | yes |
+| X-Surf | Zorro II | yes | yes |
+
+The X-Surf's chip sits behind an ISA bridge. The driver looks for it at ISA
+port 0x300. If nothing answers there, the driver configures it through ISA
+plug-and-play and says so on the console. The board's IDE ports are never
+touched.
 
 How each line maps the board:
 

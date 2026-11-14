@@ -36,6 +36,7 @@ typedef struct
     unsigned int	intr_mode;
     unsigned int	link;
     unsigned int	running;	/* the chip is started */
+    unsigned int	pnp;		/* X-Surf: set up through plug-and-play */
 
     /* receive */
     unsigned int	rx_frames;	/* frames taken from the ring */
