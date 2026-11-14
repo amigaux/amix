@@ -22,7 +22,19 @@ Plans, with no dates; they may change.
 - Shared libraries for packages, to save memory and disk.
 - `crash` and `adb` on the 68040/68060 kernel, as a boot option.
 
-## 1.1 (unreleased)
+## 1.1.1
+
+A point release on the 1.1 kernels. Its packages go into the 1.1 repository (`http://pkg.amigaux.org/1.1`), and a 1.1 system takes them in place with `apkg`.
+Both new drivers are tested in emulation only, not on real cards.
+
+- The Individual Computers Buddha and Catweasel Z-II IDE ports: disks and ATAPI CD-ROM drives, the root disk included (`buddha-k30`, `buddha-k46` 1.1.0-4).
+- The Individual Computers X-Surf-100 and X-Surf ethernet cards, as the interface `xsf0` (`xsurf-k30`, `xsurf-k46` 1.0.0-3).
+- `kbootset` 1.1.0.261114-45, which knows both drivers.
+- New media replace 1.1's: the install CD, the network installer, the boot floppies and the Z3660 boot disk install onto a disk on a Buddha, and the CD and the network installer also onto one on a Catweasel Z-II.
+- Every installed system carries both new drivers, and the network installer can also install over an X-Surf.
+- Two new ready installed disk images, for the first port's master of a Buddha: one for the 68030, one for the 68040/68060.
+
+## 1.1
 
 - Loadable kernel modules on the 68030 and the 68040/68060, loaded at boot or on demand.
 - Filesystems as modules, loaded when a filesystem of their type is mounted.
