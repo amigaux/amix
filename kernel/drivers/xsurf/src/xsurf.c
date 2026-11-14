@@ -223,7 +223,7 @@ static int
 xs_ok_ack(q, mp, prim)
 queue_t *q;
 mblk_t *mp;
-unsigned long prim;
+ulong prim;
 {
     mblk_t *a;
     dl_ok_ack_t *ok;
@@ -245,7 +245,7 @@ static int
 xs_error_ack(q, mp, prim, err)
 queue_t *q;
 mblk_t *mp;
-unsigned long prim, err;
+ulong prim, err;
 {
     mblk_t *a;
     dl_error_ack_t *e;
@@ -277,9 +277,9 @@ mblk_t *mp;
 {
     xs_stream_t *sp = (xs_stream_t *)q->q_ptr;
     xs_board_t *b;
-    unsigned long prim;
+    ulong prim;
 
-    if (sp == NULL || blklen(mp) < (int)sizeof(unsigned long)) {
+    if (sp == NULL || blklen(mp) < (int)sizeof(ulong)) {
 	freemsg(mp);
 	return 1;
     }
@@ -307,13 +307,13 @@ mblk_t *mp;
 	dl_bind_req_t *req = (dl_bind_req_t *)mp->b_rptr;
 	dl_bind_ack_t *ack;
 	mblk_t *a;
-	unsigned long sap;
+	ulong sap;
 
 	if (blklen(mp) < (int)sizeof(dl_bind_req_t))
-	    return xs_error_ack(q, mp, prim, (unsigned long)DL_BADPRIM);
+	    return xs_error_ack(q, mp, prim, (ulong)DL_BADPRIM);
 	sap = req->dl_sap;
 	if (sap > 0xffff)
-	    return xs_error_ack(q, mp, prim, (unsigned long)DL_BADSAP);
+	    return xs_error_ack(q, mp, prim, (ulong)DL_BADSAP);
 	if ((a = allocb(sizeof(dl_bind_ack_t) + XS_ETHERADDRL, BPRI_MED)) == NULL)
 	    return 0;
 	a->b_datap->db_type = M_PCPROTO;
@@ -365,7 +365,7 @@ mblk_t *mp;
     }
 
     default:
-	return xs_error_ack(q, mp, prim, (unsigned long)DL_BADPRIM);
+	return xs_error_ack(q, mp, prim, (ulong)DL_BADPRIM);
     }
 }
 
@@ -383,7 +383,7 @@ xs_stream_t *sp;
 mblk_t *mp;
 {
     dl_unitdata_req_t *dp = (dl_unitdata_req_t *)mp->b_rptr;
-    unsigned long off;
+    ulong off;
     mblk_t *m;
     int s, len, room, n;
 
@@ -395,7 +395,7 @@ mblk_t *mp;
 	return 1;
     }
     off = dp->dl_dest_addr_offset;
-    if (off > (unsigned long)(blklen(mp) - XS_ETHERADDRL)) {
+    if (off > (ulong)(blklen(mp) - XS_ETHERADDRL)) {
 	b->st.tx_bad_req++;
 	b->ifs.ifs_oerrors++;
 	freemsg(mp);
