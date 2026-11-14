@@ -184,14 +184,25 @@ known about it, and what to do. Measurements are from emulation unless the entry
   libc's `sigaction` stores the new handler before it tells the kernel; a signal in between calls address 0, and
   `sh`'s SIGSEGV handler returns to it. `tests/sigrace` shows it on stock 68030-261103-71 and on this kernel alike.
 
+## Shutdown
+
+- **`shutdown` can give the prompt back and the machine halt only minutes later** (stock, both kernel lines; measured
+  in emulation on 16 MB machines). After `shutdown -i0 -g0 -y` the console shows `THE SYSTEM IS BEING SHUT DOWN NOW`
+  and `Changing to init state 0 - please wait`, the command returns, and `INIT: New run level: 0` comes up to five
+  minutes later instead of at once; the halt then completes normally. `shutdown` asks init to change run level by
+  running `/sbin/init 0`, which sends a signal to process 1 and returns. In the late cases init had taken that signal
+  (none was pending or held on process 1) and slept in its idle wait until its own five-minute timer woke it, and only
+  then changed run level; the request is not lost in the kernel, and the instruction window in init where its wake-up
+  is missed has not been pinned down. It follows heavy file writing just before the shutdown, on a machine short of
+  memory (idle daemons swapped out). Measured with about 150 MB written before each shutdown on 16 MB: this kernel
+  (cut -77) halted late in 2 of 4 shutdowns, after 172 and 164 s; the stock 2.1c kernel under the same test in 1 of
+  4, after 189 s; the shutdowns after only reading back halted at once. Not seen on 32 MB machines so far; the 040/060
+  line runs the same `/sbin/init` and can do the same. What to do: do not switch off on the prompt; wait for `The
+  system is halted`. If `who -r` still shows the old run level half a minute after `shutdown`, run `/sbin/init 0`
+  once more: a second request is acted on at once (27 s to the halt, measured).
+
 ## Not explained
 
-- **A shutdown sometimes stops after its broadcast, before init changes run level** (emulation, several builds). After
-  `shutdown -i0 -g0 -y` the console shows `THE SYSTEM IS BEING SHUT DOWN NOW` and the prompt, and then nothing: no
-  `INIT: New run level: 0` in the 3 minutes the test rig waits. Seen on rows of -71's builds, on cut -73 and on cut -77
-  (once each on the last two, on 2026-11-06, after rows that had finished their load), so not tied to one kernel's
-  change; a rerun of the same row halted. Whether the machine still answered on the network is not recorded. Cause
-  unknown.
 - **One shutdown stalled after `INIT: New run level: 0`** on development build 68030-261105-98 in emulation: no
   further output, the machine still answering on the network. Not seen in the later runs that finished their load on
   this kernel or on 68030-261103-71. Cause unknown; not called fixed.
