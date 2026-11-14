@@ -16,6 +16,34 @@ interface.
 **Status: in development.** The board facts the driver is built on, and
 where each was checked, are in [docs/facts.md](docs/facts.md).
 
+## Interrupts and polling
+
+The module parameter `intr` chooses how the driver hears the chip:
+
+- **`intr=2`, the default.** At load the driver puts its handler on the
+  level-2 interrupt chain and makes the board raise one real interrupt: a
+  one-word remote read with only the remote-DMA-complete event unmasked. Only
+  if the handler sees that interrupt does the driver unmask the chip's
+  receive and transmit events. If the attach or the test fails, the board is
+  polled.
+- **`intr=0`.** The board is polled from the clock tick, 60 times a second.
+
+At load the console prints one line per board: the card, its address, and
+the mode it ended in (`interrupt I/O`, `polled`, or
+`polled (interrupt self-test failed)`).
+
+In interrupt mode the tick keeps watch. If the chip has events waiting and
+no interrupt has been taken for three ticks, the driver masks the chip,
+polls from then on, and says once `xsfN: interrupts stopped; polled`. The
+tick also restarts a transmit that has not finished in 200 ms.
+
+The kit's driver contract (kernel/dlm C3-6 section 1.3) keeps polling as
+the default for a driver whose interrupt path is unproven. This driver meets
+that rule's purpose in a different way. It never enables a chip interrupt it
+has not seen arrive. It falls back to polling when one stops arriving. For a
+Zorro network card the level-2 interrupt is the usual path; the stock A2065
+driver works that way.
+
 ## Not confirmed on hardware
 
 The driver is tested in the Amiberry emulator and against a model chip in
