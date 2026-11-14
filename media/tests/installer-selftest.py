@@ -5901,6 +5901,16 @@ def audit_root_record():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def audit_miniroot_versionless():
+    head("MN. the miniroot (inside the pinned RAM-disk images) tells the user no release number: no echo or "
+         "readask line of src/miniroot/profile says \"amigaux <digit>\"")
+    src = open(os.path.join(REPO, "src", "miniroot", "profile"), encoding="latin-1").read().split("\n")
+    bad = [i + 1 for i, l in enumerate(src)
+           if re.search(r"\b(echo|readask)\b", l) and not l.lstrip().startswith("#") and re.search(r"amigaux [0-9]", l)]
+    (fail if bad else ok)("src/miniroot/profile: no user-facing line names a release%s"
+                          % ((": lines " + " ".join(map(str, bad))) if bad else ""))
+
+
 def audit_media_version():
     head("MV. the version a user is shown is media/VERSION's: the profiles say @VERSION@ and the staging puts it "
          "in; the netinstall's text, the Buddha images' README and the release notes name the same version")
@@ -7269,7 +7279,7 @@ def _sh_session(body, stdin="", timeout=30):
 
 
 def audit_source_fit():
-    head("SF. the source probe takes only an amigaux 1.1 install disc for the running kernel's line: another "
+    head("SF. the source probe takes only an amigaux install disc for the running kernel's line: another "
          "medium is named and skipped, two fitting discs are listed and asked for, a stale /cdrom is let go")
     prof = open(os.path.join(REPO, "src", "miniroot", "profile"), encoding="latin-1").read()
     fns = []
@@ -7315,14 +7325,14 @@ def audit_source_fit():
         shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
         medium("1,3", "1.0"); medium("2,5", "k46")
         rc, o = run(True)
-        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "The CD at 1,3 is not an amigaux 1.1 install disc" in o
+        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "The CD at 1,3 is not an amigaux install disc for this machine" in o
                 and "More than one" not in o)
         (ok if good else fail)("source EXECUTED: a 1.0 disc at 1,3 and the 1.1 disc at 2,5 -> the 1.0 disc is named and "
                                "skipped, 2,5 is the source%s" % ("" if good else ": %r" % o[-300:]))
         shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
         medium("1,3", "k46", "2026-10-10T08:00:00Z"); medium("2,5", "k46", "2026-11-07T09:36:12Z")
         rc, o = run(True, "2\n")
-        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "More than one amigaux 1.1 install disc" in o
+        good = (rc == 0 and "SRC=cdfs 2,5 SPEC=2,5" in o and "More than one amigaux install disc is in a drive" in o
                 and "1)  the CD-ROM drive at 1,3, built 2026-10-10T08:00:00Z" in o
                 and "2)  the CD-ROM drive at 2,5, built 2026-11-07T09:36:12Z" in o)
         (ok if good else fail)("source EXECUTED: two 1.1 discs -> both listed with their build dates, the one chosen "
@@ -7334,14 +7344,14 @@ def audit_source_fit():
         shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
         medium("2,5", "k46")
         rc, o = run(True, stale=True)
-        good = (rc == 0 and "not a readable amigaux 1.1 install disc: unmounting it" in o and "SRC=cdfs 2,5" in o
+        good = (rc == 0 and "not a readable amigaux install disc: unmounting it" in o and "SRC=cdfs 2,5" in o
                 and "already mounted" not in o)
         (ok if good else fail)("source EXECUTED: a stale /cdrom (setup.sh's first line is not its own) is let go and "
                                "the drives are looked at again%s" % ("" if good else ": %r" % o[-300:]))
         shutil.rmtree(os.path.join(d, "media"), ignore_errors=True)
         medium("2,5", "k30")
         rc, o = run(True)
-        good = rc == 99 and "RESTART" in o and "The CD at 2,5 is not an amigaux 1.1 install disc" in o
+        good = rc == 99 and "RESTART" in o and "The CD at 2,5 is not an amigaux install disc for this machine" in o
         (ok if good else fail)("source EXECUTED: only a disc of the other line (BASE.k30 on a k46 kernel) -> named, "
                                "not taken, the restart prompt%s" % ("" if good else ": %r" % o[-300:]))
     finally:
@@ -7538,6 +7548,7 @@ def main():
     audit_kbootset_cards()
     audit_root_record()
     audit_media_version()
+    audit_miniroot_versionless()
     audit_swap_stepdown()
     audit_universal_cards()
     audit_cd_candidates()

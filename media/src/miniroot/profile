@@ -708,7 +708,7 @@ source_built()
 # pick_cd SPEC... -- more than one 1.1 install disc answered: list them and ask which; the pick goes to $CD_FOUND.pick
 pick_cd()
 {
-	echo "\nMore than one amigaux 1.1 install disc is in a drive:\n"
+	echo "\nMore than one amigaux install disc is in a drive:\n"
 	_pi=0
 	while read _ps _pb
 	do
@@ -1028,7 +1028,7 @@ find_source()
 			return 0
 		fi
 		# ejected (or another medium): its installer is not readable here
-		echo "\nThe medium mounted on $CDROM is not a readable amigaux 1.1 install disc: unmounting it."
+		echo "\nThe medium mounted on $CDROM is not a readable amigaux install disc: unmounting it."
 		drop_source
 	fi
 
@@ -1071,7 +1071,7 @@ find_source()
 						break
 					fi
 				else
-					echo "\nThe CD at $s is not an amigaux 1.1 install disc for this machine (built `source_built`); it is skipped."
+					echo "\nThe CD at $s is not an amigaux install disc for this machine (built `source_built`); it is skipped."
 				fi
 			fi
 			drop_source
