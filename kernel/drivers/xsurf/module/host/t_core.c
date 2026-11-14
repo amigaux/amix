@@ -531,6 +531,105 @@ ioctl_msg(int cmd, unsigned int count, int with_cont)
     return mp;
 }
 
+/*
+ * The interface ioctls as IP sends them down: struct iocblk_in (the iocblk,
+ * two queue pointers, IP's flags word) with the ifreq in b_cont.
+ */
+struct t_iocblk_in {
+    struct iocblk iocblk; void *tclient, *nclient; int ioc_ifflags;
+};
+struct t_ifreq {
+    char ifr_name[16]; short ifr_flags; char ifr_rest[14];
+};
+
+static mblk_t *
+ifreq_msg(int cmd, int len, short flags)
+{
+    mblk_t *mp = allocb(sizeof(struct t_iocblk_in), BPRI_MED);
+    struct t_iocblk_in *io = (struct t_iocblk_in *)mp->b_wptr;
+    struct t_ifreq *ifr;
+
+    mp->b_datap->db_type = M_IOCTL;
+    memset(io, 0, sizeof *io);
+    io->iocblk.ioc_cmd = cmd;
+    io->iocblk.ioc_count = len;
+    io->ioc_ifflags = flags;
+    mp->b_wptr += sizeof *io;
+    mp->b_cont = allocb(sizeof *ifr, BPRI_MED);
+    ifr = (struct t_ifreq *)mp->b_cont->b_wptr;
+    memset(ifr, 0, sizeof *ifr);
+    strcpy(ifr->ifr_name, "xsf0");
+    ifr->ifr_flags = flags;
+    mp->b_cont->b_wptr += len;
+    return mp;
+}
+
+/* IFF_UP | IFF_BROADCAST | IFF_NOTRAILERS, what IP holds for an ethernet */
+#define T_IFFLAGS	0x23
+
+static void
+t_ifioctl()
+{
+    static struct { int cmd; int len; } nak[] = {
+	{ SIOCSIFADDR, 32 }, { SIOCGIFADDR, 32 }, { SIOCSIFDSTADDR, 32 },
+	{ SIOCGIFDSTADDR, 32 }, { SIOCSIFBRDADDR, 32 }, { SIOCGIFBRDADDR, 32 },
+	{ SIOCSIFNETMASK, 32 }, { SIOCGIFNETMASK, 32 }, { SIOCSIFMETRIC, 32 },
+	{ SIOCGIFMETRIC, 32 }, { SIOCSIFMTU, 32 }, { SIOCGIFMTU, 32 },
+	{ SIOCSIFMEM, 32 }, { SIOCGIFMEM, 32 }, { SIOCSIFNAME, 32 },
+	{ SIOCIFDETACH, 32 }, { IF_UNITSEL, 4 }, { SIOCSPROMISC, 4 },
+	{ SIOCADDMULTI, 32 }, { SIOCDELMULTI, 32 }, { SIOCGENADDR, 32 },
+	{ SIOCGENPSTATS, 32 },
+    };
+    static int ack[] = { SIOCGIFFLAGS, SIOCSIFFLAGS };
+    struct iocblk *io;
+    struct t_ifreq *ifr;
+    mblk_t *mp;
+    int i;
+
+    cur = "ifioctl";
+    boot("intr=0");
+    s_open(&S[0], 0);
+    /* the flags: acknowledged with the message as it came */
+    for (i = 0; i < 2; i++) {
+	s_put(&S[0], ifreq_msg(ack[i], sizeof *ifr, T_IFFLAGS));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	CHECK(mp && mp->b_datap->db_type == M_IOCACK && io->ioc_cmd == ack[i]);
+	CHECK(io && io->ioc_error == 0 && io->ioc_count == sizeof *ifr);
+	CHECK(mp && mp->b_wptr - mp->b_rptr == sizeof(struct t_iocblk_in) &&
+	      ((struct t_iocblk_in *)io)->ioc_ifflags == T_IFFLAGS);
+	CHECK(mp && mp->b_cont && mp->b_cont->b_wptr - mp->b_cont->b_rptr == sizeof *ifr);
+	if (mp && mp->b_cont) {
+	    ifr = (struct t_ifreq *)mp->b_cont->b_rptr;
+	    CHECK(ifr->ifr_flags == T_IFFLAGS && strcmp(ifr->ifr_name, "xsf0") == 0);
+	}
+	freemsg(mp);
+    }
+    /* the transparent form, a plain ioctl() on the device: refused */
+    for (i = 0; i < 2; i++) {
+	s_put(&S[0], ioctl_msg(ack[i], TRANSPARENT, 1));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	CHECK(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_error == EINVAL &&
+	      io->ioc_count == 0 && mp->b_cont == NULL);
+	freemsg(mp);
+    }
+    /* everything else IP, arp or slink could send: refused, as aen does */
+    for (i = 0; i < sizeof nak / sizeof nak[0]; i++) {
+	s_put(&S[0], ifreq_msg(nak[i].cmd, nak[i].len, T_IFFLAGS));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	if (!(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_error == EINVAL &&
+	      io->ioc_count == 0 && mp->b_cont == NULL))
+	    printf("ifioctl: 0x%x not refused\n", nak[i].cmd);
+	CHECK(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_cmd == nak[i].cmd);
+	CHECK(io && io->ioc_error == EINVAL && io->ioc_count == 0 && mp->b_cont == NULL);
+	freemsg(mp);
+    }
+    CHECK(s_upcount(&S[0]) == 0);
+    shutdown();
+}
+
 static void
 t_ioctl()
 {
@@ -936,6 +1035,7 @@ main()
     t_rx_hostile();
     t_rx_nomem();
     t_ioctl();
+    t_ifioctl();
     t_prom();
     t_ring();
     t_overrun();

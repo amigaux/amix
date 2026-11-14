@@ -86,8 +86,31 @@ struct copyreq {
 struct copyresp {
     int cp_cmd; void *cp_cr; unsigned int cp_id; caddr_t cp_rval;
 };
-#define SIOCSIFFLAGS	0x8010
-#define SIOCGIFFLAGS	0x8011
+/* the stock sys/sockio.h values (struct ifreq is 32 bytes) */
+#define SIOCSIFADDR	0x8020690c
+#define SIOCGIFADDR	0xc020690d
+#define SIOCSIFDSTADDR	0x8020690e
+#define SIOCGIFDSTADDR	0xc020690f
+#define SIOCSIFFLAGS	0x80206910
+#define SIOCGIFFLAGS	0xc0206911
+#define SIOCSIFMEM	0x80206912
+#define SIOCGIFMEM	0xc0206913
+#define SIOCSIFMTU	0x80206915
+#define SIOCGIFMTU	0xc0206916
+#define SIOCGIFBRDADDR	0xc0206917
+#define SIOCSIFBRDADDR	0x80206918
+#define SIOCGIFNETMASK	0xc0206919
+#define SIOCSIFNETMASK	0x8020691a
+#define SIOCGIFMETRIC	0xc020691b
+#define SIOCSIFMETRIC	0x8020691c
+#define IF_UNITSEL	0x80047336
+#define SIOCIFDETACH	0x80206938
+#define SIOCSIFNAME	0x80206949
+#define SIOCSPROMISC	0x80046930
+#define SIOCADDMULTI	0x80206931
+#define SIOCDELMULTI	0x80206932
+#define SIOCGENPSTATS	0xc0206939
+#define SIOCGENADDR	0xc0206955
 
 struct ifstats {
     struct ifstats *ifs_next; char *ifs_name; short ifs_unit; short ifs_active;

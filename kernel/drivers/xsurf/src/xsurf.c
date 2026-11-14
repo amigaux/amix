@@ -630,7 +630,22 @@ mblk_t *mp;
     switch (iocbp->ioc_cmd) {
     case SIOCSIFFLAGS:
     case SIOCGIFFLAGS:
-	xs_ioc_reply(q, mp, 0);
+	/*
+	 * IP sends these down with its ifreq in b_cont and its flags word
+	 * after the iocblk (struct iocblk_in), and passes the acknowledgement
+	 * back up as the answer: return the message as it came, as aen does.
+	 * Freeing b_cont here made ifconfig read flags 0.  The transparent
+	 * form (a plain ioctl() on the device) carries no ifreq: refused, as
+	 * the stock slip driver does.
+	 */
+	if (iocbp->ioc_count == TRANSPARENT) {
+	    xs_ioc_reply(q, mp, EINVAL);
+	    return;
+	}
+	mp->b_datap->db_type = M_IOCACK;
+	iocbp->ioc_error = 0;
+	iocbp->ioc_rval = 0;
+	qreply(q, mp);
 	return;
 
     case XSURF_NUMBER_OF_BOARDS:
