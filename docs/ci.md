@@ -17,6 +17,7 @@ finding to fix, not a gate.
 | tests | kernel/drivers a4091 host tests | `make -C kernel/drivers/a4091/test/host check` |
 | tests | kernel/drivers z3660scsi host tests | `make -C kernel/drivers/z3660scsi/test/host check` |
 | tests | kernel/drivers z3660eth host test (its parameter parser) | `make -C kernel/drivers/z3660eth/module test` |
+| tests | kernel/drivers xsurf host tests | `make -C kernel/drivers/xsurf/module test` |
 | tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
 | tests | pkgtools: the host engine, then its eight suites (apkg, the kbootset consumer, conffile end to end, the no-http variant, conffile, contents-fsck, migrate, the repository tools) | `PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make -C userland/pkgtools test` |
 | tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim, check-image, the image manifest) | `sh toolchain/test-tools` |
