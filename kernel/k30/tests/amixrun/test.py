@@ -38,4 +38,16 @@ go('old DONE_ text, never finishes', 1, 'cat /old', serve('stale'))
 go('old DONE_ text, then the real end', 0, 'cat /old', serve('late'))
 go('a short command, answered', 0, 'date', serve('answer'))
 go('a command never finishes', 1, 'date', serve('silent'))
+# telnet sends a bare CR as CR NUL: the transcript keeps the CR only, also across two reads; a NUL not after a CR is kept
+class Chunks:
+    def __init__(self, chunks): self.chunks = list(chunks)
+    def settimeout(self, t): pass
+    def recv(self, n): return self.chunks.pop(0) if self.chunks else b''
+    def sendall(self, data): pass
+import importlib.util
+os.environ.update(AMIX_HOST='127.0.0.1', AMIX_PASS='x')   # amixrun refuses to load without them; nothing is dialled here
+spec = importlib.util.spec_from_file_location('amixrun', T); ar = importlib.util.module_from_spec(spec); spec.loader.exec_module(ar)
+got = ar.readuntil(Chunks([b'ab\r', b'\x00cd\r\x00\n', b'x\x00y\r\n']), [], 5)
+ok = got == b'ab\rcd\r\nx\x00y\r\n'; bad += not ok
+print('%-4s %-36s %r' % ('ok' if ok else 'FAIL', 'CR NUL folded, a lone NUL kept', got))
 sys.exit(1 if bad else 0)
