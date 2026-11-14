@@ -2,7 +2,7 @@
 
 ## 2026-11-14 — xsurf 1.0.0-3 (8eedd1cd..31dc6f50)
 
-Fix: `ifconfig xsf0` showed `flags=0<>`. The driver acknowledged the interface-flags ioctls (SIOCGIFFLAGS, SIOCSIFFLAGS) without the request record; it now returns the message as it came, as the stock ethernet driver does, and the interface shows `flags=23<UP,BROADCAST,NOTRAILERS>`. The transparent form of the two is refused with EINVAL. The other interface ioctls were checked and are unchanged (refused, as before). Host tests: 555 and 46 checks, with a new case for the interface ioctls. Module 1.0.0-3 (k30 eafad2d4…, k46 e01d1b13…), packages xsurf30/xsurf46 1.0.0-3.
+Fix: `ifconfig xsf0` showed `flags=0<>`. The driver acknowledged the interface-flags ioctls (SIOCGIFFLAGS, SIOCSIFFLAGS) without the request record; it now returns the message as it came, as the stock ethernet driver does, and the interface shows `flags=23<UP,BROADCAST,NOTRAILERS>`. The transparent form of the two is refused with EINVAL. The other interface ioctls were checked and are unchanged (refused, as before). Host tests: 555 and 46 checks, with a new case for the interface ioctls. Module 1.0.0-3 (k30 eafad2d4…, k46 e01d1b13…), packages xsurf30/xsurf46 1.0.0-3. Run in emulation on the X-Surf-100 in Zorro III and II and on the X-Surf; the README's Tested section lists the checks (217e651d).
 
 ## 2026-11-14 — xsurf 1.0.0-2 (cdc1b584..1c6b4380)
 
