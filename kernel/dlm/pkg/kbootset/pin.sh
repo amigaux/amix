@@ -12,6 +12,15 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -45 (2026-11-14): amix cb64131 -- kbootset knows character major 56,
+# the xsurf module's (the X-Surf and X-Surf-100 ethernet, interface xsf0):
+# its registry copy gives the row to gate 3 and to the major table every
+# module-kernel generation carries (core patch 0051), so xsurf loads on the
+# 1.1 kernels with no kernel change.  Built in amix-toolchain:dist (the host
+# gives the same bytes): the box binary 87f824a3 (179160 bytes, text
+# 151868 + data 1828 + bss 553660); kbootset(1M), whatis and rc scripts as
+# -44.
+#
 # -44 (2026-11-13): amix 194311e -- a root or boot controller whose key is
 # zorro:1212:00 (the Buddha) is taken as named by a root-class module that
 # lists mobo:buddha, the stand-in the buddha module carries for the 1.1
@@ -295,8 +304,8 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=194311e
-KB_SHA=8de92f8c01b503bd0c43a2176d1d35dea62643efddb9129d34b207aba9025375
+KB_DLM_COMMIT=cb64131
+KB_SHA=87f824a3bb2828fc4bafd3a011c4fd855ff97c3383bb48a12998f30568d653db
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
 KB_MAN_SHA=a3aa96c2a5ed9b2d550dd92ce5c783bafb80686506751e84cb05b6d4655960c6
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
@@ -305,5 +314,5 @@ KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261113-44
-KB_SOURCE_EPOCH=1794528000
+KB_VERSION=1.1.0.261114-45
+KB_SOURCE_EPOCH=1794614400
