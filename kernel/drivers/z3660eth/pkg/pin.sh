@@ -25,19 +25,24 @@
 # the module form (it could never arm there) and two kmem-only diagnostics
 # gone; no change in what the driver does.  Built in amix-toolchain:dist at
 # amix b566cb4 (gcc-cross-amix 33ebadc).
+# 1.0.0-14 (2026-11-14): module 1.0.0-8, the DLPI requests checked (a
+# destination inside the request, a bound stream, a 16-bit SAP) and an answer
+# that finds no memory retried instead of lost; two counters appended to the
+# status record.  Built in amix-toolchain:dist against the kit of amix
+# 1a3e7797 (gcc-cross-amix 33ebadc).
 
 KM_NAME=z3660eth
 KM_SHORT=zeth
 KM_REPO=kernel/drivers/z3660eth
-KM_VERSION=1.0.0-7
-KM_PKG_VERSION=1.0.0-13
+KM_VERSION=1.0.0-8
+KM_PKG_VERSION=1.0.0-14
 
-KM_K30_SHA=7fb5a3e0ea41c0c2b5c7f24a37ce10ea7b90c7d9446334cf4a4fc1405d928840
-KM_K46_SHA=92d67894488ccb5576efabdd40f50ddd28189fdbe25e5722ecc4a45821e29b27
+KM_K30_SHA=477878d7fe232b5c8e0e03110f26159058517ba88f447c36d8abc2544c082ead
+KM_K46_SHA=f71f9b4807e9d741014a83a3cf72be23f68f91679693e7399bbbdc64473b91c1
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
+KM_KIT_COMMIT=1a3e77979df2f22d613d715742e975e98fb2d5de
 
 KM_LICENCES="\
 kernel/drivers/z3660eth/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
@@ -47,4 +52,4 @@ kernel/drivers/z3660eth/NOTICE f7c22823715ccb1c30e4d8ae35e18051275cd79ef545bbc7c
 KM_FILES_COMMON="\
 /etc/inet/link.d/z3660eth kernel/drivers/z3660eth/link.d/z3660eth 0d2586e039aecf82860436186bef761a057e05887477706df1674bfb21c143c7 0444"
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1794614400	# 2026-11-14 00:00 UTC

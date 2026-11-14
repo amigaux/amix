@@ -213,7 +213,8 @@ against the kits' headers are the static objects of record: k30 `c2d6225e…`,
 k46 `142e2486…` (`make -C module static`); since ZS-05 (1.0.0-5) k30
 `c9370806…`, k46 `37185507…`; since the bprobe guard and the MAC_HI shape check
 (1.0.0-6) k30 `421d908c…`, k46 `6c6a9a07…`; since 1.0.0-7 (two kmem-only
-diagnostics gone) k30 `04ec0a58…`, k46 `4a17c662…`.
+diagnostics gone) k30 `04ec0a58…`, k46 `4a17c662…`; since 1.0.0-8 (the DLPI
+request checks, below) k30 `4e258b0d…`, k46 `85a5ba6d…`.
 
 **In the module, the kmem tunables move.** `z3660eth_reprobe` and the counters
 are pokes and reads at a kernel address the static kernel's `nm` gives. In the
@@ -225,6 +226,27 @@ kernel/dlm's side (`modadmin`); until then the documented `/dev/kmem` pokes
 (`z3660eth_cache`, `z3660eth_ci_enforce` and their read-backs, BUILD.md section
 8) is not in the module at all since 1.0.0-7: nothing could set it there, so
 the module form compiles it out and its calls are no-ops.
+
+## DLPI requests are checked, and every request is answered (2026-11-14, module 1.0.0-8)
+
+A DLPI request comes from whoever opened the stream, so its fields are checked
+before they are used: DL_UNITDATA_REQ needs a request block of its full size and
+a 6-byte destination wholly inside it (`dl_dest_addr_offset`/`length`), and a
+bound stream (the frame's type is the bound SAP; an unbound stream used to send
+type 0); DL_BIND_REQ needs its full size and a SAP of 16 bits (else DL_ERROR_ACK
+DL_BADSAP). A malformed or unbound request is dropped and counted (`tx_bad_req`,
+`tx_unbound`, appended to the status record: a reader of the older, shorter
+record is unaffected). Only root can open `/dev/zen0`, and nothing from the wire
+reaches these fields; the checks keep a wrong request from reading kernel memory.
+
+An answer (DL_OK_ACK, DL_BIND_ACK, DL_INFO_ACK, DL_ERROR_ACK) that finds no
+memory used to be dropped with the request, and slink, ifup or dhcpc then waited
+for it for ever. `z3660ethproto` now returns 0 for such a request and leaves it
+untouched; wput queues it (behind anything already waiting, in order), and the
+write service procedure and the poll tick run the queue again, so the answer
+comes once memory is there. A state changes only once its answer exists, so a
+retried request acts once. `module/host/` tests all of this against the module
+form of this source built for the host (`make -C module test`).
 
 ## RX backpressure (2026-10-19, decided in the RX throughput investigation)
 
