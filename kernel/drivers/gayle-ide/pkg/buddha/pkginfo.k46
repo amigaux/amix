@@ -1,0 +1,14 @@
+PKG=buddha46
+NAME=buddha-k46 1.1.0-4 - Buddha and Catweasel Z-II IDE driver module (root class), k46 line
+ARCH=Amiga
+VERSION=1.1.0-4
+CATEGORY=system
+CLASSES=none
+VENDOR=amix
+PSTAMP=amix-buddha46-1.1.0-4
+# Kernel space (amix-dlm C2-2, C3-5 sec 1, C4-2 sec 8.2): a role=module entry
+# of the #ext kpkg block (line=k46), class root, never an ordinary entry.
+# Catalog name buddha-k46, pkginst buddha46; VERSION is the module's
+# (the fork's module/buddha/VERSION at kernel/drivers/gayle-ide/gayle-ide.pin).
+APKG_DESC=Individual Computers Buddha and Catweasel Z-II IDE ports as a root-class kernel module for the 68040/68060 line module kernel kernel-k46-m: /etc/conf/mod.d/buddha, interrupt I/O by default (param intr=0: polled).  Needs kbootset 1.1.0.261113-44 or later: upgrade kbootset first, as the release notes' upgrade step says.  Tested in emulation only.
+DESC=The amix-gayle-ide driver's Buddha flavour built as an amix-dlm kernel module for the 68040/68060 line: it drives the IDE ports of the Individual Computers Buddha (two ports) and Catweasel Z-II (three ports).  Root class, loaded by the module core's root pass before the root filesystem is mounted (match zorro:1212:2a and the stand-in mobo:buddha; the module finds its boards itself and loads nothing when there is none), each board registered with sd at rank ide as a pseudo SCSI host adapter; never unloaded.  SCSI units fixed per port and drive (6/5, 3/2, 1/0).  Interrupt I/O by default after a self-test, polled when the test fails or interrupts stop; the line param intr=0 in /etc/conf/modreg.local.d/buddha selects polled I/O.  No major and no device nodes of its own: sd owns the disk majors and nodes.  /etc/conf/modreg.d/buddha holds the package's defaults (none; comments only).  Needs kbootset 1.1.0.261113-44 or later (its registry knows the stand-in mobo:buddha): upgrade kbootset first, as the release notes' upgrade step says.  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  Tested in emulation only, not on a real board.  MIT.
