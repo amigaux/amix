@@ -10,6 +10,7 @@ Drivers kept here as source, with the package recipe beside the code:
 | `a4091/` | A4091 Zorro III SCSI (NCR 53C710), with the A4000T onboard 53C710 variant (`a4kt710`) |
 | `z3660scsi/` | Z3660 accelerator SCSI |
 | `z3660eth/` | Z3660 accelerator ethernet |
+| `xsurf/` | Individual Computers X-Surf-100 and X-Surf ethernet |
 
 Drivers that other developers started are kept as our own forks in the
 amigaux organisation. We fix them there, the build takes them by pin, and
@@ -20,7 +21,7 @@ choose to. Their directory holds only a README and a pin file,
 | Directory | What | Our fork | Started from |
 |-----------|------|----------|--------------|
 | `cdfs/` | CD-ROM filesystem, as a module | amigaux/amix-cdfs | Stefan Reinauer's ODFileSystem |
-| `gayle-ide/` | A4000 Gayle IDE | amigaux/amix-gayle-ide | Emre Bastuz's amix-gayle-ide |
+| `gayle-ide/` | A4000 and A1200 Gayle IDE, and Buddha / Catweasel Z-II IDE (`buddha`) | amigaux/amix-gayle-ide | Emre Bastuz's amix-gayle-ide |
 | `paula/` | Paula audio | amigaux/amix-paula | Ignacio Soriano's paula-amix |
 | `z3660rtg/` | Z3660 accelerator RTG graphics | amigaux/amix-z3660rtg | Ignacio Soriano's zz9000-amix |
 
