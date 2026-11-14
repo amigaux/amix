@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — two recipes, gayle and buddha; the fork pinned at release-1.1 (9ea1da9d, 0884fe5d)
+
+gayle's recipe moves to pkg/gayle/ unchanged. pkg/buddha/ rolls buddha30/buddha46-1.1.0-4 (module 1.1.0-4: k30 8720ae0a, k46 da22bb8e; packages 6ceb7321, d212a715), root class, no depend, no kbootset= key; it needs kbootset 1.1.0.261113-44 or later and is tested in emulation only. The pin moves to the fork's release-1.1, 6003b68; the gayle objects and packages are unchanged.
+
 ## 2026-11-04 — packages 1.1.0-9 (408e557)
 
 The copyright file's licence heading names the component; objects unchanged.

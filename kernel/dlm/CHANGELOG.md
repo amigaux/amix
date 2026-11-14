@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — C3-6 versions 11 and 12: when a driver may default to interrupts (3062e83d, 060c6f29)
+
+A driver with a polled mode may default to interrupts when its interrupt path is enabled only after a self-test with a real board interrupt and it falls back to polling, saying so, when interrupts stop; the buddha and xsurf modules do. The Gayle IDE module as of 1.1 does not fall back, a known gap for its next version. Spec 30 §4 says the same. Docs only.
+
 ## 2026-11-14 — character major 56 is xsurf's; kbootset -45 (92c87123, f6a8fb5d)
 
 Character major 56 is xsurf's, the X-Surf and X-Surf-100 ethernet module (spec 20 §6). It loads on the 1.1 kernels with kbootset 1.1.0.261114-45, which carries the row; no kernel change. C3-5 version 24 gives buddha and xsurf their short names.
