@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # release-files.sh -- the release files of a set of images of record and media, checked.
 #
-#   tools/release-files.sh --images DIR [--kind 4g|ide-2g] [--media FILE]...
+#   tools/release-files.sh --images DIR [--version V] [--kind 4g|ide-2g|buddha-2g] [--media FILE]...
 #
-# For each DIR/amix-1.1-<line>-<kind>.img (kind 4g by default; ide-2g the IDE images): its .zip holding that one image, plain
+# For each DIR/amix-<V>-<line>-<kind>.img (V 1.1 by default, 1.1.1 a point release; kind 4g by default, ide-2g the IDE
+# images, buddha-2g the images for a disk on a Buddha): its .zip holding that one image, plain
 # zip (`zip -fz-`: no zip64 -- an image is under 4 GiB, and old built-in unzippers choke on zip64),
 # under 2 GiB (a release host's file cap); `zipinfo -v` must show no zip64 extra field, and
 # `unzip -t` must pass. Then DIR/SHA256SUMS over the zips and the images, and the content check
@@ -13,7 +14,8 @@
 # amix's tools/known-bad-modules.txt with it (no known-bad module).
 # Everything goes to DIR/RELEASE-CHECK.txt. Exit 0 all clean, 1 a check failed, 2 usage.
 set -uo pipefail
-KIND=4g   # --kind: the images' name suffix, amix-1.1-<line>-<kind>.img
+KIND=4g   # --kind: the images' name suffix, amix-<V>-<line>-<kind>.img
+VER=1.1   # --version: the release the images are named for
 here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 # amix's tools/release-check is the one content check every release file passes: this checkout's
 RC="$(cd "$here/../.." && pwd)/tools/release-check"
@@ -23,7 +25,7 @@ RC="$(cd "$here/../.." && pwd)/tools/release-check"
 missing_lines() {
 	local L hit=0
 	for L in k46 k30; do
-		[ -f "$1/amix-1.1-$L-$KIND.img" ] || { echo "$L"; hit=1; }
+		[ -f "$1/amix-$VER-$L-$KIND.img" ] || { echo "$L"; hit=1; }
 	done
 	return $hit
 }
@@ -61,7 +63,8 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--images) IMG="$2"; shift 2 ;;
 	--media) MEDIA+=("$2"); shift 2 ;;
-	--kind) case "$2" in 4g|ide-2g) KIND=$2 ;; *) echo "release-files: --kind 4g|ide-2g" >&2; exit 2 ;; esac; shift 2 ;;
+	--kind) case "$2" in 4g|ide-2g|buddha-2g) KIND=$2 ;; *) echo "release-files: --kind 4g|ide-2g|buddha-2g" >&2; exit 2 ;; esac; shift 2 ;;
+	--version) case "$2" in [0-9]*.[0-9]*) VER=$2 ;; *) echo "release-files: --version N.N[.N]" >&2; exit 2 ;; esac; shift 2 ;;
 	*) sed -n '2,14p' "$0"; exit 2 ;;
 	esac
 done
@@ -84,7 +87,7 @@ for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do _mdirs+=("$(dirname "$m")"/*); done
 if _h=$(not_release_files "$IMG"/* "${_mdirs[@]+"${_mdirs[@]}"}" "${MEDIA[@]+"${MEDIA[@]}"}"); then :; else
 	say "FAIL not release files, a raw k30 image is a bench medium: $_h"; bad=1
 fi
-for img in "$IMG"/amix-1.1-k??-"$KIND".img; do
+for img in "$IMG"/amix-"$VER"-k??-"$KIND".img; do
 	[ -f "$img" ] || continue
 	b="$(basename "$img" .img)" z="$IMG/$b.zip"
 	rm -f "${z:?}"
@@ -100,11 +103,11 @@ for img in "$IMG"/amix-1.1-k??-"$KIND".img; do
 	[ "$ut" = 0 ] || { v="FAIL (unzip -t rc $ut)"; bad=1; }
 	say "zip $b.zip: $zs bytes ($(awk -v a="$zs" 'BEGIN { printf "%.1f", a / 1048576 }') MiB) holding $b.img $(stat -c %s "$img") bytes; zip64 lines in zipinfo -v: $z64; unzip -t rc $ut: $v"
 done
-( cd "$IMG" && sha256sum amix-1.1-k??-"$KIND".zip amix-1.1-k??-"$KIND".img > SHA256SUMS ) || { say "FAIL SHA256SUMS"; bad=1; }
+( cd "$IMG" && sha256sum amix-"$VER"-k??-"$KIND".zip amix-"$VER"-k??-"$KIND".img > SHA256SUMS ) || { say "FAIL SHA256SUMS"; bad=1; }
 say "# SHA256SUMS"
 cat "$IMG/SHA256SUMS" | tee -a "$R"
 say "# content check"
-imgs=("$IMG"/amix-1.1-k??-"$KIND".img)
+imgs=("$IMG"/amix-"$VER"-k??-"$KIND".img)
 for m in "${MEDIA[@]+"${MEDIA[@]}"}"; do
 	[ -f "$m" ] || { say "FAIL $m: no such file"; bad=1; continue; }
 	if [ -f "$m.sha256" ]; then
@@ -120,8 +123,8 @@ bash "$here/medium-address-check.sh" "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 python3 "$here/public-text-check.py" --disc "${imgs[@]}" "${MEDIA[@]+"${MEDIA[@]}"}" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
-# the images' README is the kind's own: build-preinstalled.sh writes README.txt for 4g, README-ide-2g.txt for ide-2g
-RDM=README.txt; [ "$KIND" = ide-2g ] && RDM=README-ide-2g.txt
+# the images' README is the kind's own: build-preinstalled.sh writes README.txt for 4g, README-<kind>.txt otherwise
+RDM=README.txt; [ "$KIND" = 4g ] || RDM=README-$KIND.txt
 bash "$here/sidecar-path-check.sh" "$IMG"/*.MANIFEST "$IMG/$RDM" "$IMG"/SHA256SUMS "$R" 2>&1 | tee -a "$R"
 [ "${PIPESTATUS[0]}" = 0 ] || bad=1
 say "release-files: $( [ $bad = 0 ] && echo 'ALL CLEAN' || echo 'FAILED')"
