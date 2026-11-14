@@ -6696,11 +6696,12 @@ def audit_l11():
         r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
         rd = lambda *p: open(os.path.join(fr, *p)).read() if os.path.exists(os.path.join(fr, *p)) else ""
         return r.stdout + r.stderr, rd
-    net = "\n".join(_extract_func(fbt, f) for f in ("find_ifs", "ask_network", "ask_repo"))
+    net = "\n".join(_extract_func(fbt, f) for f in ("find_ifs", "if_label", "ask_network", "ask_repo"))
     # the hardware is the test's: an A2065 or none (aen -S), never a Z3660 NIC, and no mknod
-    zen_none = lambda c: c.replace("mknod /dev/zen0 c 51 0", "false").replace("( : < /dev/zen0 )", "false")
-    net_aen, net_none = zen_none(net).replace("/usr/amiga/bin/aen -S", "true"), \
-        zen_none(net).replace("/usr/amiga/bin/aen -S", "false")
+    zen_none = lambda c: (c.replace("mknod /dev/zen0 c 51 0", "false").replace("( : < /dev/zen0 )", "false")
+                          .replace("mknod /dev/xsf$XN c 56 $XN", "false").replace("( : < /dev/xsf$XN )", "xsf_open $XN"))
+    net_aen, net_none = "xsf_open() { false; }\n" + zen_none(net).replace("/usr/amiga/bin/aen -S", "true"), \
+        "xsf_open() { false; }\n" + zen_none(net).replace("/usr/amiga/bin/aen -S", "false")
     show = '\nask_network\necho "MODE=$FB_NET_MODE CONF=$FB_NET_CONFIGURED IP=$FB_IP REPO=$FB_REPO_HOST NOIF=$FB_NET_NOIF I=$i"\n'
     out, rd = fbrun(net_aen + show,
                     answers=("y", "y", "pkg.example", ""), FB_L11="y", FB_IP="", FB_REPO_HOST="", FB_REPO_IP="")
@@ -6710,6 +6711,20 @@ def audit_l11():
     (ok if "MODE=dhcp CONF=y IP= REPO=pkg.example NOIF=y I=1" in out and "network questions are skipped" in out else fail)(
         "firstboot dialog (1.1), no interface: no network question asked, DHCP recorded for a card fitted later: %r"
         % out.strip()[-120:])
+    # an X-Surf (xsf0) answers the open test: alone it is the interface, beside an A2065 it is the
+    # second entry of a choice built from what was found, and a static address goes on it
+    xsf_on = lambda c: c.replace("xsf_open() { false; }", 'xsf_open() { [ "$1" = 0 ]; }')
+    showif = show.replace('I=$i"', 'I=$i IF=$FB_ETHER_IF"')
+    for what, code, answers, want, menu in (
+            ("an X-Surf alone", xsf_on(net_none), ("y", "n", "192.0.2.7"),
+             "MODE=static", ["Ethernet interface xsf0 found."]),
+            ("an A2065 and an X-Surf, the second chosen", xsf_on(net_aen), ("y", "n", "2", "192.0.2.7"),
+             "MODE=static", ["  1)   aen0\tA2065 Ethernet", "  2)   xsf0\tX-Surf Ethernet"])):
+        out, rd = fbrun(code + showif, answers=answers + ("", "", "", "", "", ""), FB_L11="y", FB_IP="",
+                        FB_REPO_HOST="pkg.example", FB_REPO_IP="")
+        good = want in out and "IF=xsf0" in out and all(m in out for m in menu)
+        (ok if good else fail)("firstboot dialog (1.1), %s: a static address on xsf0: %r"
+                               % (what, " | ".join(out.strip().splitlines()[-3:])))
     out, rd = fbrun(net_none + show, answers=("y",), FB_L11="", FB_IP="192.0.2.5", FB_REPO_HOST="pkg.example", FB_REPO_IP="")
     (ok if "CONF= " in out and "I=2" in out and "left as the installation set it" in out else fail)(
         "firstboot dialog (1.0), no interface: as before (asked, then left as the installation set it): %r"

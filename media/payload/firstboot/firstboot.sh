@@ -481,6 +481,8 @@ find_ifs()
 	#           EACCES are indistinguishable here), so this probe answers exactly
 	#           one question: can this kernel open the device, yes or no. On the
 	#           same box `( : < /dev/aen0 )` returns 0.
+	#   xsf0, xsf1 -- an X-Surf or X-Surf-100 (xsurf, cdevsw major 56; its package lays the
+	#           nodes): the same open test, a node made for it taken away again
 	NET_IFS=
 	if /usr/amiga/bin/aen -S > /dev/null 2>&1; then
 		NET_IFS="aen0"
@@ -502,12 +504,34 @@ find_ifs()
 			rm -f /dev/zen0
 		fi
 	fi
+	for XN in 0 1
+	do
+		XMADE=
+		[ -c /dev/xsf$XN ] || { mknod /dev/xsf$XN c 56 $XN 2>/dev/null && XMADE=y; }
+		if ( : < /dev/xsf$XN ) 2>/dev/null; then
+			NET_IFS="$NET_IFS xsf$XN"
+		elif [ -n "$XMADE" ]; then
+			rm -f "/dev/xsf${XN:?}"
+		fi
+	done
 
 	NIF=0
 	if [ -n "$NET_IFS" ]; then
 		set -- $NET_IFS
 		NIF=$#
 	fi
+}
+
+# if_label IF -- the interface's card, for the choice
+if_label()
+{
+	case "$1" in
+		aen0)	echo "A2065 Ethernet" ;;
+		zen0)	echo "Z3660 native Ethernet" ;;
+		xsf0)	echo "X-Surf Ethernet" ;;
+		xsf1)	echo "X-Surf Ethernet, second board" ;;
+		*)	echo "Ethernet" ;;
+	esac
 }
 
 ask_network()
@@ -522,9 +546,10 @@ ask_network()
 		find_ifs
 		if [ "$NIF" = 0 ]; then
 			echo "\nNo supported Ethernet interface was found on this machine, so the"
-			echo "network questions are skipped.  Amiga UNIX supports the A2065 (aen0) and,"
-			echo "on a Z3660, the native Ethernet (zen0).  A card fitted later asks a"
-			echo "DHCP server for its address at the next boot."
+			echo "network questions are skipped.  Amiga UNIX supports the A2065 (aen0),"
+			echo "on a Z3660 the native Ethernet (zen0), and the X-Surf and X-Surf-100"
+			echo "(xsf0).  A card fitted later asks a DHCP server for its address at the"
+			echo "next boot."
 			FB_NET_MODE=dhcp FB_IP= FB_NETMASK= FB_GATEWAY= FB_DNS1= FB_DNS2= FB_NET_NOIF=y
 			FB_NET_CONFIGURED=y
 			return 0
@@ -562,25 +587,34 @@ ask_network()
 	[ -z "$NET_IFS" ] || set -- $NET_IFS
 	if [ "$NIF" = 0 ]; then
 		echo "\nNo supported Ethernet interface was found on this machine."
-		echo "Amiga UNIX supports the A2065 (aen0) and, on a Z3660, the native"
-		echo "Ethernet (zen0).  Networking is left as the installation set it."
+		echo "Amiga UNIX supports the A2065 (aen0), on a Z3660 the native Ethernet"
+		echo "(zen0), and the X-Surf and X-Surf-100 (xsf0)."
+		echo "Networking is left as the installation set it."
 		return 0
 	fi
 	if [ "$NIF" = 1 ]; then
 		FB_ETHER_IF="$1"
 		echo "\nEthernet interface $FB_ETHER_IF found."
 	else
+		# the choice is the interfaces found, numbered in the order find_ifs found them
 		IFSEL=
 		while [ "$IFSEL" = "" ]
 		do
 			echo ""
-			echo "  1)   aen0	A2065 Ethernet"
-			echo "  2)   zen0	Z3660 native Ethernet"
+			IFN=0
+			for IFC in $NET_IFS
+			do
+				IFN=`expr $IFN + 1`
+				echo "  $IFN)   $IFC	`if_label $IFC`"
+			done
 			readask "\nWhich interface do you want to use? [1] "
-			case $ask in
-				1|"" )	IFSEL=aen0 ;;
-				2 )	IFSEL=zen0 ;;
-			esac
+			[ "$ask" != "" ] || ask=1
+			IFN=0
+			for IFC in $NET_IFS
+			do
+				IFN=`expr $IFN + 1`
+				[ "$ask" = "$IFN" ] && IFSEL=$IFC
+			done
 		done
 		FB_ETHER_IF="$IFSEL"
 	fi
@@ -1266,11 +1300,12 @@ SWAP_BLK="/dev/dsk/c${ID}d0s${FB_SWAP_SLICE}"
 # kernel value is set with `uname -S`. Do both so `uname -n` resolves now and
 # after a reboot. (Confirmed on the box: Amix reads /etc/nodename at boot.)
 # 1.1: no name given -> amix- and the last four hex digits of the first interface's
-# MAC (amix-base's dlpi-mac; zen0 first, the Z3660's own), which ifup replaces with the name a
+# MAC (amix-base's dlpi-mac; zen0 first, the Z3660's own, then aen0, then an X-Surf's xsf0),
+# which ifup replaces with the name a
 # DHCP server offers when /etc/inet/interfaces says `hostname dhcp`
 if [ "$FB_L11" = y ] && [ -z "$FB_NODENAME" ]; then
 	FB_NAME_EFF=
-	for d in /dev/zen0 /dev/aen0
+	for d in /dev/zen0 /dev/aen0 /dev/xsf0
 	do
 		[ -c "$d" ] || continue
 		m=`/usr/sbin/dlpi-mac -t 2 "$d" 2>/dev/null`

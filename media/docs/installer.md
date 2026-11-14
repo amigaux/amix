@@ -83,7 +83,10 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   `/etc/rc.conf`, `/etc/display`; no S99zen, S20monsw, syslog unit, S89rootswap,
   S01kbnamelist or S99zkbootset (their packages carry them). `docs/l11-disk.md`.
 - **The first boot** (`FB_L11=y`): DHCP or one static interface, the answers into
-  `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed.
+  `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed. The interfaces offered are
+  those that answer an open: aen0 (`aen -S`), zen0 (the Z3660's), xsf0 and xsf1 (an X-Surf or
+  X-Surf-100, the xsurf module every installed generation carries); with more than one, the
+  choice lists what was found. With none, `* dhcp` brings up a card fitted later.
 - **The repository.** A 1.1 install's `/etc/apkg.conf` names `http://pkg.amigaux.org/1.1`,
   the release's own tree (the profiles' `FB_REPO_URL`, and the driver's default on 1.1).
 - **Checks.** `tools/l11-target-check.py` reads all of it host-side; the first-boot rig's
