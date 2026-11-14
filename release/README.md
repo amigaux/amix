@@ -40,10 +40,19 @@ a live version that a newer one replaces to the catalog's older block, where
 `carried-1.1` must name it. Against 1.1, 1.1.1 adds buddha-k30 and buddha-k46
 1.1.0-4 and xsurf-k30 and xsurf-k46 1.0.0-3, and kbootset 1.1.0.261114-45
 replaces 1.1.0.261105-43, which `carried-1.1` lists at the tag `1.1`. The
-kernels and every other package are 1.1's. Its locks, written when it is
-built, are as for 1.1: `amix-1.1.1.lock`, the public rebuild at the tag
-`1.1.1`, and `amix-1.1.1-published.lock`, the same build on the published 1.1
-tree, whose `previous` line is the digest of 1.1's catalog.
+kernels and every other package are 1.1's. Its locks are as for 1.1, both
+built at amix 7d9e944f:
+
+- `amix-1.1.1.lock` (sha256 `29f765aecb959dbb1e031e10d1db513af09625d7f0c75c3b1f1cf72c0f6eec9f`):
+  1.1.1 as anyone rebuilds it, with `RELEASE_PUBLIC=1` and no published tree.
+  A rebuild is proven against it.
+- `amix-1.1.1-published.lock` (sha256 `b37fb273039da097a2afc9477d11c8b09a956df18d0f3b81dda1ab0d674143fd`):
+  the record of what `http://pkg.amigaux.org/1.1` holds with 1.1.1, the same
+  build on the published 1.1 tree. It differs from the first only in its
+  `previous` line (the digest of 1.1's catalog), the catalog (md5
+  `ec6ab6f48fa71aec70df78717f35ab86` for the rebuild's
+  `394ff54b7715ee3818beb8a575ac880d`) and the 26 older versions `carried-1.1`
+  names. The media are the same bytes in both.
 
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
