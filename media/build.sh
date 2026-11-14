@@ -105,10 +105,13 @@ step "inputs: kernel/dlm and userland/pkgtools at ${HEAD:0:12}${DIRTY}, out/ at 
 src="$MEDIA_SCRATCH/src"
 mkdir -p "$src"
 git -C "$top" archive HEAD kernel/dlm userland/pkgtools | tar -x -C "$src"
-make -C "$src/kernel/dlm" tools > "$log/dlm-tools.log" 2>&1 || { tail -20 "$log/dlm-tools.log" >&2; fail "kernel/dlm make tools (log out/build/media/log/dlm-tools.log)"; }
+make -C "$src/kernel/dlm" tools build/nlmake > "$log/dlm-tools.log" 2>&1 || { tail -20 "$log/dlm-tools.log" >&2; fail "kernel/dlm make tools (log out/build/media/log/dlm-tools.log)"; }
 B="$L11_IN/dlm/build"
 mkdir -p "$B/box"
 for t in kbootset mkstore lsstore; do cp "$src/kernel/dlm/build/$t" "$B/$t"; done
+# nlmake is no input of the media: the install harness's host-side check of an installed disk
+# (its first boot's namelist) reads it from here, beside the store tools it checks the disk with
+cp "$src/kernel/dlm/build/nlmake" "$B/nlmake"
 cp "$out/kspace/beside/amix-cdboot" "$B/amix-cdboot"
 mkdir -p "$L11_IN/kspace-beside"
 cp "$out/kspace/beside/amix-cdboot" "$L11_IN/kspace-beside/amix-cdboot"
