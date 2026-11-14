@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 11
+# C3-6 — what a driver changes to become a module, version 12
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -29,7 +29,9 @@
   board window above `VSECT1` (§3); version 11 (2026-11-14): a driver
   whose interrupt path passes a self-test with a real board interrupt
   and falls back to polling when interrupts stop may default to
-  interrupts (§1.3). The
+  interrupts (§1.3); version 12 (2026-11-14): the modules that do are
+  buddha and xsurf; the Gayle IDE module as of 1.1 meets the first
+  condition and not the second (§1.3). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -145,8 +147,8 @@ packages.
   raised it, and returns nonzero only when its own board did. It must
   return fast when its board did not.
 - **A driver with a polled mode keeps it as the default** (30 §4),
-  **unless** (version 11) both of these hold, as in the gayle, buddha
-  and xsurf modules:
+  **unless** (version 11) both of these hold, as in the buddha and
+  xsurf modules:
   - its interrupt path is enabled only after a self-test in which the
     board itself raises an interrupt, by a real command (as the Gayle
     IDE's below), and the attached handler claims it; a software raise
@@ -155,11 +157,18 @@ packages.
     completes, or times out, with no interrupt counted) and says so on
     the console.
 
-  Such a driver may default to interrupts. Either way it attaches only
-  once its board is set up to interrupt, in process context (the first
-  open, or `_load` if the board is set up there), enables the board's
-  interrupt only after the self-test passes, and stays polled if either
-  fails. The choice is a module parameter (`param intr:int:0:0:6` or as
+  Such a driver may default to interrupts. **A known gap (version
+  12):** the Gayle IDE module as of 1.1 meets the first condition and
+  not the second. Its self-test is a real READ VERIFY, counted only when
+  the board's INTRQ mirror shows it, but when interrupts stop after the
+  test passed, its watchdog fails each request after 20 s (`command timed
+  out`), resets the port and stays in interrupt mode, so every later
+  command times out the same way. Its next version closes the gap.
+
+  Either way it attaches only once its board is set up to interrupt, in
+  process context (the first open, or `_load` if the board is set up
+  there), enables the board's interrupt only after the self-test passes,
+  and stays polled if either fails. The choice is a module parameter (`param intr:int:0:0:6` or as
   fits), whose 0 always means polled; its default is polled unless both
   conditions above hold.
 - **The self-test** raises the level from software and checks that the

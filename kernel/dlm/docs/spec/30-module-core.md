@@ -122,9 +122,12 @@ cannot attach (or whose self-test of the attached handler fails) runs polled.
 Polled stays the default for a driver that has a polled mode, unless its
 interrupt path is enabled only after a self-test in which the board itself
 raises a real interrupt, and it falls back to polling when interrupts stop
-(contract C3-6 version 11 §1.3): the Gayle IDE
-(`amix-gayle-ide/docs/module-form.md`), Buddha and X-Surf modules default to
-interrupts that way. Attachment
+(contract C3-6 version 12 §1.3): the Buddha and X-Surf modules default to
+interrupts that way. The Gayle IDE module as of 1.1
+(`amix-gayle-ide/docs/module-form.md`) defaults to interrupts after such a
+self-test but does not fall back: when interrupts stop, every request times
+out after 20 s and the driver stays in interrupt mode. That is a known gap,
+closed in its next version. Attachment
 during `marc_root` is allowed; enabling the board's interrupt waits until the
 handler's self-test passes.
 
