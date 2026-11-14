@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — 1.1.1: install onto a Buddha or Catweasel Z-II, the X-Surf at first boot, the release set (67e7405a..f39567a2)
+
+The CD, floppy and Z3660-disk boot generations carry the buddha root module, and every installed system gets buddha and xsurf with kbootset -45. The interview names the Buddha and the Catweasel Z-II; the root record names the board by id, and by base when two boards carry the root's key. The first-boot dialog offers an X-Surf (xsf0, xsf1) among the interfaces it finds. media/VERSION is 1.1.1 and names the files (amix-1.1.1-*); the image profiles carry both drivers, with new ones for the Buddha disk images; release notes in docs/releases/1.1.1.md. Known limit noted: a drive alone as slave on the motherboard IDE port is not found. Rows so far, on development-line inputs: installs onto a Buddha on both lines, a lone slave, booting from the floppy pair, and regression installs passing; the rest are still running. The netinstall waits for new RAM-disk images.
+
 ## 2026-11-13 — the 2.1 install-media loader, said no wider than known (a4738d45)
 
 The installer, updbootpart and docs/installer.md no longer call the Amix 2.1 install-media boot2 (5ab360b1…) name-based or say it cannot relocate ET_REL kernels. Under Amiberry it boots the stock 2.1 and 2.1c kernels; on metal, with this project's combined kernels, it fired Alert('RELA') (the D245 Guru) before the kernel ran, for a reason not established. Every place that replaces or refuses it still does; comments and docs only.
