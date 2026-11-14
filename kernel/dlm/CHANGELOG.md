@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — character major 56 is xsurf's; kbootset -45 (cb641313, a56d2399)
+
+Character major 56 is xsurf's, the X-Surf and X-Surf-100 ethernet module (spec 20 §6). It loads on the 1.1 kernels with kbootset 1.1.0.261114-45, which carries the row; no kernel change. C3-5 version 24 gives buddha and xsurf their short names.
+
 ## 2026-11-13 — C2-4 version 29: the bootset file's facts, and a disk moved to another controller (b501b553)
 
 C2-4 says when /etc/default/bootset's bootdev and rootdev are read (only where kinfo does not give them), and how to name a new controller after a disk moves: cards, then build with --bootdev, --rootdev, --root and --swap, then commit.
