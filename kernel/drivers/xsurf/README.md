@@ -128,6 +128,17 @@ With the card absent, the module is not kept, the console says nothing and
 gate 3 ("major c:56 is not in the registry") and leaves the boot
 generation as it was.
 
+Module 1.0.0-3 answers SIOCGIFFLAGS and SIOCSIFFLAGS with IP's request, so
+`ifconfig` shows the interface's flags (1.0.0-2 showed `flags=0<>`). It was
+checked again from its packages, with one boot each and interrupts: the
+X-Surf-100 in Zorro III (k46) and Zorro II (k30), and the X-Surf (k46).
+Each boot ran the checks above, and also:
+
+- `ifconfig xsf0` showed `flags=23<UP,BROADCAST,NOTRAILERS>` and the
+  broadcast address after a static address, a DHCP lease and ifdown/ifup;
+- `ifconfig xsf0 down` gave `flags=22`, and `up` gave 23 again;
+- the guest answered a ping of the network's broadcast address.
+
 Throughput **in the emulator** (100 MiB by FTP; it says nothing about a
 real card):
 
@@ -148,7 +159,9 @@ injects what the emulator cannot produce:
 - corrupt ring headers and a dead interrupt line;
 - memory shortages.
 
-They also cover every DLPI primitive and hostile frames from the wire.
+They also cover every DLPI primitive, the interface ioctls IP sends down
+(the flags acknowledged with its request, the rest refused) and hostile
+frames from the wire.
 
 What the emulator's model of these boards cannot show, so no row above
 covers it:
