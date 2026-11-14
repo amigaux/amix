@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — the 1.1.1 notes: when an X-Surf comes up (a9efb2c3)
+
+The notes now say the first-boot dialog offers xsf0 with DHCP (every interface, `* dhcp`) or a static address, and that a card fitted later comes up by DHCP only on a system set up with DHCP, else by a line in /etc/inet/interfaces. Notes only.
+
 ## 2026-11-14 — the netinstall images with xsurf 1.0.0-3; the miniroot names no release (9098a36b..d77a9310)
 
 The netinstall RAM-disk pins move to ni-k30-1.1.1-2 and ni-k46-1.1.1-2 (xsurf 1.0.0-3). The miniroot's install-disc messages no longer name a release ("an amigaux install disc"), so they stay right at a point release; a selftest keeps them so. The 1.1.1 notes name xsurf 1.0.0-3.
