@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-14 — 1.1.1 on the published 1.1 tree; kbootset -43 carried (a83e00bc)
+
+carried-1.1 lists kbootset 1.1.0.261105-43 (c75f62d5, built at the tag 1.1), which 1.1.1's kbootset -45 moves to the older block. The README says how a point release is built, on the published tree with RELEASE_PREVIOUS, and names 1.1.1's two locks.
+
 ## 2026-11-10 — the 1.1 locks (c1d4a11)
 
 amix-1.1.lock (671008ee) is what a public rebuild of the tag 1.1 gives; amix-1.1-published.lock (caeca530) records what pkg.amigaux.org/1.1 holds. The README names both by sha256 and explains the difference.
