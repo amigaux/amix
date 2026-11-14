@@ -38,7 +38,7 @@ The release step keeps every published file byte for byte (a published name
 and version whose bytes differ is refused), adds the new versions, and moves
 a live version that a newer one replaces to the catalog's older block, where
 `carried-1.1` must name it. Against 1.1, 1.1.1 adds buddha-k30 and buddha-k46
-1.1.0-4 and xsurf-k30 and xsurf-k46 1.0.0-2, and kbootset 1.1.0.261114-45
+1.1.0-4 and xsurf-k30 and xsurf-k46 1.0.0-3, and kbootset 1.1.0.261114-45
 replaces 1.1.0.261105-43, which `carried-1.1` lists at the tag `1.1`. The
 kernels and every other package are 1.1's. Its locks, written when it is
 built, are as for 1.1: `amix-1.1.1.lock`, the public rebuild at the tag
