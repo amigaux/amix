@@ -143,7 +143,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `kernel-k30` | the 68030 kernel: the cut of record (`kernel/k30/cuts/CURRENT`) rebuilt by `kernel/k30/cuts/build.sh`, which refuses sums other than the record's | `kernel/k30/build/cuts/<id>/`, its sums in `out/kernels/k30.list` |
 | `kernel-k46` | the 68040/68060 kernel: the cut of record (`kernel/port/cuts/CURRENT`) rebuilt by `kernel/port/cuts/build.sh`, from the port at `kernel/port/port.pin` | `kernel/port/build/cuts/<id>/`, its sums in `out/kernels/k46.list` |
 | `modules` | `kernel/modules/*/module` on both lines | `out/modules/<line>/<name>` |
-| `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth}/module` and the forks at their pins (cdfs, gayle-ide, paula, z3660rtg) | `out/modules/<line>/<name>` |
+| `drivers`, `drivers/<name>` | every driver module on both lines, on this checkout's kit: `kernel/drivers/{a4091,z3660scsi,z3660eth,xsurf}/module` and the forks at their pins (cdfs, gayle-ide, paula, z3660rtg) | `out/modules/<line>/<name>` |
 | `kspace` | the kernel-space packages: each `kernel/<dir>/pkg/build.sh` (dlm, k30, port, every module and driver), one version per name | `out/kspace/{pkgs,beside}/` |
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, each after the packages its `BUILD_DEPENDS` names | `out/userland/pkgs/` |
 | `apkg` | APKG and APKGENG, by pkgtools' `make dist` | `out/apkg/` |
