@@ -6323,6 +6323,85 @@ def audit_swap_stepdown():
                           % ((": " + "; ".join(bad)) if bad else ""))
 
 
+# The mode each device node's package ships (the contents DB of the 1.1.1 images): a node
+# the installer or a boot script makes may be no wider than this. A node not listed here is
+# not the installer's to make. The miniroot's own disk nodes (/dev/dsk, /dev/rdsk in the RAM
+# disk, never on the target) are not covered.
+PKG_NODE_MODES = {
+    "/dev/zz9000":  ("z3660rtg", 0o660),
+    "/dev/zz9000i": ("z3660rtg", 0o444),
+    "/dev/zen0":    ("z3660eth", 0o600),
+    "/dev/xsf":     ("xsurf", 0o600),      # xsf0, xsf1
+    "/dev/kinfo":   ("kbootset", 0o444),
+    "/dev/conslog": ("syslog", 0o222),
+}
+NODE_SCRIPTS = ("src/installer/install.sh", "src/installer/l11.sh", "src/installer/setup.sh",
+                "payload/firstboot/firstboot.sh", "payload/S99zen", "payload/updbootpart-l11")
+
+
+def _node_path(word):
+    w = word.rstrip(";})").strip('"\'').replace("${TARGET:?}", "").replace("$TARGET", "")
+    w = re.sub(r"\$\{?XN(:\?)?\}?$", "", w)
+    return w
+
+
+def node_mode_findings(text):
+    """Each mknod of a node, with the chmod that follows it on the same line or the next
+    two: a list of strings, one per node that is unlisted, left without a chmod, or
+    chmod'ed wider than its package ships. Any chmod of a /dev path is checked too."""
+    bad = []
+    lines = text.split("\n")
+    for i, l in enumerate(lines):
+        if l.lstrip().startswith("#"):
+            continue
+        for m in re.finditer(r"mknod\s+(\S+)\s+[cb]\s", l):
+            node = _node_path(m.group(1))
+            if node.startswith(("/dev/dsk/", "/dev/rdsk/")):
+                continue
+            if node not in PKG_NODE_MODES:
+                bad.append("line %d: mknod %s, a node no table entry names" % (i + 1, node))
+                continue
+            near = " ".join(lines[i:i + 3])[m.start():]
+            cm = [c for c in re.finditer(r"chmod\s+([0-7]{3,4})\s+(\S+)", near) if _node_path(c.group(2)) == node]
+            if not cm:
+                bad.append("line %d: mknod %s with no chmod after it (its mode is then mknod's default, not the package's)" % (i + 1, node))
+        for c in re.finditer(r"chmod\s+([0-7]{3,4})\s+(\S+)", l):
+            node = _node_path(c.group(2))
+            if not node.startswith("/dev/") or node.startswith(("/dev/dsk/", "/dev/rdsk/")):
+                continue
+            pkg, want = PKG_NODE_MODES.get(node, ("?", 0))
+            if int(c.group(1), 8) & ~want:
+                bad.append("line %d: chmod %s %s, wider than %s's %04o" % (i + 1, c.group(1), node, pkg, want))
+    return bad
+
+
+def audit_dev_node_modes():
+    head("DN. no device node the installer or a boot script makes is wider than its package ships "
+         "(/dev/zz9000 is the z3660rtg package's 0660 root sys; the installer makes none)")
+    allbad = []
+    for rel in NODE_SCRIPTS:
+        f = os.path.join(REPO, rel)
+        if os.path.exists(f):
+            allbad += ["%s %s" % (rel, b) for b in node_mode_findings(open(f, encoding="latin-1").read())]
+    (fail if allbad else ok)("every mknod and /dev chmod in the installer, first boot and S99zen is within its "
+                             "package's mode%s" % ((": " + "; ".join(allbad)) if allbad else ""))
+    # the rule itself, on fixtures: the old 1.0 RTG kit's node is caught, the package mode passes
+    caught = node_mode_findings('\t[ -c "$TARGET/dev/zz9000" ] || run mknod "$TARGET/dev/zz9000" c 49 0\n'
+                                '\trun chmod 0644 "$TARGET/dev/zz9000"\n')
+    bare = node_mode_findings('mknod /dev/zen0 c 51 0\n')
+    fine = node_mode_findings('mknod /dev/xsf$XN c 56 $XN 2>/dev/null && chmod 0600 "/dev/xsf$XN"\n'
+                              'run /bin/mknod "$TARGET/dev/kinfo" c 53 0\nrun chmod 0444 "$TARGET/dev/kinfo"\n')
+    (ok if len(caught) == 1 and "wider" in caught[0] and len(bare) == 1 and not fine else fail)(
+        "the check catches a 0644 /dev/zz9000 and a bare mknod, and passes the package modes "
+        "(caught=%d bare=%d fine=%d)" % (len(caught), len(bare), len(fine)))
+    drv = open(DRIVER, encoding="latin-1").read()
+    gone = not re.search(r'\$INST/x11kit/(Xzz9000|rtg-kbdback|zz9k_monsw)\b', drv) and "/dev/zz9000\" c 49" not in drv
+    refuse = re.search(r'\[ "\$X11KIT" != rtg \] \|\| \[ "\$INSTALL_LAYOUT" = 1\.1 \] \\\n\t\|\| die ', drv)
+    (ok if gone and refuse else fail)("install.sh: no 1.0 RTG kit (no Xzz9000 laydown, no /dev/zz9000 node) and "
+                                      "X11KIT=rtg refused on a 1.0 install before anything is written "
+                                      "(gone=%s refuse=%s)" % (gone, bool(refuse)))
+
+
 def audit_net_space():
     head("NS. on the netinstall medium the free-space check sizes the set from the catalog (#isize, else the "
          "datastream sizes), with the base packages, the kernel set and twice the largest datastream (apkg's cache "
@@ -7562,6 +7641,7 @@ def main():
     audit_boot_rivals()
     audit_guarded_mkdir()
     audit_net_space()
+    audit_dev_node_modes()
     audit_l11()
 
     print()
