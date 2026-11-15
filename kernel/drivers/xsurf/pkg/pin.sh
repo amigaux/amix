@@ -28,16 +28,19 @@
 # (version 2) and a console line on each change; each kind of transmit
 # failure said once; collisions in netstat; a board whose registers do not
 # take writes refused at load and reported through the new /dev/xsfctl; no
-# write to the AX88796B's register 0x17.  New: /usr/sbin/xsf, xsurf(7),
-# xsf(1M).  Built in amix-toolchain:dist against the kit of amix 1a3e7797.
+# write to the AX88796B's register 0x17; after a reset the X-Surf-100 waits
+# for D_RDY; register cycles byte, else word (parameter regs); a remote-DMA
+# self-test at load, the windows, else the data port (parameter data).
+# New: /usr/sbin/xsf, xsurf(7), xsf(1M).  Built in amix-toolchain:dist
+# against the kit of amix 1a3e7797.
 
 KM_NAME=xsurf
 KM_SHORT=xsurf
 KM_REPO=kernel/drivers/xsurf
 KM_VERSION=1.0.0-4
 
-KM_K30_SHA=799cc09945f1ced5b341967b5ca92d1def8f6a6f31719cb08b8a00b34bc9bbd1
-KM_K46_SHA=739ff6fe8371c8696aa1eb88e5fddee563e9a5128f75546339284b3dc755dcb4
+KM_K30_SHA=7e2bc8183b562085cf3a1343e2671983a2b4020ef5ce5ab3e435ef5db2b7b57b
+KM_K46_SHA=eb446fa8c814d74cc6307ced2bac1369e477e0dc179f9cde4b3944544db9b3ae
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -53,10 +56,10 @@ kernel/drivers/xsurf/NOTICE 61cdaa4de14fcb16e351c24244c7637c5b78d45da69a71975aec
 _xs=out/build/xsurf-tools/out
 KM_FILES_COMMON="\
 /etc/inet/link.d/xsurf kernel/drivers/xsurf/link.d/xsurf b4b62296d468f10c4c847d41f6d54a92791d98be710600a91ad84578a1a3e0d3 0444
-/usr/sbin/xsf $_xs/bin/xsf 79d6374aa2a8febc2d8838fce4dc5a9d121436682cdb6ff1d56850af7e80f1e4 0755
-/opt/amix/man/7/xsurf kernel/drivers/xsurf/man/xsurf.7 1cb376ed19ccea613254bb6205b9b683ca3de0cbc48cc0ad206d38bd91e96550 0644
+/usr/sbin/xsf $_xs/bin/xsf 38a3bd9938fe803667e9fc0c4eee8f08b5fa6a68bc659851449cbb5f9c8e8ca8 0755
+/opt/amix/man/7/xsurf kernel/drivers/xsurf/man/xsurf.7 d5d5770a32bc764366ac98533157d660e212076782629ef5ae0924087d901b2c 0644
 /opt/amix/man/whatis.d/@PKG@ kernel/drivers/xsurf/pkg/xsurf.whatis cba113c6abf27b42e240d6c16158e79056255812bc7ea64183d5e55c070efffd 0644
-/opt/amix/man/1m/xsf kernel/drivers/xsurf/man/xsf.1m 38fc795aa2b63bb0f751b1ca7dac79f984b55ae51ff9afb94bfae558e9b10498 0644"
+/opt/amix/man/1m/xsf kernel/drivers/xsurf/man/xsf.1m 93ac58621b619b2881aa6e71fb85c0b770443118b1352139623cd4a49afe2a4b 0644"
 
 # xsf, in GCC 14's environment rather than the roll's (TOOLCHAIN=none)
 kdrv_prepare() {
