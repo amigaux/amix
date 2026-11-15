@@ -66,6 +66,18 @@ for stops it with a message.  The default is the card the server's name
 says, else
 .BR auto .
 .TP 8
+.BI \-dev " path"
+The card's device node.  The default is the card's own,
+.B /dev/zz9000
+or
+.BR /dev/va2000 ;
+a second card of a kind is another node (a ZZ9000 beside a Z3660 is
+.BR /dev/zz9001 ).
+With
+.B \-card auto
+each card's driver is tried on this node.  A node no card answers on
+stops the server with a message.
+.TP 8
 .BI \-mode " width" x height
 The screen mode.  On the ZZ9000/Z3660: one of 640x480, 800x600,
 1024x768, 1280x720, 1280x800, 1280x1024, 1920x800 and 1920x1080, as far
