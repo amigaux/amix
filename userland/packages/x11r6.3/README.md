@@ -1,7 +1,7 @@
 # x11r6.3 — X11R6.3 for Amix
 
 The X Window System, release 6.3, under `/opt/amix/X11R6`:
-- the `Xrtg` server for RTG cards, the ZZ9000 and the Z3660 RTG (the Amiga DDX; who wrote it:
+- the `Xrtg` server for RTG cards, the ZZ9000, the Z3660 RTG and the VA2000 (the Amiga DDX; who wrote it:
   below), also installed as `Xzz9000` and `X`;
 - the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (static) with their headers;
 - xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart.
@@ -30,6 +30,8 @@ MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with 
 - **hw/amix's input and screen framework** (`amixInit.c`, `amixIo.c`, `amixKbd.c`,
   `amixMouse.c`, `amix.h`): the 1987 Sun X server through Commodore's Amix X server, under the
   UC Regents' and Sun's notices in each file;
+- **the VA2000 driver** (`rtg/va2000`, copied from the xrtg-amix fork at `xrtg-amix.pin` by
+  `FORKDIRS`): Antti Sokero's, MIT, ported to the RTG layer's card record, MIT (Jussi Alanärä);
 - **the rtg/ layer and the ZZ9000 driver**: based on Antti Sokero's
   [xrtg-amix](https://github.com/asokero/xrtg-amix) (its rtg/ layer and VA2000 driver), MIT,
   Copyright (c) 2025-2026 Antti Sokero; `rtgdraw.c`'s `copyRun` is his `va2000CopyRun`
@@ -83,6 +85,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `29-rtg-card-ops.patch` | Ours: the RTG layer's card interface in `rtg.h`: `rtgCardOps`, a versioned record a card driver fills (name, device, modes; caps: depth, masks, `-blitmin` default, registers mapped into the server or not, move16 allowed or not; probe, setMode, modeSize, initHW, closeHW, fillBox, copyBox, flush, monitorSwitch) and the card table `rtgCards[]`. fillBox/copyBox may queue, flush waits, and the layer flushes before any CPU access the queue could meet and before every entry point returns. The monitor switch is per card: the ZZ9000 driver reads an int, the VA2000 driver an unsigned short. initHW may clear its blitter flag (a failed self-test) and the layer reads the caps again after it. The declarations are prototypes. Header only. |
 | `30-rtg-card-neutral.patch` | Ours: the RTG layer made card-neutral on patch 29's record, the same drawing on the ZZ9000/Z3660. `rtg/rtgscreen.c` (the cfb16 screen, GC wrapper, colormaps; the visual from the card's caps), `rtg/rtgdraw.c` (run helpers, CPU fill and copy, the box order of a region copy, the direct PutImage, `-blitmin`, `-move16`; the blitter only through the record), `rtg/rtgcards.c` (the card table); `rtg/zz9000/` keeps the device, mode, map and the `ZZ9KIOC_BLITS` queue behind `zz9000CardOps`, its monitor switch the same int ioctl as before. The card is taken once: `-card NAME`, else the server's name (`Xzz9000`: zz9000), else (`-card auto`, `Xrtg`, `X`) the first whose probe succeeds; a card the server has no driver for stops it with the list. The CPU fill's stride is the mapped pitch, as the copy's always was. The server is built under one name, `AmixServerName` (host.def: build.sh's `XSERVER`, `Xrtg`). |
 | `31-rtg-copyrun-longword.patch` | Antti Sokero's misaligned-source longword copy (`va2000CopyRun`, MIT) in the layer's `copyRun`: the destination aligned, and when the source's phase differs each long built from two word reads, so every store to the framebuffer is one aligned long and no access is misaligned. It serves the CPU copies within the screen and the direct PutImage (an odd window x). |
+| `32-rtg-va2000.patch` | Ours: the MNT VA2000 card under the RTG layer. `FORKDIRS` copies the card directory from the xrtg-amix fork at the pin (`xrtg-amix.pin`: `x11r6.3/hw/amix/rtg/va2000`, Antti Sokero's VA2000 driver, MIT, ported to the card record, MIT) into `programs/Xserver/hw/amix/rtg/va2000` before the patches; this patch puts it in `rtg/Imakefile`'s SUBDIRS and RTGCARDS (after the ZZ9000, so `-card auto` probes it second), links its library after the rtg library and names it in the `-card` usage line. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
