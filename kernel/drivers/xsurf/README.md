@@ -54,9 +54,10 @@ The module parameter `intr` chooses how the driver hears the chip:
   polled.
 - **`intr=0`.** The board is polled from the clock tick, 60 times a second.
 
-At load the console prints one line per board: the card, its address, and
-the mode it ended in (`interrupt I/O`, `polled`, or
-`polled (interrupt self-test failed)`).
+At load the console prints one line per board: the card, its address, its
+station address, the mode it ended in (`interrupt I/O`, `polled`, or
+`polled (interrupt self-test failed)`) and its link (see Link and
+diagnostics).
 
 In interrupt mode the tick keeps watch. If the chip has events waiting and
 no interrupt has been taken for three ticks, the driver masks the chip,
@@ -75,23 +76,63 @@ The packages are `xsurf-k30` (pkginst `xsurf30`) and `xsurf-k46`
 (`xsurf46`), one for each kernel line. Each installs:
 
 - the module, `/etc/conf/mod.d/xsurf`;
-- the nodes `/dev/xsf0` and `/dev/xsf1` (character major 56);
-- the `ifup` entry, `/etc/inet/link.d/xsurf`.
+- the nodes `/dev/xsf0` and `/dev/xsf1` (character major 56), and the
+  status node `/dev/xsfctl` (minor 15);
+- the `ifup` entry, `/etc/inet/link.d/xsurf`;
+- the status program `/usr/sbin/xsf`;
+- the pages `xsurf(7)` and `xsf(1M)`.
 
 The major comes from the kbootset registry, so install a kbootset whose
 registry has `c 56 xsurf` (1.1.0.261114-45 or later) first:
 `apkg update; apkg upgrade`. Then configure `xsf0` in
 `/etc/inet/interfaces`, for example `xsf0 dhcp`.
 
+## Link and diagnostics
+
+The console line at load is gone once the system is up: it comes before
+the system log runs. So everything it says can be read again with `xsf`.
+
+- **The link.** The X-Surf-100's chip reports link, speed and duplex in its
+  Device Status Register (0x17). The X-Surf's RTL8019AS has no link bit,
+  but set to auto-detect it sends on its coax port when the 10BASE-T link
+  test fails, and says so in its CONFIG0 register. The driver reports that
+  as `no link (10BASE-T link test failed; sending on coax)`. Set to one
+  medium, the link is not known, and the line names the setting. The tick
+  reads the link twice a second. A change is said on the console once it
+  has held for a second, at most once every ten seconds per board.
+- **Transmit failures.** The first of each kind is said once per boot, then
+  only counted: a transmit that did not complete (the chip restarted), a
+  remote-DMA write that did not complete, a transmit aborted after 16
+  collisions, any other transmit error. Collisions go into the interface's
+  counter, so `netstat -i` shows them.
+- **A board that does not take register writes.** After its reset, the
+  probe writes two patterns to two page-1 registers and reads them back. A
+  board whose writes are lost refuses at load with a console line
+  (`its registers do not take writes`). Without this check it would pass
+  the probe: after power-on the chip already reads as reset, and the
+  station-address check takes any unicast junk. If every board found is
+  refused, the module stays loaded with nothing attached, so that `xsf`
+  can say why. `/dev/xsf0` still fails at once, and `ifup` stops there.
+
+Diagnostics cost nothing in the receive and transmit paths beyond the
+counters: the link read and the notes ride the clock tick.
+
 ## Status
 
-`userland/xsf.c` reads the driver's status record: card, Zorro mode,
-interrupt mode and every receive and transmit counter, one per line. Build
-it on the box with `cc -o xsf xsf.c`, with `src/xsurfuser.h` beside it.
+`xsf` (`userland/xsf.c`, installed as `/usr/sbin/xsf`) prints what the
+driver knows. First come the load line again, with the link as it is now,
+then the frames and errors, the transmit failures by kind, and what they
+point at when no frame was ever sent. Then every counter of the status
+record, one `name value` per line.
 
-- `xsf` prints `/dev/xsf0`'s record;
-- `xsf 1` prints the second board's;
-- `xsf -S` exits 0 when the board is there and 1 when it is not.
+- `xsf` shows `xsf0`, then any board refused at load;
+- `xsf 1` shows the second board;
+- `xsf -a` shows every board found, in use or refused;
+- `xsf -S` exits 0 when the board is in use and 1 when it is not.
+
+It reads `/dev/xsfN` for a board in use. It reads `/dev/xsfctl` for every
+board found, which works even when every board was refused. The pages
+`man/xsurf.7` and `man/xsf.1m` say how to read the output.
 
 ## Tested
 
@@ -191,13 +232,17 @@ a run on a real board:
 - **X-Surf-100 registers:**
   - Byte access to the chip registers at board+0x800. Linux does this; the
     maker's page says word access only.
-  - RCR bit 6, set as Linux sets it on this board. Its meaning on the
-    AX88796B was not checked against the datasheet.
-  - The PHY powered on through GPOC, with the link left to the chip; there
-    is no MII handling.
+  - The link from the Device Status Register: read as the datasheet
+    describes it. The emulator does not model that register.
+  - The PHY left as it comes from reset, with no MII handling.
+    The datasheet gives the PHY's control register as 0x3100 at reset:
+    powered, autonegotiating.
   - Zorro III operation on a real board, and the warning when the board
     is placed at or above 0x80000000.
 - **X-Surf:**
+  - The link from CONFIG0 and CONFIG2: read as the RTL8019AS datasheet
+    describes them. Which medium setting a real X-Surf's EEPROM gives is
+    not known.
   - Byte writes to the chip registers through the ISA window. Linux does
     this; the maker's page says writes should be word-wide.
   - Whether the chip comes up at ISA 0x300 by itself (as Linux assumes) or
@@ -209,6 +254,17 @@ a run on a real board:
   raise them; host tests drive them against a model chip.
 - **The 68030 data cache.** A cache-inhibited mapping of a Zorro III window
   on the 68030 line.
+
+Settled from the AX88796B datasheet (V1.6), against what Linux's
+`ax88796.c` assumes:
+
+- **Register 0x17 is not a GPOC.** A write sets the back-pressure jam
+  limit; a read is the Device Status Register. Driver 1.0.0-3 and earlier
+  wrote 0 there at set-up and 0x40 at unload, which only mattered with back
+  pressure on (it is off). From 1.0.0-4 the driver never writes it, and it
+  reads the link there.
+- **RCR bit 6 is reserved.** The driver sets it on the X-Surf-100 as Linux
+  does. Setting it does nothing.
 
 ## Credits
 
