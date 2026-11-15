@@ -106,14 +106,16 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   Without the key, 30 MiB on the 68030 line and the whole slice on the 68040/68060 line. The
   same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
   `swap -l` shows what is in use.
-- **The CD probe.** The miniroot looks for the install CD at cdfs `1,3`, `0,3`, `0,2`, `1,2`,
-  `0,5`, `1,5`, `2,5`, `3,5`, mounting each address once (`CD_CANDIDATES` in
-  `src/miniroot/profile`, equal to `MINIROOT_CD_CANDIDATES` in `setup.sh`). `k,5` is an ATAPI
-  drive on the IDE slave (gayle unit 5) with the IDE port as card k.
-  **Limitation:** the miniroot does not say which address answered, so the interview's disk
-  scan skips every candidate unit the medium's profile cannot install to (`scan_safe_ids`).
-  With `k,5` in the list that includes SCSI id 5 (and `d`, `15`, `1d`): a disk at id 5 is
-  not offered as a target unless the profile's `INSTALLABLE_IDS` names it.
+- **The CD probe.** The miniroot finds the install CD on the cards the running kernel
+  registered: each card's units by one bounded `kbootset` inquiry (the units that answer as CD
+  drives; the A3000's WD, which takes no inquiry, by mounting each unit once), else every unit
+  of every card, else the fixed list `1,3`, `0,3`, `0,2`, `1,2`, `0,5`, `1,5`, `2,5`, `3,5`
+  (`CD_CANDIDATES` in `src/miniroot/profile`, equal to `MINIROOT_CD_CANDIDATES` in `setup.sh`;
+  `k,5` is an ATAPI drive on the IDE slave of card k). It records the address that answered in
+  `/tmp/cd.spec`, and the interview keeps only that unit out of the disk scan: a disk at id 5
+  (a SCSI id 5, a Buddha's first-port slave) is offered unless the CD itself is there. Only
+  with no recorded address does the scan skip every candidate unit the profile cannot install
+  to (`scan_safe_ids`).
 - **The IDE port's card.** A four-card kernel numbers the sd cards by class (z3660 < zorro <
   mobo < ide), so the IDE port is card 0 alone, card 1 beside a Z3660 or one Zorro SCSI card,
   card 2 beside both. For a profile with `TARGET_HBA=gayle` the interview reads
