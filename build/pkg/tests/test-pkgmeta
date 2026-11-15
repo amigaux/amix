@@ -564,6 +564,28 @@ try:
     write(os.path.join(fsrc, "src", "x.c"), "\n")
     refused("check refuses FORKPIN and a src/ together", ("check", fsrc),
             "FORKPIN is set, but the source is in the tree")
+    # --- directories of pinned forks added to the source (FORKDIRS) ---------------------------
+    rc, out, err = run("check", recipe(fpk, "fd", FORKDIRS='"kernel/drivers/zz/zz.pin hw/va prog/hw/va"'))
+    check("check passes FORKDIRS beside a tarball source", rc == 0, err)
+    rc, out, err = run("check", recipe(fpk, "fd2", FORKDIRS='"kernel/drivers/zz/zz.pin hw/va a/va\n'
+                                       'kernel/drivers/zz/zz.pin hw/vb b/vb"'))
+    check("check passes FORKDIRS of two newline-separated triples", rc == 0, err)
+    refused("check refuses FORKDIRS that is not whole triples",
+            ("check", recipe(fpk, "fdw", FORKDIRS='"kernel/drivers/zz/zz.pin hw/va"')),
+            "FORKDIRS holds 2 words, not")
+    refused("check refuses a FORKDIRS pin the checkout lacks",
+            ("check", recipe(fpk, "fdn", FORKDIRS='"kernel/drivers/zz/no.pin hw/va a/va"')),
+            "FORKDIRS: kernel/drivers/zz/no.pin: no such file in the checkout")
+    refused("check refuses a FORKDIRS pin without a full commit",
+            ("check", recipe(fpk, "fds", FORKDIRS='"kernel/drivers/zz/short.pin hw/va a/va"')),
+            "FORKDIRS: kernel/drivers/zz/short.pin does not hold `<url> <40-hex commit>`")
+    refused("check refuses a FORKDIRS path that leaves the tree",
+            ("check", recipe(fpk, "fdp", FORKDIRS='"kernel/drivers/zz/zz.pin hw/va ../va"')),
+            "FORKDIRS: ../va is not a relative path in the tree")
+    refused("check refuses one tree path named twice",
+            ("check", recipe(fpk, "fdt", FORKDIRS='"kernel/drivers/zz/zz.pin hw/va a/va '
+                                                  'kernel/drivers/zz/zz.pin hw/vb a/va"')),
+            "FORKDIRS: a/va is named twice as a path in the tree")
     refused("check refuses a SHA256 that is not one",
             ("check", recipe(tmp, "badsha", SHA256="abc")), "SHA256 is not 64")
 

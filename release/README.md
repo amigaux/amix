@@ -85,6 +85,10 @@ stock userland <name>-<version> <path> <sha256> [patched <sha256>]
                                       each amix-system file a userland package carries:
                                       copied (STOCK_ETC), or patched by its stage hook
                                       (STOCK_PATCHED); from the recipe's BUILD.txt
+source userland <name>-<version> <pin> <URL> <commit> <path> digest <sha256>
+                                      each directory of a pinned fork a userland package
+                                      copies into its source (FORKDIRS): the path in the
+                                      fork and the digest of its files; from BUILD.txt
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
