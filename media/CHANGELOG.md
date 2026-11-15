@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — installer.md: a disk at id 5 (fc27cb18)
+
+The installer guide says that a disk at SCSI id 5 is offered as an install target unless the install CD is the device there.
+
 ## 2026-11-15 — the 1.1.1 notes: the CD's installer still says "1.1 install disc" (57a05174)
 
 The notes say the install CD, the boot floppies and the Z3660 boot disk start 1.1's installer RAM disk unchanged, so three of its messages still say "amigaux 1.1 install disc", and that a 1.1.1 or a 1.1 disc is taken. The entry below for the -2 netinstall images now says its release-neutral messages are in the netinstall images only. Docs only.
