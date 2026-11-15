@@ -3,6 +3,24 @@
 What a user of the 68030 kernel may meet, with the cut it was found against. Each entry says what is seen, what is
 known about it, and what to do. Measurements are from emulation unless the entry says otherwise.
 
+## Boot
+
+- **A root filesystem that cannot be mounted hung the machine with a second panic** (stock, both kernel lines; fixed in
+  cut -78). When the kernel names ufs as the root filesystem and the root disk cannot be opened (no driver for its
+  controller, or no disk at the unit), `vfs_mountroot: cannot mount root` panics. The panic flushes the filesystems
+  (sync), and ufs's flush followed the half-set-up root and faulted, so `DOUBLE PANIC` replaced the single panic. From
+  -78 sync does nothing while no root is mounted, and skips a filesystem not yet set up (which also keeps a panic early
+  in boot from turning into a second one). On -77 or earlier: boot a generation whose root is on a controller this
+  kernel drives.
+- **The panic backtrace could fault** (stock; fixed in cut -78). It read the outermost frame's return slot, which was
+  never written, and then the instruction words just below address 0; on a real 68030 that is a bus error inside the
+  panic, so a panic became a second one. From -78 the walk bounds each frame and its return address to the kernel's
+  text before reading through it (the 68040/68060 port's frame test). In emulation that read gave no bus error, so the
+  difference on a real 68030 is not yet shown.
+- **A panic waits for Return** (stock, both kernel lines). After any panic the kernel waits for Return on the Amiga
+  keyboard before it goes back to the firmware, so the boot loader's fall-back to the last good generation, after a
+  trial kernel that panics, also waits for Return. Nothing on that path times out.
+
 ## Swap
 
 - **A large swap area is refused, at most 16 x maxmem pages per area** (cut -72). `swap -a` prints `SC_ADD failed` and
@@ -109,6 +127,18 @@ known about it, and what to do. Measurements are from emulation unless the entry
   units. From cut -74 the second shift is gone (`tools/growsdt030.py`, 2 bytes). With the fix the 16 MiB netinstall
   completed 3 times of 3 (a build with -73's ufs and this fix), and an install under the same watch logged no bad
   store to a chain head.
+- **A program using a user mapping of a Zorro III board's memory could be killed by a wrong check** (stock; fixed in
+  cut -78). When a user access bus-errors on a translation the MMU tables call valid, the kernel probes the device to
+  decide between retrying and SIGKILL. The stock probe read the physical address as a kernel virtual address, which is
+  right only below `0x40000000`, where the kernel maps physical memory one-to-one; every Zorro III board AutoConfig
+  places in an A3000 or A4000 is above it. So a Zorro III ZZ9000 (z3660rtg, zz9ksvc) or VA2000 used through a user
+  mapping on a 68030 was killed ("Hardware Bus Error @ va, (pa physical)", then `User BUS ERROR ... FAULT:1`) at
+  offsets that depended on the kernel's own layout. Seen in emulation as a 32-bit 1920x1080 draw on a Zorro III
+  ZZ9000 killed under sustained drawing. From cut -78 the probe reads the faulting page through a one-page kernel
+  mapping (`src/hardbus030.c`), so only a page that does not answer ends the program. That a page which really
+  gives a bus error is still killed is not shown in emulation (the emulator answers an empty Zorro III address without
+  one). On -77 or earlier: use the 68040/68060 kernel for a Zorro III graphics card in user space, or the card in
+  Zorro II where it supports that. What raised the first bus error in emulation is not settled.
 
 ## Networking
 
