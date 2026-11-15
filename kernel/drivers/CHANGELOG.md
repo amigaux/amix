@@ -3,6 +3,10 @@
 Changes to the shared kernel/drivers README and the fork pins. Each source driver keeps its own CHANGELOG in its
 directory.
 
+## 2026-11-15 — va2000-k30/-k46 1.1.0-1: the kbootset floor (5d94db95)
+
+APKG_KBOOTSET=1.1.0.261115-46, so the catalog row carries kbootset= and apkg 0.3.12 installs kbootset -46 first; the descriptions drop the manual step.
+
 ## 2026-11-15 — va2000: the fork pin and the va2000-k30/-k46 packages (5e281ea4, 78edd09a)
 
 va2000/ pins our fork of Antti Sokero's va2000-amix (amigaux/va2000-amix dbb5b4f, module 1.1.0-1) with the recipe of va2000-k30/-k46 1.1.0-1: /dev/va2000 (c 68, demand class), va2000.h, va2000(7). The node is 0660 root sys, as z3660rtg's /dev/zz9000, since it maps the card's registers and framebuffer. Needs kbootset -46; the descriptions give the step after a late kbootset upgrade. Tested in emulation without a board.
