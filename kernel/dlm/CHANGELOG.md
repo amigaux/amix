@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — C2-2 version 7: a module row's kbootset floor (02bad6ba, c35b7ce2)
+
+A module's catalog row may carry `kbootset=`, the oldest kbootset that composes a generation with it; apkg 0.3.12 adds kbootset at install and upgrade, from `APKG_KBOOTSET` or a kbootset.conf line. `abi/registry/kbootset` gives each major the oldest kbootset that has it (c 56: 1.1.0.261114-45, c 68: 1.1.0.261115-46) and goes into the kit. A module whose majors are all 1.1's asks for no floor; a major the table does not list is refused. C2-4 version 31: a kbootset upgrade runs the trigger. C3-5 version 26.
+
 ## 2026-11-15 — fb_register, DDI k46.1.6; the kit at kabi 1.5 / 1.6 on the release line (0b787858, 049f72d4, df7fbcd9)
 
 The release line's kit now numbers as the development line's: k30.1.5 and k46.1.6 (core 0055 was already in the series; the 1.5 fingerprint texts equal 1.4's). A module may put its board's framebuffer window into the port's non-cacheable, not serialised class with `fb_register`, from `_load` only: the range is page-aligned and inside one non-RAM AutoConfig board, and the kernel's two slots are held by module name for the boot (EINVAL, EBUSY, ENOSPC; never released). Core patch 0056 `dlm_curname`. `<sys/ddiline.h>` and `DDI_FB_REGISTER` let one source build for both lines and every kernel: a weak reference on k46 that returns ENOSYS on a kernel without it, ENOSYS with no reference on k30. modcheck warns on a weak name that is in no list. C3-2 version 6, C3-6 version 14 (the VA2000 module calls it from its `_load`), ddi.md, spec 30 §8. The released 1.1 kernels are unchanged; a kernel must claim k46.1.6 to export the call.

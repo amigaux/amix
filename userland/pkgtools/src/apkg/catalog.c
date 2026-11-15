@@ -334,8 +334,8 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
             else
                 e->offset = atol(val);
         } else if (strcmp(key, "kbootset") == 0) {
-            /* C2-2 v6 §1.1: the lowest kbootset package version that
-             * composes a generation with this kernel */
+            /* C2-2 v6 §1.1, v7: the lowest kbootset package version
+             * that composes a generation with this kernel or module */
             if (kdup(&seen_kbootset, e, key))
                 continue;
             if (!safe_word(val))
@@ -372,8 +372,11 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         if (!seen_pin)
             krefuse(e, "missing key", "pin=");
     }
-    if (seen_kbootset && (e->role == NULL || strcmp(e->role, "kernel") != 0))
-        krefuse(e, "only a kernel entry may carry", "kbootset=");
+    /* C2-2 v7: a module row may carry it too; a loader row may not */
+    if (seen_kbootset && (e->role == NULL ||
+                          (strcmp(e->role, "kernel") != 0 &&
+                           strcmp(e->role, "module") != 0)))
+        krefuse(e, "only a kernel or module entry may carry", "kbootset=");
     if (!seen_size)
         krefuse(e, "missing key", "size=");
     if (!seen_sha)

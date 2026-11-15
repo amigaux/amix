@@ -208,15 +208,22 @@ try:
     e_proto = PROTO.replace("f none /etc/foo.conf", "e conffile /etc/foo.conf")
     rc, out, err = run("check", conf("conf", "cecls", e_proto, CONFFILES='"/etc/foo.conf"'))
     check("CONFFILES: a listed e object passes", rc == 0, err)
+    rc, out, err = run("check", conf("conf", "cpre", PROTO, CONFFILES='"/opt/amix/bin/foo"'))
+    check("CONFFILES: a path under the package's PREFIX passes", rc == 0, err)
+    x_proto = (PROTO.replace("f none /opt/amix/bin/foo 0755 root bin\n", "")
+               + "f none /opt/amix/X11R6/lib/X11/xinit/xinitrc 0644 root sys\n")
+    rc, out, err = run("check", conf("conf", "cprex", x_proto, PREFIX="/opt/amix/X11R6",
+                                     CONFFILES='"/opt/amix/X11R6/lib/X11/xinit/xinitrc /etc/foo.conf"'))
+    check("CONFFILES: under PREFIX=/opt/amix/X11R6 and under /etc together pass", rc == 0, err)
     for name, proto, over, needle in (
             ("cmiss", PROTO, {"CONFFILES": '"/etc/bar.conf"'},
              "/etc/bar.conf is not in the prototype"),
             ("cdir", PROTO, {"CONFFILES": '"/etc"'}, "is a 'd' object, not f or e"),
             ("cunlisted", e_proto, {}, "e /etc/foo.conf is not in CONFFILES"),
-            ("cprefix", PROTO, {"CONFFILES": '"/opt/amix/bin/foo"'},
-             "/opt/amix/bin/foo is not under /etc or /var"),
+            ("cprefix", x_proto, {"PREFIX": "/opt/amix/X11R6", "CONFFILES": '"/opt/amix/bin/foo"'},
+             "/opt/amix/bin/foo is not under /etc, /var or PREFIX=/opt/amix/X11R6"),
             ("cusr", PROTO + "f none /usr/lib/foo.rc 0644 root sys\n",
-             {"CONFFILES": '"/usr/lib/foo.rc"'}, "is not under /etc or /var"),
+             {"CONFFILES": '"/usr/lib/foo.rc"'}, "is not under /etc, /var or PREFIX=/opt/amix"),
             ("crel", PROTO, {"CONFFILES": '"etc/foo.conf"'}, "is not an absolute path"),
             ("ctwice", PROTO, {"CONFFILES": '"/etc/foo.conf /etc/foo.conf"'},
              "lists /etc/foo.conf twice"),
@@ -303,7 +310,7 @@ try:
              "/usr/lib/inet holds nothing in the prototype"),
             ("lconf", SYS, {"SYSTEM_PATHS": '"/usr/sbin /usr/lib/amix"',
                             "CONFFILES": "/usr/sbin/ifup"},
-             "/usr/sbin/ifup is not under /etc or /var")):
+             "/usr/sbin/ifup is not under /etc, /var or PREFIX")):
         refused("check refuses %s" % name,
                 ("check", conf("lbad", name, proto, **over)), needle)
 

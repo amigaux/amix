@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — CONFFILES under a package's own PREFIX (1c06e71d)
+
+pkgmeta lets CONFFILES name files under the package's own PREFIX as well as /etc and /var (X keeps its configuration in /opt/amix/X11R6/lib/X11); the class scripts and the roll are unchanged.
+
 ## 2026-11-15 — FORKDIRS; dist.sh builds va2000 (f1654565, 51663042, 2f5526a8)
 
 pkgbuild.sh takes FORKDIRS: directories of pinned forks are copied into a package's source before the patches; BUILD.txt and the lock name each (source <pin> <url> <commit> <path> digest <sha256>); pkgmeta checks the triples. dist.sh builds va2000 from its fork pin. build/pkg/README.md no longer names an internal reference.

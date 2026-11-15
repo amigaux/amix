@@ -1,6 +1,6 @@
 .\" apkg.conf.5 - manual page for /etc/apkg.conf.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG.CONF 5 "November 2026" "apkg 0.3.7" "Amix File Formats"
+.TH APKG.CONF 5 "November 2026" "apkg 0.3.12" "Amix File Formats"
 .SH NAME
 apkg.conf \- configuration file of the apkg package client
 .SH SYNOPSIS
@@ -54,6 +54,12 @@ file for pkgadd and pkgrm (/var/apkg/admin)
 .B kbootset\fR, \fBkbootset_journal
 the generation composer run after a kernel-space transaction, and its
 journal
+.TP
+.B apkg
+the installed apkg an upgrade runs for the rest of its packages once it
+has upgraded apkg itself (/usr/apkg/bin/apkg; under
+.B \-R
+only when set here)
 .TP
 .B timeout\fR, \fBconnect_timeout
 seconds of silence on a transfer, and for a connect

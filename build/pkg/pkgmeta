@@ -494,9 +494,11 @@ def prototype_problems(recipe, m):
             out.append("CONFFILES: %s is not an absolute path" % c)
     for c in sorted(set(c for c in conf if conf.count(c) > 1)):
         out.append("CONFFILES lists %s twice" % c)
+    # /etc, /var, or the package's own tree (PREFIX: X's lib/X11 lives there)
+    roots = ("/etc/", "/var/") + ((m["PREFIX"].rstrip("/") + "/",) if m["PREFIX"].rstrip("/") else ())
     for c in conf:
-        if c.startswith("/") and not c.startswith(("/etc/", "/var/")):
-            out.append("CONFFILES: %s is not under /etc or /var" % c)
+        if c.startswith("/") and not c.startswith(roots):
+            out.append("CONFFILES: %s is not under /etc, /var or PREFIX=%s" % (c, m["PREFIX"]))
     if objs is not None:
         out += shared_dir_problems(os.path.join(recipe, "prototype"))
     if m["MAN_REPLACES"] and objs is None:

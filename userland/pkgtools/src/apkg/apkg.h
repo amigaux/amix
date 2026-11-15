@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.11"
+#define APKG_VERSION "0.3.12"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -246,6 +246,8 @@ struct conf {
     char *cfdir;       /* <root><target>/var/sadm/conffiles (conffile(5)) */
     char *bootsetconf; /* <root><target>/etc/default/bootset           */
     char *kbootset;    /* kbootset binary (engine-like: NOT -R prefixed) */
+    char *self;        /* the installed apkg an upgrade re-execs       */
+    int self_set;      /* apkg= was given in the config file           */
     char *kbootset_journal; /* --journal handed to kbootset; "" = the
                                contract default <target>/var/kbootset/journal */
     int pkgadd_is_default; /* pkgadd came from built-in default        */
@@ -429,6 +431,16 @@ extern int cmd_conffiles(const struct conf *cf, int resolve,
 extern int conffile_state(const struct conf *cf, const char *pkginst);
 /* delete a package's kept config files, .new/.old and baselines */
 extern int conffile_purge(const struct conf *cf, const char *pkginst);
+/* after pkgrm: drop the baselines whose file is gone (stored by an
+ * upgrade that did not finish, for a file pkgrm removed as class none) */
+extern void conffile_prune(const struct conf *cf, const char *pkginst);
+/* before the pkgadd of staged as pkginst: store the baseline of each
+ * untouched file that becomes a conffile; the number stored */
+extern int conffile_prepare(const struct conf *cf, const char *staged,
+                            const char *pkginst);
+/* `apkg conffiles prepare`: the same for the journaled transaction's
+ * packages not installed yet (APKG's postinstall); always 0 */
+extern int cmd_conffiles_prepare(const struct conf *cf);
 
 /* -------- the filesystem a package needs (fsreq.c) --------
  *
@@ -439,6 +451,8 @@ extern int conffile_purge(const struct conf *cf, const char *pkginst);
  * EX_OK, EX_DEPS (refused: the target filesystem is not one of them) or
  * EX_VERIFY (the parameter is malformed); message printed. */
 #define APKG_FSTYPE_PARAM "APKG_FSTYPE"
+/* KEY's value in pkginfo(4) text, xmalloc'd, or NULL */
+extern char *pkginfo_get(const char *text, const char *key);
 extern int fs_check(const struct conf *cf, const char *name,
                     const char *staged);
 
@@ -503,12 +517,26 @@ extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
 /* the catalog name and pkginst of the kbootset package (an ordinary entry,
  * C2-2 §1.1) */
 #define KBOOTSET_PKG "kbootset"
+/* the package tools: an upgrade takes them first, in a transaction of
+ * their own, and when apkg itself was among them the new apkg does the
+ * rest (install.c); APKG_REEXEC in the environment marks that run */
+#define APKG_PKG     "apkg"
+#define APKGENG_PKG  "apkgeng"
+#define APKG_REEXEC_ENV "APKG_REEXEC"
+/* main()'s argv, for that re-exec */
+extern char **apkg_argv;
 /* A kernel in the transaction brings its set (apkg 0.3.5): every installed
  * module of its line the transaction does not move whose catalog version
  * is newer and fits the new kernel, then the loader and kbootset when the
  * catalog has newer ones; each addition is printed.  *todo and *ow grow
  * (xrealloc), *nt counts them.  A module left behind that does not fit is
  * the pre-flight's to refuse. */
+/* C2-2 v7: the catalog's kbootset first in the transaction when a kernel
+ * or module row's kbootset= needs it (printed) */
+extern void kspace_floor(const struct conf *cf, struct catalog *cat,
+                         struct pkgent ***todo, int **ow, int *nt);
+/* 1 when the target has a kernel-space record */
+extern int kspace_has_records(const struct conf *cf);
 extern void kspace_expand(const struct conf *cf, struct catalog *cat,
                           struct pkgent ***todo, int **ow, int *nt);
 /* after kbootset refused at a gate: name every installed module that does

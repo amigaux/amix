@@ -53,7 +53,7 @@
 /* the value of KEY in pkginfo(4) text: the first KEY=VALUE line, blanks
  * around KEY and VALUE and one pair of surrounding quotes removed (the
  * reading gen-catalog.py's parse_pkginfo() gives).  xmalloc'd, or NULL */
-static char *pkginfo_get(const char *text, const char *key)
+char *pkginfo_get(const char *text, const char *key)
 {
     const char *line;
     const char *end;
