@@ -18,6 +18,10 @@ struct chip {
     int dsr, dsr_writes;		/* 0x17: read the DSR; writes to it counted */
     int link, link_speed, link_duplex, link_medium;	/* what the link op reports */
     int link_reads, link_bad_page, link_in_dma;
+    int clobber;			/* a page-1 MAR write also lands one register up (1) or down (-1) */
+    int data_flip;			/* remote-DMA writes store the byte inverted */
+    int flip_from, data_writes;		/* ... from this many data-port writes on (0: from the first) */
+    int ready_calls, ready_wait;	/* the ready op: calls, what it returns */
     unsigned char par[6], mar[8];
     int cntr[3];
     int ovw, rec_stp, rec_rbcr, rec_loop, ovw_bad_ack;	/* overrun recovery */

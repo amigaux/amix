@@ -4,11 +4,17 @@
 # $match: the X-Surf-100 (1212:64) and the X-Surf (1212:17).
 # $param intr: 2 = the level-2 interrupt after a self-test (polled when it
 # fails), 0 = polled.
+# $param regs: register cycles on the X-Surf-100: 0 = byte, word when byte
+# writes do not land (the probe's check), 1 = byte only, 2 = word only.
+# $param data: the X-Surf-100's data path: 0 = the longword windows, the
+# 16-bit data port when their self-test fails, 1 = windows only, 2 = port.
 $modtype drv
 $class boot
 $match zorro:1212:64,zorro:1212:17
 $majors c:56
 $unload never
 $param intr:int:2:0:2
+$param regs:int:0:0:2
+$param data:int:0:0:2
 $desc X-Surf and X-Surf-100 ethernet xsf (STREAMS/DLPI)
 xsurf	xsurf

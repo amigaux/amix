@@ -1018,6 +1018,16 @@ char *params;
 	cmn_err(CE_NOTE, "xsurf: intr=%d is not 0 or 2; using 2", (int)xs_intr_param);
 	xs_intr_param = 2;
     }
+    xs_regs_param = (int)xs_param(params, "regs", 0L);
+    if (xs_regs_param > 2) {
+	cmn_err(CE_NOTE, "xsurf: regs=%d is not 0, 1 or 2; using 0", xs_regs_param);
+	xs_regs_param = 0;
+    }
+    xs_data_param = (int)xs_param(params, "data", 0L);
+    if (xs_data_param > 2) {
+	cmn_err(CE_NOTE, "xsurf: data=%d is not 0, 1 or 2; using 0", xs_data_param);
+	xs_data_param = 0;
+    }
 
     if (xs_find_boards() == 0) {
 	if (xs_nfound > 0) {
@@ -1061,11 +1071,14 @@ char *params;
 	b->last_claims = b->st.irq_claims;
 	b->st.selftest_failed = xs_intr_param == 2 && !intr;
 	xs_chip_mask(b, intr);
-	cmn_err(CE_CONT, "xsf%d: %s, Zorro %d at 0x%x, %s, %s, %s\n",
+	cmn_err(CE_CONT, "xsf%d: %s, Zorro %d at 0x%x, %s, %s, %s%s%s\n",
 	    b->unit, b->ops->name, (int)b->st.zorro, (int)b->phys, xs_macstr(b->mac),
 	    intr ? "interrupt I/O" :
 	    xs_intr_param == 2 ? "polled (interrupt self-test failed)" : "polled",
-	    xs_link_str(b));
+	    xs_link_str(b),
+	    b->st.reg_access == XSURF_ACCESS_WORD ? ", registers by word cycles" :
+	    b->st.reg_access == XSURF_ACCESS_WORD_LO ? ", registers by word cycles (low byte)" : "",
+	    b->ops->paths == 2 && b->data_path == XSURF_DATA_PORT ? ", data through the data port" : "");
 	splx(s);
     }
     return 0;

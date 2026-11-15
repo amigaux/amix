@@ -17,6 +17,8 @@
 #define XS_TBCR1	0x06
 #define XS_ISR		0x07	/* interrupt status, write 1 to clear */
 #define XS_RSAR0	0x08	/* W: remote start address */
+#define XS_CRDA0	0x08	/* R: current remote DMA address */
+#define XS_CRDA1	0x09
 #define XS_RSAR1	0x09
 #define XS_RBCR0	0x0a	/* W: remote byte count */
 #define XS_RBCR1	0x0b
