@@ -1410,9 +1410,10 @@ t_diagnostics()
     shutdown();
 
     cur = "diag-prom-through-the-data-path";
+    host_console[0] = 0;
     chip_power_on(MAC);
     chip.rd_data_bad = 1;		/* a register form that misreads the data port */
-    boot("intr=0");
+    CHECK(xsurf_load("intr=0") == 0);
     CHECK(xs_nboards == 1 && memcmp(B->mac, MAC, 6) == 0);
     shutdown();
     chip_power_on(MAC);
