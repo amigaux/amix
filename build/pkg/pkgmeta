@@ -63,6 +63,8 @@ STYLES_DIR = os.path.join(HERE, "styles")
 # driver sets before sourcing it. URL and SHA256 are required unless the
 # source is in the tree (the package's own src/, or SRCPKG's) or is a fork
 # pinned in the checkout (FORKPIN: a <dir>/<name>.pin, `<url> <commit>`).
+# FORKDIRS adds directories of pinned forks to any source: triples
+# `<pin file> <path in the fork> <path in the tree>`.
 REQUIRED = ("NAME", "PKG", "VERSION", "PKGREV", "SUMMARY", "DESC", "CATEGORY",
             "SET", "LICENSE")
 SOURCE = ("URL", "SHA256")
@@ -71,7 +73,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("SRCDIR", ""), ("PATCH_STRIP", "1"), ("SRCPKG", ""),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
-            ("PREBUILT", ""), ("FORKPIN", ""), ("MAN_REPLACES", ""),
+            ("PREBUILT", ""), ("FORKPIN", ""), ("FORKDIRS", ""), ("MAN_REPLACES", ""),
             ("STOCK_PATCHED", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
@@ -114,6 +116,34 @@ def source(recipe):
     if len(values) != len(KEYS):
         raise Refused("%s: unexpected output from sh" % path)
     return dict(zip(KEYS, values))
+
+
+def forkdirs_problems(recipe, value):
+    """FORKDIRS: whole triples, each a checkout pin of `<url> <40-hex>` and two
+    relative paths; one tree path once."""
+    top = os.path.dirname(os.path.dirname(os.path.dirname(os.path.normpath(recipe))))
+    words, out, seen = value.split(), [], set()
+    if len(words) % 3:
+        return ["FORKDIRS holds %d words, not <pin file> <path in the fork> <path in the tree> triples"
+                % len(words)]
+    for i in range(0, len(words), 3):
+        pin, frm, to = words[i:i + 3]
+        if pin.startswith("/") or ".." in pin.split("/") or not pin.endswith(".pin"):
+            out.append("FORKDIRS: %s is not a checkout path to a .pin file" % pin)
+        elif not os.path.isfile(os.path.join(top, pin)):
+            out.append("FORKDIRS: %s: no such file in the checkout" % pin)
+        else:
+            f = open(os.path.join(top, pin)).read().split()
+            if len(f) != 2 or not re.match(r"^[0-9a-f]{40}$", f[1]):
+                out.append("FORKDIRS: %s does not hold `<url> <40-hex commit>`" % pin)
+        for what, path in (("path in the fork", frm), ("path in the tree", to)):
+            parts = path.rstrip("/").split("/")
+            if path.startswith("/") or ".." in parts or "." in parts or "" in parts:
+                out.append("FORKDIRS: %s is not a relative %s" % (path, what))
+        if to.rstrip("/") in seen:
+            out.append("FORKDIRS: %s is named twice as a path in the tree" % to)
+        seen.add(to.rstrip("/"))
+    return out
 
 
 def sh_quote(s):
@@ -643,6 +673,8 @@ def problems(recipe, m):
                 out.append("FORKPIN=%s does not hold `<url> <40-hex commit>`" % m["FORKPIN"])
         if tree:
             out.append("FORKPIN is set, but the source is in the tree (%s)" % tree)
+    if m["FORKDIRS"]:
+        out += forkdirs_problems(recipe, m["FORKDIRS"])
     for k in SOURCE:
         if m["FORKPIN"]:
             if m[k]:
