@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — core 0058: prt_where kept around a module's lifecycle calls (68a043da)
+
+The core saves prt_where and puts it back around a module's `_load`, `_unload`, halt entry and deferred calls, so one plain cmn_err there (a "no board" notice) no longer leaves every later line doubled in putbuf. State harness module pw1, five checks. Entry points a module installs are left as they are; ddi.md still says to start formats with `^`.
+
 ## 2026-11-15 — core 0057: a refused load no longer doubles later log lines (ae615e8e)
 
 dlm_undef puts prt_where back to 2 after its note: a plain cmn_err left 3, and with syslogd running every later line went into putbuf twice. ddi.md says the stock cmn_err leaves prt_where as the format's first character set it, so a module's formats start with `^`. The bench README explains prt_where 0x3 with conslogging 1. Takes effect with the next kernel cut on each line.
