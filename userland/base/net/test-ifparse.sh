@@ -10,7 +10,7 @@
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 SH=${1:-sh}
-AWK=${2:-awk}
+AWK=${2:-$(command -v awk)}   # by its path: the wrapper below is "awk" too
 T=$(mktemp -d "${TMPDIR:-/tmp}/test-ifparse.XXXXXX")
 trap 'rm -rf "${T:?}"' EXIT
 pass=0 fail=0
