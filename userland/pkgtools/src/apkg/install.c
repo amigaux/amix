@@ -636,8 +636,10 @@ static int install_one(const struct conf *cf, const char *pkgadd,
 
     /* a file that becomes a conffile: untouched ones take the new
      * default (conffile.c); an installed instance only */
-    if (!p->kspace && installed_version(cf, pkginst, iver, sizeof(iver)))
+    if (!p->kspace && installed_version(cf, pkginst, iver, sizeof(iver))) {
         (void)conffile_prepare(cf, file, pkginst);
+        (void)conffile_unconf(cf, file, pkginst);
+    }
     if (run_pkgadd(cf, pkgadd, file, pkginst, ow) != 0)
         return EX_PKGCMD;
     if (!p->kspace)

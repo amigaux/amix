@@ -457,6 +457,10 @@ extern int conffile_prepare(const struct conf *cf, const char *staged,
 /* `apkg conffiles prepare`: the same for the journaled transaction's
  * packages not installed yet (APKG's postinstall); always 0 */
 extern int cmd_conffiles_prepare(const struct conf *cf);
+/* before the pkgadd of staged as pkginst: an edited config file the new
+ * version ships as a plain file is saved as <path>.old, and said */
+extern int conffile_unconf(const struct conf *cf, const char *staged,
+                           const char *pkginst);
 
 /* -------- the filesystem a package needs (fsreq.c) --------
  *
