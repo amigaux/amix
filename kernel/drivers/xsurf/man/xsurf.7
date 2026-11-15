@@ -36,7 +36,18 @@ xsf0: X-Surf-100, Zorro 3 at 0x40000000, 00:80:10:12:34:56, interrupt I/O, link 
 .RE
 .PP
 that is the card, its Zorro mode and address, its station address, how it
-is serviced and its link.
+is serviced and its link; then
+.B ", registers by word cycles"
+or
+.B ", data through the data port"
+when the probe chose those (see PARAMETERS).
+.PP
+Before it takes a board, the driver checks that the chip's registers take
+writes and that its memory takes a frame and gives it back: after the
+chip's reset it waits until the chip says it is ready, writes test
+patterns to two registers and reads them back, then writes four
+full-size test frames into the chip's memory and reads them back the way
+received frames come.
 .B "interrupt I/O"
 is the level-2 interrupt, after a self-test with a real interrupt from the
 board;
@@ -63,12 +74,28 @@ counted.
 .BR xsf (1M)
 shows all of it, the counters, and anything the console said at load.
 .SH PARAMETERS
-One line
-.B "param intr=0"
+Each is one line
+.BI "param " name = value
 in
-.B /etc/conf/modreg.local.d/xsurf
-makes the driver poll from the start instead of using the interrupt. It
-takes effect from the next boot generation:
+.BR /etc/conf/modreg.local.d/xsurf :
+.TP
+.B intr=0
+poll from the start instead of using the interrupt (2, the default: the
+interrupt, after its self-test).
+.TP
+.B regs=1 \fRor\fP regs=2
+on the X-Surf-100, reach the chip's registers by byte cycles only, or by
+word cycles only. The default, 0, uses byte cycles, as other systems'
+drivers do, and switches to word cycles, as the maker's documentation
+gives the register area, when the probe finds that byte writes do not
+land.
+.TP
+.B data=1 \fRor\fP data=2
+on the X-Surf-100, move frames through the card's longword windows only,
+or through the 16-bit data port only. The default, 0, uses the windows
+and switches to the port when they fail the self-test at load.
+.PP
+A line takes effect from the next boot generation:
 .PP
 .RS
 .ft CW
@@ -117,6 +144,10 @@ the driver wrote its test patterns and read something else back: the path
 from the Amiga to the chip's registers does not work. Without this check
 such a board would look like a working interface that never sends or
 receives anything.
+.TP
+.B "remote-DMA self-test: ..."
+the chip's registers work but a test frame did not reach its memory, or
+came back different: the card's data path, by every path tried.
 .TP
 .B "the chip does not reset"
 nothing that answers like the chip is there.

@@ -114,6 +114,24 @@ the system log runs. So everything it says can be read again with `xsf`.
   refused, the module stays loaded with nothing attached, so that `xsf`
   can say why. `/dev/xsf0` still fails at once, and `ifup` stops there.
 
+- **The probe's own checks.** After the chip's reset, the X-Surf-100
+  waits for the chip's ready bit (D_RDY), because the datasheet says the
+  chip is busy right after a reset. Then the register check runs. If byte
+  writes do not land, it tries word cycles, the access the maker gives for
+  the register area. Then a remote-DMA self-test writes four full-size
+  frames into the chip's memory and reads them back. If the card's
+  longword windows fail it, the test runs again on the 16-bit data port.
+  The load line names any choice other than byte cycles and the windows.
+  A board that fails gets a console line saying why and is refused.
+  Parameters `regs` and `data` fix the choices for a tester; see
+  `xsurf(7)`.
+- **What xsf shows after one failed attempt:**
+  - the probe's raw values: CR and ISR before the reset, the wait for
+    D_RDY, the byte read back by each kind of register cycle, the PROM
+    image as read, the self-test's result;
+  - the chip's ISR, TSR and CR at the first transmit timeout;
+  - its ISR and remote address at the first remote-DMA write timeout.
+
 Diagnostics cost nothing in the receive and transmit paths beyond the
 counters: the link read and the notes ride the clock tick.
 
@@ -230,8 +248,15 @@ a run on a real board:
 - **Interrupts.** Interrupt delivery from a real board on level 2: the
   driver's self-test decides at load time and falls back to polling.
 - **X-Surf-100 registers:**
-  - Byte access to the chip registers at board+0x800. Linux does this; the
-    maker's page says word access only.
+  - Which cycles a real card in Zorro III mode takes for its registers.
+    The driver tries byte cycles, then word cycles, and the parameter
+    `regs` can fix either. The emulator takes both, so it shows neither
+    choice.
+  - How long the chip stays busy after its reset (D_RDY). The emulator
+    has no busy time.
+  - The word-cycle form (the register byte in both halves of the word,
+    read back from the high half, else the low one) and the 16-bit data
+    port path: written from the maker's register map, never run on a card.
   - The link from the Device Status Register: read as the datasheet
     describes it. The emulator does not model that register.
   - The PHY left as it comes from reset, with no MII handling.

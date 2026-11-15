@@ -44,8 +44,73 @@ static const char *names[] = {
     0, 0,
     "link_speed", "link_duplex", "link_medium", "link_raw", "link_changes",
     "notes", "if_collisions",
+    "probe_cr", "probe_isr", "reset_wait", "reg_access",
+    "regs_read_byte", "regs_read_word", "regs_read_word_lo",
+    0, 0, 0, 0, 0, 0, 0, 0,		/* prom: printed apart */
+    "dma_test", "dma_test_at", "dma_test_wrote", "dma_test_read",
+    "txto_isr", "txto_tsr", "txto_cr", "dmato_isr", "dmato_crda", "dmato_len",
+    "data_path", "regs_param", "data_param",
     0
 };
+
+static const char *
+regsword(unsigned int v, char *buf)
+{
+    if (v == XSURF_REGS_PASSED)
+	return "passed";
+    if (v == XSURF_REGS_NOT_TRIED)
+	return "not tried";
+    sprintf(buf, "read 0x%02x", v);
+    return buf;
+}
+
+/* what the probe read, the self-test and the first timeouts, in words */
+static void
+diag(xsurf_status_t *st)
+{
+    char b0[16], b1[16], b2[16];
+    int i;
+
+    if (st->size < sizeof *st)
+	return;
+    printf("  probe: CR 0x%02x, ISR 0x%02x before the reset", st->probe_cr, st->probe_isr);
+    if (st->board_kind == XSURF_KIND_XSURF100) {
+	if (st->reset_wait == 0xffffffff)
+	    printf("; never ready after it (20 ms)");
+	else
+	    printf("; ready %u us after it", st->reset_wait);
+    }
+    printf("\n  registers: byte cycles %s, word %s, word low %s\n",
+	   regsword(st->regs_read[0], b0), regsword(st->regs_read[1], b1),
+	   regsword(st->regs_read[2], b2));
+    printf("  PROM as read:");
+    for (i = 0; i < 32; i++)
+	printf(" %02x", st->prom[i]);
+    printf("\n  remote-DMA self-test: ");
+    switch (st->dma_test) {
+    case XSURF_DMATEST_PASSED:
+	printf("passed, %s\n", st->data_path == XSURF_DATA_FIFO ? "through the windows" :
+	       "through the data port");
+	break;
+    case XSURF_DMATEST_NOWRITE:
+	printf("the write did not complete (remote address 0x%04x)\n", st->dma_test_at);
+	break;
+    case XSURF_DMATEST_MISMATCH:
+	printf("byte %u read back 0x%02x, written 0x%02x\n", st->dma_test_at,
+	       st->dma_test_read, st->dma_test_wrote);
+	break;
+    default:
+	printf("not run\n");
+    }
+    if (st->tx_timeouts)
+	printf("  first transmit timeout: ISR 0x%02x, TSR 0x%02x, CR 0x%02x\n",
+	       st->txto_isr, st->txto_tsr, st->txto_cr);
+    if (st->tx_dma_timeouts)
+	printf("  first remote-DMA write timeout: ISR 0x%02x, remote address 0x%04x, %u bytes\n",
+	       st->dmato_isr, st->dmato_crda, st->dmato_len);
+    if (st->regs_param || st->data_param)
+	printf("  parameters: regs=%u data=%u\n", st->regs_param, st->data_param);
+}
 
 static int
 status(int fd, int cmd, xsurf_status_t *st)
@@ -88,6 +153,9 @@ refused(int i, xsurf_status_t *st)
     if (st->refused == XSURF_REFUSED_NOWRITES)
 	printf(" (wrote 0x55 or 0xaa, read 0x%x)", st->refused_detail);
     printf("\n");
+    if (st->refused == XSURF_REFUSED_NORESET || st->refused == XSURF_REFUSED_NOWRITES ||
+	st->refused == XSURF_REFUSED_NOMAC || st->refused == XSURF_REFUSED_DMA)
+	diag(st);
 }
 
 /* a board in use: the load line, the state in words, then the counters */
@@ -103,13 +171,18 @@ inuse(xsurf_status_t *st)
 	printf("xsf: the driver's record is version %u: no words, only counters\n",
 	       st->version);
     } else {
-	printf("xsf%u: %s, Zorro %u at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x, %s, %s\n",
+	printf("xsf%u: %s, Zorro %u at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x, %s, %s%s%s\n",
 	       st->unit, card(st->board_kind), st->zorro, st->board_phys,
 	       st->mac[0], st->mac[1], st->mac[2], st->mac[3], st->mac[4], st->mac[5],
 	       st->intr_mode == XSURF_MODE_INTR ? "interrupt I/O" :
 	       st->selftest_failed ? "polled (interrupt self-test failed)" : "polled",
 	       xs_words_link(st->link, st->link_speed, st->link_duplex,
-			     st->link_medium, words));
+			     st->link_medium, words),
+	       st->size < sizeof *st ? "" :
+	       st->reg_access == XSURF_ACCESS_WORD ? ", registers by word cycles" :
+	       st->reg_access == XSURF_ACCESS_WORD_LO ? ", registers by word cycles (low byte)" : "",
+	       st->size >= sizeof *st && st->board_kind == XSURF_KIND_XSURF100 &&
+	       st->data_path == XSURF_DATA_PORT ? ", data through the data port" : "");
 	if (st->intr_mode != XSURF_MODE_INTR && st->irq_fallbacks)
 	    printf("  interrupts stopped after load; polled since\n");
 	printf("  received %u frames, %u errors; sent %u frames, %u errors, %u collisions\n",
@@ -134,6 +207,7 @@ inuse(xsurf_status_t *st)
 		   notes & XSURF_NOTE_DMA ? " remote-DMA write not completed;" : "",
 		   notes & XSURF_NOTE_ABORT ? " transmit aborted;" : "",
 		   notes & XSURF_NOTE_TXERR ? " transmit error;" : "");
+	diag(st);
     }
     for (i = 0; i < n && i < (int)(sizeof names / sizeof names[0]); i++)
 	if (names[i])			/* the mac's two words are printed below */
@@ -141,6 +215,12 @@ inuse(xsurf_status_t *st)
     if (st->version >= 2)
 	printf("mac %02x:%02x:%02x:%02x:%02x:%02x\n",
 	       st->mac[0], st->mac[1], st->mac[2], st->mac[3], st->mac[4], st->mac[5]);
+    if (st->size >= sizeof *st) {
+	printf("prom");
+	for (i = 0; i < 32; i++)
+	    printf(" %02x", st->prom[i]);
+	printf("\n");
+    }
 }
 
 /* every board found through /dev/xsfctl; refused_only skips those in use */
