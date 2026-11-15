@@ -402,9 +402,9 @@ extern void apkg_ipv4_str(unsigned long addr, char *buf);  /* buf >= 16 */
 extern int installed_version(const struct conf *cf, const char *pkginst,
                              char *ver, unsigned verlen);
 /* 1 when the engine's record of pkginst is an install cut short: its
- * !I-Lock! (pkginstall removes it only at a clean end), or a package
- * directory without its pkginfo.  2 when only a removal was cut short
- * (!R-Lock!).  0 otherwise. */
+ * !I-Lock! (pkginstall removes it only at a clean end), or the record an
+ * update moved aside to <PKGLOC>/.save.<pkginst>.  2 when only a removal
+ * was cut short (!R-Lock!).  0 otherwise. */
 extern int pkg_partial(const struct conf *cf, const char *pkginst);
 /* `apkg recover` with no journal: install again, from the catalog, every
  * package an install left partial */
@@ -447,6 +447,8 @@ extern int cmd_conffiles(const struct conf *cf, int resolve,
 extern int conffile_state(const struct conf *cf, const char *pkginst);
 /* delete a package's kept config files, .new/.old and baselines */
 extern int conffile_purge(const struct conf *cf, const char *pkginst);
+/* rm -r of dir: 0, or -1 when something stayed */
+extern int rm_tree(const char *dir);
 /* after pkgrm: drop the baselines whose file is gone (stored by an
  * upgrade that did not finish, for a file pkgrm removed as class none) */
 extern void conffile_prune(const struct conf *cf, const char *pkginst);
