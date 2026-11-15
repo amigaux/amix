@@ -329,9 +329,12 @@ marks such a package
 .BR [partial] ,
 and
 .B "apkg info"
-says "Installed: partially".  A package directory without its
-.B pkginfo
-counts as partial too.  A removal cut short
+says "Installed: partially".  An update to another version first moves
+the installed record aside to
+.BI /var/sadm/pkg/.save. pkginst
+and writes the new one later; a cut in between leaves no record in its
+place, and the package counts as partial too (the saved record is removed
+once the install has ended).  A removal cut short
 .RB ( !R-Lock! )
 is shown, and is finished by
 .BR "apkg remove" ,

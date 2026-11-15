@@ -133,13 +133,16 @@ int installed_version(const struct conf *cf, const char *pkginst,
     return installed_param(cf, pkginst, "VERSION", ver, verlen);
 }
 
-/* pkginstall makes <pkgloc>/!I-Lock! before it touches the package's
- * files and removes it only when the install ends without a warning or a
- * failure; a cut (a kill, a power loss) or a failed script leaves it,
- * with pkginfo already saying the new VERSION and the contents database
- * already holding the new entries.  pkgremove does the same with
- * !R-Lock!.  A package directory without its pkginfo is an install cut
- * before the engine wrote it. */
+/* The engine's record of an install cut short (pkginstall/main.c):
+ *  - <pkgloc>/!I-Lock!, made before the package's files are touched and
+ *    removed only when the install ends without a warning or a failure;
+ *    a cut or a failed script leaves it, with pkginfo already saying the
+ *    new VERSION and the contents database holding the new entries;
+ *  - <PKGLOC>/.save.<pkginst>: an update to another version first moves
+ *    the installed record there (mv_pkgdirs) and writes a new one only
+ *    later; a cut in between leaves the record moved aside and none in
+ *    its place (quit() moves it back on an orderly failure).
+ * pkgremove's !R-Lock! marks a removal cut short (2). */
 int pkg_partial(const struct conf *cf, const char *pkginst)
 {
     char *dir;
@@ -149,24 +152,41 @@ int pkg_partial(const struct conf *cf, const char *pkginst)
     if (pkginst == NULL || pkginst[0] == '\0' || strcmp(pkginst, "-") == 0)
         return 0;
     dir = cat3(cf->sadmpkg, "/", pkginst);
-    r = 0;
-    if (file_exists(dir)) {
-        p = cat2(dir, "/!I-Lock!");
+    p = cat2(dir, "/!I-Lock!");
+    r = file_exists(p);
+    free(p);
+    if (!r) {
+        p = cat3(cf->sadmpkg, "/.save.", pkginst);
         r = file_exists(p);
         free(p);
-        if (!r) {
-            p = cat2(dir, "/pkginfo");
-            r = !file_exists(p);
-            free(p);
-        }
-        if (!r) {
-            p = cat2(dir, "/!R-Lock!");
-            r = file_exists(p) ? 2 : 0;
-            free(p);
-        }
+    }
+    if (!r) {
+        p = cat2(dir, "/!R-Lock!");
+        r = file_exists(p) ? 2 : 0;
+        free(p);
     }
     free(dir);
     return r;
+}
+
+/* after a good pkgadd of pkginst: the record an update cut short had
+ * moved aside (<PKGLOC>/.save.<pkginst>) is the old version's, and the
+ * engine removes it only on its own way out; it goes */
+static void drop_saved_record(const struct conf *cf, const char *pkginst)
+{
+    char *sav;
+
+    if (opt_dryrun)
+        return;
+    sav = cat3(cf->sadmpkg, "/.save.", pkginst);
+    if (file_exists(sav)) {
+        if (rm_tree(sav) == 0)
+            note("removed %s, the record an interrupted update had moved "
+                 "aside", sav);
+        else
+            warnx2("cannot remove %s", sav);
+    }
+    free(sav);
 }
 
 int pkg_essential(const struct conf *cf, const char *pkginst,
@@ -635,13 +655,16 @@ static int install_one(const struct conf *cf, const char *pkgadd,
     int rc;
 
     /* a file that becomes a conffile: untouched ones take the new
-     * default (conffile.c); an installed instance only */
-    if (!p->kspace && installed_version(cf, pkginst, iver, sizeof(iver))) {
+     * default (conffile.c); an installed instance only, or one an
+     * install cut short (the contents entries say which files) */
+    if (!p->kspace && (installed_version(cf, pkginst, iver, sizeof(iver)) ||
+                       pkg_partial(cf, pkginst) == 1)) {
         (void)conffile_prepare(cf, file, pkginst);
         (void)conffile_unconf(cf, file, pkginst);
     }
     if (run_pkgadd(cf, pkgadd, file, pkginst, ow) != 0)
         return EX_PKGCMD;
+    drop_saved_record(cf, pkginst);
     if (!p->kspace)
         return EX_OK;
     rc = kpkg_write_record_fields(cf, p->reckey, p->name, p->version,
@@ -1195,20 +1218,36 @@ static void warn_partial_elsewhere(const struct conf *cf,
 {
     DIR *d;
     struct dirent *de;
+    const char *name;
+    char *sav;
     int i;
 
     d = opendir(cf->sadmpkg);
     if (d == NULL)
         return;
     while ((de = readdir(d)) != NULL) {
-        if (de->d_name[0] == '.' || pkg_partial(cf, de->d_name) != 1)
+        name = de->d_name;
+        if (strncmp(name, ".save.", 6) == 0)
+            name += 6;          /* an update cut short (pkg_partial) */
+        else if (name[0] == '.')
             continue;
+        if (pkg_partial(cf, name) != 1)
+            continue;
+        if (name != de->d_name) {
+            /* named once: by its .save. entry only when there is no
+             * record directory to be named by */
+            sav = cat3(cf->sadmpkg, "/", name);
+            i = file_exists(sav);
+            free(sav);
+            if (i)
+                continue;
+        }
         for (i = 0; i < cat->n; i++)
-            if (strcmp(cat->ents[i].pkginst, de->d_name) == 0)
+            if (strcmp(cat->ents[i].pkginst, name) == 0)
                 break;
         if (i == cat->n)
             warnx2("%s is partially installed and not in the catalog: "
-                   "pkgadd it again from its package file", de->d_name);
+                   "pkgadd it again from its package file", name);
     }
     closedir(d);
 }

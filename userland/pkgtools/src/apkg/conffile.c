@@ -724,8 +724,8 @@ static void purge_one(const struct conf *cf, const char *pkginst,
     free(disk);
 }
 
-/* rm -r of a baseline directory */
-static int rm_tree(const char *dir)
+/* rm -r of a directory (a baseline tree; install.c, a saved record) */
+int rm_tree(const char *dir)
 {
     DIR *d;
     struct dirent *de;

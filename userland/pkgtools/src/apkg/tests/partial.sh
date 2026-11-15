@@ -8,7 +8,10 @@
 # files; PART 2 ships the two as `e conffile` (../conffile/i.conffile), a
 # class "slow" laid before them, and one interruption point per variant:
 # the file laydown, the class action script, the postinstall, a failing
-# preinstall.  Each is cut two ways: apkg killed with the engine (a power
+# preinstall; and the record an update moves aside (.save.PART) before it
+# writes the new one, made here as the engine does it (the host engine
+# runs no checkinstall script as a non-root user, so that window is not
+# cut for real here).  Each is cut two ways: apkg killed with the engine (a power
 # loss: the journal stays) and the engine alone (apkg sees pkgadd fail).
 # Then one `apkg upgrade` (or `apkg recover`) must finish the package:
 # the engine's !I-Lock! gone, pkgchk clean, the edited config file kept
@@ -133,6 +136,7 @@ apbg() { fakeroot -i "$FS" -s "$FS" "$NEW" -c "$C/etc/apkg.conf" -R "$T" "$@" </
 says() { grep -qF -- "$1" "$R/out"; }
 is() { test "$(cat "$1" 2>/dev/null)" = "$2"; }
 lockf() { echo "$T/var/sadm/pkg/PART/!I-Lock!"; }
+savef() { echo "$T/var/sadm/pkg/.save.PART"; }
 chk() { fakeroot -i "$FS" -s "$FS" "$HB/pkgchk" -R "$T" PART >"$R/chk.out" 2>&1; }
 # set up: PART 1 installed by apkg, edit.conf edited
 setup() {
@@ -160,6 +164,7 @@ cut() {
 repaired() {
     local tag="$1"
     check "$tag: no !I-Lock! left" test ! -e "$(lockf)"
+    check "$tag: no record left moved aside (.save.PART)" test ! -e "$(savef)"
     check "$tag: pkginfo says 2" grep -q '^VERSION=2$' "$T/var/sadm/pkg/PART/pkginfo"
     chk; check "$tag: pkgchk PART clean" test $? -eq 0
     check "$tag: the tree is version 2" bash -c "grep -q 'data 2' '$T/usr/p/f0001' && grep -q 'data 2' '$T/usr/p/f$LAST' && test \"\$(cat '$T/etc/p/slow')\" = slow=2"
@@ -243,18 +248,28 @@ check "recover: says there is no journal, then installs the package again" \
     bash -c "grep -q 'no unfinished transaction' '$R/out' && grep -q 'part is partially installed' '$R/out'"
 repaired recover
 
-echo "a package directory without its pkginfo"
-setup r-noinfo
-publish PART-2-none; ap update; ap upgrade
-mv "$T/var/sadm/pkg/PART/pkginfo" "$R/pkginfo.saved"
+echo "the installed record moved aside (.save.PART), none in its place"
+setup r-save
+publish PART-2-none; ap update
+mv "$T/var/sadm/pkg/PART" "$(savef)"
 ap list installed
-check "noinfo: list shows it [partial]" says "[partial]"
-ap -f install part; check "noinfo: apkg -f install lays it again (rc 0)" test $? -eq 0
-check "noinfo: pkginfo is back" grep -q '^VERSION=2$' "$T/var/sadm/pkg/PART/pkginfo"
-mv "$T/var/sadm/pkg/PART/pkginfo" "$R/pkginfo.saved"
-ap upgrade; check "noinfo: or a plain apkg upgrade (rc 0)" test $? -eq 0
-check "noinfo: ... pkginfo is back, pkgchk clean" \
-    bash -c "grep -q '^VERSION=2$' '$T/var/sadm/pkg/PART/pkginfo'" && { chk; check "noinfo: pkgchk" test $? -eq 0; }
+check "save: list shows it [partial]" says "[partial]"
+ap info part
+check "save: info says partially installed" says "Installed:   partially: an install was cut short"
+ap upgrade; rc=$?
+cp "$R/out" "$R/repair.out"
+check "save: apkg upgrade repairs it (rc 0)" test $rc -eq 0
+check "save: ... naming the partial package" says "part is partially installed (an install was cut short); installing 2 again"
+repaired save
+
+echo "a package directory without pkginfo is not taken for a partial install"
+setup r-stock
+# stock 2.1 keeps such directories (bnu, face, nsu on a 1.1.1 disk)
+mkdir -p "$T/var/sadm/pkg/bnu/install"; : > "$T/var/sadm/pkg/bnu/install/depend"
+ap upgrade; check "stock: apkg upgrade rc 0" test $? -eq 0
+check "stock: no word about bnu" bash -c "! grep -q bnu '$R/out'"
+ap list installed
+check "stock: PART is not partial" bash -c "! grep -qF '[partial]' '$R/out'"
 
 echo
 echo "== partial: $pass passed, $fail failed =="
