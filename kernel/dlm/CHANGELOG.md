@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — make core runs against an unbuilt port clone (c321272e)
+
+tests/core/run.sh assembles the port's devkvmap040.o and dma_cache040.o from PORT's src/, so make core runs against an unbuilt clone at the pin; a checkout with neither the sources nor built copies is refused by name.
+
 ## 2026-11-15 — core 0057 and 0058: a module's load no longer doubles later log lines (0e73d04e, cf41d58b)
 
 dlm_undef puts prt_where back to 2 after its note: a plain cmn_err left 3, and with syslogd running every later line went into putbuf twice. The core also saves prt_where and puts it back around a module's `_load`, `_unload`, halt entry and deferred calls, so one plain cmn_err there (a "no board" notice) has the same protection. State harness module pw1. ddi.md says module formats start with `^`; entry points a module installs are left as they are. Takes effect with the next kernel cut on each line.

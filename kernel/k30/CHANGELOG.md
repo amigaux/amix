@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — three guards for the next 68030 kernel, and the k30.1.5 claim (215a64ba)
+
+build-cross-kernel.sh gains three guards. The hardbus guard (default on; src/hardbus030.c, tools/hardbus-retarget.py): a user bus error on a valid translation whose physical address is at or above 0x40000000 is probed through a one-page kernel mapping of that page, instead of at the physical address read as a kernel address, so a Zorro III user mapping is no longer killed at random; retries are capped at 16, and below 1 GiB the stock hardbus runs. `--sync-guard`: the 68040/68060 port's syncguard.s, byte for byte, with the stock sync weakened, so a root that cannot be mounted panics once. `--bt-walk`: the port's btwalk.s, byte for byte, hooked into the panic backtrace (tools/btwalk030.py), so the walk no longer reads the outermost frame's never-written return slot. `--kabi` accepts k30.1.5.
+
 ## 2026-11-14 — KNOWN-ISSUES: the late halt after shutdown, explained (5bc6ce6e)
 
 A shutdown that returns to the prompt and halts up to five minutes later is explained: after heavy writes on a 16 MB machine, init acts on the run-level request only at its own five-minute timer. Stock 2.1c does the same, so it is not a kernel defect. A second `/sbin/init 0` is acted on at once.
