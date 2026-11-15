@@ -81,7 +81,7 @@
 #define XSURF_DMATEST_PASSED	1
 #define XSURF_DMATEST_NOWRITE	2	/* the write did not complete (no RDC) */
 #define XSURF_DMATEST_MISMATCH	3	/* read back differently */
-#define XSURF_DMATEST_LEN	1534	/* bytes a round: 11 FIFO blocks, a part block, a tail word */
+#define XSURF_DMATEST_LEN	1514	/* bytes a round, a full frame: 11 FIFO blocks, a part, a tail word */
 #define XSURF_DMATEST_ROUNDS	4	/* rounds, each its own pattern, in both transmit slots */
 
 /* notes: transmit failures said once on the console (then only counted) */
