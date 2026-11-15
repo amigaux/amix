@@ -19,6 +19,7 @@ struct chip {
     int link, link_speed, link_duplex, link_medium;	/* what the link op reports */
     int link_reads, link_bad_page, link_in_dma;
     int clobber;			/* a page-1 MAR write also lands one register up (1) or down (-1) */
+    int rd_data_bad;			/* the register accessor misreads the data port (0) */
     int data_flip;			/* remote-DMA writes store the byte inverted */
     int flip_from, data_writes;		/* ... from this many data-port writes on (0: from the first) */
     int ready_calls, ready_wait;	/* the ready op: calls, what it returns */

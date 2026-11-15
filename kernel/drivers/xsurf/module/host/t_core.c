@@ -1407,6 +1407,17 @@ t_diagnostics()
     CHECK(B->st.reg_access == XSURF_ACCESS_BYTE && B->st.data_path == XSURF_DATA_PORT);
     CHECK(strstr(host_console, "link up 100 full\n") != NULL);	/* no access notes: byte, one path */
 
+    shutdown();
+
+    cur = "diag-prom-through-the-data-path";
+    chip_power_on(MAC);
+    chip.rd_data_bad = 1;		/* a register form that misreads the data port */
+    boot("intr=0");
+    CHECK(xs_nboards == 1 && memcmp(B->mac, MAC, 6) == 0);
+    shutdown();
+    chip_power_on(MAC);
+    boot("intr=0");
+
     cur = "diag-txto-snapshot";
     s_open(&S[0], 0);
     bind(&S[0], 0x800);
