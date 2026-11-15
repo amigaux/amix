@@ -6,23 +6,27 @@
 #
 # Reads /etc/display (display(4)); an argument overrides one field for this
 # run (WxH is mode=WxH). The card is /etc/display.d/<card> (display.d(4)),
-# or with "card auto" the first whose node opens, the native one last. The
-# mode and depth must be among the card's; the card's limits are raised;
-# when the card shares the monitor and the kernel's monsw does not own the
-# switch, the card's switch tool flips it, and back at the end. The server
-# runs through xinit (X11R6's, else the stock one) with ~/.xsession, then
-# ~/.xinitrc, then /etc/display's session, then /usr/lib/amix/xsession; the
-# card's environment reaches the server alone, and the card's restore command
-# runs when the server ended on its own. A session's server is given the
+# or with "card auto" the first that is there, the native one last: its
+# probe command says so when it has one (and may name the node, modes and
+# depths), then its node must open. The mode and depth must be among the
+# card's; the card's limits are raised; when the card shares the monitor and
+# the kernel's monsw does not own the switch, the card's switch tool flips
+# it, and back at the end. The server runs through xinit (X11R6's, else the
+# stock one) with ~/.xsession, then ~/.xinitrc, then /etc/display's session,
+# then /usr/lib/amix/xsession; the card's environment reaches the server
+# alone, and the card's restore command runs when the server ended on its
+# own. A session's server is given the
 # card's "once" option (display.d(4)), so it exits when the session ends
 # instead of resetting for another; xdm and dtlogin manage their server
 # themselves and do not get it. When an X server for the display still runs
 # (one that is ending, or another session's), xstart waits up to
 # XSTART_WAIT seconds (default 60) for it to go, then refuses.
-# -n says what would run, and every mistake in the files; -xdm runs X11R6's
-# xdm with that server instead of a session, -dtlogin CDE's dtlogin the same
-# way (it takes xdm's -server, which outranks its Xconfig). The stock startx
-# is not touched.
+# -n says what would run, and every mistake in the files, and exits 1 only
+# for one in /etc/display or the card used: a key it does not know (from a
+# newer base) and a mistake in another card's file are warned about. -xdm
+# runs X11R6's xdm with that server instead of a session, -dtlogin CDE's
+# dtlogin the same way (it takes xdm's -server, which outranks its
+# Xconfig). The stock startx is not touched.
 #
 # Installed as /usr/amix/bin/xstart. Exit 0 when the session (or xdm) ran,
 # 1 when the display cannot be set up, 2 on a usage mistake.
@@ -94,10 +98,71 @@ then
 	echo "$errs" | sed 's/^/xstart: /' >&2
 fi
 
-# the card: by name, or the first whose node opens
+# probe <card>: whether the card is here. The card's probe command, when it
+# has one, decides first (exit 0: here), and the node, modes and depths
+# lines it prints replace the file's; then the node must open. Sets p_node,
+# p_modes, p_depths and p_cmd; when the card is not here, p_why says why and
+# p_fault is 1 for a mistake (a missing probe, a bad line it printed) rather
+# than an absent card.
 probe() {
-	_n=`disp_val "$DISP_D/$1" node`
-	[ -n "$_n" ] && sh -c ": < $_n" 2>/dev/null
+	_pn=$1
+	_pf=$DISP_D/$1
+	p_node=`disp_val $_pf node`
+	p_modes=`disp_val $_pf modes`
+	p_depths=`disp_val $_pf depths`
+	p_cmd=`disp_val $_pf probe`
+	p_why=
+	p_fault=
+	if [ -n "$p_cmd" ]
+	then
+		_px=`echo $p_cmd | awk '{ print $1 }'`
+		if [ ! -x "$_px" ]
+		then
+			p_why="no probe $_px"
+			p_fault=1
+			return 1
+		fi
+		# its output, a blank line, then its status, read back from the text
+		_po=`$p_cmd < /dev/null; _s=$?; echo; echo "status $_s"`
+		_ps=`echo "$_po" | sed -n '$s/^status //p'`
+		if [ "$_ps" != 0 ]
+		then
+			p_why="its probe $p_cmd finds no card"
+			return 1
+		fi
+		_pv=`echo "$_po" | sed '$d' | awk '
+		NF == 0 { next }
+		{ k = $1; ok = NF > 1 }
+		k == "node" { if (NF != 2 || $2 !~ /^\//) ok = 0 }
+		k == "modes" { for (i = 2; i <= NF; i++) if ($i !~ /^[0-9]+x[0-9]+$/ && !(NF == 2 && $i == "auto")) ok = 0 }
+		k == "depths" { for (i = 2; i <= NF; i++) if ($i !~ /^[0-9]+$/) ok = 0 }
+		k != "node" && k != "modes" && k != "depths" { print "W " k; next }
+		!ok { print "E " $0; next }
+		{ $1 = ""; print substr(k, 1, 1) $0 }'`
+		_pe=`echo "$_pv" | sed -n 's/^E //p' | sed -n 1p`
+		if [ -n "$_pe" ]
+		then
+			p_why="its probe printed a bad line: $_pe"
+			p_fault=1
+			return 1
+		fi
+		for _pw in `echo "$_pv" | sed -n 's/^W //p'`
+		do
+			say "$_pn: its probe printed \"$_pw\", ignored"
+		done
+		_px=`echo "$_pv" | sed -n 's/^n //p' | sed -n '$p'`
+		[ -n "$_px" ] && p_node=$_px
+		_px=`echo "$_pv" | sed -n 's/^m //p' | sed -n '$p'`
+		[ -n "$_px" ] && p_modes=$_px
+		_px=`echo "$_pv" | sed -n 's/^d //p' | sed -n '$p'`
+		[ -n "$_px" ] && p_depths=$_px
+	fi
+	if [ -n "$p_node" ] && sh -c ": < $p_node" 2>/dev/null
+	then
+		return 0
+	fi
+	p_why="its node $p_node does not open"
+	return 1
 }
 if [ $card = auto ]
 then
@@ -109,6 +174,7 @@ then
 			card=$c
 			break
 		fi
+		[ -n "$p_fault" ] && say "$c: $p_why"
 	done
 	if [ -z "$card" ]
 	then
@@ -123,13 +189,14 @@ elif probe $card
 then
 	:
 else
-	say "$card: its node `disp_val "$DISP_D/$card" node` does not open"
+	say "$card: $p_why"
 	exit 1
 fi
 C=$DISP_D/$card
 server=`disp_val $C server`
-modes=`disp_val $C modes`
-depths=`disp_val $C depths`
+node=$p_node
+modes=$p_modes
+depths=$p_depths
 if [ ! -x "$server" ]
 then
 	say "$card: no server $server"
@@ -176,13 +243,13 @@ then
 	}
 fi
 
-# the server's line: the card's args with %m %w %h %d %n filled in
+# the server's line: the card's args with %m %w %h %d %n %p filled in
 w=`echo "$mode" | sed 's/x.*//'`
 h=`echo "$mode" | sed 's/.*x//'`
 n=`echo $disp | sed 's/^://'`
 args=`disp_val $C args | sed -e "s/%m/$mode/g" -e "s/%w/$w/g" -e "s/%h/$h/g" \
-	-e "s/%d/$depth/g" -e "s/%n/$n/g"`
-env=`disp_val $C env | sed -e "s/%n/$n/g"`
+	-e "s/%d/$depth/g" -e "s/%n/$n/g" -e "s|%p|$node|g"`
+env=`disp_val $C env | sed -e "s/%n/$n/g" -e "s|%p|$node|g"`
 line=`echo $server $disp $args`
 sline=`echo $line $once`
 # xdm takes the card's environment in the server's line, as the stock
@@ -261,6 +328,8 @@ wait_old() {
 if [ -n "$dry" ]
 then
 	echo "card     $card ($C)"
+	[ -n "$p_cmd" ] && echo "probe    $p_cmd"
+	echo "node     $node"
 	echo "mode     ${mode:-chosen by the server}, depth ${depth:-as the server sets it}"
 	echo "server   $line"
 	[ -n "$env" ] && echo "env      $env"
@@ -280,7 +349,7 @@ then
 		r=`disp_val $C restore`
 		[ -n "$r" ] && echo "restore  $r, when the server ends on its own"
 	fi
-	[ -z "$errs" ]
+	[ -z "`disp_fatal "$errs" $card`" ]
 	exit
 fi
 
