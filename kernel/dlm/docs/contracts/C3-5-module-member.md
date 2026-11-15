@@ -180,9 +180,10 @@ per line**:
   kbootset than 1.1's sets `APKG_KBOOTSET=<version>` in `pkginfo`, and
   `gen-catalog.py` puts it on the row as `kbootset=` (C2-2 §1.2), so
   installing the module alone brings that kbootset into the transaction
-  instead of ending at gate 3. A module owning a major sets at least the
-  version `abi/registry/kbootset` gives that major: xsurf
-  1.1.0.261114-45 (c 56), va2000 1.1.0.261115-46 (c 68).
+  instead of ending at gate 3. A module owning a major newer than 1.1's
+  rows sets at least the version `abi/registry/kbootset` gives that
+  major: xsurf 1.1.0.261114-45 (c 56), va2000 1.1.0.261115-46 (c 68). A
+  module whose majors are all 1.1's sets none.
 - **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not
   installed (or is disabled) is refused by `kbootset build`, gate 3 (§2).
