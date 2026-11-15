@@ -205,6 +205,37 @@ printf 'all:\\n\\techo "$(CFLAGS)" > out.txt\\n' > Makefile
                                 stdout=subprocess.PIPE).stdout.decode().strip()
         write(os.path.join(amix, "kernel", "drivers", "zz", "zz.pin"), "file://%s %s\n" % (fork, fork_c))
         package(pkgs, "forked", "hooks", "FORKPIN=kernel/drivers/zz/zz.pin\n", build=HOOKS_BUILD)
+        # directories of a pinned fork copied into the source (FORKDIRS), before
+        # the patches: a second local repository, its tip
+        fork2 = os.path.join(tmp, "forkrepo2")
+        write(os.path.join(fork2, "hw", "va", "card.txt"), "the card\n")
+        write(os.path.join(fork2, "hw", "va", "sub", "more.txt"), "more\n")
+        write(os.path.join(fork2, "hw", "plain.txt"), "a file, not a directory\n")
+        g2 = ["git", "-C", fork2, "-c", "user.name=t", "-c", "user.email=t@invalid"]
+        subprocess.run(["git", "init", "-q", fork2], check=True)
+        subprocess.run(g2 + ["add", "."], check=True)
+        subprocess.run(g2 + ["commit", "-q", "-m", "fork2"], check=True)
+        fork2_c = subprocess.run(["git", "-C", fork2, "rev-parse", "HEAD"], check=True,
+                                 stdout=subprocess.PIPE).stdout.decode().strip()
+        write(os.path.join(amix, "userland", "packages", "fdirs", "va.pin"),
+              "file://%s %s\n" % (fork2, fork2_c))
+        fd_pin = "userland/packages/fdirs/va.pin"
+        fd_build = HOOKS_BUILD.replace("cp greet.txt out.txt",
+                                       "cat greet.txt extra/va/card.txt extra/va/sub/more.txt > out.txt")
+        package(pkgs, "fdirs", "hooks", 'FORKDIRS="%s hw/va extra/va"\n' % fd_pin, build=fd_build,
+                src={"greet.txt": "hello from src/\n"})
+        write(os.path.join(pkgs, "fdirs", "patches", "01-card.patch"),
+              "--- a/extra/va/card.txt\n+++ b/extra/va/card.txt\n@@ -1 +1 @@\n-the card\n+the card, patched\n")
+        package(pkgs, "fdtwo", "hooks", 'FORKDIRS="%s hw/va one/va\n%s hw/va/sub two/sub"\n' % (fd_pin, fd_pin),
+                build=HOOKS_BUILD.replace("cp greet.txt out.txt",
+                                          "cat one/va/card.txt two/sub/more.txt > out.txt"),
+                src={"greet.txt": "x\n"})
+        package(pkgs, "fdthere", "hooks", 'FORKDIRS="%s hw/va extra/va"\n' % fd_pin, build=fd_build,
+                src={"greet.txt": "x\n", "extra/va/card.txt": "already here\n"})
+        package(pkgs, "fdnone", "hooks", 'FORKDIRS="%s hw/nothere extra/va"\n' % fd_pin, build=fd_build,
+                src={"greet.txt": "x\n"})
+        package(pkgs, "fdfile", "hooks", 'FORKDIRS="%s hw/plain.txt extra/va"\n' % fd_pin, build=fd_build,
+                src={"greet.txt": "x\n"})
         # vim's version string: __DATE__ __TIME__, which GCC takes from
         # SOURCE_DATE_EPOCH -- so the build sees the package's epoch
         package(pkgs, "datetime", "hooks", src={"greet.txt": "x\n"}, build=HOOKS_BUILD.replace(
@@ -575,6 +606,36 @@ stage() {
         shutil.rmtree(fork)
         rc, out = build("forked")
         check("FORKPIN: a commit the cache has is not fetched again", rc == 0, out)
+        rc, out = build("fdirs")
+        check("FORKDIRS copies the fork's directory into the tree before the patches",
+              rc == 0 and read(os.path.join(out_pkg, "fdirs", "work", "fdirs-1.0", "out.txt"))
+              == "hello from src/\nthe card, patched\nmore\n", out)
+        files = [("./card.txt", "the card\n"), ("./sub/more.txt", "more\n")]  # C order
+        fd_digest = hashlib.sha256("".join("%s  %s\n" % (hashlib.sha256(t.encode()).hexdigest(), n)
+                                           for n, t in files).encode()).hexdigest()
+        bt = read(os.path.join(out_pkg, "fdirs", "BUILD.txt")) if rc == 0 else ""
+        check("BUILD.txt names the pin, its commit, the path in the fork and the copied files' digest",
+              "source %s file://%s %s hw/va digest %s\n" % (fd_pin, fork2, fork2_c, fd_digest) in bt, bt or out)
+        check("BUILD.txt keeps the in-tree source's line beside it",
+              "source userland/packages/fdirs/src digest " in bt, bt)
+        rc, out = build("fdtwo")
+        bt = read(os.path.join(out_pkg, "fdtwo", "BUILD.txt")) if rc == 0 else ""
+        check("FORKDIRS: two triples, newline-separated, each copied and named",
+              rc == 0 and read(os.path.join(out_pkg, "fdtwo", "work", "fdtwo-1.0", "out.txt"))
+              == "the card\nmore\n" and bt.count("source %s " % fd_pin) == 2
+              and " hw/va/sub digest " in bt, bt or out)
+        rc, out = build("fdthere")
+        check("refused: a FORKDIRS path already in the tree",
+              rc != 0 and "extra/va is already in the tree" in out, out)
+        rc, out = build("fdnone")
+        check("refused: a FORKDIRS path the fork does not have",
+              rc != 0 and "no hw/nothere at" in out, out)
+        rc, out = build("fdfile")
+        check("refused: a FORKDIRS path in the fork that is not a directory",
+              rc != 0 and "is not a directory" in out, out)
+        shutil.rmtree(fork2)
+        rc, out = build("fdirs")
+        check("FORKDIRS: a commit the cache has is not fetched again", rc == 0, out)
         rc, out = build("nohook")
         check("refused: STYLE=hooks without a build hook",
               rc != 0 and "defines no build hook" in out, out)

@@ -23,6 +23,7 @@ choose to. Their directory holds only a README and a pin file,
 | `cdfs/` | CD-ROM filesystem, as a module | amigaux/amix-cdfs | Stefan Reinauer's ODFileSystem |
 | `gayle-ide/` | A4000 and A1200 Gayle IDE, and Buddha / Catweasel Z-II IDE (`buddha`) | amigaux/amix-gayle-ide | Emre Bastuz's amix-gayle-ide |
 | `paula/` | Paula audio | amigaux/amix-paula | Ignacio Soriano's paula-amix |
+| `va2000/` | MNT VA2000 RTG graphics card (`/dev/va2000`) | amigaux/va2000-amix | Antti Sokero's va2000-amix |
 | `z3660rtg/` | Z3660 accelerator RTG graphics | amigaux/amix-z3660rtg | Ignacio Soriano's zz9000-amix |
 
 A pin file is one line, `<git URL> <full commit hash>`. The URL is always our

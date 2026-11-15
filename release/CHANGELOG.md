@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — README: the lock's `source userland` line (f1654565)
+
+The lock carries a `source userland` line for each FORKDIRS directory.
+
 ## 2026-11-15 — the 1.1.1 locks (6ed42795..248d6b25)
 
 amix-1.1.1.lock (the public rebuild, sha256 29f765ae…) and amix-1.1.1-published.lock (on the published 1.1 tree, b37fb273…), both from make dist at amix 7d9e944f with every RAM-disk image fetched by URL. The README names xsurf 1.0.0-3 and both locks with their sha256 and how they differ.
