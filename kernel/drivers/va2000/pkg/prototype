@@ -10,8 +10,9 @@
 # copyright only, no scripts; and the node of the driver's major as a device
 # entry in the module's class, va2000 (C3-5 v18 sec 1.2), which pkginfo's
 # CLASSES lists; the class has no action script, so stock pkgadd lays it and
-# pkgrm removes it as a none object.  The node is 0666, as the fork's static
-# install makes it.  /etc, /dev, /usr, /usr/include and /opt are the stock
+# pkgrm removes it as a none object.  The node is 0660 root sys, as
+# z3660rtg's /dev/zz9000: it maps the card's registers and framebuffer, so
+# only root and the group sys may open it (the X server runs as root).  /etc, /dev, /usr, /usr/include and /opt are the stock
 # core's directories, declared with core's attributes; /etc/conf and below
 # and /opt/amix/man are shared by every module package.
 #
@@ -24,7 +25,7 @@ d none /etc/conf/modreg.d 0755 root sys
 f none /etc/conf/mod.d/va2000 0644 root sys
 f none /etc/conf/modreg.d/va2000 0644 root sys
 d none /dev 0755 bin bin
-c va2000 /dev/va2000 68 0 0666 root root
+c va2000 /dev/va2000 68 0 0660 root sys
 d none /usr 0755 bin bin
 d none /usr/include 0755 bin bin
 f none /usr/include/va2000.h 0644 bin bin
