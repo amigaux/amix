@@ -1,12 +1,16 @@
 # Changelog
 
+## 2026-11-15 — the 1.1.1 notes: the CD's installer still says "1.1 install disc"; installer.md on a disk at id 5 (2426515a, 21ec1f22)
+
+The notes say the install CD, the boot floppies and the Z3660 boot disk start 1.1's installer RAM disk unchanged, so three of its messages still say "amigaux 1.1 install disc", and that a 1.1.1 or a 1.1 disc is taken. docs/installer.md says a disk at id 5 is offered as a target unless the CD is there. The entry below for the -2 netinstall images now says its release-neutral messages are in the netinstall images only. Docs only.
+
 ## 2026-11-15 — the 1.1.1 notes: when an X-Surf comes up (a9efb2c3)
 
 The notes now say the first-boot dialog offers xsf0 with DHCP (every interface, `* dhcp`) or a static address, and that a card fitted later comes up by DHCP only on a system set up with DHCP, else by a line in /etc/inet/interfaces. Notes only.
 
-## 2026-11-14 — the netinstall images with xsurf 1.0.0-3; the miniroot names no release (9098a36b..d77a9310)
+## 2026-11-14 — the netinstall images with xsurf 1.0.0-3; the netinstall miniroot names no release (9098a36b..d77a9310)
 
-The netinstall RAM-disk pins move to ni-k30-1.1.1-2 and ni-k46-1.1.1-2 (xsurf 1.0.0-3). The miniroot's install-disc messages no longer name a release ("an amigaux install disc"), so they stay right at a point release; a selftest keeps them so. The 1.1.1 notes name xsurf 1.0.0-3.
+The netinstall RAM-disk pins move to ni-k30-1.1.1-2 and ni-k46-1.1.1-2 (xsurf 1.0.0-3). In the netinstall images the miniroot's install-disc messages no longer name a release ("an amigaux install disc"), so they stay right at a point release; the CD, floppies and Z3660 disk keep 1.1's RAM disks, whose messages still say "amigaux 1.1 install disc", until new RAM-disk images are built. A selftest keeps them so. The 1.1.1 notes name xsurf 1.0.0-3.
 
 ## 2026-11-14 — the version shown comes from media/VERSION (c1dc2497)
 
