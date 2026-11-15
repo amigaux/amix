@@ -39,6 +39,7 @@
 #define XS_OVW_US	2000		/* after a stop on overrun: at least 1.6 ms */
 #define XS_SELFTEST_US	20000		/* the interrupt self-test's wait */
 #define XS_READY_US	20000		/* the longest to wait for D_RDY after a reset */
+#define XS_DMATEST_BLOCK 128		/* the self-test reads back this much at a time */
 
 #define XS_ISR_LOOPS	8		/* passes over ISR per service call */
 #define XS_RX_FRAMES	64		/* frames per drain: more than the ring holds */

@@ -688,8 +688,10 @@ xs_board_t *b;
  * XSURF_DMATEST_ROUNDS rounds of XSURF_DMATEST_LEN bytes, each round its
  * own pattern and transmit slot, written the way a frame goes (FIFO
  * blocks, a part block and a tail word on the X-Surf-100's windows), read
- * back the way a frame comes, and compared.  Several full-size rounds, so
- * that a window that works only now and then is likely to show.
+ * back in blocks of XS_DMATEST_BLOCK (the same windows and tail) and
+ * compared.  Several full-size rounds, so that a window that works only
+ * now and then is likely to show.  The pattern is built in the receive
+ * buffer, which nothing else uses at load; the read-back is on the stack.
  * The chip runs meanwhile in monitor mode and internal loopback: it
  * receives and sends nothing.  The result goes into the status record; a
  * write that never completes is not counted as a transmit failure.  The
@@ -699,16 +701,14 @@ int
 xs_dma_test(b)
 xs_board_t *b;
 {
-    static unsigned char pat[XSURF_DMATEST_LEN], back[XSURF_DMATEST_LEN];
-    int i, r, page;
+    unsigned char *pat = xs_rxbuf, back[XS_DMATEST_BLOCK];
+    int i, j, n, r, page;
 
     b->st.dma_test_at = b->st.dma_test_wrote = b->st.dma_test_read = 0;
     for (r = 0; r < XSURF_DMATEST_ROUNDS; r++) {
     page = XS_TX_START + (r & 1) * XS_TX_SLOT;
-    for (i = 0; i < XSURF_DMATEST_LEN; i++) {
+    for (i = 0; i < XSURF_DMATEST_LEN; i++)
 	pat[i] = (i * (2 * r + 7) + 0x35 + r * 0x5a + (i >> 8)) & 0xff;
-	back[i] = ~pat[i];
-    }
     if (!xs_rdma_write(b, pat, page, XSURF_DMATEST_LEN)) {
 	b->st.dma_test = XSURF_DMATEST_NOWRITE;
 	b->st.dma_test_at = b->st.dmato_crda;
@@ -718,16 +718,23 @@ xs_board_t *b;
 	XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
 	return 0;
     }
-    xs_rdma_read(b, back, page << 8, XSURF_DMATEST_LEN);
-    for (i = 0; i < XSURF_DMATEST_LEN; i++)
-	if (back[i] != pat[i]) {
-	    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
-	    b->st.dma_test = XSURF_DMATEST_MISMATCH;
-	    b->st.dma_test_at = r * XSURF_DMATEST_LEN + i;
-	    b->st.dma_test_wrote = pat[i];
-	    b->st.dma_test_read = back[i];
-	    return 0;
-	}
+    for (i = 0; i < XSURF_DMATEST_LEN; i += n) {
+	n = XSURF_DMATEST_LEN - i;
+	if (n > XS_DMATEST_BLOCK)
+	    n = XS_DMATEST_BLOCK;
+	for (j = 0; j < n; j++)
+	    back[j] = ~pat[i + j];
+	xs_rdma_read(b, back, (page << 8) + i, n);
+	for (j = 0; j < n; j++)
+	    if (back[j] != pat[i + j]) {
+		XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
+		b->st.dma_test = XSURF_DMATEST_MISMATCH;
+		b->st.dma_test_at = r * XSURF_DMATEST_LEN + i + j;
+		b->st.dma_test_wrote = pat[i + j];
+		b->st.dma_test_read = back[j];
+		return 0;
+	    }
+    }
     }
     XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
     b->st.dma_test = XSURF_DMATEST_PASSED;
