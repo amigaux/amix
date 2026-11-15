@@ -1,6 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 5
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 6
 
-- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4). Version 5 (2026-11-13): minor 5, a kernel whose core takes a `zorro` match key with product 00 (§3).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4). Version 5 (2026-11-13): minor 5, a kernel whose core takes a `zorro` match key with product 00 (§3). Version 6 (2026-11-15): minor 6 on k46, `fb_register`, and a weak reference is not an import (§2, §3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -76,6 +76,15 @@ the minor the kit carried before it grew, k30.1.2 and k46.1.2 in the 1.3
 kits, so a module that imports nothing newer is built as before and loads
 where it loaded before. The checker refuses a module whose `kabi` is below
 a name it imports.
+
+**A weak reference is not an import** (version 6). An undefined symbol
+bound weak resolves to the kernel's name when the block has it and to 0
+when it does not (C3-1 §1), so it raises no minor, gate 2 (`kbootset`)
+does not count it, and the checker does not require it in the lists; it
+warns when no list of the line names it (most likely a misspelling,
+which would be 0 at every load). That is how one module object uses a
+newer kernel's name and still loads on an older one: `fb_register`
+through `DDI_FB_REGISTER` (§3, minor 6).
 
 The **post-link gate** fails the kernel build unless:
 - every listed name is defined in the final link, with the listed kind;
@@ -183,6 +192,21 @@ minor 5 whatever it imports, so `kbootset` gate 2 and apkg's pre-flight
 refuse it on an older kernel instead of the boot failing. A cut claims
 1.5 only with core patch 0055. Every module of minor 4 or below still
 fits a minor-5 kernel.
+
+**Minor 6, k46 only: the framebuffer cache class** (version 6). One new
+name, `fb_register(pa, len)` (func), the core's provider on k46
+(`core/plat/k46/line.c`, with core patch 0056's `dlm_curname`), which
+puts a module's framebuffer window in the cache class the port's
+`hat_cm_fb_add` gives a static driver: non-cacheable, not serialised.
+The contract, the two slots and their holders are C3-6 §5; the call is
+in `docs/abi/ddi.md`. A cut claims k46.1.6 only when it carries core
+0056 and `core/plat/k46/line.c` with `fb_register`, and links the port's
+`hat_cm_fb` and `hat_cm_fb_add` (every k46 kernel of the driver line
+has them). k30 has no minor 6: the 68030 has no such class (C3-6 §5),
+and a k30 kit stays at 1.5. A module that calls `fb_register` by name
+is tagged k46.1.6; one that uses the kit's `DDI_FB_REGISTER` holds a
+weak reference (§2) and keeps the minor its other names give it. Every
+module of minor 5 or below still fits a minor-6 kernel.
 
 The two exclusion flags stay data names, and are not replaced by a
 `paula_claim()`/`paula_release()` pair (2026-10-28). No rule here

@@ -16,6 +16,9 @@
  *     zorro:MMMM:PP key against each board's manufacturer and product; a
  *     mobo: key always, because the module's gated probe decides, as for
  *     the loader (10 section 5.3);
+ *   - fb_register's window rule (k46, the line's file): a framebuffer
+ *     window lies inside one board's window in bootinfo, a board whose
+ *     memory is not the kernel's (plat_board_window());
  *   - s5's inode table pointer `inode`, which the kernel keeps for the
  *     programs that read it through the namelist and /dev/kmem (sadc, and
  *     so sar and timex -s; crash), points at an empty table while no s5
@@ -91,6 +94,41 @@ plat_match(char *key)
 		if (get32(cfg + 20) >> 16 == 0)
 			break;			/* the boards end at a zero manufacturer */
 		if (get32(cfg + 20) >> 16 == mf && ((const unsigned char *)cfg)[17] == pr)
+			return 1;
+	}
+	return 0;
+}
+
+/*
+ * 1 if [pa, pa+len) lies inside one AutoConfig board's window in bootinfo
+ * (cd_BoardAddr at +32, cd_BoardSize at +36) and that board's memory is
+ * not on the kernel's free list (er_Type at +16, ERTF_MEMLIST 0x20: a RAM
+ * board's pages are managed, never a device window); 0 otherwise, and for
+ * an empty or wrapping range.  fb_register's rule on k46.
+ */
+#define	CD_TYPE		16
+#define	CD_ADDR		32
+#define	CD_SIZE		36
+#define	ERTF_MEMLIST	0x20
+
+int
+plat_board_window(unsigned long pa, unsigned long len)
+{
+	const char *cfg;
+	ax_u32 base, size;
+	int i;
+
+	if (len == 0 || pa + len - 1 < pa)
+		return 0;
+	for (i = 0; i < AXB_MAXBOARDS; i++) {
+		cfg = bootinfo + AXB_AUTOCON + i * AXB_CFGSIZE;
+		if (get32(cfg + 20) >> 16 == 0)
+			break;			/* the boards end at a zero manufacturer */
+		base = get32(cfg + CD_ADDR);
+		size = get32(cfg + CD_SIZE);
+		if (((const unsigned char *)cfg)[CD_TYPE] & ERTF_MEMLIST)
+			continue;
+		if (pa >= base && len <= size && pa - base <= size - len)
 			return 1;
 	}
 	return 0;

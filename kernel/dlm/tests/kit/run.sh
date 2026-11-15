@@ -306,6 +306,20 @@ for l in k30 k46; do
 	KABI_OVERRIDE=$l.1.4 mkbad $l zp4 "$WRAP"'MOD_MISC_WRAPPER(zp4, l, u, "x");\n' "$R0"'$match zorro:1212:00\n$rank ide\nzp4\tzp4\n' &&
 		refused "a 1.4 tag on a module with a product-00 zorro key" $l "$W/$l-zp4/out/mod.d/zp4" "needs kabi minor 5"
 	fi
+	# a weak undefined no list names is 0 at every load: warned, not refused
+	mkbad $l weakx "$WRAP"'asm(".weak fb_regster");\nextern int fb_regster();\nint (*weakx_p)() = fb_regster;\nMOD_MISC_WRAPPER(weakx, l, u, "x");\n' "$M0"'weakx\tweakx\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-weakx/out/mod.d/weakx" > "$W/weakx.out" 2>&1 &&
+		   grep -q "warning: weak undefined symbol fb_regster is in no list" "$W/weakx.out"; then
+			pass "$l: a weak undefined name in no list is warned about, not refused"
+		else fail "$l: the weak misspelling"; cat "$W/weakx.out"; fi
+	# k46.1.6 (C3-2 v6 section 3) adds fb_register only: a module tagged
+	# 1.5 that imports nothing newer passes the 1.6 kit as it is
+	if [ "${KABI##*.}" -ge 6 ]; then
+	KABI_OVERRIDE=$l.1.5 mkbad $l prev5 "$WRAP"'MOD_MISC_WRAPPER(prev5, l, u, "x");\n' "$M0"'prev5\tprev5\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-prev5/out/mod.d/prev5" > "$W/prev5.out" 2>&1; then
+			pass "$l: a module tagged $l.1.5 passes the $KABI kit"
+		else fail "$l: a 1.5-tagged module on the 1.6 kit"; cat "$W/prev5.out"; fi
+	fi
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do
@@ -415,6 +429,37 @@ if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" 
 	pass "a module that imports AllocMem, displaytype, paula_busy and audio_nopen is built as k30.1.3 and k46.1.3"
 else
 	fail "the minor-3 module"; cat "$d"/make*.log
+fi
+# fb_register (k46.1.6, C3-6 section 5): one source through the make
+# fragment.  DDI_FB_REGISTER keeps the module at 1.2 on both lines: on k46
+# a weak fb_register (0 on a kernel before 1.6, the call ENOSYS), on k30
+# no reference at all.  Called by name it is 1.6 on k46 and refused on k30.
+d=$W/fbreg
+mkdir -p "$d"
+printf '%b' '#include "sys/types.h"\n#include "sys/errno.h"\n#include "sys/moddefs.h"\n#include "sys/amixddi.h"\nDDI_FB_REGISTER_DECL;\nint fbreg_e;\nstatic int l(p) char *p; { fbreg_e = DDI_FB_REGISTER(0x40010000UL, 0x400000UL); return 0; }\nstatic int u() { return 0; }\nMOD_MISC_WRAPPER(fbreg, l, u, "x");\n' > "$d/fbreg.c"
+printf '%b' '$modtype misc\n$class boot\n$match always\nfbreg\tfbreg\n' > "$d/Master"
+printf 'MODULE = fbreg\nOBJS = fbreg.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: fbreg: ok (k30.1.2, boot," "$d/make30.log" &&
+   grep -q "modcheck: fbreg: ok (k46.1.2, boot," "$d/make46.log" &&
+   m68k-elf-nm "$d/build/k46/src/Driver.o" | grep -q " w fb_register$" &&
+   ! m68k-elf-nm "$d/build/k30/src/Driver.o" | grep -q fb_register; then
+	pass "DDI_FB_REGISTER: one source, k30.1.2 with no reference, k46.1.2 with a weak fb_register"
+else
+	fail "DDI_FB_REGISTER"; cat "$d"/make*.log
+fi
+d=$W/fbname
+mkdir -p "$d"
+sed -e 's/DDI_FB_REGISTER_DECL;//' -e 's/DDI_FB_REGISTER(/fb_register(/' -e 's/fbreg/fbname/g' "$W/fbreg/fbreg.c" > "$d/fbname.c"
+sed 's/fbreg/fbname/g' "$W/fbreg/Master" > "$d/Master"
+printf 'MODULE = fbname\nOBJS = fbname.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: fbname: ok (k46.1.6, boot," "$d/make46.log" &&
+   ! (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1) &&
+   grep -q "undefined: fb_register" "$d/make30.log"; then
+	pass "fb_register by name: k46.1.6 on k46, refused on k30"
+else
+	fail "fb_register by name"; cat "$d"/make*.log
 fi
 # the root-context probe builds and checks on both lines; on k46 it
 # also calls dev_kvmap (tests/bench/README.md, the root context)
