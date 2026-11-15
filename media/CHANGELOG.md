@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — no device node wider than its package (203d3df1)
+
+install.sh loses the 1.0 RTG kit branch and its 0644 /dev/zz9000. No medium reached it; the 1.1 and 1.1.1 images carry the z3660rtg package's 0660 root sys. X11KIT=rtg on a 1.0 install is refused. First boot's probe nodes and S99zen's zen0 get 0600, as their packages ship them. Selftest DN checks every mknod and every chmod of a /dev path against the package's mode.
+
 ## 2026-11-15 — the 1.1.1 notes: the CD's installer still says "1.1 install disc"; installer.md on a disk at id 5 (2426515a, 21ec1f22)
 
 The notes say the install CD, the boot floppies and the Z3660 boot disk start 1.1's installer RAM disk unchanged, so three of its messages still say "amigaux 1.1 install disc", and that a 1.1.1 or a 1.1 disc is taken. docs/installer.md says a disk at id 5 is offered as a target unless the CD is there. The entry below for the -2 netinstall images now says its release-neutral messages are in the netinstall images only. Docs only.
