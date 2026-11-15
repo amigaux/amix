@@ -295,6 +295,11 @@ chip_power_on(unsigned char *mac)
     chip.mem[28] = chip.mem[29] = 0x57;
     chip.cr = 0x21;
     chip.isr = 0x80;
+    chip.dsr = XS_DSR_RDY | XS_DSR_LINK | XS_DSR_SPEED | XS_DSR_DUPLEX;
+    chip.link = XSURF_LINK_UP;
+    chip.link_speed = 100;
+    chip.link_duplex = XSURF_DUPLEX_FULL;
+    chip.link_medium = XSURF_MEDIUM_TP;
 }
 
 static void
@@ -325,7 +330,22 @@ chip_transmit()
 	chip.wire_len[chip.wire_n] = chip.tbcr;
     }
     chip.wire_n++;
-    if (chip.tx_mode == TX_ABORT) {
+    if (chip.tx_mode == TX_COLLIDED) {
+	chip.isr |= XS_I_PTX;
+	chip.tsr = XS_TSR_PTX | XS_TSR_COL;
+	return;
+    }
+    if (chip.tx_mode == TX_PTX_ABORT) {
+	chip.wire_n--;
+	chip.isr |= XS_I_PTX | XS_I_TXE;
+	chip.tsr = XS_TSR_ABT | XS_TSR_COL;
+	return;
+    }
+    if (chip.tx_mode == TX_UNDERRUN) {
+	chip.wire_n--;
+	chip.isr |= XS_I_TXE;
+	chip.tsr = XS_TSR_FU;
+    } else if (chip.tx_mode == TX_ABORT) {
 	chip.wire_n--;			/* aborted: it never made it */
 	chip.isr |= XS_I_TXE;
 	chip.tsr = XS_TSR_ABT;
@@ -414,6 +434,8 @@ chip_rd(int r)
 	return chip.cr;
     if (r == XS_DATA)
 	return chip_data_read();
+    if (r == XS_DSR)
+	return chip.dsr;
     if (r == XS_RESET) {
 	chip.started = 0;
 	chip.txing = 0;
@@ -432,6 +454,7 @@ chip_rd(int r)
 	return chip.mar[r - 8];
     }
     switch (r) {
+    case XS_RTL_ID0: return 0x99;	/* reserved on the AX88796B: not 0x55/0xaa */
     case XS_BNRY: return chip.bnry;
     case XS_TSR: return chip.tsr;
     case XS_ISR: return chip.isr;
@@ -449,7 +472,11 @@ chip_wr(int r, int v)
     int page = (chip.cr >> 6) & 3, i;
 
     v &= 0xff;
+    if (chip.writes_lost)
+	return;
     if (r == XS_CR) {
+	if (chip.page_lost)
+	    v &= ~0xc0;
 	chip_cmd(v);
 	return;
     }
@@ -457,10 +484,8 @@ chip_wr(int r, int v)
 	chip_data_write(v);
 	return;
     }
-    if (r == XS_GPOC) {
-	if (chip.rbcr != 0)
-	    chip.gpoc_in_dma++;		/* the emulator would move data */
-	chip.gpoc = v;
+    if (r == XS_DSR) {
+	chip.dsr_writes++;		/* the AX88796B's BJLC: never written */
 	return;
     }
     if (r > 0x0f)
@@ -597,16 +622,29 @@ m_irq(xs_board_t *b)
     return chip_irq_line();
 }
 
+/* the link as the test set it; entered in page 0, out of any remote DMA */
 static void
-m_phy(xs_board_t *b, int on)
+m_link(xs_board_t *b)
 {
-    chip_wr(XS_GPOC, on ? 0 : XS_GPOC_PPDSET);
+    chip.link_reads++;
+    if ((chip.cr & 0xc0) != 0)
+	chip.link_bad_page++;
+    if (chip.dma && chip.rbcr > 0)
+	chip.link_in_dma++;
+    b->st.link = chip.link;
+    b->st.link_speed = chip.link_speed;
+    b->st.link_duplex = chip.link_duplex;
+    b->st.link_medium = chip.link_medium;
+    b->st.link_raw = chip.dsr;
 }
 
 struct xs_ops host_ops = {
-    "Model", XSURF_KIND_XSURF100, 0x40, m_rd, m_wr, m_bin, m_bout, m_irq, m_phy,
+    "Model", XSURF_KIND_XSURF100, 0x40, m_rd, m_wr, m_bin, m_bout, m_irq, m_link,
 };
 int	host_boards = 1;
+int	host_refuse;
+xs_found_t	xs_found[XSURF_MAXFOUND];
+int		xs_nfound;
 
 /* the core tests' board finder: one board on the model chip */
 int
@@ -615,19 +653,30 @@ xs_find_boards()
     xs_board_t *b;
     int i;
 
-    xs_nboards = 0;
+    xs_nboards = xs_nfound = 0;
     for (i = 0; i < host_boards && i < 1; i++) {
 	b = &xs_board[i];
 	memset(b, 0, sizeof *b);
 	b->ops = &host_ops;
 	b->unit = i;
 	b->tx_cur = -1;
-	if (!xs_chip_reset(b) || !xs_read_prom(b, b->mac))
-	    return 0;
+	memset(&xs_found[xs_nfound], 0, sizeof xs_found[0]);
+	if (host_refuse || !xs_chip_reset(b) || xs_regs_check(b) >= 0 ||
+	    !xs_read_prom(b, b->mac)) {
+	    xs_found[xs_nfound].board = -1;
+	    xs_found[xs_nfound].rec.version = XSURF_STATUS_VERSION;
+	    xs_found[xs_nfound].rec.size = sizeof(xsurf_status_t);
+	    xs_found[xs_nfound].rec.unit = 0xffffffff;
+	    xs_found[xs_nfound].rec.refused = host_refuse ? host_refuse : XSURF_REFUSED_NOWRITES;
+	    xs_nfound++;
+	    continue;
+	}
 	xs_chip_init(b, 0);
 	b->present = 1;
 	b->st.zorro = 2;
+	b->st.unit = i;
 	b->phys = 0xe90000;
+	xs_found[xs_nfound++].board = xs_nboards;
 	xs_nboards++;
     }
     return xs_nboards;

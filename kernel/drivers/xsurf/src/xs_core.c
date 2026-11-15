@@ -13,6 +13,7 @@
  */
 #include "xsk.h"
 #include "xsurf.h"
+#include "xsurfwords.h"
 
 #define XRD(b, r)	((*(b)->ops->rd)((b), (r)))
 #define XWR(b, r, v)	((*(b)->ops->wr)((b), (r), (v)))
@@ -145,6 +146,41 @@ unsigned char *mac;
 }
 
 /*
+ * Do the registers take writes?  Asked of a chip just reset, before the
+ * station address is read: a chip after power-on already reads as reset,
+ * and the address check takes any unicast junk, so without this a board
+ * whose register writes are lost would pass the probe.  Page 1's MAR2 and
+ * MAR3 are written with 0x55 and 0xAA, then the other way round, and read
+ * back; the same numbers in page 0 are write-only (the remote count) and
+ * read as something else, so a page select that is lost shows too.  The
+ * registers are left zero, the remote count too, the chip stopped in page
+ * 0.  -1 when they take writes, else the byte read where 0x55 or 0xAA was
+ * written.
+ */
+int
+xs_regs_check(b)
+xs_board_t *b;
+{
+    int pass, a, c, got = -1;
+
+    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_PAGE1 | XS_CR_STP);
+    for (pass = 0; pass < 2 && got < 0; pass++) {
+	a = pass ? XS_CHECK_B : XS_CHECK_A;
+	c = pass ? XS_CHECK_A : XS_CHECK_B;
+	XWR(b, XS_CHECK_REG, a);
+	XWR(b, XS_CHECK_REG + 1, c);
+	if ((got = XRD(b, XS_CHECK_REG)) == a && (got = XRD(b, XS_CHECK_REG + 1)) == c)
+	    got = -1;
+    }
+    XWR(b, XS_CHECK_REG, 0);
+    XWR(b, XS_CHECK_REG + 1, 0);
+    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
+    XWR(b, XS_RBCR0, 0);
+    XWR(b, XS_RBCR1, 0);
+    return got;
+}
+
+/*
  * Set the chip up in the documented order, stopped; with `start' also start
  * it, transmitter and receiver on.  The interrupt mask follows the board's
  * mode: everything the driver handles in interrupt mode, nothing polled.
@@ -161,8 +197,6 @@ int start;
     XWR(b, XS_DCR, XS_DCR_WORD);
     XWR(b, XS_RBCR0, 0);
     XWR(b, XS_RBCR1, 0);
-    if (b->ops->phy)			/* no remote DMA can be running now */
-	(*b->ops->phy)(b, 1);
     XWR(b, XS_RCR, XS_RCR_MON);
     XWR(b, XS_TCR, XS_TCR_LOOP);
     XWR(b, XS_TPSR, XS_TX_START);
@@ -269,6 +303,7 @@ int page, len;
 	if (t >= XS_RDC_US) {
 	    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STA);
 	    b->st.tx_dma_timeouts++;
+	    b->note_due |= XSURF_NOTE_DMA;
 	    b->need_reset = 1;
 	    return 0;
 	}
@@ -503,11 +538,14 @@ xs_board_t *b;
 	if (isr & XS_I_PTX) {
 	    XWR(b, XS_ISR, isr & (XS_I_PTX | XS_I_TXE));
 	    tsr = XRD(b, XS_TSR);
-	    if (tsr & XS_TSR_COL)
+	    if (tsr & XS_TSR_COL) {
 		b->st.tx_collisions++;
+		b->ifs.ifs_collisions++;
+	    }
 	    if (isr & XS_I_TXE) {
 		b->st.tx_errors++;
 		b->ifs.ifs_oerrors++;
+		b->note_due |= (tsr & XS_TSR_ABT) ? XSURF_NOTE_ABORT : XSURF_NOTE_TXERR;
 	    } else {
 		b->st.tx_frames++;
 		b->ifs.ifs_opackets++;
@@ -521,8 +559,12 @@ xs_board_t *b;
 	    b->ifs.ifs_oerrors++;
 	    if (tsr & (XS_TSR_ABT | XS_TSR_FU))
 		b->st.tx_aborts++;
-	    if (tsr & XS_TSR_ABT)
+	    if (tsr & XS_TSR_ABT) {
 		b->st.tx_collisions += 16;
+		b->ifs.ifs_collisions += 16;
+		b->note_due |= XSURF_NOTE_ABORT;
+	    } else
+		b->note_due |= XSURF_NOTE_TXERR;
 	    xs_tx_done(b);
 	}
 
@@ -553,6 +595,7 @@ xs_board_t *b;
 	return;
     if (b->tx_cur >= 0 && lbolt - b->tx_since > XS_TX_TIMEOUT) {
 	b->st.tx_timeouts++;
+	b->note_due |= XSURF_NOTE_TXTIMEOUT;
 	b->need_reset = 1;
     }
     if (b->need_reset)
@@ -593,4 +636,27 @@ xs_board_t *b;
     XWR(b, XS_IMR, 0);
     XWR(b, XS_ISR, XS_I_RDC);
     return 1;
+}
+
+/*
+ * The link state in the status record as one number, to see a change, and
+ * in words, for the load line, the tick's link lines and the notes.  The
+ * words come from a static buffer: one at a time, at IPL 4.
+ */
+int
+xs_link_key(b)
+xs_board_t *b;
+{
+    return (int)(b->st.link | b->st.link_speed << 2 | b->st.link_duplex << 10 |
+		 b->st.link_medium << 12);
+}
+
+char *
+xs_link_str(b)
+xs_board_t *b;
+{
+    static char buf[64];
+
+    return xs_words_link(b->st.link, b->st.link_speed, b->st.link_duplex,
+			 b->st.link_medium, buf);
 }

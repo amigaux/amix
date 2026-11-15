@@ -17,8 +17,9 @@
 
 /*
  * A card the driver knows: its AutoConfig id, its operations, how many
- * bytes of its window the driver uses, and its probe (reset, station
- * address, chip set up and stopped; 0 = not usable).
+ * bytes of its window the driver uses, and its probe (reset, register
+ * check, station address, chip set up and stopped; XSURF_REFUSED_NONE, or
+ * why the board is not usable).
  */
 struct xs_card
 {
@@ -70,26 +71,40 @@ xs_board_t *b;
     b->va = 0;
 }
 
+xs_found_t	xs_found[XSURF_MAXFOUND];
+int		xs_nfound;
+
 /*
- * What both cards' probes end with: reset, station address, the chip set
- * up and left stopped.  0 with a console line naming what failed.
+ * What both cards' probes end with: reset, the register check, station
+ * address, the chip set up and left stopped.  A refusal has a console
+ * line naming what failed; the reason and its detail go to the caller.
  */
 static int
-xs_probe_chip(b)
+xs_probe_chip(b, detail)
 xs_board_t *b;
+int *detail;
 {
+    int got;
+
     if (!xs_chip_reset(b)) {
 	cmn_err(CE_NOTE, "xsurf: %s at 0x%x: the chip does not reset",
 	    b->ops->name, (int)b->phys);
-	return 0;
+	return XSURF_REFUSED_NORESET;
+    }
+    if ((got = xs_regs_check(b)) >= 0) {
+	*detail = got;
+	cmn_err(CE_NOTE,
+	    "xsurf: %s at 0x%x: its registers do not take writes (wrote 0x55 or 0xaa, read 0x%x)",
+	    b->ops->name, (int)b->phys, got);
+	return XSURF_REFUSED_NOWRITES;
     }
     if (!xs_read_prom(b, b->mac)) {
 	cmn_err(CE_NOTE, "xsurf: %s at 0x%x: no usable station address",
 	    b->ops->name, (int)b->phys);
-	return 0;
+	return XSURF_REFUSED_NOMAC;
     }
     xs_chip_init(b, 0);
-    return 1;
+    return XSURF_REFUSED_NONE;
 }
 
 static int	xs100_probe(), xsurf_probe();
@@ -111,7 +126,10 @@ static struct xs_card xs_cards[] = {
  *            long is two 16-bit chip transfers in byte order.  Used in
  *            blocks of 0x80 bytes from those addresses, inside the maker's
  *            windows and where the emulator decodes them.
- * The PHY is powered through GPOC and left to the chip: no MII access.
+ * The PHY is on from reset and left to the chip (no MII access); its link,
+ * speed and duplex come from the Device Status Register (0x17, read).
+ * The driver never writes 0x17: on the AX88796B a write sets the
+ * back-pressure jam limit (datasheet V1.6 sec. 5.1.67), not a GPOC.
  * --------------------------------------------------------------------- */
 #define XS100_IRQ	0x0040
 #define XS100_REGS	0x0800
@@ -194,32 +212,53 @@ xs_board_t *b;
     return (b->va[XS100_IRQ] & 0x80) != 0;
 }
 
-/* GPOC: only ever written with no remote DMA set up (a stopped chip, a
- * zero remote count), so a model that decodes it as the data port moves
- * nothing */
+/*
+ * The link from the DSR.  D_RDY clear (the chip in reset, asleep or
+ * loading its EEPROM) makes the other bits meaningless: link unknown.
+ */
 static void
-xs100_phy(b, on)
+xs100_link(b)
 xs_board_t *b;
-int on;
 {
-    xs100_wr(b, XS_GPOC, on ? 0 : XS_GPOC_PPDSET);
+    int dsr = xs100_rd(b, XS_DSR);
+    xsurf_status_t *st = &b->st;
+
+    st->link_raw = dsr;
+    if (!(dsr & XS_DSR_RDY)) {
+	st->link = XSURF_LINK_UNKNOWN;
+	st->link_speed = 0;
+	st->link_duplex = XSURF_DUPLEX_UNKNOWN;
+	st->link_medium = XSURF_MEDIUM_NOTREADY;
+	return;
+    }
+    st->link_medium = XSURF_MEDIUM_TP;
+    if (dsr & XS_DSR_LINK) {
+	st->link = XSURF_LINK_UP;
+	st->link_speed = (dsr & XS_DSR_SPEED) ? 100 : 10;
+	st->link_duplex = (dsr & XS_DSR_DUPLEX) ? XSURF_DUPLEX_FULL : XSURF_DUPLEX_HALF;
+    } else {
+	st->link = XSURF_LINK_DOWN;
+	st->link_speed = 0;
+	st->link_duplex = XSURF_DUPLEX_UNKNOWN;
+    }
 }
 
 static struct xs_ops xs100_ops = {
     "X-Surf-100", XSURF_KIND_XSURF100, 0x40,
-    xs100_rd, xs100_wr, xs100_bin, xs100_bout, xs100_irq, xs100_phy,
+    xs100_rd, xs100_wr, xs100_bin, xs100_bout, xs100_irq, xs100_link,
 };
 
 static int
-xs100_probe(b)
+xs100_probe(b, detail)
 xs_board_t *b;
+int *detail;
 {
     if (bprobe((caddr_t)XS100_REG(b, XS_CR), -1)) {
 	cmn_err(CE_NOTE, "xsurf: X-Surf-100 at 0x%x: no answer at its registers",
 	    (int)b->phys);
-	return 0;
+	return XSURF_REFUSED_NOANSWER;
     }
-    return xs_probe_chip(b);
+    return xs_probe_chip(b, detail);
 }
 
 /* ------------------------------------------------------------------------
@@ -304,9 +343,64 @@ xs_board_t *b;
     return (b->va[XSURF_IRQ] & 0x80) != 0;
 }
 
+/*
+ * The link as the RTL8019AS shows it (datasheet LS003.8, CONFIG0 and
+ * CONFIG2): it has no link bit, but in auto-detect (CONFIG2 PL 00) it
+ * sends on coax, or on AUI, when the 10BASE-T link test fails, and says
+ * so in CONFIG0.  With the medium set any other way the link is not known.
+ * A chip whose ID bytes are not the RTL8019's is not decoded.
+ */
+static void
+xsurf_link(b)
+xs_board_t *b;
+{
+    xsurf_status_t *st = &b->st;
+    int c0, c2, c3, run = b->running ? XS_CR_STA : XS_CR_STP;
+
+    st->link = XSURF_LINK_UNKNOWN;
+    st->link_speed = 0;
+    st->link_duplex = XSURF_DUPLEX_UNKNOWN;
+    if (xsurf_rd(b, XS_RTL_ID0) != 0x50 || xsurf_rd(b, XS_RTL_ID1) != 0x70) {
+	st->link_raw = 0;
+	st->link_medium = XSURF_MEDIUM_NOTKNOWN;
+	return;
+    }
+    xsurf_wr(b, XS_CR, XS_CR_NODMA | XS_CR_PAGE3 | run);
+    c0 = xsurf_rd(b, XS_RTL_CONFIG0);
+    c2 = xsurf_rd(b, XS_RTL_CONFIG2);
+    c3 = xsurf_rd(b, XS_RTL_CONFIG3);
+    xsurf_wr(b, XS_CR, XS_CR_NODMA | run);
+    st->link_raw = (c0 << 8) | c2;
+    switch (XS_CONFIG2_PL(c2)) {
+    case 0:
+	if (c0 & XS_CONFIG0_AUI) {
+	    st->link = XSURF_LINK_DOWN;
+	    st->link_medium = XSURF_MEDIUM_AUI;
+	} else if (c0 & XS_CONFIG0_BNC) {
+	    st->link = XSURF_LINK_DOWN;
+	    st->link_medium = XSURF_MEDIUM_COAX;
+	} else {
+	    st->link = XSURF_LINK_UP;
+	    st->link_medium = XSURF_MEDIUM_TP;
+	    st->link_speed = 10;
+	    st->link_duplex = (c3 & XS_CONFIG3_FUDUP) ? XSURF_DUPLEX_FULL : XSURF_DUPLEX_HALF;
+	}
+	break;
+    case 1:
+	st->link_medium = XSURF_MEDIUM_TP_NOTEST;
+	break;
+    case 2:
+	st->link_medium = XSURF_MEDIUM_AUI;
+	break;
+    default:
+	st->link_medium = XSURF_MEDIUM_COAX;
+	break;
+    }
+}
+
 static struct xs_ops xsurf_ops = {
     "X-Surf", XSURF_KIND_XSURF, 0x00,
-    xsurf_rd, xsurf_wr, xsurf_bin, xsurf_bout, xsurf_irq, 0,
+    xsurf_rd, xsurf_wr, xsurf_bin, xsurf_bout, xsurf_irq, xsurf_link,
 };
 
 static void
@@ -390,13 +484,14 @@ xs_board_t *b;
 }
 
 static int
-xsurf_probe(b)
+xsurf_probe(b, detail)
 xs_board_t *b;
+int *detail;
 {
     if (bprobe((caddr_t)XSURF_REG(b, XS_CR), -1)) {
 	cmn_err(CE_NOTE, "xsurf: X-Surf at 0x%x: no answer in its ISA window",
 	    (int)b->phys);
-	return 0;
+	return XSURF_REFUSED_NOANSWER;
     }
     if (!xs_chip_reset(b)) {
 	xsurf_pnp(b);
@@ -404,13 +499,47 @@ xs_board_t *b;
 	cmn_err(CE_NOTE, "xsurf: X-Surf at 0x%x: chip set up through ISA plug-and-play",
 	    (int)b->phys);
     }
-    return xs_probe_chip(b);
+    return xs_probe_chip(b, detail);
+}
+
+/*
+ * A board AutoConfig gave the finder: in use as xs_board[board], or refused
+ * (board -1) with a record of what it is and why.
+ */
+static void
+xs_note_found(board, c, addr, why, detail)
+int board, why, detail;
+struct xs_card *c;
+long addr;
+{
+    xs_found_t *f;
+
+    if (xs_nfound >= XSURF_MAXFOUND)
+	return;
+    f = &xs_found[xs_nfound++];
+    bzero((caddr_t)f, sizeof(xs_found_t));
+    f->board = board;
+    if (board >= 0)
+	return;
+    f->rec.version = XSURF_STATUS_VERSION;
+    f->rec.size = sizeof(xsurf_status_t);
+    f->rec.board_kind = c->ops->kind;
+    f->rec.board_phys = (unsigned int)addr;
+    f->rec.zorro = (unsigned long)addr >= (unsigned long)0x01000000 ? 3 : 2;
+    f->rec.unit = 0xffffffff;
+    f->rec.refused = why;
+    f->rec.refused_detail = detail;
+    f->rec.link = XSURF_LINK_UNKNOWN;
+    f->rec.link_duplex = XSURF_DUPLEX_UNKNOWN;
 }
 
 /*
  * Every board of every known card, in the order of xs_cards, up to
- * XS_MAXBOARDS: found through AutoConfig, mapped, probed.  The units are
- * numbered in that order.  Returns how many are set up.
+ * XS_MAXBOARDS in use: found through AutoConfig, mapped, probed.  The
+ * units are numbered in that order; a refused board takes no unit and is
+ * left with nothing behind (no mapping, its interrupt mask cleared when
+ * its registers answered).  xs_found records every board either way.
+ * Returns how many are set up.
  */
 int
 xs_find_boards()
@@ -418,9 +547,9 @@ xs_find_boards()
     struct xs_card *c;
     xs_board_t *b;
     long addr, size;
-    int i;
+    int i, why, detail;
 
-    xs_nboards = 0;
+    xs_nboards = xs_nfound = 0;
     for (c = xs_cards; c->ops; c++) {
 	for (i = 0; xs_nboards < XS_MAXBOARDS; i++) {
 	    addr = size = 0;
@@ -435,26 +564,35 @@ xs_find_boards()
 		cmn_err(CE_NOTE,
 		    "xsurf: %s at 0x%x: placed at or above 0x80000000, the board has shut itself up",
 		    c->ops->name, (int)addr);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_HIGH, 0);
 		continue;
 	    }
 	    if ((unsigned long)size < c->bytes) {
 		cmn_err(CE_NOTE, "xsurf: %s at 0x%x: AutoConfig size 0x%x too small",
 		    c->ops->name, (int)addr, (int)size);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_SMALL, (int)size);
 		continue;
 	    }
 	    if (xs_map(b, (unsigned long)addr, c->bytes) != 0) {
 		cmn_err(CE_NOTE, "xsurf: %s at 0x%x: no kernel address space to map it",
 		    c->ops->name, (int)addr);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_NOMAP, 0);
 		continue;
 	    }
-	    if (!(*c->probe)(b)) {
+	    detail = 0;
+	    if ((why = (*c->probe)(b, &detail)) != XSURF_REFUSED_NONE) {
+		if (why != XSURF_REFUSED_NOANSWER)
+		    xs_chip_stop(b);	/* its interrupt masked, if writes land */
 		xs_unmap(b);
+		xs_note_found(-1, c, addr, why, detail);
 		continue;
 	    }
 	    b->present = 1;
 	    b->st.board_kind = c->ops->kind;
 	    b->st.board_phys = (unsigned int)addr;
 	    b->st.zorro = (unsigned long)addr >= (unsigned long)0x01000000 ? 3 : 2;
+	    b->st.unit = b->unit;
+	    xs_note_found(xs_nboards, c, addr, XSURF_REFUSED_NONE, 0);
 	    xs_nboards++;
 	}
     }
