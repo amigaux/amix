@@ -50,6 +50,12 @@ from the format's first character and leaves it there, for every later
   the console logger, every later line enters the buffer twice, directly
   and as the logger's copy (`modadmin -L` shows each twice).
 
+A core with patch 0058 puts `prt_where` back after a module's `_load`,
+`_unload`, halt entry and deferred calls. A `cmn_err` in an entry point
+the module installs (open, ioctl, an interrupt, a STREAMS or filesystem
+routine) still leaves it, and so does any `cmn_err` on a kernel whose core
+is older. Start the formats with `^` in either case.
+
 ## Memory
 
 | Name | Form | Context | Provider | Contract |

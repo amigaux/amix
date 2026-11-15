@@ -706,7 +706,9 @@ there. `prt_where` 0x3 with `conslogging 1` shows each later line twice,
 once stored directly and once as the log driver's copy. The stock
 `cmn_err` leaves `prt_where` as its format's first character set it, so
 one plain-format `cmn_err` (a boot `NOTICE:` line, for one) leaves 0x3
-for the rest of the boot (`docs/abi/ddi.md`, core patch 0057).
+for the rest of the boot (`docs/abi/ddi.md`, core patches 0057 and 0058;
+from 0058 the core puts it back after a module's `_load`, `_unload`, halt
+entry and deferred calls).
 
 **`modadmin -K` (core patch 0026), on a box without a console logger.**
 After boot the stock kernel's `prt_where` is 0x2: printf goes to the
