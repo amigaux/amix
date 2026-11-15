@@ -73,15 +73,20 @@ the cable, the hub or switch port, or the card's PHY. Look at the link
 lights of the card and of the port.
 .TP
 .B "refused at load: its registers do not take writes"
-the driver cannot write the chip's registers: the card, not the network.
+what the driver writes to the chip's registers does not come back: the
+fault lies between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed. Not the network.
 .TP
 .B "no frame reached the chip: its remote-DMA writes do not complete"
-the card's data path.
+frames written into the chip's memory never complete: the fault lies
+between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed.
 .TP
 .B "no transmit has completed"
 the chip takes frames but never reports them sent or failed. The chips'
 transmitters do not wait for a link (their datasheets), so a missing link
-alone does not explain it: suspect the card.
+alone does not explain it: the fault lies between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed.
 .TP
 .B "every transmit aborted on collisions"
 the medium. On the X-Surf, a 10BASE-T link test that fails makes the chip
