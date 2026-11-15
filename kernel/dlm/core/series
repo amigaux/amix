@@ -57,3 +57,5 @@
 0054-modadmin-namelist-fork.patch
 0055-zorro-product-zero.patch
 0056-curname.patch
+0057-undef-prt-where.patch
+0058-modcall-prt-where.patch

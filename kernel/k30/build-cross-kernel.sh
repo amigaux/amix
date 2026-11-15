@@ -91,12 +91,13 @@
 #                         becomes (idx >> 3) & 3, sd.c.in's rank column and ranked insert (rank class,
 #                         then base: 1 z3660, 2 zorro, 3 mobo, 4 ide), and every alien object that
 #                         includes sd.h is compiled fresh.  2 (the default) is today's kernel, byte for byte.
-#     --kabi k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4  (with --dlm) the module kernel's kabi: kinfo's tag, the core's DLM_KABI and
+#     --kabi k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5  (with --dlm) the module kernel's kabi: kinfo's tag, the core's DLM_KABI and
 #                         the abi-<kabi>.txt mkabi checks against; k30.1.1 is stage 4's (kernel/dlm core 0031, the
 #                         bdevsw layout; k30.1.2 from dlm 42411c4: root_defer, iodone, ramdisk_image,
 #                         vfs_register; k30.1.3 from dlm e45b061, C3-2 v2: AllocMem, FreeMem, displaytype and the
 #                         audio exclusion pair, so it needs --audio-paula; k30.1.4 from dlm 74405ce, core 0048: a
-#                         filesystem module loads at its first mount, no new name). The block generator, the libgcc
+#                         filesystem module loads at its first mount, no new name; k30.1.5 from dlm 16a25b51,
+#                         core 0055: a zorro match key may name product 00, no new name). The block generator, the libgcc
 #                         export loop and the core.list gate take only the list lines whose minor is at most the
 #                         claim's (C3-2 v2 section 2). Default k30.1.0.
 #     --bempty-ram        (kernel/dlm core 0031) bdevsw row 20, the stock ramdisk, becomes an empty row (every
@@ -224,6 +225,23 @@
 #                freed queue for queuerun.  --check after the link and after the dlm splice (freeq named only from
 #                freeq_guarded; qdetach and strclose among its callers).  --no-freeq-guard is the kernel without it,
 #                byte for byte.
+#   --no-hardbus-guard  build WITHOUT the user bus-error probe above 1 GiB (on by default; HARDBUS_GUARD=0 does the
+#                same).  By default src/hardbus030.c joins the final link and tools/hardbus-retarget.py retargets
+#                usrxmemflt's one call of hardbus to hardbus_z3: a user bus error on a valid translation whose physical
+#                address is at or above 0x40000000 (a Zorro III board) is probed through a one-page kernel mapping of
+#                that page instead of at the physical address read as a kernel address; below 0x40000000 the stock
+#                hardbus runs.  --check after the link and after the dlm splice.  --no-hardbus-guard is the kernel
+#                without it, byte for byte.
+#   --sync-guard <syncguard.s>  the 68040/68060 port's sync guard, taken byte for byte (the cut passes the port's
+#                src/syncguard.s): it is assembled into the final link and the stock sync in fs/exp is made weak
+#                (one byte), so sync() returns at once while no root is mounted (rootdir 0) and skips a filesystem
+#                switch row not yet set up.  A root that cannot be mounted then panics once, instead of a second
+#                panic in ufs_update.  Checked after the link and after the dlm splice.  Off when not given.
+#   --bt-walk <btwalk.s>  the port's backtrace frame test, taken byte for byte (the port's src/btwalk.s): it is
+#                assembled into the final link and tools/btwalk030.py makes the panic backtrace's 26-byte frame
+#                test a bsr.l bt_frame_ok, which also bounds the return address to the kernel's text before the walk
+#                reads the call instruction through it (the outermost frame's never-written slot read 0xFFFFFFFA).
+#                Redone after the final link, checked after the dlm splice.  Off when not given.
 #   --no-swap-guard  build WITHOUT the swapadd guard (on by default; SWAP_GUARD=0 does the same).  By default
 #                src/swapguard030.c joins the final link and tools/swapguard-retarget.py retargets swapadd's callers
 #                to swapadd_guarded and swapadd's anon-array kmem_zalloc to swapguard_take: the array is allocated
@@ -297,6 +315,9 @@ FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_se
 UFS_HOLE_FIX="${UFS_HOLE_FIX:-1}"  # --no-ufs-hole-fix (UFS_HOLE_FIX=0): rwip's ufs_bmap allocates a hole alloc-only as stock
 GROWSDT_FIX="${GROWSDT_FIX:-1}"   # --no-growsdt-fix (GROWSDT_FIX=0): the stock hat_growsdt (tools/growsdt030.py)
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
+HARDBUS_GUARD="${HARDBUS_GUARD:-1}"  # --no-hardbus-guard (HARDBUS_GUARD=0): the stock probe at every physical address
+SYNCG_S="${SYNCG_S:-}"            # --sync-guard <syncguard.s>: the port's sync guard, byte for byte
+BTW_S="${BTW_S:-}"                # --bt-walk <btwalk.s>: the port's backtrace frame test, byte for byte
 ARENA8M="${ARENA8M:-1}"           # --no-arena8m (ARENA8M=0): kvseg 4 MiB, as stock
 SEGVN_PROT="${SEGVN_PROT:-1}"     # --no-segvn-prot (SEGVN_PROT=0): a denied access restarts for ever, as stock
 RMW_FAULT="${RMW_FAULT:-1}"       # --no-rmw-fault (RMW_FAULT=0): a tas or cas fault decided as a read, as stock
@@ -323,7 +344,7 @@ while [ "$#" -gt 0 ]; do
     --config)   CONFIG="${2:?--config needs a value}"; shift 2 ;;
     --probe-sole) PROBE_SOLE="${2:?--probe-sole needs a value}"; shift 2 ;;
     --sd-cards) SD_CARDS="${2:?--sd-cards needs 2 or 4}"; shift 2 ;;
-    --kabi)     KABI="${2:?--kabi needs k30.1.0, k30.1.1, k30.1.2, k30.1.3 or k30.1.4}"; shift 2 ;;
+    --kabi)     KABI="${2:?--kabi needs k30.1.0, k30.1.1, k30.1.2, k30.1.3, k30.1.4 or k30.1.5}"; shift 2 ;;
     --audio-paula) AUDIO_PAULA="${2:?--audio-paula needs the amix-paula directory}"; shift 2 ;;
     --bempty-ram) BEMPTY_RAM=1; shift ;;
     --config=*) CONFIG="${1#--config=}"; shift ;;
@@ -350,6 +371,9 @@ while [ "$#" -gt 0 ]; do
     --no-ufs-rwip-fix) UFS_RWIP=0; shift ;;
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
+    --no-hardbus-guard) HARDBUS_GUARD=0; shift ;;
+    --sync-guard) SYNCG_S="${2:?--sync-guard needs the path of syncguard.s}"; shift 2 ;;
+    --bt-walk) BTW_S="${2:?--bt-walk needs the path of btwalk.s}"; shift 2 ;;
     --no-growsdt-fix) GROWSDT_FIX=0; shift ;;
     --no-ufs-hole-fix) UFS_HOLE_FIX=0; shift ;;
     --ufs-hole-fix) UFS_HOLE_FIX=1; shift ;;
@@ -384,6 +408,9 @@ case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; ex
 case "$UFS_HOLE_FIX" in 0|1) ;; *) echo "UFS_HOLE_FIX='$UFS_HOLE_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$GROWSDT_FIX" in 0|1) ;; *) echo "GROWSDT_FIX='$GROWSDT_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$HARDBUS_GUARD" in 0|1) ;; *) echo "HARDBUS_GUARD='$HARDBUS_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
+[ -z "$SYNCG_S" ] || [ -f "$SYNCG_S" ] || { echo "--sync-guard: no file $SYNCG_S" >&2; exit 2; }
+[ -z "$BTW_S" ] || [ -f "$BTW_S" ] || { echo "--bt-walk: no file $BTW_S" >&2; exit 2; }
 case "$SWAP_GUARD" in 0|1) ;; *) echo "SWAP_GUARD='$SWAP_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$ARENA8M" in 0|1) ;; *) echo "ARENA8M='$ARENA8M' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$SEGVN_PROT" in 0|1) ;; *) echo "SEGVN_PROT='$SEGVN_PROT' (want 0 or 1)" >&2; exit 2 ;; esac
@@ -400,7 +427,7 @@ case "$AUDIO_REPLIES" in 0|1) ;; *) echo "AUDIO_REPLIES='$AUDIO_REPLIES' (want 0
   || { echo "--ufs-hole-fix needs the rwip fix (UFS_RWIP=1): without it rwip creates the window's leading pages unread" >&2; exit 2; }
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
-case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4)" >&2; exit 2 ;; esac
+case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5)" >&2; exit 2 ;; esac
 KABI_MINOR="${KABI##*.}"   # the claim's minor: list lines whose since is above it are not this kernel's (C3-2 v2)
 # k30.1.3 lists paula_busy and audio_nopen, which only the patched audio.c defines: refuse the claim without the patch
 # here, before a long build, rather than at ksymgate
@@ -1671,6 +1698,81 @@ if [ "$SEGVN_PROT" = 1 ]; then
   [ "$GOT" = "D core_holes T core_seg_holes U as_getprot U as_memory U vn_rdwr" ] || { echo "--segvn-prot: coreseg030.o holds '$GOT'" >&2; exit 1; }
   SVP_OBJ="segvnprot030.o coreseg030.o"
 fi
+HBG_OBJ=""
+if [ "$HARDBUS_GUARD" = 1 ]; then
+  # === 8h4. the user bus-error probe above 1 GiB: src/hardbus030.c; usrxmemflt's call is retargeted after the link ===
+  echo "--- hardbus guard: compiling $KT/src/hardbus030.c (hardbus_z3) ---"
+  ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/hardbus030.c" -o "$BUILD/hardbus030.o" ) \
+    || { echo "--hardbus-guard: hardbus030.c did not compile" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/hardbus030.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "bprobe cmn_err hardbus lbolt sptalloc sptfree u" ] || { echo "--hardbus-guard: hardbus030.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/hardbus030.o" | awk '$2 ~ /^[TDBC]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "hardbus_z3 hbg_calls hbg_cap hbg_high hbg_kill hbg_last_pa hbg_magic hbg_nomap hbg_retry" ] \
+    || { echo "--hardbus-guard: hardbus030.o exports '$GOTX'" >&2; exit 1; }
+  # the u-area by offset: exactly u.u_procp (0x730) and u.u_ar0 (0x864), the stock code's own offsets
+  GOT="$("$OBJDUMP" -r "$BUILD/hardbus030.o" | awk '$3 ~ /^u\+/ {print $3}' | LC_ALL=C sort -u | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "u+0x00000730 u+0x00000864" ] || [ "$GOT" = "u+0x730 u+0x864" ] \
+    || { echo "--hardbus-guard: hardbus030.o reads the u-area at '$GOT' (want u+0x730 and u+0x864)" >&2; exit 1; }
+  echo "  hardbus030.o $(sha256sum "$BUILD/hardbus030.o" | cut -c1-16): imports/exports exact; u+0x730, u+0x864"
+  HBG_OBJ="hardbus030.o"
+else
+  echo "--- hardbus guard: --no-hardbus-guard -- the stock probe at every physical address ---"
+fi
+SYNCG_OBJ=""
+if [ -n "$SYNCG_S" ]; then
+  # === 8h5. the sync guard: the port's syncguard.s, byte for byte; the stock sync weakened in fs/exp ===
+  echo "--- sync guard: assembling $SYNCG_S ($(sha256sum "$SYNCG_S" | cut -c1-16)); the stock sync weakened in fs/exp ---"
+  "$AS" -o "$BUILD/syncguard.o" "$SYNCG_S" || { echo "--sync-guard: syncguard.s did not assemble" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/syncguard.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "nfstype rootdir u vfssw" ] || { echo "--sync-guard: syncguard.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/syncguard.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "sync syncg_calls syncg_last_i syncg_magic syncg_skip_fn syncg_skip_ops syncg_skip_root" ] \
+    || { echo "--sync-guard: syncguard.o exports '$GOTX'" >&2; exit 1; }
+  ! "$NM" "$BUILD/syncguard.o" | awk '$2=="C"{f=1} END{exit !f}' || { echo "--sync-guard: syncguard.o has a COMMON" >&2; exit 1; }
+  [ "$("$NM" "$BUILD/fs/exp" | awk '$3=="sync" || $3=="syssync" {print $1 $2 $3}' | LC_ALL=C sort | tr '\n' ' ')" = "00001baeTsync 00001c00Tsyssync " ] \
+    || { echo "--sync-guard: fs/exp does not define sync at 0x1bae and syssync at 0x1c00 (not the stock fs/exp)" >&2; exit 1; }
+  cp "$BUILD/fs/exp" "$BUILD/fs/exp.pre-syncg"
+  python3 - "$BUILD/fs/exp" <<'PYS' || { echo "--sync-guard: could not weaken sync in fs/exp" >&2; exit 1; }
+import struct, sys
+p = sys.argv[1]
+b = bytearray(open(p, 'rb').read())
+shoff, = struct.unpack_from('>I', b, 32)
+shentsize, shnum = struct.unpack_from('>HH', b, 46)
+sh = [struct.unpack_from('>IIIIIIIIII', b, shoff + i * shentsize) for i in range(shnum)]
+hits = []
+for s in sh:
+    if s[1] != 2:
+        continue
+    stroff = sh[s[6]][4]
+    for o in range(s[4], s[4] + s[5], 16):
+        name, = struct.unpack_from('>I', b, o)
+        if bytes(b[stroff + name:b.index(0, stroff + name)]) == b'sync' and b[o + 12] >> 4 == 1:   # STB_GLOBAL
+            hits.append(o)
+assert len(hits) == 1, 'global sync symbols: %d' % len(hits)
+b[hits[0] + 12] = (2 << 4) | (b[hits[0] + 12] & 15)                                                 # STB_WEAK
+open(p, 'wb').write(b)
+PYS
+  D="$({ cmp -l "$BUILD/fs/exp.pre-syncg" "$BUILD/fs/exp" || :; } | wc -l)"
+  [ "$D" = 1 ] || { echo "--sync-guard: weakening changed $D bytes of fs/exp (want exactly 1)" >&2; exit 1; }
+  [ "$("$NM" "$BUILD/fs/exp" | awk '$3=="sync" || $3=="syssync" {print $1 $2 $3}' | LC_ALL=C sort | tr '\n' ' ')" = "00001baeWsync 00001c00Tsyssync " ] \
+    || { echo "--sync-guard: fs/exp after the weakening is not 'sync W, syssync T'" >&2; exit 1; }
+  rm -f "$BUILD/fs/exp.pre-syncg"
+  echo "  syncguard.o $(sha256sum "$BUILD/syncguard.o" | cut -c1-16): imports/exports exact; fs/exp: sync weak (1 byte)"
+  SYNCG_OBJ="syncguard.o"
+fi
+BTW_OBJ=""
+if [ -n "$BTW_S" ]; then
+  # === 8h6. the backtrace frame test: the port's btwalk.s, byte for byte; backtrace is hooked after the link ===
+  echo "--- backtrace walk: assembling $BTW_S ($(sha256sum "$BTW_S" | cut -c1-16)) ---"
+  "$AS" -o "$BUILD/btwalk.o" "$BTW_S" || { echo "--bt-walk: btwalk.s did not assemble" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/btwalk.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "_start edata end etext" ] || { echo "--bt-walk: btwalk.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/btwalk.o" | awk '$2 ~ /^[TDBC]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "bt_badret bt_budget bt_frame_ok bt_frames bt_lastbadret bt_laststop bt_magic bt_prev bt_stops bt_walks" ] \
+    || { echo "--bt-walk: btwalk.o exports '$GOTX'" >&2; exit 1; }
+  echo "  btwalk.o $(sha256sum "$BUILD/btwalk.o" | cut -c1-16): imports/exports exact"
+  BTW_OBJ="btwalk.o"
+fi
 CCOM_OBJ=""
 if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   # === 8i. the carved filesystems' core-tier COMMONs stay the kernel's: every abi/k30/core.list name (since <= the
@@ -1679,7 +1781,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   # The stock tools that read these through /dev/kmem and the namelist (sadc's inode, crash) find them in the kernel.
   # An empty set builds no object, so a kernel whose core.list names none of them links as before.
   echo "--- carve commons: core.list names that are COMMONs of the carved ${CARVE_FS} and nothing else in the link has ---"
-  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ ) 2>/dev/null \
+  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ ) 2>/dev/null \
     | awk 'NF >= 2 && $(NF-1) != "U" {print $NF}' | LC_ALL=C sort -u > "$BUILD/carvecom.have"
   python3 - "$DLM_CORE/abi/k30/core.list" "$KABI_MINOR" "$BUILD/carvecom.s" "$BUILD/carvecom.have" \
     $(for f in ${CARVE_FS//,/ }; do echo "$BUILD/fs/$f/exp"; done) <<'PYC' || exit 1
@@ -1724,8 +1826,8 @@ PYC
     CCOM_OBJ="carvecom.o"
   fi
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${HBG_OBJ:+ $HBG_OBJ}${SYNCG_OBJ:+ $SYNCG_OBJ}${BTW_OBJ:+ $BTW_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
 # HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
 # modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
 kzero_check() {
@@ -1745,6 +1847,37 @@ kzero_check() {
   [ "$callers" = "$want" ] || { echo "[FAIL] kzero: relocations naming kzero are in '$callers', want exactly '$want'" >&2; exit 1; }
   echo "  [OK] kzero fault catch bound in $(basename "$u"): kzero @0x$kz, bzero stock @0x302, kzr_magic; callers: $callers"
 }
+# HARD CHECK (sync guard): one strong sync, the port's (its first bytes: link, moveml, then syncg_calls counted where
+# the stock sync loads a constant), named from syssync and xpanic only.  A lost weaken links the stock sync.
+sync_check() {
+  local u="$1" sa callers
+  sa="$("$NM" "$u" | awk '$3=="sync" && $2=="T" {print $1}')"
+  [ "$("$NM" "$u" | awk '$3=="sync"' | wc -l)" = 1 ] && [ -n "$sa" ] \
+    || { echo "[FAIL] sync guard: $u does not have exactly one strong sync" >&2; exit 1; }
+  "$NM" "$u" | awk '$3=="syncg_magic" && $2=="D" {f=1} END{exit !f}' || { echo "[FAIL] sync guard: no syncg_magic in .data" >&2; exit 1; }
+  python3 - "$u" "$sa" <<'PYK' || { echo "[FAIL] sync guard: sync's first bytes are not syncguard.s's" >&2; exit 1; }
+import struct, sys
+b = open(sys.argv[1], 'rb').read()
+shoff, = struct.unpack_from('>I', b, 32)
+shentsize, = struct.unpack_from('>H', b, 46)
+text_off = struct.unpack_from('>IIIIIIIIII', b, shoff + shentsize)[4]                      # section 1 is .text
+sys.exit(b[text_off + int(sys.argv[2], 16):][:10] != bytes.fromhex('4e56000048e7202052b9'))
+PYK
+  callers="$("$OBJDUMP" -dr "$u" | awk '/^[0-9a-f]+ <[^>]*>:$/ {fn=substr($2, 2, length($2) - 3)} /R_68K_32[ \t]+sync$/ {print fn}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$callers" = "syssync xpanic" ] || { echo "[FAIL] sync guard: relocations naming sync are in '$callers', want exactly 'syssync xpanic'" >&2; exit 1; }
+  echo "  [OK] sync guard bound in $(basename "$u"): sync @0x$sa (syncguard.s), syncg_magic; callers: $callers"
+}
+if [ -n "$SYNCG_S" ]; then sync_check "$BUILD/unix"; fi
+if [ -n "$BTW_S" ]; then
+  echo "--- backtrace walk: backtrace's frame test -> bsr.l bt_frame_ok (tools/btwalk030.py) ---"
+  python3 "$KT/tools/btwalk030.py" "$BUILD/unix"
+  python3 "$KT/tools/btwalk030.py" --check "$BUILD/unix"
+fi
+if [ "$HARDBUS_GUARD" = 1 ]; then
+  echo "--- hardbus guard: usrxmemflt's call of hardbus -> hardbus_z3 (tools/hardbus-retarget.py) ---"
+  python3 "$KT/tools/hardbus-retarget.py" "$BUILD/unix"
+  python3 "$KT/tools/hardbus-retarget.py" --check "$BUILD/unix"
+fi
 if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_TAILZERO" = 1 ]; then qz_check "$BUILD/unix"; fi ;; esac
 case ",$CARVE_FS," in *,ufs,*) ;; *) if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi ;; esac
@@ -1815,7 +1948,7 @@ print('--- process limits: rlimits ' + ' '.join(hit[0]) + ' ---')
 PYRL
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $CCOM_OBJ" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
@@ -1894,6 +2027,9 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
   if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   if [ "$FREEQ_GUARD" = 1 ]; then python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"; fi
+  if [ -n "$SYNCG_S" ]; then sync_check "$BUILD/unix"; fi
+  if [ -n "$BTW_S" ]; then python3 "$KT/tools/btwalk030.py" --check "$BUILD/unix" || exit 1; fi
+  if [ "$HARDBUS_GUARD" = 1 ]; then python3 "$KT/tools/hardbus-retarget.py" --check "$BUILD/unix" || exit 1; fi
   if [ "$GROWSDT_FIX" = 1 ]; then python3 "$KT/tools/growsdt030.py" --check "$BUILD/unix" || exit 1; fi
   case ",$CARVE_FS," in *,ufs,*) ;; *)
     if [ "$UFS_RWIP" = 1 ]; then python3 "$KT/tools/rwippc030.py" --check "$BUILD/unix" || exit 1; fi

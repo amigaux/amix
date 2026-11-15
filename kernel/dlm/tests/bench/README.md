@@ -699,10 +699,16 @@ From core patch 0025, `modadmin -L` starts with one line of the ring's
 words: `putbuf 0x… (2000 bytes), putbufsz …, wpos …, rpos …,
 conslogging …, prt_where 0x…`. Never read them with `dd skip=`: dd reads
 its way through `/dev/kmem` from 0 and hangs the box. `prt_where` 0x2 is
-the stock kernel after boot: printf writes the ring, not the console. The
-ring holds text only in `-L`'s output, because the log driver's copies
-(`logcons`) also put binary header bytes there. A `cmn_err` line can
-appear twice, once from printf and once from the log driver's copy.
+the stock kernel after boot: printf writes the console, and the ring only
+through a console logger. The ring holds text only in `-L`'s output,
+because the log driver's copies (`logcons`) also put binary header bytes
+there. `prt_where` 0x3 with `conslogging 1` shows each later line twice,
+once stored directly and once as the log driver's copy. The stock
+`cmn_err` leaves `prt_where` as its format's first character set it, so
+one plain-format `cmn_err` (a boot `NOTICE:` line, for one) leaves 0x3
+for the rest of the boot (`docs/abi/ddi.md`, core patches 0057 and 0058;
+from 0058 the core puts it back after a module's `_load`, `_unload`, halt
+entry and deferred calls).
 
 **`modadmin -K` (core patch 0026), on a box without a console logger.**
 After boot the stock kernel's `prt_where` is 0x2: printf goes to the

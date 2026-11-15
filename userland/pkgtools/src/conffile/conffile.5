@@ -83,6 +83,16 @@ beside it as above.  An older apkg, or a bare
 keeps both kinds, with a
 .B .new
 file beside each.
+.PP
+Installing a version that ships a config file as a plain file (a
+downgrade) lays the package's default over it: apkg saves a file you
+edited as
+.IB file .old
+first and drops the file's baseline, its
+.B .new
+and its
+.B PENDING
+line.
 .SS What to do with a .new file
 Compare the two, for example with
 .BR diff (1):
