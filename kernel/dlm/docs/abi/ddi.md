@@ -33,9 +33,22 @@ The C is K&R. The kernel compiler runs with `-traditional`.
 | Name | Form | Context | Provider | Contract |
 |---|---|---|---|---|
 | `printf` | `printf(fmt, ...)` | any | stock | to the console; `%s %d %u %x %o %c` |
-| `cmn_err` | `cmn_err(level, fmt, ...)` | any | stock | `CE_CONT`, `CE_NOTE`, `CE_WARN`, `CE_PANIC` (`<sys/cmn_err.h>`); a leading `!` sends the message to the log only |
+| `cmn_err` | `cmn_err(level, fmt, ...)` | any | stock | `CE_CONT`, `CE_NOTE`, `CE_WARN`, `CE_PANIC` (`<sys/cmn_err.h>`); start the format with `^`, below |
 | `panic` | `panic(fmt)` | any | stock | does not return |
 | `panicstr` | `char *` (data, read-only) | any | stock | nonzero once the system is panicking: a driver's halt or flush paths test it |
+
+The stock `cmn_err` sets the kernel's print destination (`prt_where`)
+from the format's first character and leaves it there, for every later
+`printf` and `cmn_err` until the next `cmn_err`, on both lines:
+
+- `^`: the console only, the value the kernel sets after boot. With
+  `syslogd` registered as the console logger, the line goes to it and
+  once into the message buffer. A module's formats start with `^`.
+- `!`: the message buffer only. Every later `printf` then misses the
+  console and the logger.
+- anything else: the console and the message buffer. Once `syslogd` is
+  the console logger, every later line enters the buffer twice, directly
+  and as the logger's copy (`modadmin -L` shows each twice).
 
 ## Memory
 

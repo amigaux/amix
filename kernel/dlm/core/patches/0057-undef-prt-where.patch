@@ -1,0 +1,72 @@
+Subject: dlm_undef puts prt_where back to 2, not 3
+
+The stock cmn_err leaves prt_where as its format's leading character set
+it, and the follow-up plain cmn_err(CE_CONT, "") left 3: from then on,
+with a console logger registered, every printf went into putbuf twice,
+directly and as the log driver's copy.  "^" puts back 2, the kernel's
+value after boot.  hostk.c's cmn_err keeps prt_where as the stock one
+does, and the state harness checks it after the undefined-symbol case.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -143,8 +143,14 @@
+ 	char *name;
+ {
+ 	cmn_err(CE_NOTE, "!%s: undefined symbol %s", ld->ld_name, name);
+-	/* "!" keeps every later printf off the console until a plain cmn_err */
+-	cmn_err(CE_CONT, "");
++	/*
++	 * The stock cmn_err leaves prt_where as its leading character set it:
++	 * "!" putbuf only, which would keep every later printf off the
++	 * console, a plain format 3, which stores every later printf in putbuf
++	 * twice once a console logger is registered.  "^" puts back 2, the
++	 * kernel's value after boot.
++	 */
++	cmn_err(CE_CONT, "^");
+ 	if (dlm_verbose)
+ 		printf("%s: undefined symbol %s\n", ld->ld_name, name);
+ }
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -79,6 +79,7 @@
+ extern int vn_open(), vn_rdwr(), host_close(), host_getattr();
+ extern int sleep();
+ extern void wakeup(), cmn_err();
++extern short prt_where;
+ extern struct cred *crget();
+ extern int nosys(), nodev();
+ 
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -227,12 +227,21 @@
+ {
+ }
+ 
++/* the stock kernel's print destination: 2 after boot, left as cmn_err sets it */
++short prt_where = 2;
++
+ void
+ cmn_err(level, fmt, a, b, c)
+ 	int level;
+ 	char *fmt;
+ 	char *a, *b, *c;
+ {
++	if (*fmt == '!')
++		prt_where = 1, fmt++;
++	else if (*fmt == '^')
++		prt_where = 2, fmt++;
++	else
++		prt_where = 3;
+ 	if (level == CE_PANIC) {
+ 		fprintf(stderr, "PANIC: ");
+ 		fprintf(stderr, fmt, a, b, c);
+--- a/test/state.c
++++ b/test/state.c
+@@ -393,6 +393,7 @@
+ 	settier("lbolt", KSYM_CORE);
+ 	check(modload("tiu", &id) == ERELOC && !byname("tiu"),
+ 	    "a DDI-tier module does not resolve a core-tier name -> ERELOC");
++	check(prt_where == 2, "the undefined-symbol note leaves prt_where 2, as after boot");
+ 	check(modload("tic", &id) == 0 && word(byname("tic"), modsym(byname("tic"), "tic_ref")) ==
+ 	    kval("lbolt"), "a core-tier module resolves it");
+ 	settier("lbolt", KSYM_DDI);
