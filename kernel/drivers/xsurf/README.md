@@ -209,9 +209,9 @@ Each boot ran the checks above, and also:
 - `ifconfig xsf0 down` gave `flags=22`, and `up` gave 23 again;
 - the guest answered a ping of the network's broadcast address.
 
-Module 1.0.0-4 was checked from its packages on 2026-11-15. The plain rows
-ran on the emulator's earlier build, then on the build that models the
-X-Surf-100's link and its stricter board options:
+Module 1.0.0-4 was checked from its packages on 2026-11-15 and 16. The
+plain rows ran on the emulator's earlier build, then on the build that
+models the X-Surf-100's link and its stricter board options:
 
 - **Each card on each line, two boots** (interrupts, then polled through
   `param intr=0` with `kbootset build` and `commit`, as `xsurf(7)` gives
@@ -246,18 +246,12 @@ X-Surf-100's link and its stricter board options:
 - **The emulator's strict X-Surf-100 options:**
   - byte writes dropped in Zorro III, with word cycles reaching one
     register: `, registers by word cycles`, and traffic;
+  - the same with the register in the low half of a word:
+    `, registers by word cycles (low byte)`, and traffic;
   - windows that drop or corrupt data: `, data through the data port`, and
     traffic;
   - a busy time after the reset: `xsf` shows the wait (200 µs and 2000 µs
     of busy time).
-  Two results go the other way:
-  - With the register in the low half of a word, the register check passes
-    but the board is refused (`no usable station address`). Its
-    station-address read takes the data port's byte from the high half.
-  - A 5000 µs busy time outlasts the driver's 20 ms limit in the emulator.
-    There the CPU runs ahead of the CIA timer the driver counts with; the
-    two shorter times showed about 5.3 counted microseconds for each
-    emulated one.
 
 Throughput **in the emulator** (100 MiB by FTP; it says nothing about a
 real card):
@@ -288,10 +282,11 @@ frames from the wire. From 1.0.0-4 they also cover:
 - the probe's register check: a lost write, a write landing in a
   neighbouring register, the word-cycle fallback and the parameters;
 - the remote-DMA self-test and the data-port fallback;
+- the station-address PROM read through the board's data path;
 - `xsf`'s output, run against a model of its devices.
 
-In all: t_core 812 checks, t_boards 152, t_xsf 53. Of 93 deliberate faults
-put into the sources, the tests catch 92. The one they miss changes
+In all: t_core 835 checks, t_boards 152, t_xsf 53. Of 94 deliberate faults
+put into the sources, the tests catch 93. The one they miss changes
 nothing: a page select before the link read that the tick has already
 done.
 
@@ -324,15 +319,16 @@ a run on a real board:
 - **X-Surf-100 registers:**
   - Which cycles a real card in Zorro III mode takes for its registers.
     The driver tries byte cycles, then word cycles, and the parameter
-    `regs` can fix either. The emulator takes both, so it shows neither
-    choice.
+    `regs` can fix either. The emulator takes both by default; its strict
+    options show each path working, not which one a card needs.
   - How long the chip stays busy after its reset (D_RDY). The emulator
-    has no busy time.
+    has a busy time only as a test option.
   - The word-cycle form (the register byte in both halves of the word,
     read back from the high half, else the low one) and the 16-bit data
     port path: written from the maker's register map, never run on a card.
   - The link from the Device Status Register: read as the datasheet
-    describes it. The emulator does not model that register.
+    describes it. The emulator's link model gives the same bits, so it
+    checks the decode against that model, not against a card.
   - The PHY left as it comes from reset, with no MII handling.
     The datasheet gives the PHY's control register as 0x3100 at reset:
     powered, autonegotiating.
