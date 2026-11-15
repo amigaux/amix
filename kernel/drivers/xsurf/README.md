@@ -13,7 +13,8 @@ The interface is `xsf0` (then `xsf1`, … in board order) and the device node is
 `/dev/xsf0`. `ifup` brings it up from `/etc/inet/interfaces`, as it does every
 interface.
 
-**Status: tested in emulation, not on a real card** (see Tested). The board
+**Status: tested in emulation; users report one real set-up working and one
+failing** (see Tested). The board
 facts the driver is built on, and where each was checked, are in
 [docs/facts.md](docs/facts.md).
 
@@ -154,7 +155,22 @@ board found, which works even when every board was refused. The pages
 
 ## Tested
 
-**In emulation only.** Nobody working on this driver has either card. The
+**Reported by users, with driver 1.0.0-3 on the 1.1.1 k46 kernel
+(68060-261106-66).** Nobody working on this driver has either card; these are
+users' reports, passed on as they came:
+
+- **Working:** an A4000D with a CyberStorm MkII 68060 and an X-Surf-100. The
+  interface took a DHCP lease, and traffic went both ways (a ping by name
+  answered). The card's Zorro mode was not reported.
+- **Failing:** an X-Surf-100 in an A4000 with a CyberStorm 68060 (model not
+  reported). The interface configured, but no frame was sent or received;
+  every transmit ended as an output error. The same machine also has
+  trouble with the card under AmigaOS, so its cause is not known.
+
+1.0.0-4's probe checks and xsf readings (see Link and diagnostics) are
+meant to tell such cases apart.
+
+**In emulation.** The
 rows below ran in the Amiberry emulator (amigaux fork, with its NE2000 receive
 poll), on the released 1.1 disk images and kernels (k30 68030-261106-77, k46
 68060-261106-66), with kbootset 1.1.0.261114-45 and the xsurf packages
@@ -241,7 +257,8 @@ An A2065 can share a machine with one X-Surf board, but not with two.
 ## Not confirmed on hardware
 
 The driver is tested in the Amiberry emulator and against a model chip in
-host tests. Nobody working on it has either card. These points rest on the
+host tests. Nobody working on it has either card; the users' reports above
+do not say which of these their set-ups exercised. These points rest on the
 maker's documentation, on Linux's drivers or on the emulator, and wait for
 a run on a real board:
 

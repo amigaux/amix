@@ -147,7 +147,9 @@ receives anything.
 .TP
 .B "remote-DMA self-test: ..."
 the chip's registers work but a test frame did not reach its memory, or
-came back different: the card's data path, by every path tried.
+came back different, by every route tried: the fault lies between the
+Amiga and the chip's memory (the card, its slot, the bus or the driver);
+xsf shows the readings.
 .TP
 .B "the chip does not reset"
 nothing that answers like the chip is there.
@@ -161,6 +163,11 @@ a bus error at the board's address.
 .B "placed at or above 0x80000000"
 the X-Surf-100 switches itself off there; give it a lower address.
 .PP
+These say what was measured, not why: a marginal card, slot or bus can
+fail them, and so can a fault in the driver. The maker's notes on Zorro
+III operation (its Buster recommendation, its jumper for Zorro II mode)
+apply.
+.PP
 Running, these are said once per boot each, then counted:
 .TP
 .B "xsf0: no link"
@@ -168,12 +175,12 @@ the cable, the hub or switch port, or the card's own PHY.
 .TP
 .B "xsf0: a transmit did not complete, chip restarted (...)"
 the chip took a frame and never reported it sent or failed. Its
-transmitter does not wait for a link, by its datasheet, so this points at
-the card rather than the cable.
+transmitter does not wait for a link, by its datasheet, so a cable fault
+alone does not explain it; xsf shows the chip's registers at that moment.
 .TP
 .B "xsf0: a remote-DMA write to the chip did not complete, frame dropped and chip restarted"
-the frame never reached the chip's memory: the card's data path does not
-work.
+the frame never reached the chip's memory; xsf shows how far the chip
+got.
 .TP
 .B "xsf0: a transmit was aborted after 16 collisions (...)"
 the medium: on the X-Surf typically a fall-back to its coax port with no
@@ -211,9 +218,11 @@ In short, with
 is the cable, the port or the card's PHY (frames still count as sent: the
 transmitter does not wait for a link);
 .B "refused at load: its registers do not take writes"
-is the card's register path;
+is the path from the Amiga to the chip's registers;
 transmits that do not complete, or remote-DMA writes that do not
-complete, are the card; aborts after 16 collisions are the medium, on the
+complete, are the path to the chip's memory or the chip itself (the
+card, its slot, the bus or the driver: the readings tell which step);
+aborts after 16 collisions are the medium, on the
 X-Surf typically its coax port chosen because the 10BASE-T link test
 failed.
 .SH SEE ALSO
@@ -221,4 +230,5 @@ failed.
 .BR ifconfig (1M),
 .BR netstat (1M)
 .SH NOTES
-Tested in the emulator and against a model chip; not yet on a real card.
+Tested in the emulator and against a model chip. Users report real
+cards working; see the driver's README.
