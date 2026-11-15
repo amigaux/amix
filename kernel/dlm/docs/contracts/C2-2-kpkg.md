@@ -1,6 +1,6 @@
 # C2-2 — kernel-space catalog entries and apkg's install record, version 7
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1); version 6 (2026-11-01): `kbootset=`, the oldest kbootset a kernel can be composed with (§1.2); version 7 (2026-11-15): `kbootset=` on a module row too, and apkg acts on it at install as at upgrade (§1.1, §1.2). Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1); version 6 (2026-11-01): `kbootset=`, the oldest kbootset a kernel can be composed with (§1.2); version 7 (2026-11-15): `kbootset=` on a module row too, and apkg acts on it at install as at upgrade (§1.1, §1.2); corrected the same day to what gen-catalog implements: a major of 1.1 asks for no floor. Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed for 1.1: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -150,8 +150,11 @@ refused (§1.1). Without the key the package sets no floor.
   owns (its `.moddata` `majors=`), or whose major has `-` there: one line
   per row of the major registry, `<c|b> <major> <version>`, the oldest
   kbootset whose registry has the row, `-` until a published kbootset
-  carries it. A module with no majors (a boot-class or filesystem
-  module) needs a value only when some other kbootset change is its
+  carries it. A major at the table's lowest version (the rows of 1.1,
+  1.1.0.261101-34, which every kbootset of 1.1 meets) asks for no floor,
+  so a 1.1 module's row stays without the key that apkg 0.3.5 to 0.3.11
+  refuse; a row the table does not list is refused. A module with no
+  majors (a boot-class or filesystem module) needs a value only when some other kbootset change is its
   need, as the buddha module's `mobo:buddha` stand-in needs
   1.1.0.261113-44 (C4-2 §8.2).
 
