@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — three guards for the next 68030 kernel, and the k30.1.5 claim (82cd8cf0)
+
+build-cross-kernel.sh gains three guards. The hardbus guard (default on; src/hardbus030.c, tools/hardbus-retarget.py): a user bus error on a valid translation whose physical address is at or above 0x40000000 is probed through a one-page kernel mapping of that page, instead of at the physical address read as a kernel address, so a Zorro III user mapping is no longer killed at random; retries are capped at 16, and below 1 GiB the stock hardbus runs. `--sync-guard`: the 68040/68060 port's syncguard.s, byte for byte, with the stock sync weakened, so a root that cannot be mounted panics once. `--bt-walk`: the port's btwalk.s, byte for byte, hooked into the panic backtrace (tools/btwalk030.py), so the walk no longer reads the outermost frame's never-written return slot. `--kabi` accepts k30.1.5.
+
 ## 2026-11-14 — amixrun folds telnet CR NUL to CR in transcripts (d98c6440)
 
 amixrun keeps telnet's CR NUL as a plain CR in transcripts, so long outputs no longer carry stray NUL bytes.
