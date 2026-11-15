@@ -45,6 +45,11 @@ int opt_conf = CONF_ASK;
 
 #define DIFF_CMD "/usr/bin/diff"
 
+typedef void (*walkfn)(const struct conf *cf, const char *pkginst,
+                       const char *rel, void *arg);
+static void walk(const struct conf *cf, const char *pkginst,
+                 const char *dir, const char *rel, walkfn fn, void *arg);
+
 /* one PENDING line */
 struct pend {
     char *pkginst;
@@ -368,6 +373,100 @@ static int wanted(const struct pend *p, char **insts, int n)
     return 0;
 }
 
+/* the baselines of one package, for pend_stale() */
+struct blist {
+    char **rel;
+    char cls[64][32];
+    int n;
+};
+
+static void blist_add(const struct conf *cf, const char *pkginst,
+                      const char *rel, void *arg)
+{
+    struct blist *b;
+
+    (void)cf;
+    (void)pkginst;
+    b = (struct blist *)arg;
+    if (b->n == 64)
+        return;
+    b->rel[b->n] = xstrdup(rel);
+    b->cls[b->n][0] = '\0';
+    b->n++;
+}
+
+/* one pass over the contents database: the class each b->rel[] has under
+ * pkginst now ("" when no line lists pkginst for it) */
+static void blist_classes(const struct conf *cf, const char *pkginst,
+                          struct blist *b);
+
+/* drop one baseline and the directories it leaves empty */
+static void drop_baseline(const struct conf *cf, const char *pkginst,
+                          const char *rel)
+{
+    char *top;
+    char *base;
+    char *dir;
+    char *up;
+
+    top = cat3(cf->cfdir, "/", pkginst);
+    base = cat2(top, rel);
+    if (unlink(base) == 0) {
+        dir = dirname_of(base);
+        while (strcmp(dir, top) != 0 && rmdir(dir) == 0) {
+            up = dirname_of(dir);
+            free(dir);
+            dir = up;
+        }
+        free(dir);
+        (void)rmdir(top);
+    }
+    free(base);
+    free(top);
+}
+
+/* After a transaction: a config file of one of its packages that the
+ * package no longer ships as one (a version without the class, a
+ * downgrade) loses its baseline, its PENDING line and the .new beside
+ * it, so the report and `apkg conffiles` name only real config files. */
+static void pend_stale(const struct conf *cf, char **insts, int n)
+{
+    struct blist b;
+    char *dir;
+    char *pfx;
+    char *x;
+    int i;
+    int k;
+
+    if (opt_dryrun)
+        return;
+    pfx = cf_rootpfx(cf);
+    b.rel = (char **)xmalloc((unsigned)(64 * sizeof(char *)));
+    for (i = 0; i < n; i++) {
+        if (!conffile_state(cf, insts[i]))
+            continue;
+        b.n = 0;
+        dir = cat3(cf->cfdir, "/", insts[i]);
+        walk(cf, insts[i], dir, "", blist_add, (void *)&b);
+        free(dir);
+        blist_classes(cf, insts[i], &b);
+        for (k = 0; k < b.n; k++) {
+            if (strcmp(b.cls[k], "conffile") != 0) {
+                (void)pend_drop(cf, insts[i], b.rel[k]);
+                x = cat3(pfx, b.rel[k], ".new");
+                (void)unlink(x);
+                free(x);
+                drop_baseline(cf, insts[i], b.rel[k]);
+                note("%s is no longer a config file of %s", b.rel[k],
+                     insts[i]);
+            }
+            free(b.rel[k]);
+        }
+    }
+    free((char *)b.rel);
+    free(pfx);
+}
+
 /* decide the pending files of insts[] (n < 0: all): ask at a terminal,
  * or apply opt_conf; with neither, leave them pending */
 static int decide(const struct conf *cf, char **insts, int n, int interactive)
@@ -406,6 +505,7 @@ int conffile_after(const struct conf *cf, char **insts, int n)
     int interactive;
     int rc;
 
+    pend_stale(cf, insts, n);
     if (pend_load(cf, &p, &np) != 0 || np == 0) {
         pend_free(p, np);
         return EX_OK;
@@ -445,8 +545,6 @@ int conffile_after(const struct conf *cf, char **insts, int n)
 
 /* call fn(cf, pkginst, rel) for each baseline file under dir; rel is
  * the path below <cfdir>/<pkginst> */
-typedef void (*walkfn)(const struct conf *cf, const char *pkginst,
-                       const char *rel, void *arg);
 
 static void walk(const struct conf *cf, const char *pkginst,
                  const char *dir, const char *rel, walkfn fn, void *arg)
@@ -626,8 +724,8 @@ static void purge_one(const struct conf *cf, const char *pkginst,
     free(disk);
 }
 
-/* rm -r of a baseline directory */
-static int rm_tree(const char *dir)
+/* rm -r of a directory (a baseline tree; install.c, a saved record) */
+int rm_tree(const char *dir)
 {
     DIR *d;
     struct dirent *de;
@@ -1084,4 +1182,176 @@ int cmd_conffiles_prepare(const struct conf *cf)
                 (void)conffile_prepare(cf, t.p[i].staged, t.p[i].pkginst);
     txn_free(&t);
     return EX_OK;
+}
+
+/* ---------------- a conffile that becomes a plain file ---------------- */
+
+static void blist_classes(const struct conf *cf, const char *pkginst,
+                          struct blist *b)
+{
+    FILE *fp;
+    char *line;
+    char *tok[256];
+    int nt;
+    int t;
+    int j;
+    int k;
+
+    if (b->n == 0)
+        return;
+    fp = fopen(cf->contents, "r");
+    if (fp == NULL)
+        return;
+    line = xmalloc(8192);
+    while (fgets(line, 8192, fp) != NULL) {
+        if (line[0] != '/')
+            continue;
+        nt = split_ws(line, tok, 256);
+        for (k = 0; k < b->n; k++)
+            if (strcmp(tok[0], b->rel[k]) == 0)
+                break;
+        if (k == b->n)
+            continue;
+        t = 1;
+        if (nt > 1 && tok[1][0] >= '0' && tok[1][0] <= '9')
+            t = 2;
+        if (t + 1 >= nt)
+            continue;
+        for (j = t + 2; j < nt; j++)
+            if (token_is(tok[j], pkginst))
+                break;
+        if (j == nt)
+            continue;
+        strncpy(b->cls[k], tok[t + 1], sizeof(b->cls[k]) - 1);
+        b->cls[k][sizeof(b->cls[k]) - 1] = '\0';
+    }
+    free(line);
+    fclose(fp);
+}
+
+struct unconf {
+    const struct conf *cf;
+    const char *map;            /* the new pkgmap's text */
+    const char *base;           /* its BASEDIR, or NULL */
+};
+
+/* the class the new pkgmap gives path: cls[] ("" when it ships none) */
+static void map_class(const struct unconf *u, const char *path, char *cls,
+                      unsigned cap)
+{
+    const char *line;
+    const char *next;
+    char buf[1024];
+    char *tok[4];
+    char *full;
+    int nt;
+
+    cls[0] = '\0';
+    for (line = u->map; line != NULL && *line != '\0'; line = next) {
+        next = strchr(line, '\n');
+        nt = next != NULL ? (int)(next - line) : (int)strlen(line);
+        if (next != NULL)
+            next++;
+        if (nt >= (int)sizeof(buf) || strstr(line, path + 1) == NULL)
+            continue;
+        memcpy(buf, line, (unsigned)nt);
+        buf[nt] = '\0';
+        nt = split_ws(buf, tok, 4);
+        if (nt > 0 && tok[0][0] >= '0' && tok[0][0] <= '9') {
+            tok[0] = tok[1];
+            tok[1] = tok[2];
+            tok[2] = tok[3];
+            nt--;
+        }
+        if (nt < 3 || tok[0][1] != '\0' ||
+            (tok[0][0] != 'f' && tok[0][0] != 'e' && tok[0][0] != 'v'))
+            continue;
+        if (tok[2][0] == '/')
+            full = xstrdup(tok[2]);
+        else if (u->base == NULL || u->base[0] == '\0' ||
+                 strcmp(u->base, "/") == 0)
+            full = cat2("/", tok[2]);
+        else
+            full = cat3(u->base, "/", tok[2]);
+        if (strcmp(full, path) == 0) {
+            strncpy(cls, tok[1], cap - 1);
+            cls[cap - 1] = '\0';
+            free(full);
+            return;
+        }
+        free(full);
+    }
+}
+
+/* one baseline: a config file of the installed version.  When the new
+ * version ships the path in another class and the file differs from its
+ * baseline (edited), the new pkgadd will lay the package's default over
+ * it: the file is saved as <path>.old first, and that is said */
+static void unconf_one(const struct conf *cf, const char *pkginst,
+                       const char *rel, void *arg)
+{
+    struct unconf *u;
+    char cls[32];
+    char *pfx;
+    char *disk;
+    char *old;
+    char *base;
+    char *dir;
+
+    u = (struct unconf *)arg;
+    map_class(u, rel, cls, sizeof(cls));
+    if (cls[0] == '\0' || strcmp(cls, "conffile") == 0)
+        return;                 /* still a conffile, or not shipped */
+    pfx = cf_rootpfx(cf);
+    disk = cat2(pfx, rel);
+    free(pfx);
+    dir = cat3(cf->cfdir, "/", pkginst);
+    base = cat2(dir, rel);
+    free(dir);
+    if (file_exists(disk) && !same_file(disk, base)) {
+        old = cat2(disk, ".old");
+        if (opt_dryrun) {
+            printf("would save your %s as %s.old: this version of %s does "
+                   "not keep edits to it\n", rel, rel, pkginst);
+        } else if (copy_file(disk, old) == 0) {
+            printf("%s: this version of %s does not keep edits to it; "
+                   "yours is saved as %s.old\n", rel, pkginst, rel);
+        } else {
+            warnx2("cannot save %s as %s.old", rel, rel);
+        }
+        free(old);
+    }
+    free(base);
+    free(disk);
+}
+
+int conffile_unconf(const struct conf *cf, const char *staged,
+                    const char *pkginst)
+{
+    struct unconf u;
+    char why[256];
+    char *map;
+    char *info;
+    char *dir;
+    char *b;
+
+    if (!conffile_state(cf, pkginst))
+        return 0;                       /* no baseline: nothing to save */
+    if (ds_member(staged, "pkgmap", &map, why, sizeof(why)) != 0)
+        return 0;
+    b = NULL;
+    if (ds_member(staged, "pkginfo", &info, why, sizeof(why)) == 0) {
+        b = pkginfo_get(info, "BASEDIR");
+        free(info);
+    }
+    u.cf = cf;
+    u.map = map;
+    u.base = b;
+    dir = cat3(cf->cfdir, "/", pkginst);
+    walk(cf, pkginst, dir, "", unconf_one, (void *)&u);
+    free(dir);
+    if (b != NULL)
+        free(b);
+    free(map);
+    return 0;
 }

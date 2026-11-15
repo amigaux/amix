@@ -153,7 +153,7 @@ int txn_refuse_if_pending(const struct conf *cf)
         return 0;
     }
     warnx2("an unfinished transaction is journaled in %s", cf->txnfile);
-    warnx2("run 'apkg recover' to finish it (or 'apkg -f recover' to "
+    warnx2("run 'apkg recover' or 'apkg upgrade' to finish it (or 'apkg -f recover' to "
            "discard the journal)");
     return -1;
 }
