@@ -71,6 +71,7 @@ xs_words_refused(unsigned int why)
     case XSURF_REFUSED_HIGH:	return "placed at or above 0x80000000, the board has shut itself up";
     case XSURF_REFUSED_SMALL:	return "AutoConfig size too small";
     case XSURF_REFUSED_NOMAP:	return "no kernel address space to map it";
+    case XSURF_REFUSED_DMA:	return "the remote-DMA self-test failed";
     }
     return "refused for a reason this xsf does not know";
 }

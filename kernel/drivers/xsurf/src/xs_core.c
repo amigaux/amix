@@ -97,6 +97,8 @@ xs_board_t *b;
     }
     isr = XRD(b, XS_ISR);
     XWR(b, XS_ISR, 0xff);
+    if (b->ops->ready)		/* busy after a reset: its writes would be lost */
+	b->st.reset_wait = (unsigned int)(*b->ops->ready)(b);
     return (isr & XS_I_RST) != 0;
 }
 
@@ -134,6 +136,8 @@ unsigned char *mac;
     XWR(b, XS_ISR, XS_I_RDC);
     XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
 
+    for (i = 0; i < XS_PROM_BYTES; i++)
+	b->st.prom[i] = prom[i];
     zero = ones = 0;
     for (i = 0; i < XS_ETHERADDRL; i++) {
 	mac[i] = prom[2 * i];
@@ -150,9 +154,11 @@ unsigned char *mac;
  * station address is read: a chip after power-on already reads as reset,
  * and the address check takes any unicast junk, so without this a board
  * whose register writes are lost would pass the probe.  Page 1's MAR2 and
- * MAR3 are written with 0x55 and 0xAA, then the other way round, and read
- * back; the same numbers in page 0 are write-only (the remote count) and
- * read as something else, so a page select that is lost shows too.  The
+ * MAR3 are written with 0x55 and 0xAA, MAR3 first, then the other way round
+ * with MAR2 first, and read back: a write that also lands in the register
+ * above or below shows as well as one that is lost.  The same numbers in
+ * page 0 are write-only (the remote count) and read as something else, so
+ * a page select that is lost shows too.  The
  * registers are left zero, the remote count too, the chip stopped in page
  * 0.  -1 when they take writes, else the byte read where 0x55 or 0xAA was
  * written.
@@ -167,8 +173,13 @@ xs_board_t *b;
     for (pass = 0; pass < 2 && got < 0; pass++) {
 	a = pass ? XS_CHECK_B : XS_CHECK_A;
 	c = pass ? XS_CHECK_A : XS_CHECK_B;
-	XWR(b, XS_CHECK_REG, a);
-	XWR(b, XS_CHECK_REG + 1, c);
+	if (pass == 0) {
+	    XWR(b, XS_CHECK_REG + 1, c);
+	    XWR(b, XS_CHECK_REG, a);
+	} else {
+	    XWR(b, XS_CHECK_REG, a);
+	    XWR(b, XS_CHECK_REG + 1, c);
+	}
 	if ((got = XRD(b, XS_CHECK_REG)) == a && (got = XRD(b, XS_CHECK_REG + 1)) == c)
 	    got = -1;
     }
@@ -301,6 +312,11 @@ int page, len;
     (*b->ops->bout)(b, buf, len);
     for (t = 0; !(XRD(b, XS_ISR) & XS_I_RDC); t += 10) {
 	if (t >= XS_RDC_US) {
+	    if (b->st.tx_dma_timeouts == 0) {	/* the first: what the chip shows */
+		b->st.dmato_isr = XRD(b, XS_ISR);
+		b->st.dmato_crda = XRD(b, XS_CRDA0) | (XRD(b, XS_CRDA1) << 8);
+		b->st.dmato_len = len;
+	    }
 	    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STA);
 	    b->st.tx_dma_timeouts++;
 	    b->note_due |= XSURF_NOTE_DMA;
@@ -594,6 +610,12 @@ xs_board_t *b;
     if (!b->running)
 	return;
     if (b->tx_cur >= 0 && lbolt - b->tx_since > XS_TX_TIMEOUT) {
+	if (b->st.tx_timeouts == 0) {	/* the first: what the chip shows */
+	    b->st.txto_cr = XRD(b, XS_CR);
+	    xs_page0(b);
+	    b->st.txto_isr = XRD(b, XS_ISR);
+	    b->st.txto_tsr = XRD(b, XS_TSR);
+	}
 	b->st.tx_timeouts++;
 	b->note_due |= XSURF_NOTE_TXTIMEOUT;
 	b->need_reset = 1;
@@ -659,4 +681,55 @@ xs_board_t *b;
 
     return xs_words_link(b->st.link, b->st.link_speed, b->st.link_duplex,
 			 b->st.link_medium, buf);
+}
+
+/*
+ * The remote-DMA self-test, at load, on a chip set up and stopped:
+ * XSURF_DMATEST_ROUNDS rounds of XSURF_DMATEST_LEN bytes, each round its
+ * own pattern and transmit slot, written the way a frame goes (FIFO
+ * blocks, a part block and a tail word on the X-Surf-100's windows), read
+ * back the way a frame comes, and compared.  Several full-size rounds, so
+ * that a window that works only now and then is likely to show.
+ * The chip runs meanwhile in monitor mode and internal loopback: it
+ * receives and sends nothing.  The result goes into the status record; a
+ * write that never completes is not counted as a transmit failure.  The
+ * chip is left stopped.
+ */
+int
+xs_dma_test(b)
+xs_board_t *b;
+{
+    static unsigned char pat[XSURF_DMATEST_LEN], back[XSURF_DMATEST_LEN];
+    int i, r, page;
+
+    b->st.dma_test_at = b->st.dma_test_wrote = b->st.dma_test_read = 0;
+    for (r = 0; r < XSURF_DMATEST_ROUNDS; r++) {
+    page = XS_TX_START + (r & 1) * XS_TX_SLOT;
+    for (i = 0; i < XSURF_DMATEST_LEN; i++) {
+	pat[i] = (i * (2 * r + 7) + 0x35 + r * 0x5a + (i >> 8)) & 0xff;
+	back[i] = ~pat[i];
+    }
+    if (!xs_rdma_write(b, pat, page, XSURF_DMATEST_LEN)) {
+	b->st.dma_test = XSURF_DMATEST_NOWRITE;
+	b->st.dma_test_at = b->st.dmato_crda;
+	b->st.tx_dma_timeouts = 0;
+	b->note_due = 0;
+	b->need_reset = 0;
+	XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
+	return 0;
+    }
+    xs_rdma_read(b, back, page << 8, XSURF_DMATEST_LEN);
+    for (i = 0; i < XSURF_DMATEST_LEN; i++)
+	if (back[i] != pat[i]) {
+	    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
+	    b->st.dma_test = XSURF_DMATEST_MISMATCH;
+	    b->st.dma_test_at = r * XSURF_DMATEST_LEN + i;
+	    b->st.dma_test_wrote = pat[i];
+	    b->st.dma_test_read = back[i];
+	    return 0;
+	}
+    }
+    XWR(b, XS_CR, XS_CR_NODMA | XS_CR_STP);
+    b->st.dma_test = XSURF_DMATEST_PASSED;
+    return 1;
 }

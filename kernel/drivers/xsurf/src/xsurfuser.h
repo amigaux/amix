@@ -61,6 +61,28 @@
 #define XSURF_REFUSED_HIGH	5	/* placed at or above 0x80000000 */
 #define XSURF_REFUSED_SMALL	6	/* AutoConfig size too small */
 #define XSURF_REFUSED_NOMAP	7	/* no kernel address space to map it */
+#define XSURF_REFUSED_DMA	8	/* the remote-DMA self-test failed */
+
+/* reg_access: how the registers are reached (the probe's check decides) */
+#define XSURF_ACCESS_BYTE	1	/* byte cycles */
+#define XSURF_ACCESS_WORD	2	/* word cycles, the register in the high byte */
+#define XSURF_ACCESS_WORD_LO	3	/* word cycles, the register in the low byte */
+
+/* data_path: how frames reach the chip's memory (X-Surf-100; the X-Surf: always the port) */
+#define XSURF_DATA_FIFO		1	/* the longword windows at 0x8880 and 0x8C80 */
+#define XSURF_DATA_PORT		2	/* the 16-bit data port at 0x840 */
+
+/* regs_read[]: what the register check read for 0x55 or 0xaa, per access */
+#define XSURF_REGS_PASSED	0x100
+#define XSURF_REGS_NOT_TRIED	0x200
+
+/* dma_test: the load-time remote-DMA write and read-back */
+#define XSURF_DMATEST_NONE	0
+#define XSURF_DMATEST_PASSED	1
+#define XSURF_DMATEST_NOWRITE	2	/* the write did not complete (no RDC) */
+#define XSURF_DMATEST_MISMATCH	3	/* read back differently */
+#define XSURF_DMATEST_LEN	1534	/* bytes a round: 11 FIFO blocks, a part block, a tail word */
+#define XSURF_DMATEST_ROUNDS	4	/* rounds, each its own pattern, in both transmit slots */
 
 /* notes: transmit failures said once on the console (then only counted) */
 #define XSURF_NOTE_TXTIMEOUT	0x01	/* a transmit did not complete; chip restarted */
@@ -131,6 +153,28 @@ typedef struct
     unsigned int	link_changes;	/* changes said on the console */
     unsigned int	notes;		/* XSURF_NOTE_* said on the console */
     unsigned int	if_collisions;	/* the interface's count (netstat Collis) */
+
+    /* the probe, as read: what tells a dead register or data path apart */
+    unsigned int	probe_cr;	/* CR before the probe's reset */
+    unsigned int	probe_isr;	/* ISR before the probe's reset */
+    unsigned int	reset_wait;	/* X-Surf-100: us until D_RDY after it (0xffffffff never) */
+    unsigned int	reg_access;	/* XSURF_ACCESS_* */
+    unsigned int	regs_read[3];	/* byte, word, word-low: XSURF_REGS_* or the byte read */
+    unsigned char	prom[32];	/* the station-address PROM image as read */
+    unsigned int	dma_test;	/* XSURF_DMATEST_* */
+    unsigned int	dma_test_at;	/* mismatch: the byte; no write: the remote address reached */
+    unsigned int	dma_test_wrote;
+    unsigned int	dma_test_read;
+    /* the chip at the first transmit timeout and the first remote-DMA write timeout */
+    unsigned int	txto_isr;
+    unsigned int	txto_tsr;
+    unsigned int	txto_cr;
+    unsigned int	dmato_isr;
+    unsigned int	dmato_crda;	/* the remote address it reached */
+    unsigned int	dmato_len;	/* of the bytes written */
+    unsigned int	data_path;	/* XSURF_DATA_* */
+    unsigned int	regs_param;	/* the module parameter regs: 0 auto, 1 byte, 2 word */
+    unsigned int	data_param;	/* the module parameter data: 0 auto, 1 windows, 2 port */
 } xsurf_status_t;
 
 #endif /* _XSURFUSER_H */

@@ -419,7 +419,8 @@ chip_data_write(int v)
     if (chip.rsar < 0x4000 || chip.rsar >= 0x8000)
 	chip.bad_addr++;
     else
-	chip.mem[chip.rsar] = v;
+	chip.mem[chip.rsar] = chip.data_flip && chip.data_writes >= chip.flip_from ? ~v : v;
+    chip.data_writes++;
     chip.rsar++;
     chip.rbcr--;
     chip_rdc_check();
@@ -495,8 +496,11 @@ chip_wr(int r, int v)
 	    chip.par[r - 1] = v;
 	else if (r == XS_CURR)
 	    chip.curr = v;
-	else
+	else {
 	    chip.mar[r - 8] = v;
+	    if (chip.clobber && r - 8 + chip.clobber >= 0 && r - 8 + chip.clobber < 8)
+		chip.mar[r - 8 + chip.clobber] = v;
+	}
 	return;
     }
     switch (r) {
@@ -638,11 +642,21 @@ m_link(xs_board_t *b)
     b->st.link_raw = chip.dsr;
 }
 
+/* after a reset: what the test set (us waited, or -1) */
+static int
+m_ready(xs_board_t *b)
+{
+    chip.ready_calls++;
+    return chip.ready_wait;
+}
+
 struct xs_ops host_ops = {
     "Model", XSURF_KIND_XSURF100, 0x40, m_rd, m_wr, m_bin, m_bout, m_irq, m_link,
+    m_ready, XSURF_ACCESS_BYTE, 0, 1,
 };
 int	host_boards = 1;
 int	host_refuse;
+int	xs_regs_param, xs_data_param;
 xs_found_t	xs_found[XSURF_MAXFOUND];
 int		xs_nfound;
 
@@ -661,18 +675,25 @@ xs_find_boards()
 	b->unit = i;
 	b->tx_cur = -1;
 	memset(&xs_found[xs_nfound], 0, sizeof xs_found[0]);
+	b->data_path = XSURF_DATA_PORT;
 	if (host_refuse || !xs_chip_reset(b) || xs_regs_check(b) >= 0 ||
-	    !xs_read_prom(b, b->mac)) {
+	    !xs_read_prom(b, b->mac) || (xs_chip_init(b, 0), !xs_dma_test(b))) {
 	    xs_found[xs_nfound].board = -1;
+	    xs_found[xs_nfound].rec = b->st;
 	    xs_found[xs_nfound].rec.version = XSURF_STATUS_VERSION;
 	    xs_found[xs_nfound].rec.size = sizeof(xsurf_status_t);
 	    xs_found[xs_nfound].rec.unit = 0xffffffff;
-	    xs_found[xs_nfound].rec.refused = host_refuse ? host_refuse : XSURF_REFUSED_NOWRITES;
+	    xs_found[xs_nfound].rec.refused = host_refuse ? host_refuse :
+		b->st.dma_test > XSURF_DMATEST_PASSED ? XSURF_REFUSED_DMA : XSURF_REFUSED_NOWRITES;
+	    xs_found[xs_nfound].rec.dma_test = b->st.dma_test;
+	    xs_found[xs_nfound].rec.dma_test_at = b->st.dma_test_at;
 	    xs_nfound++;
 	    continue;
 	}
 	xs_chip_init(b, 0);
 	b->present = 1;
+	b->st.reg_access = b->ops->access;
+	b->st.data_path = b->data_path;
 	b->st.zorro = 2;
 	b->st.unit = i;
 	b->phys = 0xe90000;

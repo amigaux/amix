@@ -1375,6 +1375,14 @@ t_regs_check()
     chip_power_on(MAC);
     chip.page_lost = 1;
     CHECK(xs_regs_check(&b) == 0x99);		/* page 0's register 0x0a */
+    cur = "regs-check-lands-one-up";
+    chip_power_on(MAC);
+    chip.clobber = 1;
+    CHECK(xs_regs_check(&b) >= 0);
+    cur = "regs-check-lands-one-down";
+    chip_power_on(MAC);
+    chip.clobber = -1;
+    CHECK(xs_regs_check(&b) >= 0);
     cur = "regs-check-stuck-high";
     chip_power_on(MAC);
     chip.cr = 0x61;				/* page 1, and stuck there */
@@ -1382,6 +1390,99 @@ t_regs_check()
     chip.mar[3] = 0xaa;
     chip.writes_lost = 1;
     CHECK(xs_regs_check(&b) == 0x55);		/* right once by chance, not twice */
+}
+
+/* the probe's raw values, the DMA self-test and the timeout snapshots */
+static void
+t_diagnostics()
+{
+    int calls;
+
+    cur = "diag-ready-after-every-reset";
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(chip.ready_calls == 1 && B->st.reset_wait == 0);
+    CHECK(memcmp(B->st.prom, chip.mem, 32) == 0);		/* the PROM image as read */
+    CHECK(B->st.dma_test == XSURF_DMATEST_PASSED && B->st.tx_dma_timeouts == 0);
+    CHECK(B->st.reg_access == XSURF_ACCESS_BYTE && B->st.data_path == XSURF_DATA_PORT);
+    CHECK(strstr(host_console, "link up 100 full\n") != NULL);	/* no access notes: byte, one path */
+
+    cur = "diag-txto-snapshot";
+    s_open(&S[0], 0);
+    bind(&S[0], 0x800);
+    chip.tx_mode = TX_HANG;
+    s_put(&S[0], send_ok(PEER, 20, 1));
+    calls = chip.ready_calls;
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(B->st.tx_timeouts == 1 && (B->st.txto_cr & XS_CR_TXP) && (B->st.txto_cr & XS_CR_STA));
+    CHECK(B->st.txto_isr == 0 && B->st.txto_tsr == 0);
+    CHECK(chip.ready_calls == calls + 1);			/* the restart's reset waited too */
+    chip.isr = 0;
+    chip.tx_mode = TX_HANG;
+    B->st.txto_cr = 0x77;
+    s_put(&S[0], send_ok(PEER, 20, 2));
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(B->st.tx_timeouts == 2 && B->st.txto_cr == 0x77);	/* the first one kept */
+    chip.tx_mode = TX_OK;
+
+    cur = "diag-dmato-snapshot";
+    chip.rdc_never = 1;
+    s_put(&S[0], send_ok(PEER, 100, 3));
+    chip.rdc_never = 0;
+    CHECK(B->st.tx_dma_timeouts == 1 && B->st.dmato_len == 114);
+    CHECK(B->st.dmato_crda == 0);				/* the model's CRDA reads 0 */
+    host_tick();
+    shutdown();
+
+    cur = "diag-dma-test-nowrite";
+    host_console[0] = 0;
+    chip_power_on(MAC);
+    chip.rdc_never = 1;
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0 && xs_nfound == 1);
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_DMA && xs_found[0].rec.dma_test == XSURF_DMATEST_NOWRITE);
+    CHECK(xs_found[0].rec.tx_dma_timeouts == 0);		/* the test's timeout is not a transmit's */
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-dma-test-mismatch";
+    chip_power_on(MAC);
+    chip.data_flip = 1;
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0);
+    CHECK(xs_found[0].rec.dma_test == XSURF_DMATEST_MISMATCH && xs_found[0].rec.dma_test_at == 0);
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-dma-test-late-round";
+    chip_power_on(MAC);
+    chip.data_flip = 1;
+    chip.flip_from = 2 * XSURF_DMATEST_LEN + 5;		/* round 3 goes wrong at byte 5 */
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0);
+    CHECK(xs_found[0].rec.dma_test == XSURF_DMATEST_MISMATCH);
+    CHECK(xs_found[0].rec.dma_test_at == 2 * XSURF_DMATEST_LEN + 5);
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-access-notes";
+    host_ops.access = XSURF_ACCESS_WORD;
+    host_ops.paths = 2;
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(strstr(host_console, "link up 100 full, registers by word cycles, data through the data port\n") != NULL);
+    shutdown();
+    host_ops.access = XSURF_ACCESS_WORD_LO;
+    host_ops.paths = 1;
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(strstr(host_console, "link up 100 full, registers by word cycles (low byte)\n") != NULL);
+    shutdown();
+    host_ops.access = XSURF_ACCESS_BYTE;
+
+    cur = "diag-params";
+    boot("intr=0 regs=2 data=1");
+    CHECK(xs_regs_param == 2 && xs_data_param == 1);
+    shutdown();
+    boot("regs=3 data=9");
+    CHECK(xs_regs_param == 0 && xs_data_param == 0);
+    CHECK(strstr(host_console, "regs=3 is not 0, 1 or 2; using 0") != NULL);
+    CHECK(strstr(host_console, "data=9 is not 0, 1 or 2; using 0") != NULL);
+    shutdown();
 }
 
 int
@@ -1417,6 +1518,7 @@ main()
     t_notes();
     t_ctl();
     t_regs_check();
+    t_diagnostics();
     printf("t_core: %d checks, %d failed\n", n_checks, n_fail);
     return n_fail != 0;
 }

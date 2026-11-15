@@ -38,6 +38,7 @@
 #define XS_RDC_US	20000		/* the longest a remote-DMA write may take */
 #define XS_OVW_US	2000		/* after a stop on overrun: at least 1.6 ms */
 #define XS_SELFTEST_US	20000		/* the interrupt self-test's wait */
+#define XS_READY_US	20000		/* the longest to wait for D_RDY after a reset */
 
 #define XS_ISR_LOOPS	8		/* passes over ISR per service call */
 #define XS_RX_FRAMES	64		/* frames per drain: more than the ring holds */
@@ -57,7 +58,8 @@ typedef struct xs_board xs_board_t;
  * A card's operations.  rd/wr take a DP8390 register number (xs8390.h) in
  * the page the core selected; bin/bout move bytes through the data port
  * after the core set up a remote DMA; irq says whether the card's own
- * network interrupt bit is set; link reads the link state into the board's
+ * network interrupt bit is set; ready waits after a reset until the chip
+ * says it is ready (0 when the card cannot say); link reads the link state into the board's
  * status record (link, link_speed, link_duplex, link_medium, link_raw),
  * the chip neither in a remote DMA nor anywhere but page 0, and leaves it
  * in page 0.  None of them sleeps or allocates.
@@ -73,6 +75,10 @@ struct xs_ops
     void	(*bout)();	/* (b, buf, len): even length */
     int		(*irq)();	/* (b) */
     void	(*link)();	/* (b) */
+    int		(*ready)();	/* (b) -> us waited until the chip is ready after a reset, or -1; or 0 */
+    int		access;		/* XSURF_ACCESS_* */
+    struct xs_ops *alt;		/* the same card by other cycles, tried when writes do not land */
+    int		paths;		/* data paths: 1 the port only, 2 the windows, then the port */
 };
 
 /* one open stream */
@@ -121,6 +127,7 @@ struct xs_board
     int			link_alike;	/* reads of link_cand in a row */
     long		link_when;	/* lbolt of the last line said */
     int			note_due;	/* XSURF_NOTE_* to say at the next tick */
+    int			data_path;	/* XSURF_DATA_* (bin/bout follow it) */
 
     xs_stream_t		s[XS_MAXDEV];
     xsurf_status_t	st;
@@ -149,6 +156,7 @@ extern int	xs_chip_reset();	/* (b) -> 1 = the chip answered */
 extern int	xs_read_prom();		/* (b, mac) -> 1 = a usable address */
 extern int	xs_regs_check();	/* (b) -> -1 = registers take writes, else the byte read */
 extern int	xs_link_key();		/* (b) -> the link state as one number */
+extern int	xs_dma_test();		/* (b) -> 1 = the remote-DMA self-test passed */
 extern char	*xs_link_str();		/* (b) -> the link state in words */
 extern void	xs_chip_init();		/* (b, start) */
 extern void	xs_chip_stop();		/* (b) */
@@ -170,6 +178,7 @@ extern void	xs_tx_restart();	/* (b): a transmit slot came free */
 
 /* xs_boards.c */
 extern int	xs_find_boards();	/* () -> number found and set up */
+extern int	xs_regs_param, xs_data_param;	/* the module parameters regs and data */
 extern void	xs_unmap();		/* (b) */
 
 #endif /* _XSURF_H */

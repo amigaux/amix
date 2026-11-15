@@ -73,42 +73,87 @@ xs_board_t *b;
 
 xs_found_t	xs_found[XSURF_MAXFOUND];
 int		xs_nfound;
+int		xs_regs_param;		/* 0 byte cycles, word if they fail; 1 byte; 2 word */
+int		xs_data_param;		/* 0 windows, the port if they fail; 1 windows; 2 port */
 
 /*
- * What both cards' probes end with: reset, the register check, station
- * address, the chip set up and left stopped.  A refusal has a console
- * line naming what failed; the reason and its detail go to the caller.
+ * What both cards' probes end with: reset (and the wait until the chip is
+ * ready), the register check, station address, the chip set up and left
+ * stopped, the remote-DMA self-test.  The register check goes through the
+ * card's access forms in turn (byte cycles, then word cycles) unless the
+ * parameter regs fixes one; the self-test through its data paths (the
+ * windows, then the port) unless the parameter data fixes one.  The raw
+ * values go into the status record; a refusal has a console line naming
+ * what failed, and the reason and its detail go to the caller.
  */
 static int
 xs_probe_chip(b, detail)
 xs_board_t *b;
 int *detail;
 {
-    int got;
+    int got, i;
 
+    for (i = 0; i < 3; i++)
+	b->st.regs_read[i] = XSURF_REGS_NOT_TRIED;
+    b->st.regs_param = xs_regs_param;
+    b->st.data_param = xs_data_param;
+    b->st.probe_cr = (*b->ops->rd)(b, XS_CR);
+    b->st.probe_isr = (*b->ops->rd)(b, XS_ISR);
     if (!xs_chip_reset(b)) {
 	cmn_err(CE_NOTE, "xsurf: %s at 0x%x: the chip does not reset",
 	    b->ops->name, (int)b->phys);
 	return XSURF_REFUSED_NORESET;
     }
-    if ((got = xs_regs_check(b)) >= 0) {
-	*detail = got;
-	cmn_err(CE_NOTE,
-	    "xsurf: %s at 0x%x: its registers do not take writes (wrote 0x55 or 0xaa, read 0x%x)",
-	    b->ops->name, (int)b->phys, got);
-	return XSURF_REFUSED_NOWRITES;
+    if (xs_regs_param == 2 && b->ops->alt)
+	b->ops = b->ops->alt;
+    for (;;) {
+	got = xs_regs_check(b);
+	b->st.regs_read[b->ops->access - 1] = got < 0 ? XSURF_REGS_PASSED : got;
+	if (got < 0)
+	    break;
+	if (xs_regs_param != 0 || b->ops->alt == 0) {
+	    *detail = got;
+	    cmn_err(CE_NOTE,
+		"xsurf: %s at 0x%x: its registers do not take writes (wrote 0x55 or 0xaa, read 0x%x%s)",
+		b->ops->name, (int)b->phys, got,
+		b->ops->access == XSURF_ACCESS_BYTE ? "" : "; by word cycles too");
+	    return XSURF_REFUSED_NOWRITES;
+	}
+	b->ops = b->ops->alt;
     }
+    b->st.reg_access = b->ops->access;
     if (!xs_read_prom(b, b->mac)) {
 	cmn_err(CE_NOTE, "xsurf: %s at 0x%x: no usable station address",
 	    b->ops->name, (int)b->phys);
 	return XSURF_REFUSED_NOMAC;
     }
     xs_chip_init(b, 0);
+    b->data_path = (b->ops->paths == 2 && xs_data_param != 2) ? XSURF_DATA_FIFO : XSURF_DATA_PORT;
+    while (!xs_dma_test(b)) {
+	if (b->data_path == XSURF_DATA_FIFO && xs_data_param == 0) {
+	    b->data_path = XSURF_DATA_PORT;	/* the windows failed: the port */
+	    xs_chip_init(b, 0);
+	    continue;
+	}
+	*detail = b->st.dma_test;
+	if (b->st.dma_test == XSURF_DMATEST_NOWRITE)
+	    cmn_err(CE_NOTE,
+		"xsurf: %s at 0x%x: remote-DMA self-test: the write did not complete (remote address 0x%x)",
+		b->ops->name, (int)b->phys, (int)b->st.dma_test_at);
+	else
+	    cmn_err(CE_NOTE,
+		"xsurf: %s at 0x%x: remote-DMA self-test: byte %d read back 0x%x, written 0x%x",
+		b->ops->name, (int)b->phys, (int)b->st.dma_test_at,
+		(int)b->st.dma_test_read, (int)b->st.dma_test_wrote);
+	return XSURF_REFUSED_DMA;
+    }
+    b->st.data_path = b->data_path;
+    xs_chip_init(b, 0);
     return XSURF_REFUSED_NONE;
 }
 
 static int	xs100_probe(), xsurf_probe();
-static struct xs_ops xs100_ops, xsurf_ops;
+static struct xs_ops xs100_ops, xs100w_ops, xs100wl_ops, xsurf_ops;
 
 static struct xs_card xs_cards[] = {
     { 0x12120064, &xs100_ops, 0x9000, xs100_probe },	/* X-Surf-100 */
@@ -126,6 +171,12 @@ static struct xs_card xs_cards[] = {
  *            long is two 16-bit chip transfers in byte order.  Used in
  *            blocks of 0x80 bytes from those addresses, inside the maker's
  *            windows and where the emulator decodes them.
+ * The maker gives the register area as word access only; Linux (and this
+ * driver first) uses byte cycles, which the emulator models and which a
+ * real card has run with.  The probe's check falls back to word cycles when
+ * byte writes do not land (register in the high byte, the byte-swapped
+ * area; then the low byte); the parameter regs fixes either.  After a reset
+ * the chip is busy (D_RDY clear) and the driver waits for it.
  * The PHY is on from reset and left to the chip (no MII access); its link,
  * speed and duplex come from the Device Status Register (0x17, read).
  * The driver never writes 0x17: on the AX88796B a write sets the
@@ -154,8 +205,35 @@ int r, v;
     *XS100_REG(b, r) = v;
 }
 
+/* word cycles: the byte written in both halves, read from the high one */
+static int
+xs100w_rd(b, r)
+xs_board_t *b;
+int r;
+{
+    return (*(volatile unsigned short *)XS100_REG(b, r) >> 8) & 0xff;
+}
+
+/* the same, read from the low half */
+static int
+xs100wl_rd(b, r)
+xs_board_t *b;
+int r;
+{
+    return *(volatile unsigned short *)XS100_REG(b, r) & 0xff;
+}
+
+static void
+xs100w_wr(b, r, v)
+xs_board_t *b;
+int r, v;
+{
+    *(volatile unsigned short *)XS100_REG(b, r) = ((v & 0xff) << 8) | (v & 0xff);
+}
+
 /* `len' bytes from the data port: whole longs through the FIFO window, a
- * block at a time, then a word and a byte from the data port itself */
+ * block at a time, then a word and a byte from the data port itself; or,
+ * on the port path, words from the data port all the way */
 static void
 xs100_bin(b, buf, len)
 xs_board_t *b;
@@ -165,6 +243,12 @@ int len;
     volatile unsigned int *fifo;	/* 32 bits */
     int n;
 
+    while (len >= 4 && b->data_path == XSURF_DATA_PORT) {
+	*(unsigned short *)buf = *(volatile unsigned short *)XS100_REG(b, XS_DATA);
+	*(unsigned short *)(buf + 2) = *(volatile unsigned short *)XS100_REG(b, XS_DATA);
+	buf += 4;
+	len -= 4;
+    }
     while (len >= 4) {
 	n = len & ~3;
 	if (n > XS100_BLOCK)
@@ -192,6 +276,12 @@ int len;
     volatile unsigned int *fifo;	/* 32 bits */
     int n;
 
+    while (len >= 4 && b->data_path == XSURF_DATA_PORT) {
+	*(volatile unsigned short *)XS100_REG(b, XS_DATA) = *(unsigned short *)buf;
+	*(volatile unsigned short *)XS100_REG(b, XS_DATA) = *(unsigned short *)(buf + 2);
+	buf += 4;
+	len -= 4;
+    }
     while (len >= 4) {
 	n = len & ~3;
 	if (n > XS100_BLOCK)
@@ -216,11 +306,26 @@ xs_board_t *b;
  * The link from the DSR.  D_RDY clear (the chip in reset, asleep or
  * loading its EEPROM) makes the other bits meaningless: link unknown.
  */
+/* after a reset: until D_RDY, at most XS_READY_US; the us waited, or -1 */
+static int
+xs100_ready(b)
+xs_board_t *b;
+{
+    int t;
+
+    for (t = 0; t < XS_READY_US; t += 10) {
+	if ((*b->ops->rd)(b, XS_DSR) & XS_DSR_RDY)
+	    return t;
+	xs_udelay(10L);
+    }
+    return -1;
+}
+
 static void
 xs100_link(b)
 xs_board_t *b;
 {
-    int dsr = xs100_rd(b, XS_DSR);
+    int dsr = (*b->ops->rd)(b, XS_DSR);
     xsurf_status_t *st = &b->st;
 
     st->link_raw = dsr;
@@ -243,9 +348,20 @@ xs_board_t *b;
     }
 }
 
+static struct xs_ops xs100wl_ops = {
+    "X-Surf-100", XSURF_KIND_XSURF100, 0x40,
+    xs100wl_rd, xs100w_wr, xs100_bin, xs100_bout, xs100_irq, xs100_link,
+    xs100_ready, XSURF_ACCESS_WORD_LO, 0, 2,
+};
+static struct xs_ops xs100w_ops = {
+    "X-Surf-100", XSURF_KIND_XSURF100, 0x40,
+    xs100w_rd, xs100w_wr, xs100_bin, xs100_bout, xs100_irq, xs100_link,
+    xs100_ready, XSURF_ACCESS_WORD, &xs100wl_ops, 2,
+};
 static struct xs_ops xs100_ops = {
     "X-Surf-100", XSURF_KIND_XSURF100, 0x40,
     xs100_rd, xs100_wr, xs100_bin, xs100_bout, xs100_irq, xs100_link,
+    xs100_ready, XSURF_ACCESS_BYTE, &xs100w_ops, 2,
 };
 
 static int
@@ -401,6 +517,7 @@ xs_board_t *b;
 static struct xs_ops xsurf_ops = {
     "X-Surf", XSURF_KIND_XSURF, 0x00,
     xsurf_rd, xsurf_wr, xsurf_bin, xsurf_bout, xsurf_irq, xsurf_link,
+    0, XSURF_ACCESS_BYTE, 0, 1,
 };
 
 static void
@@ -507,10 +624,11 @@ int *detail;
  * (board -1) with a record of what it is and why.
  */
 static void
-xs_note_found(board, c, addr, why, detail)
+xs_note_found(board, c, addr, why, detail, from)
 int board, why, detail;
 struct xs_card *c;
 long addr;
+xsurf_status_t *from;		/* a refusal after the probe began: what it read */
 {
     xs_found_t *f;
 
@@ -521,6 +639,8 @@ long addr;
     f->board = board;
     if (board >= 0)
 	return;
+    if (from)
+	f->rec = *from;
     f->rec.version = XSURF_STATUS_VERSION;
     f->rec.size = sizeof(xsurf_status_t);
     f->rec.board_kind = c->ops->kind;
@@ -564,19 +684,19 @@ xs_find_boards()
 		cmn_err(CE_NOTE,
 		    "xsurf: %s at 0x%x: placed at or above 0x80000000, the board has shut itself up",
 		    c->ops->name, (int)addr);
-		xs_note_found(-1, c, addr, XSURF_REFUSED_HIGH, 0);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_HIGH, 0, (xsurf_status_t *)0);
 		continue;
 	    }
 	    if ((unsigned long)size < c->bytes) {
 		cmn_err(CE_NOTE, "xsurf: %s at 0x%x: AutoConfig size 0x%x too small",
 		    c->ops->name, (int)addr, (int)size);
-		xs_note_found(-1, c, addr, XSURF_REFUSED_SMALL, (int)size);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_SMALL, (int)size, (xsurf_status_t *)0);
 		continue;
 	    }
 	    if (xs_map(b, (unsigned long)addr, c->bytes) != 0) {
 		cmn_err(CE_NOTE, "xsurf: %s at 0x%x: no kernel address space to map it",
 		    c->ops->name, (int)addr);
-		xs_note_found(-1, c, addr, XSURF_REFUSED_NOMAP, 0);
+		xs_note_found(-1, c, addr, XSURF_REFUSED_NOMAP, 0, (xsurf_status_t *)0);
 		continue;
 	    }
 	    detail = 0;
@@ -584,7 +704,7 @@ xs_find_boards()
 		if (why != XSURF_REFUSED_NOANSWER)
 		    xs_chip_stop(b);	/* its interrupt masked, if writes land */
 		xs_unmap(b);
-		xs_note_found(-1, c, addr, why, detail);
+		xs_note_found(-1, c, addr, why, detail, &b->st);
 		continue;
 	    }
 	    b->present = 1;
@@ -592,7 +712,7 @@ xs_find_boards()
 	    b->st.board_phys = (unsigned int)addr;
 	    b->st.zorro = (unsigned long)addr >= (unsigned long)0x01000000 ? 3 : 2;
 	    b->st.unit = b->unit;
-	    xs_note_found(xs_nboards, c, addr, XSURF_REFUSED_NONE, 0);
+	    xs_note_found(xs_nboards, c, addr, XSURF_REFUSED_NONE, 0, (xsurf_status_t *)0);
 	    xs_nboards++;
 	}
     }
