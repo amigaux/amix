@@ -1,9 +1,9 @@
-.\" Xzz9000.1 -- userland/packages/x11r6.3.  MIT, see LICENSE in userland/packages.
-.TH XZZ9000 1 "2026-11-01" "x11r63" "X11R6.3 on Amix"
+.\" Xrtg.1 -- userland/packages/x11r6.3.  MIT, see LICENSE in userland/packages.
+.TH XRTG 1 "2026-11-15" "x11r63" "X11R6.3 on Amix"
 .SH NAME
-Xzz9000, X \- X11R6.3 server for the ZZ9000 and Z3660 RTG cards
+Xrtg, Xzz9000, X \- X11R6.3 server for RTG cards (the ZZ9000 and Z3660 RTG)
 .SH SYNOPSIS
-.B Xzz9000
+.B Xrtg
 [
 .BI : display
 ] [
@@ -11,15 +11,26 @@ Xzz9000, X \- X11R6.3 server for the ZZ9000 and Z3660 RTG cards
 \&...
 ]
 .SH DESCRIPTION
-.B Xzz9000
-is the X server for the RTG output of the MNT ZZ9000 and the Z3660
-accelerator under Amix.  It draws one 16-bit TrueColor screen (RGB565)
-into the card's framebuffer through the card driver,
-.BR /dev/zz9000 ,
+.B Xrtg
+is the X server for the RTG output of a graphics card under Amix: the
+MNT ZZ9000 and the Z3660 accelerator's RTG.  It draws one 16-bit
+TrueColor screen into the card's framebuffer through the card driver
+.RB ( /dev/zz9000 )
 and uses the card's blitter for large fills and copies.  Keyboard and
 mouse come from the Amix screen manager, as for the stock servers.
+.PP
+.B Xzz9000
+and
 .B X
-is the same program.
+are the same program.  The name it is started under picks the card:
+.B Xzz9000
+drives the ZZ9000/Z3660 card, as it always has;
+.B Xrtg
+and
+.B X
+take the first card the server finds.
+.B \-card
+overrides both.
 .PP
 The server needs the card driver loaded and must run as root: the
 driver's node is readable and writable by root and group sys only.  Start it as root,
@@ -38,13 +49,24 @@ raw key codes plus 8 (8 to 135).
 .SH OPTIONS
 Besides the options every X server takes (see
 .BR Xserver (1)),
-.B Xzz9000
+.B Xrtg
 takes these:
 .TP 8
+.BI \-card " name"
+The card to drive:
+.B zz9000
+(the ZZ9000 or the Z3660 RTG), or
+.B auto
+for the first card the server finds.  A card this server has no driver
+for stops it with a message.  The default is the card the server's name
+says, else
+.BR auto .
+.TP 8
 .BI \-mode " width" x height
-The screen mode: one of 640x480, 800x600, 1024x768, 1280x720, 1280x800,
-1280x1024, 1920x800 and 1920x1080, as far as the card offers it.  The
-default is 1920x800.
+The screen mode.  On the ZZ9000/Z3660: one of 640x480, 800x600,
+1024x768, 1280x720, 1280x800, 1280x1024, 1920x800 and 1920x1080, as far
+as the card offers it; the default is 1920x800.  A mode the card does not
+have stops the server with the card's list.
 .TP 8
 .B \-audiobell
 Ring the bell on
@@ -57,9 +79,10 @@ off, a faulty chip) the first bell would freeze the whole machine.
 .BI \-blitmin " pixels"
 Fills and copies of at least this many pixels on the screen go to the
 card's blitter; smaller ones, other raster operations and everything in
-pixmaps are drawn by the CPU.  The default is 1024; 0 never uses the
-blitter.  The server also stops using the blitter, for the rest of its
-run, if the driver says the card or mode has none.
+pixmaps are drawn by the CPU.  The default is the card's (1024 on the
+ZZ9000/Z3660); 0 never uses the blitter.  The server also stops using
+the blitter, for the rest of its run, if the driver says the card or
+mode has none.
 .TP 8
 .BI \-blitmax " pixels"
 Accepted and ignored: the card driver splits every blitter operation

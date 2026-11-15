@@ -1,4 +1,4 @@
-The Amiga X server of the x11r63 package (Xzz9000): who holds which part
+The Amiga X server of the x11r63 package (Xrtg): who holds which part
 
 The server's hw/amix tree comes from patch 00, Ignacio Soriano's Amiga X
 server, with the package's patches 01 onwards on top.  Its parts, and the
@@ -18,7 +18,8 @@ notice that covers each:
    (the Z3660 modes, the raster-op and window copy fixes, fills and copies
    on the card's blitter, the monitor switch, the keyboard back to the
    console when the server ends), the package's patches 01 onwards, and
-   zz9000screen.c, the package's own, MIT:
+   the files of its own among them (rtgscreen.c, once zz9000screen.c;
+   rtgcards.c, rtgdraw.h), MIT:
 
        Copyright (c) 2026 Jussi Alanärä
 
