@@ -74,6 +74,7 @@
 /* ---------------- installed state ---------------- */
 
 int opt_force_essential = 0;   /* --force-remove-essential (main.c) */
+char **apkg_argv = NULL;       /* main()'s argv, for the re-exec */
 
 /* the value of parameter key (e.g. "VERSION") in the installed pkginfo,
  * CR/LF and one level of quotes stripped, "" when the line is absent:
@@ -588,8 +589,13 @@ static int install_one(const struct conf *cf, const char *pkgadd,
                        const char *file, const char *pkginst, int ow,
                        const struct txnpkg *p)
 {
+    char iver[128];
     int rc;
 
+    /* a file that becomes a conffile: untouched ones take the new
+     * default (conffile.c); an installed instance only */
+    if (!p->kspace && installed_version(cf, pkginst, iver, sizeof(iver)))
+        (void)conffile_prepare(cf, file, pkginst);
     if (run_pkgadd(cf, pkgadd, file, pkginst, ow) != 0)
         return EX_PKGCMD;
     if (!p->kspace)
@@ -703,6 +709,17 @@ static int commit_txn(const struct conf *cf, const struct source *src,
         if (from[i] != NULL)
             free(from[i]);
     free((char *)from);
+    /* a new kbootset composes the generation again, so what an older one
+     * refused (a major it did not know) is built now */
+    if (rc == EX_OK && !t.kspace && kspace_has_records(cf))
+        for (i = 0; i < nt; i++)
+            if (!todo[i]->kspace && t.p[nrep + i].done &&
+                strcmp(todo[i]->name, KBOOTSET_PKG) == 0) {
+                t.kspace = 1;
+                if (!opt_dryrun)
+                    printf("kbootset %s is installed; composing the "
+                           "generation with it\n", todo[i]->version);
+            }
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);
     /* good, and the journal cleared: recover will not read them */
@@ -891,6 +908,7 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     /* one transaction at a time on a target; then the plan of one kernel
      * package per line and the kernel-space pre-flight, before anything
      * is fetched */
+    kspace_floor(cf, cat, &todo, &ow, &nt);
     rep = NULL;
     nrep = 0;
     rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
@@ -1003,19 +1021,87 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
  * question the way SVR4 always could: the old inode stays alive for the
  * running process while the directory entry is replaced.
  */
-/* the place of a package in an upgrade (0.3.5): kbootset first, the
- * other ordinary packages, the loader, the modules, the kernel last.  The
+/* the place of a package in an upgrade: the package tools first (0.3.12:
+ * the engine, apkg, kbootset; 0.3.5 had kbootset alone), the other
+ * ordinary packages, the loader, the modules, the kernel last.  The
  * generation is built once, after all of them; the order decides what a
  * failure midway leaves (the journal, 'apkg recover'). */
+#define RANK_TOOLS 1            /* ranks 0..1: the tools that install
+                                 * packages, upgraded before the re-exec;
+                                 * kbootset leads the rest, so the
+                                 * generation is built once, at the end */
 static int set_rank(const struct pkgent *e)
 {
-    if (!e->kspace)
-        return strcmp(e->name, KBOOTSET_PKG) == 0 ? 0 : 1;
+    if (!e->kspace) {
+        if (strcmp(e->name, APKGENG_PKG) == 0)
+            return 0;
+        if (strcmp(e->name, APKG_PKG) == 0)
+            return 1;
+        return strcmp(e->name, KBOOTSET_PKG) == 0 ? 2 : 3;
+    }
     if (strcmp(e->role, "loader") == 0)
-        return 2;
+        return 4;
     if (strcmp(e->role, "module") == 0)
-        return 3;
-    return 4;
+        return 5;
+    return 6;
+}
+
+/* After an upgrade of the package tools that took apkg itself, run the
+ * new apkg with this call's arguments for the rest; it finds the tools
+ * up to date.  It must answer `apkg version` first; when it cannot, this
+ * returns and the running apkg does the rest. */
+static void reexec_self(const struct conf *cf)
+{
+    static char envset[] = APKG_REEXEC_ENV "=1";
+    char *argv[3];
+    char line[128];
+    int fd[2];
+    int pid;
+    int st;
+    int n;
+    int got;
+
+    line[0] = '\0';
+    got = 0;
+    fflush(stdout);
+    fflush(stderr);
+    if (access(cf->self, X_OK) == 0 && pipe(fd) == 0) {
+        pid = fork();
+        if (pid == 0) {
+            (void)close(fd[0]);
+            (void)dup2(fd[1], 1);
+            (void)close(fd[1]);
+            argv[0] = cf->self;
+            argv[1] = (char *)"version";
+            argv[2] = NULL;
+            execv(argv[0], argv);
+            _exit(127);
+        }
+        (void)close(fd[1]);
+        if (pid > 0) {
+            while (got < (int)sizeof(line) - 1 &&
+                   (n = (int)read(fd[0], line + got,
+                                  (unsigned)(sizeof(line) - 1 - got))) > 0)
+                got += n;
+            line[got] = '\0';
+            if (waitpid(pid, &st, 0) < 0 || !WIFEXITED(st) ||
+                WEXITSTATUS(st) != 0)
+                got = 0;
+        }
+        (void)close(fd[0]);
+    }
+    if (got < 6 || strncmp(line, "apkg ", 5) != 0) {
+        warnx2("the new apkg %s does not run; this apkg (%s) does the "
+               "rest", cf->self, APKG_VERSION);
+        return;
+    }
+    line[strcspn(line, "\n")] = '\0';
+    printf("the package tools are upgraded; %s does the rest\n", line);
+    fflush(stdout);
+    (void)putenv(envset);
+    execv(cf->self, apkg_argv);
+    warnx2("cannot run %s; this apkg (%s) does the rest", cf->self,
+           APKG_VERSION);
 }
 
 /* stable: insertion sort by rank, todo[] and ow[] together */
@@ -1125,6 +1211,8 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     int nrep;
     int i, j;
     int nk;
+    int ntools;
+    int self;
     int rc;
 
     /* Several names, ONE transaction (one journal, one kbootset build +
@@ -1181,6 +1269,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         return rc;
     }
     kspace_expand(cf, cat, &todo, &ow, &nt);
+    kspace_floor(cf, cat, &todo, &ow, &nt);
     order_set(todo, ow, nt);
     /* an upgrade keeps its pkginst, so it replaces no other kernel
      * package; kspace_replaces() still refuses a line with two kernel
@@ -1257,8 +1346,35 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
     }
 
-    rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
-                    pkgadd, rep, nrep);
+    /* the engine and apkg in a transaction of their own when apkg itself
+     * is among them and other packages follow: the new apkg does the rest
+     * (kbootset first) */
+    ntools = 0;
+    self = 0;
+    for (i = 0; i < nt; i++)
+        if (set_rank(todo[i]) <= RANK_TOOLS) {
+            ntools++;
+            if (strcmp(todo[i]->name, APKG_PKG) == 0)
+                self = 1;
+        }
+    if (self && ntools < nt && !opt_dryrun &&
+        getenv(APKG_REEXEC_ENV) == NULL &&
+        (cf->target[0] == '\0' || cf->self_set)) {
+        rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, ntools,
+                        pkgadd, NULL, 0);
+        if (rc == EX_OK) {
+            reexec_self(cf);
+            rc = commit_txn(cf, &src, "upgrade", todo + ntools, ow + ntools,
+                            files + ntools, insts + ntools, nt - ntools,
+                            pkgadd, rep, nrep);
+        } else {
+            warnx2("the package tools were not all upgraded; nothing else "
+                   "was");
+        }
+    } else {
+        rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
+                        pkgadd, rep, nrep);
+    }
     free_strv(files, nt);
     free_strv(insts, nt);
     if (rep != NULL)
@@ -1351,6 +1467,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
         (void)txn_save(cf, &t);
         if (!opt_dryrun)
             printf("removed %s\n", pkginst);
+        conffile_prune(cf, pkginst);
     }
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);

@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.11" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.12" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -179,12 +179,26 @@ moves, as one transaction ("every installed package is up to date" when
 there is none).  This is the way to take a new kernel cut: the kernel,
 kbootset, the loader and every module package move together.
 .IP
-The packages of a transaction are installed in this order: kbootset,
-the other ordinary packages, the loader, the modules, the kernel last.
+The packages of a transaction are installed in this order: the package
+tools (the engine, apkg, kbootset), the other ordinary packages, the
+loader, the modules, the kernel last.
 The generation is built once, after the last
 .BR pkgadd ;
 a failure midway leaves the journal for
 .BR "apkg recover" .
+.IP
+When apkg itself is among them and other packages follow, the engine
+and apkg are upgraded first, as a transaction of their own, and the new
+apkg is run with the same arguments for the rest ("the package tools are
+upgraded; apkg 0.3.12 does the rest"), so the rest is done by the new
+code.  If that transaction fails, nothing else is upgraded.  If the new
+apkg does not answer
+.BR "apkg version" ,
+the running one says so and does the rest.
+.IP
+A file that the new version turns into a config file is compared with
+its installed entry first; an untouched one takes the new default (see
+.BR "CONFIG FILES" ).
 .TP
 .BR remove " [" \-\-purge ]
 .I name
@@ -222,7 +236,7 @@ is purged without a pkgrm.  An installed essential package is refused,
 as by
 .BR remove .
 .TP
-.BR conffiles " [" list | resolve "] [\fIname\fR]"
+.BR conffiles " [" list | resolve | prepare "] [\fIname\fR]"
 .B list
 (the default) shows the config files of every package, or of
 .IR name ,
@@ -239,6 +253,13 @@ or
 .B \-\-conf\-new
 it decides without asking.  Without a terminal and without either flag it
 refuses (exit 1).
+.B prepare
+is run by the APKG package's postinstall: for the packages of the
+journaled transaction still to be installed, it stores the baseline of
+each untouched file that becomes a config file (see
+.BR "CONFIG FILES" ),
+so an older apkg that upgrades APKG and those packages in one transaction
+gets the new behaviour for them.  It prints nothing and exits 0.
 .TP
 .B recover
 Finish a transaction that was interrupted (a power cut, a killed
@@ -427,14 +448,29 @@ shows the set and changes nothing).  A module the catalog has no fitting
 version of is left for the pre-flight, which refuses the transaction: remove
 it, or wait for its package.
 .PP
-A kernel row may carry
+A kernel or module row may carry
 .BI kbootset= version :
 the lowest kbootset that composes a generation with
-it.  When neither the transaction's kbootset nor the installed one is
-that new, the transaction is refused before anything is fetched
+it (a module's majors must be in kbootset's registry).  When neither the
+transaction's kbootset nor the installed one is that new, the catalog's
+kbootset joins the transaction, first, in an
+.B install
+and an
+.B upgrade
+alike ("with kbootset 1.1.0.261115-46 or newer needed: upgrading kbootset
+1.1.0.261114-45 -> 1.1.0.261115-46 first"); the highest such version of
+the transaction counts.  When the catalog has none new enough, the
+transaction is refused before anything is fetched
 ("kernel-k46-m needs kbootset 1.1.0.261101-34 or newer; 1.1.0.261031-33
 is installed and the catalog has none newer").  Older clients ignore the
-key.
+key on a kernel row; apkg 0.3.5 to 0.3.11 refuse a module row that
+carries it.
+.PP
+A transaction that installs or upgrades kbootset on a system with
+kernel-space packages builds and commits the generation again with it,
+so a module that an older kbootset refused (a major it did not know) is
+in the next generation ("kbootset 1.1.0.261115-46 is installed; composing
+the generation with it").
 .PP
 When kbootset refuses the build at a gate anyway (exit 7), apkg names
 every installed module that does not fit the installed kernel of its
@@ -713,6 +749,18 @@ file into place and records it in the package database with
 .BR "installf \-c conffile" .
 A file you have edited is asked about only when the package's default
 changed.
+.PP
+When an upgrade turns a plain file of the installed version into a
+config file, there is no baseline yet.  Before the
+.B pkgadd
+apkg compares the file with what the package database recorded for it:
+when its size, checksum and modification time are all unchanged (you
+never touched it), apkg stores it as the baseline, and the new default
+replaces it silently; otherwise the file is kept and asked about as
+above.  apkg moves no file of yours for this, so a failed or interrupted
+upgrade loses nothing (with
+.B \-v
+it names each file it found untouched).
 .B remove
 keeps the files you edited;
 .B purge

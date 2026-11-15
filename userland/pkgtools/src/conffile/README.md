@@ -7,7 +7,8 @@ packagers and for `build/pkg`.
 ## Using them in a package
 
 - Each conffile is `e conffile <abs path> <mode> <owner> <group>` in the prototype, with an
-  absolute path under `/etc` or `/var`. A relocatable (BASEDIR-relative) path is not supported.
+  absolute path under `/etc`, `/var` or the package's own prefix tree (build/pkg's `CONFFILES=`
+  rule). A relocatable (BASEDIR-relative) path is not supported.
 - The prototype carries `i i.conffile=<this dir>/i.conffile` and `i r.conffile=<this dir>/r.conffile`,
   and pkginfo says `CLASSES=none conffile`.
 - A conffile may be a path another package also owns, as amix-base ships core's `/etc/inittab`.
@@ -47,9 +48,20 @@ carries `APKG_ESSENTIAL=yes` and apkg refuses to remove it (`docs/design.md` sec
 
 Departures from the original design, and why:
 
-- **No migration row** (1.1 is clean installs only). A file present without a baseline
-  is treated as edited, the conservative outcome; on a clean install that is a file the installer
-  wrote before the package (the installer's `removef core` transfer, for instance).
+- **No migration row in the scripts.** A file present without a baseline is treated as edited,
+  the conservative outcome; on a clean install that is a file the installer wrote before the package
+  (the installer's `removef core` transfer, for instance).
+- **A file that becomes a conffile** (the installed version shipped it in another class, as a plain
+  `f none`): an upgrade is one pkgadd over the installed instance, no pkgrm, so the scripts see the
+  file and no baseline. An edited file is kept with `.new`, as it should be; an untouched one would be
+  kept too, with the old default. The scripts cannot tell the two apart: the engine writes the new
+  contents entry before the class script runs. So apkg (from 0.3.12) compares the file with its
+  installed entry before the pkgadd (size, checksum and mtime; the engine sets the mtime from the
+  pkgmap) and, when all three match, stores it as the baseline: the script then finds it unedited
+  and installs the new default silently. apkg moves no file, so a failed or cut pkgadd loses
+  nothing; a stored baseline whose file pkgrm later removes is dropped by `apkg remove`. A symlink
+  that becomes a conffile is not handled (the script writes through the link and the engine fails
+  the install): ship a new path instead. A packager need not do anything for this.
 - **No s5 `new/` directory**: clean 1.1 installs are UFS.
 - **A removed file comes back.** After the class action script the engine verifies every object of
   the class and fails the install, "partially failed", on one that does not exist (heirloom
