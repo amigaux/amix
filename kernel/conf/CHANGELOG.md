@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — catalog names for va2000 (5e281ea4)
+
+names.conf names va200030/46 (va2000-k30/-k46).
+
 ## 2026-11-14 — catalog names for xsurf and buddha (1760165f)
 
 names.conf names buddha30/46 (buddha-k30/-k46) and xsurf30/46 (xsurf-k30/-k46).
