@@ -595,6 +595,10 @@ chip_tx_complete()
 static int
 m_rd(xs_board_t *b, int r)
 {
+    if (r == XS_DATA && chip.rd_data_bad) {
+	(void)chip_rd(r);
+	return 0;
+    }
     return chip_rd(r);
 }
 

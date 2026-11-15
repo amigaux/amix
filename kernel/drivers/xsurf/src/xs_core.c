@@ -105,7 +105,9 @@ xs_board_t *b;
 /*
  * The station address: the chip's PROM image, 32 bytes read in byte mode
  * with the remote count programmed to the bytes read; the address is every
- * second byte.  The chip is stopped and receives nothing meanwhile (monitor
+ * second byte.  The bytes are data, so they come through the card's data
+ * path one at a time (a byte read of the data port, as Linux reads them),
+ * whichever cycles the control registers needed.  The chip is stopped and receives nothing meanwhile (monitor
  * mode, internal loopback).  1 when the address is a usable unicast one.
  */
 int
@@ -130,7 +132,7 @@ unsigned char *mac;
     XWR(b, XS_RSAR1, 0);
     XWR(b, XS_CR, XS_CR_RREAD | XS_CR_STA);
     for (i = 0; i < XS_PROM_BYTES; i++)
-	prom[i] = XRD(b, XS_DATA);
+	(*b->ops->bin)(b, &prom[i], 1);
     for (t = 0; t < XS_RDC_US && !(XRD(b, XS_ISR) & XS_I_RDC); t += 10)
 	xs_udelay(10L);
     XWR(b, XS_ISR, XS_I_RDC);
