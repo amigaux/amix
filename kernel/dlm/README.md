@@ -35,7 +35,7 @@ module core and every module — is built with the period cross toolchain
 [gcc-cross-amix](https://github.com/isoriano1968/gcc-cross-amix): GCC 2.7.2.3
 targeting `m68k-cbm-sysv4`. Each kernel line pins one compiler, and the ABI
 kit records the pin. The pinned commit (`toolchain.pin`) is on
-[jusii/gcc-cross-amix](https://github.com/jusii/gcc-cross-amix). The modern GCC 14 cross compiler is used for userland
+[amigaux/gcc-cross-amix](https://github.com/amigaux/gcc-cross-amix). The modern GCC 14 cross compiler is used for userland
 only (including `kbootset` and the package tools) and never for kernel space.
 
 ## What is not here
