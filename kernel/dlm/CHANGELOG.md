@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — make core runs against an unbuilt port clone (89ea2080)
+
+tests/core/run.sh assembles the port's devkvmap040.o and dma_cache040.o from PORT's src/, so make core runs against an unbuilt clone at the pin; a checkout with neither the sources nor built copies is refused by name.
+
 ## 2026-11-15 — core 0058: prt_where kept around a module's lifecycle calls (68a043da)
 
 The core saves prt_where and puts it back around a module's `_load`, `_unload`, halt entry and deferred calls, so one plain cmn_err there (a "no board" notice) no longer leaves every later line doubled in putbuf. State harness module pw1, five checks. Entry points a module installs are left as they are; ddi.md still says to start formats with `^`.
