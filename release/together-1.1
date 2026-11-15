@@ -1,0 +1,9 @@
+# together-1.1 -- packages the 1.1 repository must carry together (build/release-together).
+# "<name> <version>: needs <name> <version>": when the release catalog's live row for the
+# first name is at least its version, the second's must be at least its version.  The
+# release step refuses a tree that breaks a rule.
+#
+# z3660rtg 1.1.2-1's card files carry probe lines, which an amix-base before 1.0-35 does
+# not know: the installer's `xstart -n` on the target refuses an unknown key.
+z3660rtg-k30 1.1.2-1: needs amix-base 1.0-35
+z3660rtg-k46 1.1.2-1: needs amix-base 1.0-35
