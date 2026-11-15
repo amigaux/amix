@@ -218,7 +218,11 @@ checked against the built kernels before they are frozen (M-REG1).
 The major registry is boot data since core patch 0051: `kbootset` writes
 its rows into each module kernel's manifest as `major` records (C3-5 §3,
 version 22), and the core reads a module's majors' owners there. A new
-major is a registry line, a `kbootset` and a kit, never a new kernel. The
+major is a registry line, a `kbootset` and a kit, never a new kernel.
+`abi/registry/kbootset` gives each row the oldest `kbootset` that has it
+(`-` until one is published); a module package that owns the major
+carries at least that version as its kbootset floor (C2-2 §1.2, version
+7), and `tests/host/kbmin.sh` keeps the two files row for row. The
 numbers stay fixed (a package ships its device nodes with them), so the
 text registry remains the one shared list; the kernels' switches have 70
 character and 32 block rows, of which the rows below are free.
