@@ -32,6 +32,13 @@ with the link as it is now. Then, indented, the frames received and sent
 with their errors and collisions, the transmit failures by kind (not
 completed, remote-DMA write not completed, aborted), what they point at
 when no frame was ever sent, and which failures were said on the console.
+Then what the driver read when it probed the board: the chip's command
+and interrupt registers before its reset, how long it took to become
+ready after it, what the register check read back by each kind of cycle,
+the station-address PROM as read, the remote-DMA self-test's result, and
+the chip's registers at the first transmit timeout and the first
+remote-DMA write timeout. These lines are what to send when the board
+does not work.
 Then every counter of the driver's status record, one per line as
 .IR "name value" ,
 for scripts and for reports.
