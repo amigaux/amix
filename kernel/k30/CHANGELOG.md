@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — cut 68030-261115-78, kern30m k30.1.5.261115-78 (1f87a19b)
+
+The 68030 kernel for 1.1.2 (kabi k30.1.5), from amix 215a64ba and port 59e1b77. A user bus error on a Zorro III board's user mapping is probed at the board's own page, not at a kernel address with the same number. A root that cannot be mounted panics once. The panic backtrace no longer reads past the outermost frame. The module core carries dlm cores 0055, 0057 and 0058. abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -77's. unix.brel b46708a9 (1545004 bytes), kabi 5e54e610; kern30m-k30.1.5.261115-78.pkg 0f8364ad (1928704 bytes), rolled three times with the same bytes. KNOWN-ISSUES gains a Boot section (a panic waits for Return) and the Zorro III probe entry. Emulator rows are recorded with a later commit.
+
 ## 2026-11-15 — three guards for the next 68030 kernel, and the k30.1.5 claim (82cd8cf0)
 
 build-cross-kernel.sh gains three guards. The hardbus guard (default on; src/hardbus030.c, tools/hardbus-retarget.py): a user bus error on a valid translation whose physical address is at or above 0x40000000 is probed through a one-page kernel mapping of that page, instead of at the physical address read as a kernel address, so a Zorro III user mapping is no longer killed at random; retries are capped at 16, and below 1 GiB the stock hardbus runs. `--sync-guard`: the 68040/68060 port's syncguard.s, byte for byte, with the stock sync weakened, so a root that cannot be mounted panics once. `--bt-walk`: the port's btwalk.s, byte for byte, hooked into the panic backtrace (tools/btwalk030.py), so the walk no longer reads the outermost frame's never-written return slot. `--kabi` accepts k30.1.5.
