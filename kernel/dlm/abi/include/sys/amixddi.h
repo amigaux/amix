@@ -1,5 +1,5 @@
 /*
- * amixddi.h -- DDI v1 (k30.1.0, k46.1.0; stage 4 adds minors 1 and 2): the names a module may use from the
+ * amixddi.h -- DDI v1 (k30.1.0, k46.1.0; later names by minor, the last k46.1.6): the names a module may use from the
  * kernel, and the declarations of those the module core provides.
  *
  * The list of record is the kit's ddi.list; the contract of each name
@@ -24,6 +24,8 @@
 
 #ifndef _SYS_AMIXDDI_H
 #define _SYS_AMIXDDI_H
+
+#include <sys/ddiline.h>		/* DDI_LINE_K30 or DDI_LINE_K46, the kit's line */
 
 /*
  * Board windows below VSECT1 (any): the kernel maps physical addresses
@@ -113,6 +115,40 @@ extern void		dma_complete();	/* (struct dma_rec *, ulong pa, ulong len, int dir)
 extern unsigned long	dma_addr();	/* (struct dma_rec *, ulong pa) */
 extern char		*dma_alloc();	/* (ulong len, ulong *pa) */
 extern void		dma_free();	/* (char *va, ulong len) */
+
+/*
+ * A framebuffer's cache class (proc, from _load; k46.1.6; contract C3-6
+ * section 5).  On k46 a page a d_mmap hands out is mapped non-cacheable
+ * serialised.  fb_register(pa, len) puts the window [pa, pa+len) in the
+ * non-cacheable, not serialised class for the rest of the boot, so stores
+ * to it drain through the 68060's store buffer: page-aligned, inside one
+ * AutoConfig board's window that is not RAM, the framebuffer only, never
+ * a register page.  0 (also for the module's own window again, after a
+ * reload), EINVAL (not from _load, a bad range), EBUSY (it overlaps a
+ * window another module or the kernel holds), ENOSPC (both of the
+ * kernel's two slots held).  A refusal leaves the window serialised, and
+ * the driver works on.
+ *
+ * One source for both lines and every kernel: DDI_FB_REGISTER_DECL; once
+ * at file scope, then DDI_FB_REGISTER(pa, len), with <sys/errno.h>.  On
+ * k46 the reference is weak, so the module keeps the minor its other
+ * names give it and loads on a kernel before 1.6, where the call gives
+ * ENOSYS.  On k30 it is ENOSYS with no reference at all: the 68030 has no
+ * such class (a device page is never cached there, and no store waits in
+ * a buffer).  A module that calls fb_register by name needs a k46.1.6
+ * kernel.
+ */
+#ifdef DDI_LINE_K46
+extern int	fb_register();		/* (unsigned long pa, unsigned long len) */
+#define	DDI_FB_REGISTER_DECL \
+	asm(".weak fb_register"); \
+	static int (*volatile ddi_fbreg)() = fb_register
+#define	DDI_FB_REGISTER(pa, len) \
+	(ddi_fbreg ? (*ddi_fbreg)((unsigned long)(pa), (unsigned long)(len)) : ENOSYS)
+#else
+#define	DDI_FB_REGISTER_DECL	extern int ddi_fbnone
+#define	DDI_FB_REGISTER(pa, len)	((void)(pa), (void)(len), ENOSYS)
+#endif
 
 /*
  * Network attachment (proc): a driver's struct ifstats (<net/if.h>) on or

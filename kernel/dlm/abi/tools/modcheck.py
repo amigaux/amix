@@ -40,7 +40,8 @@
 #     depend naming every -d module;
 #   - no SHT_REL; RELA types R_68K_NONE, 32, 16, 8, PC32, PC16, PC8 only;
 #   - every undefined non-weak global in the kit's allowlist for the
-#     module's tier, or defined by a -d module;
+#     module's tier, or defined by a -d module (a weak one is not counted:
+#     it is 0 on a kernel without it, and is not an import for --kabi);
 #   - on k46: the 68060 scan (m68k-cbm-sysv4-scan060) and the 4 KiB page
 #     geometry (no shift by 11 of an address, the port's
 #     check_page_geometry.sh rule).
@@ -53,7 +54,9 @@
 #     (C4-4 section 4): sections and COMMONs aligned to at most 16, each
 #     allocated PROGBITS at a file offset that is a multiple of its
 #     alignment.
-# Warns (exit status unchanged) on each COMMON symbol outside the module's
+# Warns (exit status unchanged) on each weak undefined symbol that no list
+# of the line names and no dependency defines (0 at every load), other than
+# the wrapper's <prefix>_conf_data; on each COMMON symbol outside the module's
 # own names (its name, its wrapper's prefix) and outside the allowlist of
 # its tier: a stock header's tentative definition of a kernel name (ifnet,
 # rawintrq) becomes a private copy in a module.  A COMMON the allowlist
@@ -649,6 +652,17 @@ def main(argv):
         if y['shndx'] == 0 and y['bind'] == 1 and y['name'] and y['name'] not in allow:
             bad('undefined symbol %s is not in the allowlist (%s) nor defined by a dependency'
                 % (y['name'], 'ddi' if keys.get('tier', 'ddi') == 'ddi' else 'ddi+core'))
+    # a weak undefined is 0 when the kernel lacks the name (C3-1 section 1):
+    # the way a module uses a newer kernel's name and still loads on an older
+    # one (fb_register through DDI_FB_REGISTER, C3-6 section 5).  One that no
+    # list of this line names, and no dependency defines, is 0 at every load:
+    # most likely a misspelling.  The wrapper's own <prefix>_conf_data is weak
+    # by design.
+    for y in e.syms:
+        if y['shndx'] == 0 and y['bind'] == 2 and y['name'] and y['name'] not in allow and \
+                not y['name'].endswith('_conf_data'):
+            warn('weak undefined symbol %s is in no list of this line and no dependency '
+                 'defines it: it is 0 at every load' % y['name'])
     # a COMMON outside the module's own names: most likely a stock header's
     # tentative definition of a kernel global (ifnet, rawintrq), which
     # becomes a private copy the module sees instead of the kernel's

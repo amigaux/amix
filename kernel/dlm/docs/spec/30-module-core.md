@@ -278,6 +278,12 @@ but not one that can root on a loaded image.
   executed through ITT0 and accessed through DTT0 as cache-inhibited, as
   today's static drivers are. Executing from `.data` through
   ITT0 is measured (U3).
+- **A framebuffer a module maps for users (k46.1.6):** the device pages a
+  `d_mmap` hands out are non-cacheable serialised; `fb_register` from
+  `_load` gives one board window the non-cacheable, not serialised class
+  of the port's `hat_cm_fb_add`, in one of its two slots, held by the
+  module for the rest of the boot (C3-6 §5, the provider in
+  `core/plat/k46/line.c`, core patch 0056).
 - **Copied modules (boot and demand class):** ordinary kmem, copy-back
   cacheable; such modules get DMA memory only from `dma_alloc` and never
   assume virtual = physical. After relocation the core

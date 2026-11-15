@@ -164,6 +164,10 @@ has it in full):
   but not serialised (ddi.md, "Memory"): registers that need serialised
   access go through `dev_kvmap(…, 0x40, …)` there too. Never give a board the address of the module's own
   memory: there is no DMA interface in DDI v1.0.
+- A framebuffer a user maps: on k46 call `DDI_FB_REGISTER(pa, len)` from
+  `_load` for its window (not the registers), so its pages are not
+  serialised; `ENOSYS` on k30 and on a kernel before k46.1.6 means
+  nothing to do (ddi.md, "The framebuffer cache class").
 - `_unload` undoes everything: hooks, handlers, timeouts, mappings,
   registrations with other modules.
 - `_halt` (void) stops a board that can interrupt or write memory.

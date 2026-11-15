@@ -170,7 +170,7 @@ fi
 if ${HOSTCC:-cc} -std=c89 -Wall -Wextra -O2 -I"$R/loader/common" -o "$B/test-bin/t_plat" \
 	"$R/tests/core/t_plat.c" "$R/core/plat/amiga.c" "$R/loader/common/bootinfo.c" &&
    "$B/test-bin/t_plat" > "$B/t_plat.log" 2>&1; then
-	pass "core/plat: $(grep -c '^PASS' "$B/t_plat.log") checks (loader record, build id, board matcher, the empty inode table)"
+	pass "core/plat: $(grep -c '^PASS' "$B/t_plat.log") checks (loader record, build id, board matcher, board window rule, the empty inode table)"
 else
 	grep '^FAIL' "$B/t_plat.log"; fail "core/plat"
 fi
@@ -188,6 +188,14 @@ if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -no-pie -DDMA_HOST -DDMA_REACH=0x2
 	pass "core/plat k30 DMA: $(grep -c '^PASS' "$B/t_dma30.log") checks (the pool, bounces, both test hooks and their dma_alloc exemption, heap mode)"
 else
 	grep '^FAIL' "$B/t_dma30.log"; fail "core/plat k30 DMA"
+fi
+
+# fb_register, the framebuffer cache class (k46.1.6, C3-6 section 5)
+if ${HOSTCC:-cc} -std=gnu89 -Wall -Wextra -O2 -o "$B/test-bin/t_fb46" "$R/tests/core/t_fb46.c" &&
+   "$B/test-bin/t_fb46" > "$B/t_fb46.log" 2>&1; then
+	pass "core/plat k46 fb_register: $(grep -c '^PASS' "$B/t_fb46.log") checks (the range rule, the two slots and their holders, a reload, the kernel's own window)"
+else
+	grep '^FAIL' "$B/t_fb46.log"; fail "core/plat k46 fb_register"
 fi
 
 # the empty inode table each line maps for the kmem readers

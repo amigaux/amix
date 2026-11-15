@@ -2,7 +2,8 @@
  * line.c -- what the 68040/68060 line's kernels give the platform hook
  * (core/plat/amiga.c): their build id is the buildid string, which uname -m
  * shows.  cputype they define themselves, and dev_kvmap/dev_kvunmap are the
- * port's own (devkvmap040.o, linked by the kernel build); and DMA.
+ * port's own (devkvmap040.o, linked by the kernel build); DMA; and the
+ * framebuffer cache class, fb_register.
  *
  * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
@@ -173,4 +174,123 @@ plat_line_zwin(unsigned long nbytes)
 	}
 	segkmem_setprot(kvseg, va, n * ZW_PG, ZW_READ);
 	return va;
+}
+
+/*
+ * fb_register(pa, len), DDI k46.1.6 (contract C3-6 section 5): a module's
+ * framebuffer window into the cache class a static driver gets from the
+ * port's hat_cm_fb_add (hat040.s).  A page with no page structure, which
+ * is what a driver's d_mmap hands out, is mapped non-cacheable serialised
+ * (0x40); inside a registered window it is mapped non-cacheable, not
+ * serialised (0x60), so stores drain through the 68060's store buffer.
+ * The port's table has two slots and an installed interval never changes
+ * or goes: a user mapping can outlive the open and the module, and a page
+ * classed two ways is the alias the port's page-table rules refuse.  So
+ * a slot is held for the rest of the boot by the module that took it, by
+ * name: after an unload the same module may ask for the same window again
+ * (0), anyone else is refused.
+ *
+ * From the module's _load only (dlm_curname, core 0056), so before any
+ * open or mapping of its device, as the port's contract asks.  The window
+ * is page-aligned and inside one AutoConfig board's window that is not RAM
+ * (plat_board_window, core/plat/amiga.c).  0; EINVAL (outside _load, an
+ * empty, unaligned or wrapping range, not inside one device board);
+ * EBUSY (it overlaps a window someone else holds, or one the kernel's own
+ * drivers installed); ENOSPC (both slots held).  Each refusal has one
+ * console line; the driver keeps the serialised class and works on.
+ */
+#define FB_SLOTS	2		/* hat040.s: hat_cm_fb, two {lo, hi} pairs */
+#define FB_NAMELEN	15		/* MODMAXNAMELEN */
+#ifndef EINVAL
+#define EBUSY		16		/* <sys/errno.h> */
+#define EINVAL		22
+#define ENOSPC		28
+#endif
+
+extern unsigned long hat_cm_fb[2 * FB_SLOTS];	/* the port's table, read here only */
+extern int hat_cm_fb_add(unsigned long, unsigned long);
+extern char *dlm_curname(void);
+extern int plat_board_window(unsigned long, unsigned long);
+
+static struct {
+	unsigned long lo, hi;		/* page frames, [lo, hi) */
+	char name[FB_NAMELEN + 1];	/* its holder */
+} fbheld[FB_SLOTS];
+
+static int
+fb_same(const char *a, const char *b)
+{
+	int i;
+
+	for (i = 0; i < FB_NAMELEN && a[i] == b[i]; i++)
+		if (a[i] == 0)
+			return 1;
+	return i == FB_NAMELEN;
+}
+
+/* the holder of the installed window [lo, hi), or 0 for the kernel's own */
+static const char *
+fb_holder(unsigned long lo, unsigned long hi)
+{
+	int i;
+
+	for (i = 0; i < FB_SLOTS; i++)
+		if (fbheld[i].name[0] && fbheld[i].lo == lo && fbheld[i].hi == hi)
+			return fbheld[i].name;
+	return 0;
+}
+
+int
+fb_register(unsigned long pa, unsigned long len)
+{
+	char *me = dlm_curname();
+	unsigned long lo, hi, klo, khi;
+	const char *h;
+	int i, k, nfree = 0;
+
+	if (me == 0) {
+		printf("dlm: fb_register: not from a module's _load\n");
+		return EINVAL;
+	}
+	if (len == 0 || ((pa | len) & (DMA_PG - 1)) || pa + len - 1 < pa ||
+	    !plat_board_window(pa, len)) {
+		printf("dlm: %s: fb_register 0x%x+0x%x: not page-aligned inside one device board\n",
+		    me, (unsigned)pa, (unsigned)len);
+		return EINVAL;
+	}
+	lo = pa >> 12;
+	hi = lo + (len >> 12);
+	for (i = 0; i < FB_SLOTS; i++) {
+		klo = hat_cm_fb[2 * i];
+		khi = hat_cm_fb[2 * i + 1];
+		if (klo == 0 && khi == 0) {
+			nfree++;
+			continue;
+		}
+		if (lo >= khi || klo >= hi)
+			continue;
+		h = fb_holder(klo, khi);
+		if (klo == lo && khi == hi && h && fb_same(h, me))
+			return 0;		/* its own, from an earlier load */
+		printf("dlm: %s: fb_register 0x%x+0x%x: overlaps the window %s holds\n",
+		    me, (unsigned)pa, (unsigned)len, h ? h : "the kernel");
+		return EBUSY;
+	}
+	if (nfree == 0 || hat_cm_fb_add(lo, hi) != 1) {
+		printf("dlm: %s: fb_register 0x%x+0x%x: both framebuffer slots are held\n",
+		    me, (unsigned)pa, (unsigned)len);
+		return ENOSPC;
+	}
+	for (k = 0; k < FB_SLOTS && fbheld[k].name[0]; k++)
+		;
+	if (k < FB_SLOTS) {
+		fbheld[k].lo = lo;
+		fbheld[k].hi = hi;
+		for (i = 0; i < FB_NAMELEN && me[i]; i++)
+			fbheld[k].name[i] = me[i];
+		fbheld[k].name[i] = 0;
+	}
+	printf("dlm: %s: framebuffer 0x%x+0x%x non-cacheable, not serialised\n",
+	    me, (unsigned)pa, (unsigned)len);
+	return 0;
 }
