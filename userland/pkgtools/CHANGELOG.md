@@ -1,3 +1,7 @@
+## 2026-11-15 — APKG 0.3.12; a module row's kbootset floor in gen-catalog (26cf1648, 09eb64ee)
+
+A file an upgrade turns into a conffile takes the new default when nobody edited it: apkg compares it with its installed entry (size, sum, mtime) and stores it as the baseline before the pkgadd; the package's postinstall (`apkg conffiles prepare`) does the same for the rest of a transaction an older apkg runs. An upgrade takes the engine and apkg first and runs the new apkg for the rest. A module row's `kbootset=` (C2-2 version 7) brings kbootset first in install and upgrade, and a transaction that changes kbootset composes the generation again. gen-catalog writes a module row's `kbootset=` from `APKG_KBOOTSET` or kbootset.conf and checks `majors=` against kernel/dlm's abi/registry/kbootset. design.md's upgrade line is corrected: an upgrade is one pkgadd over the instance. APKG 0.3.12 md5 2338b1e9, not published.
+
 ## 2026-11-06 — APKGENG 1.12.10 (48a8885)
 
 A pkgadd that quits before installing (an installed package under instance=quit) no longer runs cpio on its caller's stdin, where it waited for ever when that was a login's terminal and gave a spurious datastream error with /dev/null; a command the engine spawns with no input now reads /dev/null.
