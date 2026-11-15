@@ -1,4 +1,4 @@
-.TH INTERFACES 4 "30 October 2026" "amix-base"
+.TH INTERFACES 4 "15 November 2026" "amix-base"
 .SH NAME
 interfaces \- how each network interface is set up at boot
 .SH SYNOPSIS
@@ -21,11 +21,8 @@ Words are separated by blanks or tabs.
 .TP
 .I key
 which interface the line is for:
-an interface name such as
-.BR aen0 ,
-.B zen0
-or
-.BR hya0 ;
+an interface name (see
+.BR INTERFACES );
 a station (MAC) address such as
 .BR 00:80:51:01:02:04 ,
 which matches whatever interface has that card, so one disk image can serve
@@ -68,6 +65,29 @@ and to this host's line in
 Letters, digits and
 .BR \- ,
 at most 63.
+.SS Interfaces
+Each network card is an interface, named by its driver and a unit number
+from 0:
+.TP 8
+.B zen0
+the Z3660's own Ethernet;
+.TP
+.B aen0
+an A2065;
+.TP
+.B xsf0
+an X-Surf-100 or an X-Surf; a second board is
+.BR xsf1 ;
+.TP
+.B lo0
+the loopback,
+.BR 127.0.0.1 ,
+always up; it needs no line.
+.PP
+The drivers present, and the names their interfaces take, are in
+.B /etc/inet/link.d
+(see
+.BR link.d (4)).
 .SS Global lines
 .TP
 .BI dns " address ..."
@@ -114,8 +134,11 @@ domain  example.com
 this file.
 .TP
 .B /etc/inet/link.d/*
-the network drivers present, one file each, shipped by the driver packages.
+the network drivers present, one file each, shipped by the driver packages
+(see
+.BR link.d (4)).
 .SH SEE ALSO
 .BR ifup (1M),
+.BR link.d (4),
 .BR dlpi-mac (1M),
 .BR rc.conf (4)
