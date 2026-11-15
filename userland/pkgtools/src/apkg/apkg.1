@@ -828,6 +828,18 @@ above.  apkg moves no file of yours for this, so a failed or interrupted
 upgrade loses nothing (with
 .B \-v
 it names each file it found untouched).
+.PP
+The other way round \(em installing a version that ships a config file
+as a plain file, as a downgrade to a version from before the files were
+config files does \(em the package lays its default over the file.  apkg
+saves a file you edited as
+.IB file .old
+first and says so ("this version of x11r63 does not keep edits to it;
+yours is saved as \&...\&.old"); afterwards the file's baseline, any
+.B .new
+beside it and its
+.B PENDING
+line are gone, so nothing claims it is still kept.
 .B remove
 keeps the files you edited;
 .B purge

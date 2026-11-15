@@ -281,6 +281,26 @@ check "apkg 0.3.12 stores no baseline for it" \
 [ -n "$OLD" ] && check "  ... and the outcome is 0.3.11's, byte for byte" \
     cmp -s "$WORK/l-new.state" "$WORK/l-old.state"
 
+# ------------------------------------------- back to a version without the class ---
+echo "a downgrade to a version that ships the files as plain files"
+newroot dn; publish GAINT-1; ap "$NEW" update; ap "$NEW" install gaint; edits
+publish GAINT-2; ap "$NEW" update; ap "$NEW" upgrade gaint
+check "set-up: edit.conf kept with .new and pending" \
+    bash -c "test \"\$(cat '$T/etc/g/edit.conf')\" = edit=mine && test -f '$T/etc/g/edit.conf.new' && grep -q 'GAINT /etc/g/edit.conf' '$T/var/sadm/conffiles/PENDING'"
+publish GAINT-1; ap "$NEW" update
+ap "$NEW" -f install gaint; check "apkg -f install of GAINT 1: rc 0" test $? -eq 0
+cp "$R/out" "$WORK/dn.out"
+check "  ... says the edits are not kept and where yours is" \
+    says '/etc/g/edit.conf: this version of GAINT does not keep edits to it; yours is saved as /etc/g/edit.conf.old'
+check "  ... yours is in edit.conf.old, the plain default in place" \
+    bash -c "test \"\$(cat '$T/etc/g/edit.conf.old')\" = edit=mine && test \"\$(cat '$T/etc/g/edit.conf')\" = edit=1"
+check "  ... an untouched one is not saved" test ! -e "$T/etc/g/touch.conf.old"
+check "  ... the report claims nothing kept" bash -c "! grep -q 'config files kept' '$R/out'"
+check "  ... no .new, no PENDING line, no baseline left" \
+    bash -c "test ! -e '$T/etc/g/edit.conf.new' && ! grep -q GAINT '$T/var/sadm/conffiles/PENDING' 2>/dev/null && test ! -e '$(base GAINT)'"
+ap "$NEW" conffiles
+check "  ... apkg conffiles lists nothing of GAINT" bash -c "! grep -q GAINT '$R/out'"
+
 # ------------------------------------------------------ a failed pkgadd ---
 echo "a failed pkgadd, then the next upgrade"
 newroot b; publish GAINT-1; ap "$NEW" update; ap "$NEW" install gaint; edits
