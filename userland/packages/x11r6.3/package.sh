@@ -17,26 +17,26 @@ FORKDIRS="userland/packages/x11r6.3/xrtg-amix.pin x11r6.3/hw/amix/rtg/va2000 pro
 # the configuration an admin edits: an upgrade keeps an edited one and puts the new default
 # beside it as .new (README, Configuration files).  Their defaults are byte-identical to 6.3-8's.
 CONFFILES="/etc/profile.d/x11r63.sh \
-	/opt/amix/X11R6/lib/X11/xdm/Xaccess \
-	/opt/amix/X11R6/lib/X11/xdm/Xresources \
-	/opt/amix/X11R6/lib/X11/xdm/Xservers \
-	/opt/amix/X11R6/lib/X11/xdm/Xsession \
-	/opt/amix/X11R6/lib/X11/xdm/Xsetup_0 \
-	/opt/amix/X11R6/lib/X11/xdm/xdm-config \
-	/opt/amix/X11R6/lib/X11/xdm/GiveConsole \
-	/opt/amix/X11R6/lib/X11/xdm/TakeConsole \
-	/opt/amix/X11R6/lib/X11/xinit/xinitrc \
-	/opt/amix/X11R6/lib/X11/twm/system.twmrc \
-	/opt/amix/X11R6/lib/X11/app-defaults/Chooser \
-	/opt/amix/X11R6/lib/X11/app-defaults/XClock \
-	/opt/amix/X11R6/lib/X11/app-defaults/XTerm \
-	/opt/amix/X11R6/lib/X11/fonts/misc/fonts.alias \
-	/opt/amix/X11R6/lib/X11/fonts/75dpi/fonts.alias \
-	/opt/amix/X11R6/lib/X11/fonts/100dpi/fonts.alias \
-	/opt/amix/X11R6/lib/X11/rstart/config \
-	/opt/amix/X11R6/lib/X11/rstart/contexts/default \
-	/opt/amix/X11R6/lib/X11/rstart/contexts/x11r6 \
-	/opt/amix/X11R6/lib/X11/xserver/SecurityPolicy"
+    /opt/amix/X11R6/lib/X11/xdm/Xaccess \
+    /opt/amix/X11R6/lib/X11/xdm/Xresources \
+    /opt/amix/X11R6/lib/X11/xdm/Xservers \
+    /opt/amix/X11R6/lib/X11/xdm/Xsession \
+    /opt/amix/X11R6/lib/X11/xdm/Xsetup_0 \
+    /opt/amix/X11R6/lib/X11/xdm/xdm-config \
+    /opt/amix/X11R6/lib/X11/xdm/GiveConsole \
+    /opt/amix/X11R6/lib/X11/xdm/TakeConsole \
+    /opt/amix/X11R6/lib/X11/xinit/xinitrc \
+    /opt/amix/X11R6/lib/X11/twm/system.twmrc \
+    /opt/amix/X11R6/lib/X11/app-defaults/Chooser \
+    /opt/amix/X11R6/lib/X11/app-defaults/XClock \
+    /opt/amix/X11R6/lib/X11/app-defaults/XTerm \
+    /opt/amix/X11R6/lib/X11/fonts/misc/fonts.alias \
+    /opt/amix/X11R6/lib/X11/fonts/75dpi/fonts.alias \
+    /opt/amix/X11R6/lib/X11/fonts/100dpi/fonts.alias \
+    /opt/amix/X11R6/lib/X11/rstart/config \
+    /opt/amix/X11R6/lib/X11/rstart/contexts/default \
+    /opt/amix/X11R6/lib/X11/rstart/contexts/x11r6 \
+    /opt/amix/X11R6/lib/X11/xserver/SecurityPolicy"
 STYLE=hooks
 TOOLCHAIN=gcc14
 PREFIX=/opt/amix/X11R6
