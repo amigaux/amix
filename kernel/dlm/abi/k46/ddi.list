@@ -39,6 +39,7 @@ dma_free func 2
 dma_prepare func 2
 drv_priv func 0
 dupmsg func 0
+fb_register func 6
 flushq func 0
 freeb func 0
 freemsg func 0
