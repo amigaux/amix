@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — C3-6 version 14: where the VA2000 module calls fb_register (cee96138)
+
+The VA2000 module calls `fb_register` from its `_load` once the first board is found, for the framebuffer window only; a second board keeps the default class. Docs only.
+
 ## 2026-11-15 — fb_register, DDI k46.1.6: a module's framebuffer cache class (73884536)
 
 A module may put its board's framebuffer window into the port's non-cacheable, not serialised class with `fb_register`, from `_load` only: the range is page-aligned and inside one non-RAM AutoConfig board, and the kernel's two slots are held by module name for the boot (EINVAL, EBUSY, ENOSPC; never released). Core patch 0056 `dlm_curname`. The kit's `<sys/ddiline.h>` and `DDI_FB_REGISTER` let one source build for both lines and every kernel: a weak reference on k46 that returns ENOSYS on an older kernel, ENOSYS with no reference on k30. modcheck warns on a weak name that is in no list. C3-2 version 6, C3-6 version 13, ddi.md, spec 30 §8.
