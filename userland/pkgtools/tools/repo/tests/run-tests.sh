@@ -3376,6 +3376,76 @@ else
     echo "  skip- a quitting engine command and an open stdin (no host engine, fakeroot or timeout)"
 fi
 
+# ---------------------------------------------------------------- T38 ----
+# A module row's kbootset= (C2-2 v7): from the package's pkginfo
+# APKG_KBOOTSET, else from a kbootset.conf line for that name and version;
+# both and different refuse it.  Its .moddata majors= against kernel/dlm's
+# abi/registry/kbootset (--kbootset-table): a major the table lists as "-"
+# or not at all refuses the package, so does a floor below a major's need;
+# a need no higher than the table's lowest version asks for no floor.
+echo "T38: a module row's kbootset= and the registry table"
+S38="$WORK/t38"; mkdir -p "$S38"
+printf '# test table\nc 48 1.1.0.261101-34\nc 54 1.1.0.261101-34\nc 56 1.1.0.261114-45\nc 68 1.1.0.261115-46\nc 70 -\n' > "$S38/table"
+# mod38 <dir> <majors> [pkginfo line]: a staging root with one module package
+mod38() {
+    local d="$1" maj="$2" extra="$3"
+    mkdir -p "$d/src" "$d/stg"
+    python3 "$MKOBJ" "$d/src/xsf" name=xsf kabi=k46.1.0 cc=$MPIN cpu=68030 \
+        class=boot match=zorro:4754:17 ${maj:+majors=$maj}
+    { printf 'DIR /etc\nDIR /etc/conf\nDIR /etc/conf/mod.d\nCOPY /etc/conf/mod.d/xsf %s\n' "$d/src/xsf"
+      [ -n "$extra" ] && printf 'PKGINFO %s\n' "$extra"; } |
+        python3 "$MKDS" "$d/stg/xsf46-1.0.0-3.pkg" xsf46 1.0.0-3 >/dev/null 2>&1
+    printf 'xsf46: xsurf-k46\n' > "$d/stg/names.conf"
+}
+gen38() { python3 "$GEN" --packages-conf none --kbootset-table "$S38/table" "$1/stg" >/dev/null 2>"$1/err"; }
+
+mod38 "$S38/a" c:56 "APKG_KBOOTSET=1.1.0.261114-45"
+gen38 "$S38/a"
+check "pkginfo APKG_KBOOTSET: the module row says kbootset= after pin=" \
+    bash -c "krow38() { grep '^#kpkg xsurf-k46 ' '$S38/a/stg/catalog'; }; krow38 | grep -q ' pin=$MPIN kbootset=1.1.0.261114-45 size='"
+mod38 "$S38/b" c:56 ""
+printf 'xsurf-k46 1.0.0-3: 1.1.0.261114-45\n' > "$S38/b/stg/kbootset.conf"
+gen38 "$S38/b"
+check "no parameter: the kbootset.conf line for that name and version" \
+    bash -c "grep '^#kpkg xsurf-k46 ' '$S38/b/stg/catalog' | grep -q ' kbootset=1.1.0.261114-45 '"
+mod38 "$S38/c" c:56 "APKG_KBOOTSET=1.1.0.261114-45"
+printf 'xsurf-k46 1.0.0-3: 1.1.0.261115-46\n' > "$S38/c/stg/kbootset.conf"
+gen38 "$S38/c"
+check "parameter and conf line differ: refused, both named" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/c/stg/catalog' && grep -q 'APKG_KBOOTSET=1.1.0.261114-45, kbootset.conf says 1.1.0.261115-46' '$S38/c/err'"
+mod38 "$S38/d" c:56 ""
+gen38 "$S38/d"
+check "a major newer than the base and no floor: refused, naming the remedy" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/d/stg/catalog' && grep -q 'xsurf-k46 1.0.0-3: owns c 56, which needs kbootset 1.1.0.261114-45 (abi/registry/kbootset): set APKG_KBOOTSET or add a kbootset.conf line' '$S38/d/err'"
+mod38 "$S38/e" c:68 "APKG_KBOOTSET=1.1.0.261114-45"
+gen38 "$S38/e"
+check "a floor below the major's need: refused" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/e/stg/catalog' && grep -q 'owns c 68, which needs kbootset 1.1.0.261115-46' '$S38/e/err'"
+mod38 "$S38/f" c:70 "APKG_KBOOTSET=1.1.0.261115-46"
+gen38 "$S38/f"
+check "a major no published kbootset knows (-): refused" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/f/stg/catalog' && grep -q 'owns c 70, which no published kbootset knows yet' '$S38/f/err'"
+mod38 "$S38/g" c:99 "APKG_KBOOTSET=1.1.0.261115-46"
+gen38 "$S38/g"
+check "a major the table does not list: refused" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/g/stg/catalog' && grep -q 'owns c 99, which abi/registry/kbootset does not list' '$S38/g/err'"
+mod38 "$S38/h" c:54 ""
+gen38 "$S38/h"
+check "a 1.1 major (need = the table's lowest) and no floor: the row as before, no kbootset=" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/h/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/h/stg/catalog' | grep -q kbootset="
+mod38 "$S38/i" "" ""
+gen38 "$S38/i"
+check "no majors and no floor: the row as before" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/i/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/i/stg/catalog' | grep -q kbootset="
+mod38 "$S38/j" "" "APKG_KBOOTSET=1.1.0.261113-44"
+gen38 "$S38/j"
+check "no majors, a floor for another need (buddha's stand-in): kept" \
+    bash -c "grep '^#kpkg xsurf-k46 ' '$S38/j/stg/catalog' | grep -q ' kbootset=1.1.0.261113-44 '"
+mod38 "$S38/k" c:56 ""
+python3 "$GEN" --packages-conf none --kbootset-table none "$S38/k/stg" >/dev/null 2>"$S38/k/err"
+check "--kbootset-table none: no table check (the row, no kbootset=)" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/k/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/k/stg/catalog' | grep -q kbootset="
+
 # -------------------------------------------------------------- done ----
 echo
 echo "repo tools: $PASS passed, $FAIL failed"
