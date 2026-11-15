@@ -13,7 +13,10 @@
 # configures and runs make. The source is the tarball at URL, checked
 # against SHA256; the git archive of a fork at the commit a checkout pin
 # names (FORKPIN, fetched by hash into out/cache/forks/<name>); or, with
-# none set, a copy of the package's src/ (or of SRCPKG's src/).
+# none set, a copy of the package's src/ (or of SRCPKG's src/). FORKDIRS adds
+# directories of pinned forks to that tree, before the patches: triples
+# "<pin file> <path in the fork> <path in the tree>", each the git archive of
+# that path at the pin's commit, fetched the same way.
 #
 # The harness: the build environment (amix-env.sh, gcc14-env.sh), the
 # fetcher (fetch.sh), the gates (gates.sh) and the roll (pkgroll.sh,
@@ -83,7 +86,7 @@ fi
 # --- package.sh -----------------------------------------------------------------
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
-URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT= FORKPIN=
+URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT= FORKPIN= FORKDIRS=
 MAN_REPLACES= STOCK_PATCHED=
 . "$HERE/package.sh"
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
@@ -213,6 +216,55 @@ else
 	[ -d "$TREE" ] || { echo "[FAIL] $TREE not produced by the tarball" >&2; exit 1; }
 fi
 echo
+
+# --- 1b. fork directories: FORKDIRS, before the patches (which may wire them in) ----------
+# fork_cache <pin file> <url> <commit>: the cache repository with that commit,
+# by full hash (fetched once; a commit the cache has is not fetched again)
+fork_cache() {
+	_fc_r=$TOP/out/cache/forks/$(basename "$1" .pin)
+	[ -d "$_fc_r/.git" ] || git init -q "$_fc_r"
+	git -C "$_fc_r" cat-file -e "$3^{commit}" 2>/dev/null ||
+		git -C "$_fc_r" fetch -q --depth 1 "$2" "$3" || {
+		echo "[FAIL] cannot fetch $3 from $2 ($1)" >&2; exit 1; }
+}
+# fork_dirs <pin> <path in the fork> <path in the tree> ...: each path's git
+# archive at the pin's commit, as <path in the tree>; a BUILD.txt line each
+FD_LINES=
+fork_dirs() {
+	[ $(( $# % 3 )) -eq 0 ] || {
+		echo "[FAIL] FORKDIRS holds $# words, not <pin> <path in the fork> <path in the tree> triples" >&2; exit 1; }
+	_fd_n=0
+	while [ $# -gt 0 ]; do
+		_fd_pin=$1 _fd_from=${2%/} _fd_to=${3%/}; shift 3
+		_fd_n=$((_fd_n + 1))
+		read -r _fd_url _fd_c < "$TOP/$_fd_pin" || {
+			echo "[FAIL] FORKDIRS: cannot read $_fd_pin" >&2; exit 1; }
+		[ -e "$TREE/$_fd_to" ] || [ -L "$TREE/$_fd_to" ] && {
+			echo "[FAIL] FORKDIRS: $_fd_to is already in the tree" >&2; exit 1; }
+		fork_cache "$_fd_pin" "$_fd_url" "$_fd_c"
+		_fd_x=$BUILD/forkdir.$_fd_n
+		rm -rf "${_fd_x:?}"; mkdir -p "$_fd_x"
+		git -C "$_fc_r" archive "$_fd_c" -- "$_fd_from" | tar -x -C "$_fd_x" || {
+			echo "[FAIL] FORKDIRS: no $_fd_from at $_fd_c in $_fd_pin's fork" >&2; exit 1; }
+		[ -d "$_fd_x/$_fd_from" ] || {
+			echo "[FAIL] FORKDIRS: $_fd_from at $_fd_c in $_fd_pin's fork is not a directory" >&2; exit 1; }
+		[ -n "$(find "$_fd_x/$_fd_from" -type f | head -1)" ] || {
+			echo "[FAIL] FORKDIRS: $_fd_from at $_fd_c in $_fd_pin's fork holds no file" >&2; exit 1; }
+		mkdir -p "$(dirname "$TREE/$_fd_to")"
+		mv "$_fd_x/$_fd_from" "$TREE/$_fd_to"
+		rm -rf "${_fd_x:?}"
+		_fd_d=$(cd "$TREE/$_fd_to" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0r sha256sum | sha256sum | cut -c1-64)
+		echo "  fork directory $_fd_pin: $_fd_url $_fd_c $_fd_from -> $_fd_to, $(find "$TREE/$_fd_to" -type f | wc -l) files, digest $_fd_d"
+		FD_LINES="$FD_LINES
+source $_fd_pin $_fd_url $_fd_c $_fd_from digest $_fd_d"
+	done
+}
+if [ -n "$FORKDIRS" ]; then
+	echo "--- fork directories ---"
+	# shellcheck disable=SC2086 # the triples are words
+	fork_dirs $FORKDIRS
+	echo
+fi
 
 # --- 2. patches ----------------------------------------------------------------------
 echo "--- patches ---"
@@ -478,6 +530,7 @@ amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 	echo "$NAME $PKGVERSION ($PKG) toolchain $AMIX_TOOLCHAIN"
 	[ -z "$SRCTREE" ] || echo "source ${SRCTREE#$TOP/} digest $SRCDIGEST"
 	[ -z "$FORKPIN" ] || echo "source $FORKPIN $_fp_url $_fp_c digest $SRCDIGEST"
+	[ -z "$FD_LINES" ] || echo "${FD_LINES#?}"
 	LC_ALL=C sort "$BUILD/stock.list" | sed 's/^/stock /'
 	echo "pkg $PKGOUT/$PKG-$PKGVERSION.pkg md5 $(md5sum "$PKGOUT/$PKG-$PKGVERSION.pkg" | cut -d' ' -f1) size $(stat -c%s "$PKGOUT/$PKG-$PKGVERSION.pkg")"
 	for b in $BINS; do

@@ -99,6 +99,13 @@ try:
           "libcfix 1.0-1 (libcfix) toolchain period\nsource userland/packages/libcfix/src digest x\n"
           "stock /usr/lib/libc.so.1 %s patched %s\nstock /etc/inittab %s\n"
           "pkg pkg/libcfix-1.0-1.pkg md5 x size 4\n" % ("7" * 64, "8" * 64, "9" * 64))
+    # a fork as the whole source (FORKPIN: its pin line covers it) and a fork's
+    # directory copied into the source (FORKDIRS: carried into the lock)
+    write(os.path.join(out, "build/userland/x11r63/BUILD.txt"),
+          "x11r63 6.3-10 (x11r63) toolchain period\n"
+          "source kernel/x/x.pin https://example.invalid/x.git %s digest %s\n"
+          "source userland/packages/x11r63/xrtg.pin https://example.invalid/xrtg.git %s x11r6.3/hw/va2000 digest %s\n"
+          "pkg pkg/x11r63-6.3-10.pkg md5 x size 4\n" % ("c" * 40, "e" * 64, "a" * 40, "0" * 64))
 
     rc, o, e = run(top, out)
     lock = open(os.path.join(out, "lock")).read().splitlines() if rc == 0 else []
@@ -119,6 +126,8 @@ try:
         "system system/stock-1.1.assets " + sha("u\n"),
         "stock userland libcfix-1.0-1 /etc/inittab " + "9" * 64,
         "stock userland libcfix-1.0-1 /usr/lib/libc.so.1 %s patched %s" % ("7" * 64, "8" * 64),
+        "source userland x11r63-6.3-10 userland/packages/x11r63/xrtg.pin https://example.invalid/xrtg.git %s "
+        "x11r6.3/hw/va2000 digest %s" % ("a" * 40, "0" * 64),
         "kit k30 k30.1.3 %s %s KIT_REV=1 PORT_REV=-" % ("1" * 64, "2" * 64),
         "kit k46 k46.1.3 %s %s KIT_REV=1 PORT_REV=2" % ("3" * 64, "4" * 64),
         "kernel k30 kabi " + "6" * 64,
