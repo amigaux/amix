@@ -56,7 +56,7 @@ so each fact about a package is written in one place.
 | `SOURCE_EPOCH=""` | the time, in seconds, of every time stamp of the rolled datastream. Unset, the time of the last commit that changed the package directory. One version is one set of bytes in every release, so the epoch belongs to the package version, never to a release; set it when that commit time would move without a new version |
 | `PREBUILT=""` | payload paths of ELFs the package ships ready-made from the pinned GCC 14 prefix (libamixrt.so.1); each must have the sha256 of a file `common/gcc14-pin.sh` pins and is not stripped. A build that then compiles nothing skips the flags gate, and any other ELF in its payload is refused |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools). For the base packages a machine cannot boot without |
-| `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc` or `/var`, space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, followed by any other class the prototype names, in its order (a device node whose group a conffile creates goes in a class of its own, so pkgadd makes it after that file), and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
+| `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc`, `/var` or the package's own `PREFIX` tree (X's `/opt/amix/X11R6/lib/X11/xinit/xinitrc`), space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, followed by any other class the prototype names, in its order (a device node whose group a conffile creates goes in a class of its own, so pkgadd makes it after that file), and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
@@ -94,7 +94,7 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   `f` or `e` line of the prototype, and a `STOCK_PATCHED` word that breaks a
   rule of its row above. It refuses a `CONFFILES` path that the
   prototype does not have, has on more than one line, or has as anything but
-  an `f` or `e` object; a path not under `/etc` or `/var`;
+  an `f` or `e` object; a path not under `/etc`, `/var` or `PREFIX`;
   an `e` object that `CONFFILES` does not list; one conffile listed by two
   packages; an object under `/etc/rc.d`; and a run-level link outside the
   boot bands: `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
