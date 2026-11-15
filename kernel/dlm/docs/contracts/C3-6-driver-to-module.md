@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 13
+# C3-6 — what a driver changes to become a module, version 14
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -34,7 +34,7 @@
   condition and not the second (§1.3); version 13 (2026-11-15, for the
   VA2000 and z3660rtg modules): a framebuffer window's cache class on
   k46, `fb_register` (k46.1.6), settles the open item (§1.5, §3, §5,
-  §6). The
+  §6); version 14 (2026-11-15): where the VA2000 module calls it (§5). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -542,9 +542,15 @@ scope and `DDI_FB_REGISTER(pa, len)`. On k46 the reference is weak
 a kernel before 1.6, and there the call gives `ENOSYS`. On k30 it is
 `ENOSYS` with no reference. A driver treats `ENOSYS` as "nothing to do"
 and any other refusal as one console line. The VA2000 module calls it
-where its static form calls `hat_cm_fb_add` (`va2000_map_regs`, the
-framebuffer at the board's base + 0x10000), and z3660rtg where it does
-under `-DZZ9K_FB_NC` (the framebuffer window, `fb_phys` and `fb_size`).
+from its `_load`, in the module wrapper file, once `va2000init` has
+found the first board (version 14), not in `va2000_map_regs` where the
+static form calls `hat_cm_fb_add`: that routine is also reached from
+open for a second board found late, where the call would always get
+`EINVAL`. The window is the board's base + 0x10000 to the end of its
+aperture; the register page below it stays serialised. A second board
+keeps the default class in the module form, which leaves the second
+slot free. z3660rtg calls it where it calls `hat_cm_fb_add` under
+`-DZZ9K_FB_NC` (the framebuffer window, `fb_phys` and `fb_size`).
 
 ## 6. Settled at agreement (2026-10-26)
 
