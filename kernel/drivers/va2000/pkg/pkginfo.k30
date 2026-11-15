@@ -1,0 +1,16 @@
+PKG=va200030
+NAME=va2000-k30 1.1.0-1 - MNT VA2000 graphics card module (/dev/va2000), k30 line
+ARCH=Amiga
+VERSION=1.1.0-1
+CATEGORY=system
+CLASSES=none va2000
+VENDOR=amix
+PSTAMP=amix-va200030-1.1.0-1
+# Kernel space (amix-dlm C2-2, C3-5 sec 1): a role=module entry of the #ext
+# kpkg block (line=k30, kabi=k30.1.2), never an ordinary entry.  Catalog
+# name va2000-k30, pkginst va200030; VERSION is the module's 1.1.0-1 (the
+# fork's module/VERSION at kernel/drivers/va2000/va2000.pin).  The device
+# node is in class va2000 (C3-5 v18 sec 1.2).  apkg on 1.1 has no key for a
+# module's kbootset floor: the descriptions say that kbootset -46 is needed.
+APKG_DESC=MNT VA2000 RTG graphics card (/dev/va2000: its registers and framebuffer for programs such as the X server Xrtg), Antti Sokero's driver (MIT) as a demand-class kernel module for the 68030 module kernel kernel-k30-m; needs kbootset 1.1.0.261115-46 or later; tested in emulation only (no board present): /etc/conf/mod.d/va2000, /dev/va2000, /usr/include/va2000.h and the page va2000(7).
+DESC=The MNT VA2000 RTG graphics card: Antti Sokero's va2000-amix driver (MIT), from our fork, built as an amix-dlm kernel module for the 68030 line (kabi k30.1.2, so it loads on the 1.1 kernels).  Programs such as the X server Xrtg open /dev/va2000, set a display mode with ioctl, draw into the framebuffer through mmap and switch the monitor between the Amiga's picture and the card's.  The console stays on the Amiga's own display: a module cannot carry the static driver's console changes.  Demand class: loaded at the first open of /dev/va2000 and kept only when it finds a board (AutoConfig 0x6D6E:0x01, firmware 5 or later); character major 68, its node /dev/va2000 (c 68 0, 0666) shipped by the package; never unloaded.  On the 68030 the framebuffer has the default class, the only one there.  It needs kbootset 1.1.0.261115-46 or later, whose registry has major 68: install kbootset first (apkg upgrade), or the boot set is refused and the generation before it stays.  /usr/include/va2000.h is the driver's interface for programs; the page is va2000(7).  No parameters; /etc/conf/modreg.d/va2000 holds the package's defaults (none).  The package writes no boot store; after the install apkg runs kbootset build and commit (or prints the command when bootset=manual).  Tested in emulation only, where no VA2000 can be fitted: the install and a boot with the module in the set; not on a real card.  MIT.
