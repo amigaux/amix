@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — C2-2 version 7: a module row's kbootset floor (9793b156)
+
+A module's catalog row may carry `kbootset=`, the oldest kbootset that composes a generation with it; apkg 0.3.12 adds kbootset at install and upgrade, from `APKG_KBOOTSET` or a kbootset.conf line. `abi/registry/kbootset` gives each major the oldest kbootset that has it (c 56: 1.1.0.261114-45, c 68: 1.1.0.261115-46) and goes into the kit. C2-4 version 31: a kbootset upgrade runs the trigger. C3-5 version 26.
+
 ## 2026-11-15 — C3-6 version 14: where the VA2000 module calls fb_register (cee96138)
 
 The VA2000 module calls `fb_register` from its `_load` once the first board is found, for the framebuffer window only; a second board keeps the default class. Docs only.
