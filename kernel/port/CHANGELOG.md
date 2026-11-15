@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — cut 68060-261115-67 is the k46 cut of record; kern46m -67 (284770af, 94a3944f, d231cf4b)
+
+port.pin moves to 1e99468 on the port's release-1.1 (REV 59e1b77, core at amix 09b89ffb). The kernel goes to kabi k46.1.6: a module can ask for the fast framebuffer class (non-cacheable, not serialised) on a page-aligned window of its Zorro III board (fb_register). A kernel that cannot mount its root now panics once, not twice: sync() skips every filesystem while there is no root. The ufs objects, abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -66's. The description says the 1.1 module packages (kabi 1.2 to 1.4) keep working with this kernel. kern46m k46.1.6.261115-67: unix 454d5d65 (2362438 bytes), kabi 98958dc9, ufs.mod bcd350fa.
+
 ## 2026-11-07 — cut 68060-261106-66 is the k46 cut of record; kern46m -66 (137e736, 9880077)
 
 port.pin moves to 388b93b (REV 512a99f, core at amix 46ef7d1). The audio driver answers each AUDIO_VOLUME or AUDIO_PERIOD request once, refuses a zero-length request (a kernel panic before), and plays each byte of a long write once. The base, the ufs objects, abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -65's. kern46m k46.1.4.261106-66 (sha256 9f816b9c).
