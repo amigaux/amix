@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — kbootset -46 (e765bb05)
+
+kbootset 1.1.0.261115-46, pinned at 575654e on both lines: character major 68, the va2000 module's, and kbootset(1M) on moving the root disk to another controller. Box binary 69d71509, package a2dd93f4.
+
 ## 2026-11-15 — major registry: c 68 va2000 (b7f52962)
 
 Character major 68 is registered to the MNT VA2000 graphics card module, short name `va2000`. kbootset's compiled table is regenerated, so a kbootset built from here accepts the module; C3-5 version 25 and spec 20 §6 carry the row.
