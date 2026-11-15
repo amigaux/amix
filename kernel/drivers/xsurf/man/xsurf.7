@@ -1,0 +1,193 @@
+.TH XSURF 7 "15 November 2026" "xsurf"
+.SH NAME
+xsurf, xsf \- Individual Computers X-Surf-100 and X-Surf ethernet
+.SH SYNOPSIS
+.B /dev/xsf0
+.br
+.B /dev/xsf1
+.br
+.B /dev/xsfctl
+.SH DESCRIPTION
+The
+.B xsurf
+driver runs the X-Surf-100 (an ASIX AX88796B, 10 and 100 Mb/s, in Zorro II
+or Zorro III) and the X-Surf (a Realtek RTL8019AS, 10 Mb/s, in Zorro II).
+Its interface is
+.BR xsf0 ,
+then
+.B xsf1
+for a second board; configure it in
+.B /etc/inet/interfaces
+like any other, for example
+.BR "xsf0 dhcp" .
+The driver is the loadable module
+.BR xsurf ,
+of the boot class: it loads early in the boot, before the root is
+mounted, when AutoConfig shows one of the two boards.
+.PP
+At load the driver prints one line for each board on the console:
+.PP
+.RS
+.ft CW
+.nf
+xsf0: X-Surf-100, Zorro 3 at 0x40000000, 00:80:10:12:34:56, interrupt I/O, link up 100 full
+.fi
+.ft R
+.RE
+.PP
+that is the card, its Zorro mode and address, its station address, how it
+is serviced and its link.
+.B "interrupt I/O"
+is the level-2 interrupt, after a self-test with a real interrupt from the
+board;
+.B "polled (interrupt self-test failed)"
+means the test failed and the driver polls the board from the clock tick
+instead, which works, only slower;
+.B polled
+alone is the parameter
+.BR intr=0 .
+A board the driver refuses gets a line saying why instead (see
+DIAGNOSTICS); its interface does not exist.
+.PP
+The link is what the chip says. The X-Surf-100 reports link, speed and
+duplex. The RTL8019AS of the X-Surf has no link bit: set to auto-detect,
+it sends on its coax port when the 10BASE-T link test fails, and the
+driver reports that as
+.BR "no link (10BASE-T link test failed; sending on coax)" ;
+set to one medium, the link is not known and the line names the setting.
+.PP
+The driver says on the console when the link changes, once it has held
+for a second, and at most once every ten seconds for each board. It says
+the first transmit failure of each kind, once per boot; later ones are only
+counted.
+.BR xsf (1M)
+shows all of it, the counters, and anything the console said at load.
+.SH PARAMETERS
+One line
+.B "param intr=0"
+in
+.B /etc/conf/modreg.local.d/xsurf
+makes the driver poll from the start instead of using the interrupt. It
+takes effect from the next boot generation:
+.PP
+.RS
+.ft CW
+.nf
+echo 'param intr=0' > /etc/conf/modreg.local.d/xsurf
+kbootset build && kbootset commit
+.fi
+.ft R
+.RE
+.PP
+then power the machine off and on. To undo it, remove the file and do the
+same.
+.SH FILES
+.TP
+.B /dev/xsf0, /dev/xsf1
+the interfaces, character major 56, minors 0 and 1; DLPI, as
+.B ifup
+and
+.B dhcpc
+use them.
+.TP
+.B /dev/xsfctl
+character major 56, minor 15: status only, for
+.BR xsf (1M).
+It opens whenever the module is loaded, also when the driver refused every
+board it found.
+.TP
+.B /etc/conf/mod.d/xsurf
+the module.
+.TP
+.B /etc/inet/link.d/xsurf
+tells
+.B ifup
+the interface's name and node.
+.TP
+.B /etc/conf/modreg.local.d/xsurf
+the parameters set on this machine.
+.SH DIAGNOSTICS
+At load, a board found but refused gets one of these lines; the module
+stays loaded so that
+.BR xsf (1M)
+can say it again later:
+.TP
+.B "xsurf: X-Surf-100 at 0x...: its registers do not take writes"
+the driver wrote its test patterns and read something else back: the path
+from the Amiga to the chip's registers does not work. Without this check
+such a board would look like a working interface that never sends or
+receives anything.
+.TP
+.B "the chip does not reset"
+nothing that answers like the chip is there.
+.TP
+.B "no usable station address"
+the address read from the card is not a unicast one.
+.TP
+.B "no answer at its registers"
+a bus error at the board's address.
+.TP
+.B "placed at or above 0x80000000"
+the X-Surf-100 switches itself off there; give it a lower address.
+.PP
+Running, these are said once per boot each, then counted:
+.TP
+.B "xsf0: no link"
+the cable, the hub or switch port, or the card's own PHY.
+.TP
+.B "xsf0: a transmit did not complete, chip restarted (...)"
+the chip took a frame and never reported it sent or failed. Its
+transmitter does not wait for a link, by its datasheet, so this points at
+the card rather than the cable.
+.TP
+.B "xsf0: a remote-DMA write to the chip did not complete, frame dropped and chip restarted"
+the frame never reached the chip's memory: the card's data path does not
+work.
+.TP
+.B "xsf0: a transmit was aborted after 16 collisions (...)"
+the medium: on the X-Surf typically a fall-back to its coax port with no
+coax attached, because the 10BASE-T link test failed.
+.TP
+.B "xsf0: interrupts stopped; polled"
+the interrupt stopped coming after load; the driver polls from then on.
+.SH TROUBLESHOOTING
+The load line is printed on the console only: it comes before the system
+log is running, and nothing keeps it. Read it on the screen while the
+machine boots, or run
+.BR xsf (1M)
+afterwards, which prints the same line and everything since.
+.PP
+Lines the driver prints once the system is up (link changes, transmit
+failures) are also in the system log:
+.B /var/log/bus-errors
+for notices and
+.B /var/log/kernel
+for warnings, when the
+.B syslog
+package runs (it does by default).
+.PP
+.B "ifconfig xsf0"
+answers only when the driver took the board and the interface is
+plumbed, and the
+.B ifup
+lines in
+.B /var/adm/rc.log
+say what the boot did with it.
+.PP
+In short, with
+.BR xsf :
+.B "no link"
+is the cable, the port or the card's PHY (frames still count as sent: the
+transmitter does not wait for a link);
+.B "refused at load: its registers do not take writes"
+is the card's register path;
+transmits that do not complete, or remote-DMA writes that do not
+complete, are the card; aborts after 16 collisions are the medium, on the
+X-Surf typically its coax port chosen because the 10BASE-T link test
+failed.
+.SH SEE ALSO
+.BR xsf (1M),
+.BR ifconfig (1M),
+.BR netstat (1M)
+.SH NOTES
+Tested in the emulator and against a model chip; not yet on a real card.
