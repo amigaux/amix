@@ -187,9 +187,10 @@ Its standard input is
 .BR /dev/null .
 Only its exit status and the three lines above count.
 .IP \(bu 3
-The server should take the node from the line, through
+When boards share a node name, the server line names the node the card
+uses, outright or through
 .BR %p ,
-so that it opens the board the probe chose.
+so that the server opens the board the probe chose.
 .PP
 The base package before 1.0-35, as on the 1.1 and 1.1.1 install media,
 takes the
@@ -233,7 +234,7 @@ module    z3660rtg
 server    /opt/amix/X11R6/bin/Xzz9000
 modes     1024x768 640x480 800x600 1280x720 1280x800 1280x1024 1920x1080
 depths    16
-args      -mode %m -dev %p -kb
+args      -mode %m -kb
 limits    vmem=131072 data=65536
 monsw     yes
 monswtool /opt/amix/bin/zz9k_monsw
@@ -247,10 +248,23 @@ The Z3660's RTG and an MNT ZZ9000 share the node name
 the Z3660's is always unit 0, and a ZZ9000 beside it is unit 1,
 .BR /dev/zz9001 .
 The probe tells the boards apart by the board identity the driver gives,
-so this file is used only for a Z3660; the ZZ9000's file has
-.B "probe /opt/amix/bin/zz9k_probe zz9000"
-instead, which prints the node of the unit the ZZ9000 is on and, in a
-Zorro III slot, a mode list with 1920x1080.
+so this file is used only for a Z3660.
+A ZZ9000 has two files:
+.B zz9000
+.RB ( "probe /opt/amix/bin/zz9k_probe zz9000 0" ),
+for a ZZ9000 alone at unit 0, and
+.B zz9001
+.RB ( "probe /opt/amix/bin/zz9k_probe zz9000 1" ,
+node
+.BR /dev/zz9001 ),
+for a ZZ9000 beside a Z3660, whose server line names its node with
+.B "\-dev /dev/zz9001"
+(the X11R6.3 package from 6.3-10 on).
+For a Zorro III card the probe prints a mode list with 1920x1080.
+The files name their nodes outright, without
+.BR %p ,
+so that they work with a base package that does not know it; later files
+may use it.
 A VA2000's node opens only when the board is there, so its file needs no
 probe.
 The server finds its fonts and its colour database by itself (the X11R6.3
