@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — kbootset.conf: the floor of the published xsurf 1.0.0-3 (f48e48fd, 6f04c3b3)
+
+kbootset.conf names the kbootset floor of the published xsurf-k30/-k46 1.0.0-3 (1.1.0.261114-45), which predate APKG_KBOOTSET; the header and the README name module packages.
+
 ## 2026-11-15 — catalog names for va2000 (5e281ea4)
 
 names.conf names va200030/46 (va2000-k30/-k46).
