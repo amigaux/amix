@@ -14,8 +14,8 @@
 # k46.1.6) is a weak reference: the framebuffer gets the fast cache class on
 # a kernel that offers it and keeps the default class otherwise.  Major c 68
 # is va2000's in the amix-dlm registry; a kbootset whose registry lacks it
-# (before 1.1.0.261115-46) refuses the boot set, and apkg on 1.1 has no key
-# for a module's kbootset floor, so pkginfo's descriptions say so.  The node
+# (before 1.1.0.261115-46) refuses the boot set; pkginfo's APKG_KBOOTSET
+# names that floor (C2-2 v7), and apkg 0.3.12 installs it first.  The node
 # /dev/va2000 (c 68 0, 0660 root sys, as z3660rtg's /dev/zz9000: it maps the
 # card's registers and framebuffer) ships as
 # a device entry in class va2000.  No parameters (modreg: comments only).
@@ -23,7 +23,8 @@
 # programs, /usr/include/va2000.h, the page va2000(7) and its whatis line.
 # 1.1.0-1 (2026-11-15): the first package.  Module 1.1.0-1 (fork dbb5b4f),
 # built in amix-toolchain:dist against the kit of amix 09b89ffb (kabi
-# k30.1.5 / k46.1.6, gcc-cross-amix 33ebadc).
+# k30.1.5 / k46.1.6, gcc-cross-amix 33ebadc).  Before its first publish:
+# /dev/va2000 0660 root sys, and APKG_KBOOTSET=1.1.0.261115-46.
 
 KM_NAME=va2000
 KM_SHORT=va2000
