@@ -3452,6 +3452,47 @@ run 0 "info on a loader row carrying kbootset=" xa -c "$XS/confZ" info loader
 echo "$OUT" | grep -q "Refused:     only a kernel or module entry may carry kbootset=" \
     && ok "a loader row with kbootset= is refused" || bad "kbootset= on a loader" "$OUT"
 
+# an entry this apkg is too old for: !apkg=<v> on a kernel-space row, or an
+# unknown mandatory key; the refusal names the remedy when the catalog has
+# a newer apkg
+AV=$("$APKG" version | sed 's/^apkg //')
+xtoonew() {     # xtoonew <repo> <extra key> <apkg row version or ->
+    xcat "$1" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+        "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg "$2")" 3
+    [ "$3" != - ] && sed -i "2i apkg|$3|APKG|APKG-$3.pkg|00000000000000000000000000000000|1|none|application|the client" "$1/catalog"
+    mkkconf "$1.conf" "file://$1"
+    sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$1.conf"
+    xa -c "$1.conf" update >/dev/null 2>&1
+}
+xreset
+xtoonew "$XS/repoN1" '!apkg=99.0' 99.0
+run 0 "info on a row with !apkg=99.0" xa -c "$XS/repoN1.conf" info ma
+echo "$OUT" | grep -q "Refused:     it needs apkg 99.0 (this apkg is too old for it)" \
+    && ok "... refused: it needs apkg 99.0, this apkg too old" || bad "!apkg= refusal" "$OUT"
+kreset
+run 3 "upgrade ma with !apkg=99.0 (exit 3)" xa -c "$XS/repoN1.conf" upgrade ma
+echo "$OUT" | grep -q "this apkg ($AV) is too old for ma; the catalog has apkg 99.0: run 'apkg upgrade apkg', then try again" && \
+[ ! -s "$SHIMLOG" ] && ok "... names the remedy, the catalog's apkg 99.0; nothing ran" || bad "!apkg= hint" "$OUT"
+kreset
+run 0 "a no-name upgrade leaves it out" xa -c "$XS/repoN1.conf" upgrade
+echo "$OUT" | grep -q "ma 2.0 is left out: the catalog entry is refused: it needs apkg 99.0" && \
+echo "$OUT" | grep -q "run 'apkg upgrade apkg', then try again" \
+    && ok "... named, with the remedy" || bad "!apkg= left out" "$OUT"
+xtoonew "$XS/repoN2" '!apkg=0.0.1' -
+run 0 "info on a row with !apkg=0.0.1" xa -c "$XS/repoN2.conf" info ma
+echo "$OUT" | grep -q "Refused" && bad "an older !apkg= refused" "$OUT" || ok "... an older !apkg= is met"
+xtoonew "$XS/repoN3" '!frobnicate=1' 99.0
+kreset
+run 3 "an unknown mandatory key (exit 3)" xa -c "$XS/repoN3.conf" upgrade ma
+echo "$OUT" | grep -q "the catalog entry is refused: unknown mandatory key !frobnicate" && \
+echo "$OUT" | grep -q "the catalog has apkg 99.0: run 'apkg upgrade apkg'" \
+    && ok "... refused, and the remedy named" || bad "unknown key hint" "$OUT"
+xtoonew "$XS/repoN4" '!frobnicate=1' -
+kreset
+run 3 "the same with no newer apkg in the catalog (exit 3)" xa -c "$XS/repoN4.conf" upgrade ma
+echo "$OUT" | grep -q "this apkg ($AV) is too old for ma, and the catalog has no newer apkg" \
+    && ok "... says the catalog has no newer apkg" || bad "unknown key, no newer apkg" "$OUT"
+
 # a transaction that changes kbootset composes the generation again
 xreset
 xcat "$XS/repoW" $KB35 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \

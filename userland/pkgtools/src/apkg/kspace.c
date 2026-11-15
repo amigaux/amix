@@ -1198,6 +1198,7 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         if (todo[i]->refused != NULL) {
             warnx2("%s: the catalog entry is refused: %s", todo[i]->name,
                    todo[i]->refused);
+            catalog_hint(todo[i]);
             return EX_VERIFY;
         }
         /* the loader has no kabi and serves both lines (C2-2 v3 §1.1) */

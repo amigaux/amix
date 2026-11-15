@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.12"
+#define APKG_VERSION "0.3.13"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -304,6 +304,8 @@ struct pkgent {
     char *kbootmin;   /* a kernel's kbootset= (C2-2 v6): the lowest kbootset
                        * version; NULL = no requirement                   */
     char *refused;    /* NULL, or why the entry may not be installed   */
+    int toonew;       /* refused because this apkg is too old for it
+                       * (an unknown mandatory key, or !apkg=)          */
 };
 
 struct catalog {
@@ -322,6 +324,9 @@ struct catalog {
 #define CAT_EFORMAT -3   /* malformed entry line             */
 
 extern int catalog_load(const char *path, struct catalog *cat);
+/* after "the catalog entry is refused": when this apkg is too old for the
+ * entry, say so and name the remedy (the catalog's apkg, if newer) */
+extern void catalog_hint(const struct pkgent *e);
 extern struct pkgent *catalog_find(struct catalog *cat, const char *name);
 extern void catalog_free(struct catalog *cat);
 
@@ -396,6 +401,17 @@ extern void apkg_ipv4_str(unsigned long addr, char *buf);  /* buf >= 16 */
  * (empty string when the pkginfo has no VERSION= line) */
 extern int installed_version(const struct conf *cf, const char *pkginst,
                              char *ver, unsigned verlen);
+/* 1 when the engine's record of pkginst is an install cut short: its
+ * !I-Lock! (pkginstall removes it only at a clean end), or a package
+ * directory without its pkginfo.  2 when only a removal was cut short
+ * (!R-Lock!).  0 otherwise. */
+extern int pkg_partial(const struct conf *cf, const char *pkginst);
+/* `apkg recover` with no journal: install again, from the catalog, every
+ * package an install left partial */
+extern int cmd_repair(const struct conf *cf, struct catalog *cat);
+/* before `apkg upgrade`: finish a journaled transaction, or drop a journal
+ * of ordinary packages whose datastream is gone (see install.c) */
+extern int recover_before_upgrade(const struct conf *cf);
 
 /* The pkginfo parameter APKG_ESSENTIAL=yes (docs/design.md section 2c):
  * the system may not boot without the package, so remove and purge

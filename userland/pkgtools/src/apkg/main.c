@@ -235,6 +235,10 @@ static void inst_marker(const struct conf *cf, const struct pkgent *e,
     const char *v;
     int essential;
 
+    if (pkg_partial(cf, e->pkginst) == 1) {
+        strcpy(buf, "[partial]");           /* an install cut short */
+        return;
+    }
     if (!ent_installed_v(cf, e, iver, sizeof(iver))) {
         if (e->refused != NULL)
             strcpy(buf, "[refused]");
@@ -279,6 +283,7 @@ static int cmd_list(const struct conf *cf, struct catalog *cat,
     }
     for (i = 0; i < cat->n; i++) {
         if (installed_only &&
+            !pkg_partial(cf, cat->ents[i].pkginst) &&
             !ent_installed_v(cf, &cat->ents[i], iver, sizeof(iver)) &&
             (cat->ents[i].kspace ||
              !conffile_state(cf, cat->ents[i].pkginst)))
@@ -331,7 +336,8 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
         printf("Signature:   unverified (no signature check in this "
                "release)\n");
         if (e->refused != NULL)
-            printf("Refused:     %s\n", e->refused);
+            printf("Refused:     %s%s\n", e->refused,
+                   e->toonew ? " (this apkg is too old for it)" : "");
     } else {
         printf("MD5:         %s\n", e->md5);
     }
@@ -346,7 +352,13 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     }
     printf("Category:    %s\n", e->category);
     printf("Description: %s\n", e->desc);
-    if (ent_installed_v(cf, e, iver, sizeof(iver))) {
+    if (pkg_partial(cf, e->pkginst) == 1)
+        printf("Installed:   partially: an install was cut short "
+               "('apkg upgrade' installs %s again)\n", e->name);
+    else if (pkg_partial(cf, e->pkginst) == 2)
+        printf("Installed:   partially: a removal was cut short "
+               "('apkg remove %s' finishes it)\n", e->name);
+    else if (ent_installed_v(cf, e, iver, sizeof(iver))) {
         printf("Installed:   yes, version %s\n",
                iver[0] == '\0' ? "(none)" : iver);
         if (pkg_essential(cf, e->pkginst, ess, sizeof(ess)))
@@ -590,6 +602,15 @@ int main(int argc, char **argv)
     }
 
     if (strcmp(verb, "upgrade") == 0) {
+        /* a transaction an interruption left journaled is finished first
+         * (apkg recover), so a plain `apkg upgrade` gets the system back */
+        if (txn_exists(&cf) && opt_dryrun) {
+            warnx2("an interrupted transaction is journaled in %s; "
+                   "apkg upgrade finishes it first (apkg recover)",
+                   cf.txnfile);
+        } else if ((rc = recover_before_upgrade(&cf)) != EX_OK) {
+            return rc;
+        }
         if (load_catalog_or_die(&cf, &cat, &ec) != 0)
             return ec;
         rc = cmd_upgrade(&cf, &cat, argv + i, argc - i);
@@ -658,7 +679,15 @@ int main(int argc, char **argv)
             usage();
             return EX_USAGE;
         }
-        return cmd_recover(&cf);
+        rc = cmd_recover(&cf);
+        /* no journal (any more): the packages an install left partial,
+         * installed again from the catalog */
+        if (rc == EX_OK && !txn_exists(&cf) &&
+            catalog_load(cf.catalog, &cat) == CAT_OK) {
+            rc = cmd_repair(&cf, &cat);
+            catalog_free(&cat);
+        }
+        return rc;
     }
 
     if (strcmp(verb, "clean") == 0) {

@@ -295,12 +295,13 @@ check "  ... the engine records GAINT 2, partially installed: the old entries ar
     grep -q '^/etc/g/touch.conf e conffile .* \*GAINT$' "$(cdb)"
 cp -rp "$T" "$WORK/b-after-fail"
 rm -f "$T/FAIL"
-ap "$NEW" upgrade gaint
-check "  ... so the next upgrade finds it up to date" says 'gaint is up to date (installed 2'
-ap "$NEW" -f install gaint; check "the retry, apkg -f install: rc 0" test $? -eq 0
+ap "$NEW" upgrade gaint; rc=$?
+check "the next plain upgrade installs it again (rc 0)" test $rc -eq 0
+check "  ... naming it partial" says 'gaint is partially installed (an install was cut short); installing 2 again'
 check "  ... untouched replaced, edited kept with .new" \
     bash -c "test \"\$(cat '$T/etc/g/touch.conf')\" = touch=2 && test \"\$(cat '$T/etc/g/edit.conf')\" = edit=mine && test -f '$T/etc/g/edit.conf.new'"
-# the user edits the file between the failed run and the next one
+# the user edits the file between the failed run and the next one (the
+# retry by name, apkg -f install, takes the same way)
 newroot b2; cp -rp "$WORK/b-after-fail/." "$T/"; rm -f "$T/FAIL"; cp "$WORK/b/fakeroot.state" "$FS"
 publish GAINT-2; ap "$NEW" update
 printf 'touch=edited-later\n' > "$T/etc/g/touch.conf"
