@@ -65,6 +65,8 @@ and a non-root client (uid 2) connects as root does. The
   box): `ps -efl`, `ls -alni` of `/tmp`, `/var/tmp`, `/var/adm` and `/proc`, `netstat -an/-in`,
   `ipcs -a`, `df`, `who -a`, `last`, `w`, `arp -a`, and the tail of cron's log. The rates are
   prngd's conservative SVR4 ones. `sar` is left out; it is not set up on a stock box.
+  It is a conffile (since 0.9.29-4): an upgrade keeps an edited one and puts the new default
+  beside it as `prngd.conf.new`; -4's default is byte-identical to -3's.
 - **No users:** prngd looks up no user or group names.
 
 ## Running it

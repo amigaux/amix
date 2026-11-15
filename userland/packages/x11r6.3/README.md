@@ -44,6 +44,22 @@ MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with 
   amix-z3660rtg, and **patches 01–31**, among them the cfb16 screen (`rtgscreen.c`, once
   `zz9000screen.c`), the card record and the card-neutral layer: ours, MIT.
 
+## Configuration files
+
+The files an admin edits are conffiles (package.sh's `CONFFILES`): an upgrade keeps an edited one
+and puts the new default beside it as `<name>.new`; an untouched one is replaced. They are
+`/etc/profile.d/x11r63.sh` and, under `/opt/amix/X11R6/lib/X11`: xdm's `Xaccess`, `Xresources`,
+`Xservers`, `Xsession`, `Xsetup_0`, `xdm-config`, `GiveConsole` and `TakeConsole`;
+`xinit/xinitrc`; `twm/system.twmrc`; the app-defaults `Chooser`, `XClock` and `XTerm`; the three
+`fonts.alias`; rstart's `config` and its contexts `default` and `x11r6`; and the SECURITY
+extension's `xserver/SecurityPolicy`. Binaries (xdm's `chooser` too), fonts and `fonts.dir`, the
+xkb data and its listings, `rgb.txt` and rstart's command scripts are not configuration.
+
+6.3-10 is the first revision with conffiles, and their defaults are byte-identical to 6.3-8's, so
+the upgrade from 6.3-8 keeps every edit (with `.new` beside it) and leaves the untouched files as
+they are, under every apkg. Upgrade with `apkg upgrade x11r63`; do not remove 6.3-8 and install
+the new revision, since removing 6.3-8, which shipped these files as ordinary ones, deletes edits.
+
 ## Source
 
 `xc-1.tar.gz` (the tree) and `xc-2.tar.gz` (fonts, docs) from
