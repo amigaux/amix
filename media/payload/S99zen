@@ -148,7 +148,7 @@ start|"")
 	;;
 esac
 
-[ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0
+[ -c /dev/zen0 ] || { mknod /dev/zen0 c 51 0; chmod 0600 /dev/zen0; }
 
 ADDR=$FALLBACK
 if [ -f $CONF ]; then
