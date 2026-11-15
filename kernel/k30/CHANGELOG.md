@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — cut 68030-261115-78: the evidence in emulation (0d9b38a3)
+
+cuts/68030-261115-78/README.md records the cut's evidence in emulation: the 32-bit draw on a Zorro III board at 0x40000000 completes four times of four where -77 is killed three times of four; a root that cannot be mounted panics once; the backtrace and dead-page behaviour shown with a page made to give a bus error. KNOWN-ISSUES says the same in two sentences.
+
 ## 2026-11-15 — cut 68030-261115-78, kern30m k30.1.5.261115-78 (1f87a19b)
 
 The 68030 kernel for 1.1.2 (kabi k30.1.5), from amix 215a64ba and port 59e1b77. A user bus error on a Zorro III board's user mapping is probed at the board's own page, not at a kernel address with the same number. A root that cannot be mounted panics once. The panic backtrace no longer reads past the outermost frame. The module core carries dlm cores 0055, 0057 and 0058. abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -77's. unix.brel b46708a9 (1545004 bytes), kabi 5e54e610; kern30m-k30.1.5.261115-78.pkg 0f8364ad (1928704 bytes), rolled three times with the same bytes. KNOWN-ISSUES gains a Boot section (a panic waits for Return) and the Zorro III probe entry. Emulator rows are recorded with a later commit.

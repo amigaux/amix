@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.12" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.13" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -278,14 +278,72 @@ the journal is printed and discarded and nothing else is changed; when
 that leaves a line without a kernel package (a replacement cut between
 its removal and the new install) it says so.
 While a journal exists,
-.BR install ,
-.B upgrade
+.B install
 and
 .B remove
-refuse to start.
+refuse to start;
+.B upgrade
+runs
+.B recover
+first (see
+.BR "INTERRUPTED INSTALLS" ).
+With no journal,
+.B recover
+installs again, from the catalog, every package an install left partial.
 .TP
 .B version
 Print the client version.
+.SH "INTERRUPTED INSTALLS"
+An install or upgrade cut short \(em a power loss, a killed process, a
+package script that failed \(em leaves the package partially installed: the
+package tools keep
+.BI /var/sadm/pkg/ pkginst /!I-Lock!
+until an install ends cleanly, and by then the package database already
+names the new version and holds its file entries.  apkg treats such a
+package as needing its install, whatever the versions say:
+.TP 4
+\(bu
+.B "apkg upgrade"
+first finishes a transaction an interruption left in the journal
+.RB ( recover ,
+"finishing the interrupted transaction first"), then installs every
+partial package of the catalog again with the rest ("x11r6.3 is partially
+installed (an install was cut short); installing 6.3-10 again").  A
+journal of ordinary packages whose downloaded package is gone or has
+changed (after
+.BR "apkg clean" ,
+or when the repository has moved on) cannot be finished from itself: it
+is dropped, said so, and the packages are installed from the catalog.  A
+journal with kernel-space work or a removal is kept, and the upgrade stops
+with
+.BR recover 's
+words.
+.TP
+\(bu
+.B "apkg recover"
+does the same: the journal first, then the partial packages.
+.TP
+\(bu
+.B "apkg list"
+marks such a package
+.BR [partial] ,
+and
+.B "apkg info"
+says "Installed: partially".  An update to another version first moves
+the installed record aside to
+.BI /var/sadm/pkg/.save. pkginst
+and writes the new one later; a cut in between leaves no record in its
+place, and the package counts as partial too (the saved record is removed
+once the install has ended).  A removal cut short
+.RB ( !R-Lock! )
+is shown, and is finished by
+.BR "apkg remove" ,
+not by an upgrade.
+.PP
+Config files come through as in any install: a file you edited is kept
+with the new default beside it, an untouched one takes the new default
+(the baseline apkg stored before the first attempt stays until the
+install ends).
 .SH FILESYSTEM
 A package whose
 .B pkginfo
@@ -465,6 +523,18 @@ transaction is refused before anything is fetched
 is installed and the catalog has none newer").  Older clients ignore the
 key on a kernel row; apkg 0.3.5 to 0.3.11 refuse a module row that
 carries it.
+.PP
+A kernel-space row may carry
+.BI !apkg= version :
+the lowest apkg that may install it.  An older apkg refuses the entry, as
+it refuses any key starting with
+.B !
+it does not know, and then says what to do: "this apkg (0.3.13) is too
+old for xsurf-k46; the catalog has apkg 0.3.14: run 'apkg upgrade apkg',
+then try again" (or that the catalog has no newer apkg).  A no-name
+.B upgrade
+that leaves such an entry out and takes apkg itself runs the new apkg
+for the rest, which takes the entry in the same call.
 .PP
 A transaction that installs or upgrades kbootset on a system with
 kernel-space packages builds and commits the generation again with it,
@@ -761,6 +831,18 @@ above.  apkg moves no file of yours for this, so a failed or interrupted
 upgrade loses nothing (with
 .B \-v
 it names each file it found untouched).
+.PP
+The other way round \(em installing a version that ships a config file
+as a plain file, as a downgrade to a version from before the files were
+config files does \(em the package lays its default over the file.  apkg
+saves a file you edited as
+.IB file .old
+first and says so ("this version of x11r63 does not keep edits to it;
+yours is saved as \&...\&.old"); afterwards the file's baseline, any
+.B .new
+beside it and its
+.B PENDING
+line are gone, so nothing claims it is still kept.
 .B remove
 keeps the files you edited;
 .B purge
