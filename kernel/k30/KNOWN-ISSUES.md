@@ -15,8 +15,8 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **The panic backtrace could fault** (stock; fixed in cut -78). It read the outermost frame's return slot, which was
   never written, and then the instruction words just below address 0; on a real 68030 that is a bus error inside the
   panic, so a panic became a second one. From -78 the walk bounds each frame and its return address to the kernel's
-  text before reading through it (the 68040/68060 port's frame test). In emulation that read gave no bus error, so the
-  difference on a real 68030 is not yet shown.
+  text before reading through it (the 68040/68060 port's frame test). Shown in emulation with that page made to give
+  a bus error: -77 double-panicked in the backtrace, -78 did not. Not yet seen on a real 68030.
 - **A panic waits for Return** (stock, both kernel lines). After any panic the kernel waits for Return on the Amiga
   keyboard before it goes back to the firmware, so the boot loader's fall-back to the last good generation, after a
   trial kernel that panics, also waits for Return. Nothing on that path times out.
@@ -135,10 +135,11 @@ known about it, and what to do. Measurements are from emulation unless the entry
   mapping on a 68030 was killed ("Hardware Bus Error @ va, (pa physical)", then `User BUS ERROR ... FAULT:1`) at
   offsets that depended on the kernel's own layout. Seen in emulation as a 32-bit 1920x1080 draw on a Zorro III
   ZZ9000 killed under sustained drawing. From cut -78 the probe reads the faulting page through a one-page kernel
-  mapping (`src/hardbus030.c`), so only a page that does not answer ends the program. That a page which really
-  gives a bus error is still killed is not shown in emulation (the emulator answers an empty Zorro III address without
-  one). On -77 or earlier: use the 68040/68060 kernel for a Zorro III graphics card in user space, or the card in
-  Zorro II where it supports that. What raised the first bus error in emulation is not settled.
+  mapping (`src/hardbus030.c`), so only a page that does not answer ends the program (shown in emulation with one
+  framebuffer page made to give a bus error; not yet seen on a real 68030). On -77 or earlier: use the 68040/68060
+  kernel for a Zorro III graphics card in user space, or the card in Zorro II where it supports that. What raises
+  these bus errors on a page the tables call valid is not settled; in emulation they are frequent on a ZZ9000
+  mapping, Zorro II or III, and below 1 GiB the stock probe always retried them.
 
 ## Networking
 

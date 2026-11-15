@@ -44,8 +44,41 @@ The build's own checks (`cut-68030-261115-78.log`): hardbus030.o, syncguard.o an
 exactly their names; the u-area is read at `u+0x730` and `u+0x864` only; one strong sync, the guard's, named from
 syssync and xpanic; usrxmemflt names `hardbus_z3` and `hardbus_z3` names `hardbus`, nothing else names either;
 backtrace calls `bt_frame_ok`; each checked again after the module core's splice; the 80 stock objects equal the
-baseline; `mkabi --check` gives abi 18c0a1c9; relsim finds no relocation the boot loader would refuse. What the
-three guards do on a running box is shown by the rows recorded with the package.
+baseline; `mkabi --check` gives abi 18c0a1c9; relsim finds no relocation the boot loader would refuse.
+
+Evidence, in emulation. The vehicles are the released 1.1.1 k30 image, first-booted, with this cut's files laid and
+kern30m's record set to them, then a kbootset generation; the root-mount rows use the released 1.1 k30 IDE image,
+because 1.1 has no Buddha root module (1.1.1's image mounts a root on a Buddha, and -78 boots it). The emulator is the
+bench's amiberry `d20f842`; the rows that make a page give a bus error use the fork's `buserror_region` option, an
+out-of-tree build at `56a7d38` (on `d20f842`).
+
+- **A Zorro III ZZ9000 at 0x40000000** (an A3000, 68030, the z3660rtg object `ee17d34`), a 32-bit 1920x1080 draw
+  through the user mapping four times: on this cut 4 of 4 drew their bars and no bus error was reported;
+  `hbg_high` 200, `hbg_retry` 200, `hbg_kill` 0. The same row on -77 and the same emulator build: 3 of 4 draws
+  killed (`User BUS ERROR ... FAULT:1`); with the board inside the one-to-one map (at 0x10000000) -77 drew 4 of 4.
+- **One page of that framebuffer made to give a bus error** (0x40500000): each draw's write to it faulted, the probe
+  through the kernel mapping faulted too, and the program was killed at that first fault, `hbg_kill` 2 for the two
+  draws, `hbg_cap` 0, `hbg_last_pa` 0x40500000: a dead device page still ends the program, with no retry loop.
+- **A Zorro II ZZ9000** (at 0x200000): the same modes, X, maptest and unload results as -77's row; `hbg_calls` 59248,
+  all below 0x40000000 (`hbg_high` 0), so the stock probe decided every one of them as before.
+- **The Z3660's own RTG** (A4000, the Z3660 in 68030 mode, fixed at 0x10000000): its attach lines, an X session
+  that ends and one killed with kill -9, as on -77; `hbg_calls` 0.
+- **A root on a Buddha** (an A4000 68030 with the disk on a Buddha, this cut as the trial generation): `PANIC:
+  vfs_mountroot: cannot mount root: errno 6`, no second panic, and after Return the loader booted the previous
+  generation. Read at the panic: `syncg_skip_root` 1 (`syncg_skip_ops` and `syncg_skip_fn` 0); `bt_walks` 1,
+  `bt_frames` 7, `bt_badret` 1, `bt_lastbadret` 0xFFFFFFFA. The emulator logged no access below address 0 from
+  backtrace and none from ufs_update while this cut ran; -77 on the same disk and machine made both (backtrace
+  reading 0xFFFFFFFA to 0xFFFFFFFE, ufs_update+0x58 reading through the root vfs's empty data).
+- **The same with the top page giving a bus error**, as a real 68030 bus would: -77 `DOUBLE PANIC: KERNEL FAULT`
+  at backtrace+0x9c; this cut one panic and no access to that page, and after Return the loader's fall-back
+  generation (-77) double-panicked the same way.
+- **The fault and protection tests** (`tests/segvnprot`): vm30 passes every case it runs (physio not run), pn30's 13
+  cases give the same results as on -72.
+- **Updating an installed 1.1.1 k30 system**: one `apkg upgrade` (apkg 0.3.11) installed this package with kbootset
+  -46, built and committed one generation, every installed module passed the new kernel's gates, the trial was
+  marked good and a second boot was plain; a generation whose root record names an absent unit panicked once
+  (errno 5) and the loader booted the previous generation after a power cycle; `kbootset default 1` boots -77 again.
+  The kbootset of 1.1 and of 1.1.1 both take this cut's sidecar (kabi=k30.1.5).
 
 | File | What |
 |---|---|
