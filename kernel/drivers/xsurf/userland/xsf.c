@@ -147,7 +147,7 @@ fields(xsurf_status_t *st)
 static void
 refused(int i, xsurf_status_t *st)
 {
-    printf("board %d: %s, Zorro %u at 0x%x: refused at load: %s", i,
+    printf("board %d: %s, Zorro %u at 0x%X: refused at load: %s", i,
 	   card(st->board_kind), st->zorro, st->board_phys,
 	   xs_words_refused(st->refused));
     if (st->refused == XSURF_REFUSED_NOWRITES)
@@ -171,7 +171,7 @@ inuse(xsurf_status_t *st)
 	printf("xsf: the driver's record is version %u: no words, only counters\n",
 	       st->version);
     } else {
-	printf("xsf%u: %s, Zorro %u at 0x%x, %02x:%02x:%02x:%02x:%02x:%02x, %s, %s%s%s\n",
+	printf("xsf%u: %s, Zorro %u at 0x%X, %02x:%02x:%02x:%02x:%02x:%02x, %s, %s%s%s\n",
 	       st->unit, card(st->board_kind), st->zorro, st->board_phys,
 	       st->mac[0], st->mac[1], st->mac[2], st->mac[3], st->mac[4], st->mac[5],
 	       st->intr_mode == XSURF_MODE_INTR ? "interrupt I/O" :

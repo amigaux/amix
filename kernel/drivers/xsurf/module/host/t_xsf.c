@@ -216,7 +216,7 @@ main()
     nfnd = 2;
     rc = run(NULL, NULL);
     CHECK(rc == 0);
-    CHECK(strstr(out, "board 1: X-Surf, Zorro 2 at 0xe90000: refused at load: its registers do not take writes (wrote 0x55 or 0xaa, read 0x99)\n") != NULL);
+    CHECK(strstr(out, "board 1: X-Surf, Zorro 2 at 0xE90000: refused at load: its registers do not take writes (wrote 0x55 or 0xaa, read 0x99)\n") != NULL);
 
     cur = "every-board-refused";
     board_errno = ENXIO;
@@ -227,7 +227,7 @@ main()
     rc = run(NULL, NULL);
     CHECK(rc == 1);
     CHECK(strstr(out, "xsf0: no such board in use\n") == out);
-    CHECK(strstr(out, "board 0: X-Surf-100, Zorro 2 at 0xe90000: refused at load: no usable station address\n") != NULL);
+    CHECK(strstr(out, "board 0: X-Surf-100, Zorro 2 at 0xE90000: refused at load: no usable station address\n") != NULL);
 
     cur = "driver-not-loaded";
     ctl_errno = ENXIO;
