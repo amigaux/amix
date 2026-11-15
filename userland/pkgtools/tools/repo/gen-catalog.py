@@ -121,6 +121,16 @@
 # sidecar's kbootset-min= (C2-3 v10), else from a kbootset.conf line for
 # that name and version (a kernel cut before the key existed); a sidecar key
 # and a conf line that differ refuse the package; neither, no key.
+# A module row's kbootset= (C2-2 v7) comes from the package's pkginfo
+# parameter APKG_KBOOTSET, else from a kbootset.conf line for that name and
+# version (a module published before the parameter); both and different
+# refuse the package.  The majors= of its .moddata are checked against
+# kernel/dlm's abi/registry/kbootset (--kbootset-table; "<c|b> <major>
+# <kbootset version>", "-" while no published kbootset has the row): a
+# major the table does not list, or lists as "-", refuses the package, and
+# so does a floor below what a major needs.  A need no higher than the
+# table's lowest version (the rows every release's kbootset has) asks for
+# no floor, so a module of 1.1 keeps its row as it was.
 # Refused per package (SKIP, like any malformed package): a sidecar
 # missing, unreadable, without kabi/pin/line, or whose line differs from
 # its path, or whose sha256=/size= disagree with the packaged unix; an
@@ -497,6 +507,10 @@ def kernel_package_markers(params):
 KSIDECAR_RE = re.compile(r"^/stand/(k30|k46)/kabi$")
 LDRINFO_PATH = "/stand/loader/ldrinfo"
 MODDIR_PREFIX = "/etc/conf/mod.d/"
+# one majors= entry of a module's .moddata (C3-1 section 3)
+MAJOR_RE = re.compile(r"^([cb]):([0-9]+)$")
+# a module package's kbootset floor (C2-2 v7), in its pkginfo
+KBOOTSET_PARAM = "APKG_KBOOTSET"
 KPKG_ALLOWED_I = ("pkginfo", "depend", "copyright")
 
 
@@ -845,7 +859,87 @@ def module_info(buf, params, pkgmap_text):
     if pin == "" or len(pin.split()) != 1 or pin != pin.strip():
         raise Malformed("module package: %s .moddata has no usable cc= "
                         "(C3-1 section 3)" % path)
-    return m.group(1), keys["kabi"], pin
+    majors = []
+    for tok in keys.get("majors", "").split(","):
+        tok = tok.strip()
+        if tok == "":
+            continue
+        mm = MAJOR_RE.match(tok)
+        if mm is None:
+            raise Malformed("module package: %s .moddata majors= has %r, "
+                            "not c:<n> or b:<n> (C3-1 section 3)"
+                            % (path, tok))
+        majors.append((mm.group(1), int(mm.group(2))))
+    return m.group(1), keys["kabi"], pin, majors
+
+
+def vercmp(a, b):
+    """src/apkg/vercmp.c apkg_vercmp: segments split on '.' and '-',
+    numeric ones compared as numbers, others as strings."""
+    def segs(v):
+        out = []
+        cur = ""
+        for ch in v:
+            if ch in ".-":
+                out.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        if v != "":
+            out.append(cur)
+        return out
+    sa, sb = segs(a or ""), segs(b or "")
+    for i in range(max(len(sa), len(sb))):
+        x = sa[i] if i < len(sa) else "0"
+        y = sb[i] if i < len(sb) else "0"
+        if x.isdigit() and y.isdigit():
+            if int(x) != int(y):
+                return -1 if int(x) < int(y) else 1
+        elif x != y:
+            return -1 if x < y else 1
+    return 0
+
+
+def read_kbootset_table(path):
+    """kernel/dlm abi/registry/kbootset: {(type, major): version or '-'}."""
+    table = {}
+    with open(path, encoding="latin-1") as fh:
+        for n, raw in enumerate(fh, 1):
+            line = raw.split("#", 1)[0].split()
+            if not line:
+                continue
+            if (len(line) != 3 or line[0] not in ("c", "b") or
+                    not line[1].isdigit()):
+                raise SystemExit("gen-catalog: %s:%d: not '<c|b> <major> "
+                                 "<kbootset version>'" % (path, n))
+            table[(line[0], int(line[1]))] = line[2]
+    return table
+
+
+def module_floor_check(name, version, kbmin, majors, table):
+    """C2-2 v7: refuse a module whose kbootset floor is below what one of
+    its majors needs (see the KERNEL-SPACE BLOCK at the top)."""
+    known = [v for v in table.values() if v != "-"]
+    base = None
+    for v in known:
+        if base is None or vercmp(v, base) < 0:
+            base = v
+    for typ, num in majors:
+        need = table.get((typ, num))
+        if need is None:
+            raise Malformed("%s %s: owns %s %d, which abi/registry/kbootset "
+                            "does not list" % (name, version, typ, num))
+        if need == "-":
+            raise Malformed("%s %s: owns %s %d, which no published kbootset "
+                            "knows yet (abi/registry/kbootset)"
+                            % (name, version, typ, num))
+        if kbmin is None and base is not None and vercmp(need, base) <= 0:
+            continue
+        if kbmin is None or vercmp(kbmin, need) < 0:
+            raise Malformed("%s %s: owns %s %d, which needs kbootset %s "
+                            "(abi/registry/kbootset): set APKG_KBOOTSET or "
+                            "add a kbootset.conf line"
+                            % (name, version, typ, num, need))
 
 
 def parse_pkginfo(text):
@@ -971,6 +1065,11 @@ def read_cats_conf(path):
 PACKAGES_CONF = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "..", "..", "..", "packages", "conf"))
+# kernel/dlm's table of the kbootset each registry row first appeared in
+# (C2-2 v7), for the module floor check
+KBOOTSET_TABLE = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "..", "..", "..", "kernel", "dlm", "abi", "registry", "kbootset"))
 
 
 class ConfConflict(Exception):
@@ -1079,7 +1178,8 @@ def essential_check(params):
 
 
 def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
-                descs_conf, verbose, kbootset_conf=None):
+                descs_conf, verbose, kbootset_conf=None,
+                kbootset_table=None):
     """relname: path relative to the staging root (forward slashes);
     it is emitted verbatim as the catalog filename field."""
     fname = relname
@@ -1154,7 +1254,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         if role == "loader":
             kline, loader = loader_info(buf, params)
         elif role == "module":
-            kline, kabi, pin = module_info(buf, params, pkgmap_text)
+            kline, kabi, pin, majors = module_info(buf, params, pkgmap_text)
         else:
             kline, kabi, pin, kbmin = kernel_sidecar(buf, params,
                                                      pkgmap_text)
@@ -1174,6 +1274,24 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
                                 "kbootset.conf says %s (C2-2 v6 section 1.2)"
                                 % (kbmin, kbconf))
             kbmin = kbmin if kbmin is not None else kbconf
+        elif role == "module":
+            kbconf = as_layers("kbootset.conf", kbootset_conf).get(
+                "%s %s" % (name, version))
+            kbpar = params.get(KBOOTSET_PARAM)
+            for what, v in (("kbootset.conf", kbconf),
+                            ("pkginfo " + KBOOTSET_PARAM, kbpar)):
+                if v is not None and (v == "" or len(v.split()) != 1 or
+                                      "|" in v):
+                    raise Malformed("%s: %s %s: %r is not one version"
+                                    % (what, name, version, v))
+            if kbpar is not None and kbconf is not None and kbpar != kbconf:
+                raise Malformed("module package: pkginfo %s=%s, "
+                                "kbootset.conf says %s (C2-2 v7)"
+                                % (KBOOTSET_PARAM, kbpar, kbconf))
+            kbmin = kbpar if kbpar is not None else kbconf
+            if kbootset_table is not None:
+                module_floor_check(name, version, kbmin, majors,
+                                   kbootset_table)
         entry = {
             "kspace": True, "name": name, "version": version,
             "pkginst": pkginst, "filename": fname, "role": role,
@@ -1460,6 +1578,12 @@ def main(argv):
                          "alongside the staging root's confs (default: "
                          "amix's userland/packages/conf; 'none' reads only "
                          "the staging root's)")
+    ap.add_argument("--kbootset-table", metavar="FILE",
+                    default=KBOOTSET_TABLE,
+                    help="kernel/dlm's abi/registry/kbootset, the kbootset "
+                         "each major first needs; a module package is "
+                         "checked against it (default: amix's, when there; "
+                         "'none' skips the check)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -1477,6 +1601,13 @@ def main(argv):
     cat_groups = {}
     descs_conf = ConfLayers("descs.conf")
     kbootset_conf = ConfLayers("kbootset.conf")
+    kbootset_table = None
+    if args.kbootset_table != "none" and os.path.isfile(args.kbootset_table):
+        kbootset_table = read_kbootset_table(args.kbootset_table)
+    elif args.kbootset_table not in ("none", KBOOTSET_TABLE):
+        print("gen-catalog: no kbootset table at %s" % args.kbootset_table,
+              file=sys.stderr)
+        return 1
     layer_dirs = [("staging", staging)]
     if args.packages_conf != "none":
         if os.path.isdir(args.packages_conf):
@@ -1582,7 +1713,8 @@ def main(argv):
         try:
             entry = build_entry(path, fname, deps_conf, names_conf,
                                 cats_conf, cat_groups, descs_conf,
-                                args.verbose, kbootset_conf)
+                                args.verbose, kbootset_conf,
+                                kbootset_table)
             if entry["name"] in seen:
                 raise Malformed("duplicate catalog name %r (already "
                                 "provided by %s)" %

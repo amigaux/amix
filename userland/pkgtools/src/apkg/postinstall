@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Jussi Alanärä <jussi@alanara.fi>
+#
+# postinstall of APKG.  When an older apkg upgrades APKG together with
+# other packages in one transaction, the apkg just installed prepares the
+# packages of that transaction that are still to come: a file that one of
+# them turns into a conffile takes the new default when nobody edited it
+# (apkg(1), conffile(5); `apkg conffiles prepare`).  An apkg from 0.3.12
+# on does this itself before each pkgadd.  Nothing to do under -R (the
+# target's apkg does not run here), without a journal, or on any error;
+# this script never fails the install.
+
+case "${PKG_INSTALL_ROOT:-/}" in
+/)	;;
+*)	exit 0 ;;
+esac
+if [ -x /usr/apkg/bin/apkg ]
+then
+	/usr/apkg/bin/apkg conffiles prepare >/dev/null 2>&1
+fi
+exit 0
