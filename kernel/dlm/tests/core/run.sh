@@ -34,8 +34,10 @@
 # Environment, required (none is part of amix, which pins them in
 # toolchain/ and kernel/port/): GCA (gcc-cross-amix build dir), G14
 # (gcc14-cross-amix build dir, for the modern m68k-elf binutils the oracle
-# links with), and with a k46 kernel PORT (the 040/060 port's checkout,
-# whose build/ has devkvmap040.o and dma_cache040.o).  B.
+# links with), and with a k46 kernel PORT (the 040/060 port's checkout:
+# devkvmap040.o and dma_cache040.o are assembled from its src/, so a clone
+# at the pin will do; its build/ copies only when the sources are absent).
+# B.
 # One PASS/FAIL line per check; exit 1 if any failed.
 #
 # Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.  The checks
@@ -59,6 +61,24 @@ B=$(mkdir -p "${B:-$R/build}/core" && cd "${B:-$R/build}/core" && pwd)
 . "$GCA/env.sh"
 PATH="$G14/prefix/bin:$PATH"
 export PATH
+
+# the port's two objects the k46 checks link (dev_kvmap, the DMA service),
+# assembled here from its sources, as the port's relink scripts do
+PK=
+for IMG; do case "$(basename "$IMG")" in K030*|*k30*) ;; *) PK=1 ;; esac; done
+if [ -n "$PK" ]; then
+	mkdir -p "$B/port"
+	for o in devkvmap040 dma_cache040; do
+		if [ -f "$PORT/src/$o.s" ]; then
+			m68k-cbm-sysv4-gcc -m68040 -c "$PORT/src/$o.s" -o "$B/port/$o.o"
+		elif [ -f "$PORT/build/$o.o" ]; then
+			cp "$PORT/build/$o.o" "$B/port/$o.o"
+		else
+			echo "run.sh: $PORT has neither src/$o.s nor build/$o.o: give the 040/060 port's checkout (PORT=...)" >&2
+			exit 1
+		fi
+	done
+fi
 
 fails=0
 pass() { echo "PASS $*"; }
@@ -408,8 +428,7 @@ for IMG; do
 		dlm_ddi dlm_intr sha256 crc32 dlm_cache dlm_hooksw dlm_spl plat-amiga; do echo "$B/obj/$f.o"; done)
 	prov="$prov $B/obj/plat-$LINE-line.o"
 	if [ $LINE = k46 ]; then
-		[ -f "$PORT/build/devkvmap040.o" ] &&
-			prov="$prov $PORT/build/devkvmap040.o"
+		prov="$prov $B/port/devkvmap040.o"
 	fi
 	# the libgcc helpers the lists name (__udivdi3 and the rest) are not
 	# kernel source symbols: a base has them only if one of its objects
@@ -425,7 +444,7 @@ for IMG; do
 	# port's kernel links and this k0 base lacks): its names, when that
 	# object defines them, are stubbed here and said, not failed
 	portdma=
-	DC=${PORT:-}/build/dma_cache040.o
+	DC=$B/port/dma_cache040.o
 	[ $LINE = k46 ] && [ -f "$DC" ] &&
 		portdma=$(m68k-elf-nm "$DC" | awk '$2=="T" && ($3=="dma_prepare" || $3=="dma_complete") {print $3}' | sort | tr '\n' ' ')
 	awk -v m=${KABI##*.} '!/^#/ && NF && $3 <= m {print $1, $2}' "$L" | while read n k; do
