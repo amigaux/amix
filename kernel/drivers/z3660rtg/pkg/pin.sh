@@ -69,7 +69,7 @@ KM_FILES_COMMON="\
 /opt/amix/man/whatis.d/@PKG@ $_zr/man/whatis 9c9c4a24c69e57ff9bf73accb36097067b496c4f5ad3bdfde44f347bfa5c7dec 0644
 /etc/display.d/z3660 $_zr/display.d/z3660 421064a1dec95831a55940d9624ee816b5d3e692dfa6580dd2fbc8ac50fd529a 0444
 /etc/display.d/zz9000 $_zr/display.d/zz9000 0b7c1c0c213b2be75b524327a7fe4c314120c94fab7dc1bf292046c25bcf9973 0444
-/etc/display.d/zz9001 $_zr/display.d/zz9001 d850630d9347a7e0b29e7b5d578ee69a25af1f883cd593b1a54080275b06da62 0444"
+/etc/display.d/zz9001 $_zr/display.d/zz9001 8511b412c031db6fe5358df98458d59e2175dcf478cb15265c2a4193919412dd 0444"
 
 # the tools, in GCC 14's environment rather than the roll's (TOOLCHAIN=none)
 kdrv_prepare() {
