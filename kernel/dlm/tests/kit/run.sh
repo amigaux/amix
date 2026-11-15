@@ -171,6 +171,15 @@ for l in k30 k46; do
 		fi
 	mkbad $l xsother "$WRAP"'MOD_MISC_WRAPPER(xsother, l, u, "x");\n' "$M0"'$majors c:56\nxsother\txsother\n' &&
 		refused "xsurf's major on another module" $l "$W/$l-xsother/out/mod.d/xsother" "registered to xsurf"
+	# c 68 is registered to va2000 (2026-11-15): va2000 passes, another module is refused
+	mkbad $l va2000 "$WRAP"'MOD_MISC_WRAPPER(va2000, l, u, "x");\n' "$M0"'$majors c:68\nva2000\tva2000\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-va2000/out/mod.d/va2000" > "$W/va2000.out" 2>&1; then
+			pass "$l: va2000 with character major 68 is accepted"
+		else
+			fail "$l: va2000 with character major 68"; cat "$W/va2000.out"
+		fi
+	mkbad $l vaother "$WRAP"'MOD_MISC_WRAPPER(vaother, l, u, "x");\n' "$M0"'$majors c:68\nvaother\tvaother\n' &&
+		refused "va2000's major on another module" $l "$W/$l-vaother/out/mod.d/vaother" "registered to va2000"
 	mkbad $l boolp "$WRAP"'MOD_MISC_WRAPPER(boolp, l, u, "x");\n' "$M0"'$param on:bool:yes\nboolp\tboolp\n' &&
 		refused "a bool default other than 0 or 1" $l "$W/$l-boolp/out/mod.d/boolp" "is not a bool value"
 	# a root-class disk controller (C4-2 section 1): accepted, rank= written
