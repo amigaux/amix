@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — the compiler fork at its new address (885eb308)
+
+toolchain.pin and the README name the compiler fork at its new address, amigaux/gcc-cross-amix (commit 33ebadc unchanged; no kit or module byte changes).
+
 ## 2026-11-15 — make core runs against an unbuilt port clone (c321272e)
 
 tests/core/run.sh assembles the port's devkvmap040.o and dma_cache040.o from PORT's src/, so make core runs against an unbuilt clone at the pin; a checkout with neither the sources nor built copies is refused by name.
