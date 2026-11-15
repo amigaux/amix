@@ -66,7 +66,9 @@ apkg clean                    remove the package files from the cache (-n: say w
 apkg licence <name>          print an installed package's saved notice, name its licence files
 apkg install <name>...       resolve deps (recursive, topological) -> download -> pkgadd each
 apkg upgrade [<name>...]     if catalog version > installed: download, then one pkgadd over the
-                             installed instance (instance=overwrite); no pkgrm runs
+                             installed instance (instance=overwrite); no pkgrm runs; a journaled
+                             transaction is finished first (recover), and a package an install
+                             left partial (the engine's !I-Lock!) is installed again
 apkg remove <name>           pkgrm wrapper
 apkg version                 client version
 Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile>
