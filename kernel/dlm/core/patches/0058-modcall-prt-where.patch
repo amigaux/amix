@@ -1,0 +1,188 @@
+Subject: prt_where kept across the core's calls into a module
+
+The stock cmn_err leaves prt_where as its format's first character set
+it.  One plain cmn_err in a module's _load (a "no board" notice) left
+3 for the rest of the boot, and with a console logger registered every
+later line went into putbuf twice; a "!" one would keep later lines off
+the console.  dlm_modcall saves prt_where and puts it back around the
+lifecycle calls: _load, _unload (also a failed load's), the halt entry,
+a deferred call.  vfs_register's init runs inside _load.  The entry
+points a module installs (cdev, STREAMS, exec, vfs operations,
+interrupts) are left as they are: they are per-operation and the module
+owns what they print.  The state harness's pw1 runs a plain cmn_err in
+each lifecycle entry and in a deferred call.
+
+--- a/dlm_core.c
++++ b/dlm_core.c
+@@ -155,6 +155,30 @@
+ 		printf("%s: undefined symbol %s\n", ld->ld_name, name);
+ }
+ 
++/*
++ * A call into a module from the core's lifecycle paths: its _load and
++ * _unload, its halt entry, a deferred call.  prt_where is put back after
++ * it: the stock cmn_err leaves prt_where as its format's first character
++ * set it, so one plain cmn_err there (a "no board" notice from a _load,
++ * say) would leave 3, and every later line would go into putbuf twice
++ * once a console logger is registered; a "!" one would keep later lines
++ * off the console.
++ */
++int
++dlm_modcall(m, f, a, b)
++	struct dlm_mod *m;
++	unsigned long f;
++	char *a;
++	long b;
++{
++	short pw = prt_where;
++	int e;
++
++	e = DLM_CALL(m, f, a, b);
++	prt_where = pw;
++	return e;
++}
++
+ static char *
+ lastcomp(p)
+ 	char *p;
+@@ -664,7 +688,7 @@
+ 		if (lf->lf_stage == LF_LOADED) {
+ 			w = G32(DLM_RP(m, m->m_wrapper) + MW_UNLOAD);
+ 			if (w)
+-				(void)DLM_CALL(m, w, m, 0);
++				(void)dlm_modcall(m, w, (char *)m, 0L);
+ 		}
+ 		if (lf->lf_stage >= LF_INLOAD)	/* its _load ran: what did it leave? */
+ 			sweep(m);
+@@ -1152,7 +1176,7 @@
+ 		}
+ 		dlm_man_params(m->m_name, pa, 512);
+ 		dlm_curmod = m;
+-		e = DLM_CALL(m, c, pa[0] ? pa : (char *)0, 0);
++		e = dlm_modcall(m, c, pa[0] ? pa : (char *)0, 0L);
+ 		dlm_curmod = 0;
+ 		dlm_free(pa, 512L);
+ 		if (e != 0)
+@@ -1252,7 +1276,7 @@
+ 	while (m->m_nlink > 0)
+ 		link_remove(m, --m->m_nlink);
+ 	if ((f = G32(DLM_RP(m, m->m_wrapper) + MW_UNLOAD)) != 0)
+-		e = DLM_CALL(m, f, m, 0);
++		e = dlm_modcall(m, f, (char *)m, 0L);
+ 	g->g_unl = 0;
+ 	if (e) {
+ 		relink(m, g->g_unlnl);
+@@ -1516,7 +1540,7 @@
+ 			printf("dlm: %s: its halt entry is not code; skipped\n", m->m_name);
+ 			continue;
+ 		}
+-		(void)DLM_CALL(m, w, 0, 0);
++		(void)dlm_modcall(m, w, (char *)0, 0L);
+ 		n++;
+ 	}
+ 	if (n)
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -324,7 +324,7 @@
+ 
+ 	for (i = 0; i < dlm_ndefer; i++) {
+ 		d = &dlm_defer[i];
+-		if ((e = DLM_CALL(d->df_mod, d->df_f, d->df_arg, 0)) != 0)
++		if ((e = dlm_modcall(d->df_mod, d->df_f, d->df_arg, 0L)) != 0)
+ 			printf("dlm: root module %s: its deferred call returned error %d\n",
+ 			    d->df_mod->m_name, e);
+ 	}
+--- a/dlm.h
++++ b/dlm.h
+@@ -353,6 +353,8 @@
+ #define	DLM_NOSLEEPMAX	(1L << 20)	/* one request in it, at most (U1) */
+ extern void dlm_free();
+ extern void dlm_undef();
++extern int dlm_modcall();
++extern short prt_where;		/* the kernel's print destination (stock) */
+ 
+ /* dlm_slot.c */
+ extern void dlm_slot_init();
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -75,6 +75,8 @@
+ for p in ('hl1', 'hl2'):
+     mod(p, halt=p + '_halt', text='\t.globl\t{p}_halt\n{p}_halt:\n\trts\n'.format(p=p))
+ mod('hl3', halt='lbolt')
++# prt_where: pw1's _load, _unload and halt entry each run a plain cmn_err
++mod('pw1', halt='pw1_halt', text='\t.globl\tpw1_halt\npw1_halt:\n\trts\n')
+ mod('hl4')
+ 
+ 
+--- a/test/state.c
++++ b/test/state.c
+@@ -863,6 +863,7 @@
+ 	char *m, *a;
+ 	long b;
+ {
++	cmn_err(CE_NOTE, "rd: a plain notice");
+ 	rd_calls++;
+ 	rd_lastarg = (int)(long)a;
+ 	return 0;
+@@ -930,9 +931,11 @@
+ 	n = dlm_root_pass(rp_arena);
+ 	check(n == 1 && byname("rd1") && !byname("rd3") && rd_e[0] == 0 && rd_e[1] == 0 && rd_calls == 0,
+ 	    "root_defer: accepted from _load in the root pass, not called there");
++	prt_where = 2;
+ 	dlm_marc_run();
+ 	check(rd_calls == 1 && rd_lastarg == 7,
+ 	    "root_defer: called once at the first sysinit entry; a failed load's call is gone");
++	check(prt_where == 2, "root_defer: a plain cmn_err in the deferred call leaves prt_where as it was");
+ 	dlm_marc_run();
+ 	check(rd_calls == 1, "root_defer: and never again");
+ 	check(rpbuild(n2, f2, d2, m2, 1) == 0, "root_defer: a third arena built");
+@@ -1481,6 +1484,41 @@
+ 	return 0;
+ }
+ 
++/* prt_where: pw1's entries run a plain cmn_err and return pw_ret */
++static int pw_ret;
++
++int
++h_pw(m, a, b)
++	char *m, *a;
++	long b;
++{
++	cmn_err(CE_NOTE, "pw1: a plain notice");
++	return pw_ret;
++}
++
++void
++pw_tests()
++{
++	int id;
++
++	host_handler("pw1_load", h_pw);
++	host_handler("pw1_unload", h_pw);
++	host_handler("pw1_halt", h_pw);
++	prt_where = 2;
++	pw_ret = ENXIO;
++	check(modload("pw1", &id) == ENXIO && !byname("pw1") && prt_where == 2,
++	    "prt_where: a _load refusing after a plain cmn_err leaves it as it was (2)");
++	pw_ret = 0;
++	check(modload("pw1", &id) == 0 && prt_where == 2,
++	    "prt_where: a _load with a plain cmn_err leaves it as it was");
++	prt_where = 1;
++	check(dlm_halt() == 1 && prt_where == 1, "prt_where: a halt entry's plain cmn_err leaves it as it was (1)");
++	dlm_halted = 0;
++	prt_where = 2;
++	check(moduload(id) == 0 && !byname("pw1") && prt_where == 2,
++	    "prt_where: an _unload with a plain cmn_err leaves it as it was");
++}
++
+ void
+ halt_tests()
+ {
+@@ -2462,6 +2500,7 @@
+ 	intr_tests();
+ 	kinfo_tests();
+ 	halt_tests();
++	pw_tests();
+ 	arena_tests();
+ 	root_tests();
+ 	defer_tests();
