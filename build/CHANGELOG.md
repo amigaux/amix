@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — pkgroll: CONFFILES split as pkgmeta splits it (e289dd36)
+
+pkgroll.sh splits CONFFILES on tabs and newlines as well as blanks and commas, as pkgmeta does.
+
 ## 2026-11-15 — CONFFILES under a package's own PREFIX (1c06e71d)
 
 pkgmeta lets CONFFILES name files under the package's own PREFIX as well as /etc and /var (X keeps its configuration in /opt/amix/X11R6/lib/X11); the class scripts and the roll are unchanged.
