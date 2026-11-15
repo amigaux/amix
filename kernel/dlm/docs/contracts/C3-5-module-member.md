@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 25
+# C3-5 — the module package and the per-module manifest record, version 26
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -36,7 +36,9 @@
   `major` record per registry row, which the core reads (core patch 0051;
   §3); version 23 (2026-11-02): the gayle row serves the A1200 IDE too
   (§1.1); version 24 (2026-11-14): short names for buddha and xsurf
-  (§1.1); version 25 (2026-11-15): va2000's short name (§1.1).
+  (§1.1); version 25 (2026-11-15): va2000's short name (§1.1); version 26
+  (2026-11-15): the package's kbootset floor, `APKG_KBOOTSET=` (§1.2, C2-2
+  version 7).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -64,8 +66,8 @@ One key is the administrator's alone (version 15): `safe` on a boot-class
 module, so it loads in safe mode too (C4-4 version 7 §2).
 
 The catalog entry and the install record are C2-2's (`role=module` with
-`line=`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=`). C2-2 needs no
-change.
+`line=`, `kabi=`, `pin=`, `size=`, `sha256=`, `file=`), and from C2-2
+version 7 the optional `kbootset=` (§1.2).
 
 ### 1.1 Names and version
 
@@ -173,7 +175,15 @@ per line**:
   beyond its `link.d` line: `ifup` does it (C3-6 §1.8; earlier, the
   installer's `S99zen`).
 - The catalog row (C2-2 §1.1) takes `kabi=` and `pin=` from the object's
-  `.moddata`. **apkg does not check dependencies** between module
+  `.moddata`.
+- **The kbootset floor** (version 26): a module that needs a newer
+  kbootset than 1.1's sets `APKG_KBOOTSET=<version>` in `pkginfo`, and
+  `gen-catalog.py` puts it on the row as `kbootset=` (C2-2 §1.2), so
+  installing the module alone brings that kbootset into the transaction
+  instead of ending at gate 3. A module owning a major sets at least the
+  version `abi/registry/kbootset` gives that major: xsurf
+  1.1.0.261114-45 (c 56), va2000 1.1.0.261115-46 (c 68).
+- **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not
   installed (or is disabled) is refused by `kbootset build`, gate 3 (§2).
 

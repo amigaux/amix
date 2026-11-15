@@ -1,0 +1,19 @@
+# The kbootset each row of the major registry needs (C2-2 section 1.2,
+# version 7): the oldest kbootset package version whose registry has the
+# row and writes it into a module kernel's major table (core patch 0051).
+# One line per row of `majors`, in its order: c (character) or b (block),
+# the major, the version; `-` until a published kbootset carries the row.
+# Rows of 1.1 give 1.1.0.261101-34, the first kbootset to write the table.
+# A module package's kbootset floor (its pkginfo APKG_KBOOTSET=, or a
+# kbootset.conf line) is at least the version here of each major it owns;
+# gen-catalog refuses a module package whose floor is lower.
+c 48 1.1.0.261101-34
+c 49 1.1.0.261101-34
+c 51 1.1.0.261101-34
+c 52 1.1.0.261101-34
+c 53 1.1.0.261101-34
+c 54 1.1.0.261101-34
+c 55 1.1.0.261101-34
+c 56 1.1.0.261114-45
+c 68 1.1.0.261115-46
+b 20 1.1.0.261101-34
