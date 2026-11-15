@@ -1,25 +1,35 @@
 /*
- * xsf -- the xsurf driver's status record, one counter per line
- * (build on the box: cc -o xsf xsf.c, with xsurfuser.h beside it).
+ * xsf -- what the xsurf driver knows about its boards (xsf(1M)).
  *
- *   xsf [unit]     print /dev/xsf<unit>'s status record (unit 0 by default)
- *   xsf -S [unit]  silent presence check: exit 0 when the board is there,
- *                  1 when its open fails (no such board)
+ *   xsf [unit]     board <unit>'s state (unit 0 by default): first what the
+ *                  console said at load, the link and what has gone wrong
+ *                  in words, then every counter of its status record, one
+ *                  "name value" per line; then any board refused at load
+ *   xsf -a         every board the driver found, in use or refused
+ *   xsf -S [unit]  silent: exit 0 when xsf<unit> is in use, 1 when not
  *
- * The record starts with its version and size; a record newer than this
- * program prints the fields it knows.
+ * /dev/xsf<unit> answers for a board in use; /dev/xsfctl for every board
+ * found, also one the driver refused at load, whose console line is gone
+ * once the system is up.  A record newer than this program prints the
+ * fields it knows; an older one (driver 1.0.0-3 and before) only those it has.
+ *
+ * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
  */
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <string.h>
+#include <unistd.h>
 #include <stropts.h>
 #include <sys/types.h>
 #include "xsurfuser.h"
+#define XS_WORDS_REFUSED
+#include "xsurfwords.h"
 
-extern int errno;
+#define CTL	"/dev/xsfctl"
 
-static char *names[] = {
+static const char *names[] = {
     "version", "size", "board_kind", "zorro", "board_phys", "intr_mode",
     "link", "running", "pnp",
     "rx_frames", "rx_delivered", "rx_no_sap", "rx_not_for_us",
@@ -29,49 +39,279 @@ static char *names[] = {
     "tx_dma_timeouts", "tx_bad_req", "tx_unbound", "tx_resends",
     "irq_claims", "irq_fallbacks", "resets", "ack_retries",
     "if_ipackets", "if_opackets", "if_ierrors", "if_oerrors",
+    /* version 2 (mac is printed apart: it is bytes) */
+    "unit", "refused", "refused_detail", "intr_param", "selftest_failed",
+    0, 0,
+    "link_speed", "link_duplex", "link_medium", "link_raw", "link_changes",
+    "notes", "if_collisions",
+    "probe_cr", "probe_isr", "reset_wait", "reg_access",
+    "regs_read_byte", "regs_read_word", "regs_read_word_lo",
+    0, 0, 0, 0, 0, 0, 0, 0,		/* prom: printed apart */
+    "dma_test", "dma_test_at", "dma_test_wrote", "dma_test_read",
+    "txto_isr", "txto_tsr", "txto_cr", "dmato_isr", "dmato_crda", "dmato_len",
+    "data_path", "regs_param", "data_param",
     0
 };
 
-main(argc, argv)
-int argc;
-char **argv;
+static const char *
+regsword(unsigned int v, char *buf)
+{
+    if (v == XSURF_REGS_PASSED)
+	return "passed";
+    if (v == XSURF_REGS_NOT_TRIED)
+	return "not tried";
+    sprintf(buf, "read 0x%02x", v);
+    return buf;
+}
+
+/* what the probe read, the self-test and the first timeouts, in words */
+static void
+diag(xsurf_status_t *st)
+{
+    char b0[16], b1[16], b2[16];
+    int i;
+
+    if (st->size < sizeof *st)
+	return;
+    printf("  probe: CR 0x%02x, ISR 0x%02x before the reset", st->probe_cr, st->probe_isr);
+    if (st->board_kind == XSURF_KIND_XSURF100) {
+	if (st->reset_wait == 0xffffffff)
+	    printf("; never ready after it (20 ms)");
+	else
+	    printf("; ready %u us after it", st->reset_wait);
+    }
+    printf("\n  registers: byte cycles %s, word %s, word low %s\n",
+	   regsword(st->regs_read[0], b0), regsword(st->regs_read[1], b1),
+	   regsword(st->regs_read[2], b2));
+    printf("  PROM as read:");
+    for (i = 0; i < 32; i++)
+	printf(" %02x", st->prom[i]);
+    printf("\n  remote-DMA self-test: ");
+    switch (st->dma_test) {
+    case XSURF_DMATEST_PASSED:
+	printf("passed, %s\n", st->data_path == XSURF_DATA_FIFO ? "through the windows" :
+	       "through the data port");
+	break;
+    case XSURF_DMATEST_NOWRITE:
+	printf("the write did not complete (remote address 0x%04x)\n", st->dma_test_at);
+	break;
+    case XSURF_DMATEST_MISMATCH:
+	printf("byte %u read back 0x%02x, written 0x%02x\n", st->dma_test_at,
+	       st->dma_test_read, st->dma_test_wrote);
+	break;
+    default:
+	printf("not run\n");
+    }
+    if (st->tx_timeouts)
+	printf("  first transmit timeout: ISR 0x%02x, TSR 0x%02x, CR 0x%02x\n",
+	       st->txto_isr, st->txto_tsr, st->txto_cr);
+    if (st->tx_dma_timeouts)
+	printf("  first remote-DMA write timeout: ISR 0x%02x, remote address 0x%04x, %u bytes\n",
+	       st->dmato_isr, st->dmato_crda, st->dmato_len);
+    if (st->regs_param || st->data_param)
+	printf("  parameters: regs=%u data=%u\n", st->regs_param, st->data_param);
+}
+
+static int
+status(int fd, int cmd, xsurf_status_t *st)
+{
+    struct strioctl si;
+
+    memset((char *)st, 0, sizeof *st);
+    si.ic_cmd = cmd;
+    si.ic_timout = 10;
+    si.ic_len = sizeof *st;
+    si.ic_dp = (char *)st;
+    return ioctl(fd, I_STR, &si);
+}
+
+static const char *
+card(unsigned int kind)
+{
+    return kind == XSURF_KIND_XSURF100 ? "X-Surf-100" :
+	   kind == XSURF_KIND_XSURF ? "X-Surf" : "an unknown card";
+}
+
+/* the record's own field count, at most what this program knows */
+static int
+fields(xsurf_status_t *st)
+{
+    int n = st->size / sizeof(unsigned int);
+
+    if (n > (int)(sizeof *st / sizeof(unsigned int)))
+	n = sizeof *st / sizeof(unsigned int);
+    return n;
+}
+
+/* a refused board: what it is and why, as its console line said */
+static void
+refused(int i, xsurf_status_t *st)
+{
+    printf("board %d: %s, Zorro %u at 0x%X: refused at load: %s", i,
+	   card(st->board_kind), st->zorro, st->board_phys,
+	   xs_words_refused(st->refused));
+    if (st->refused == XSURF_REFUSED_NOWRITES)
+	printf(" (wrote 0x55 or 0xaa, read 0x%x)", st->refused_detail);
+    printf("\n");
+    if (st->refused == XSURF_REFUSED_NORESET || st->refused == XSURF_REFUSED_NOWRITES ||
+	st->refused == XSURF_REFUSED_NOMAC || st->refused == XSURF_REFUSED_DMA)
+	diag(st);
+}
+
+/* a board in use: the load line, the state in words, then the counters */
+static void
+inuse(xsurf_status_t *st)
+{
+    unsigned int *v = (unsigned int *)st;
+    char words[64];
+    int i, n = fields(st);
+    unsigned int notes;
+
+    if (st->version < 2) {
+	printf("xsf: the driver's record is version %u: no words, only counters\n",
+	       st->version);
+    } else {
+	printf("xsf%u: %s, Zorro %u at 0x%X, %02x:%02x:%02x:%02x:%02x:%02x, %s, %s%s%s\n",
+	       st->unit, card(st->board_kind), st->zorro, st->board_phys,
+	       st->mac[0], st->mac[1], st->mac[2], st->mac[3], st->mac[4], st->mac[5],
+	       st->intr_mode == XSURF_MODE_INTR ? "interrupt I/O" :
+	       st->selftest_failed ? "polled (interrupt self-test failed)" : "polled",
+	       xs_words_link(st->link, st->link_speed, st->link_duplex,
+			     st->link_medium, words),
+	       st->size < sizeof *st ? "" :
+	       st->reg_access == XSURF_ACCESS_WORD ? ", registers by word cycles" :
+	       st->reg_access == XSURF_ACCESS_WORD_LO ? ", registers by word cycles (low byte)" : "",
+	       st->size >= sizeof *st && st->board_kind == XSURF_KIND_XSURF100 &&
+	       st->data_path == XSURF_DATA_PORT ? ", data through the data port" : "");
+	if (st->intr_mode != XSURF_MODE_INTR && st->irq_fallbacks)
+	    printf("  interrupts stopped after load; polled since\n");
+	printf("  received %u frames, %u errors; sent %u frames, %u errors, %u collisions\n",
+	       st->if_ipackets, st->if_ierrors, st->if_opackets, st->if_oerrors,
+	       st->if_collisions);
+	printf("  transmits: %u not completed (chip restarted), %u remote-DMA writes not completed,\n",
+	       st->tx_timeouts, st->tx_dma_timeouts);
+	printf("    %u aborted (16 collisions or FIFO underrun), %u other errors\n",
+	       st->tx_aborts, st->tx_errors - st->tx_aborts);
+	if (st->link == XSURF_LINK_DOWN)
+	    printf("  no link: see the cable, the hub or switch port and their link lights\n");
+	if (st->tx_frames == 0 && st->tx_dma_timeouts > 0)
+	    printf("  no frame reached the chip: its remote-DMA writes do not complete\n");
+	else if (st->tx_frames == 0 && st->tx_timeouts > 0)
+	    printf("  no transmit has completed: the chip takes frames but never reports them sent\n");
+	else if (st->tx_frames == 0 && st->tx_aborts > 0)
+	    printf("  every transmit aborted on collisions: the medium (coax, or no link)\n");
+	notes = st->notes;
+	if (notes)
+	    printf("  said on the console:%s%s%s%s\n",
+		   notes & XSURF_NOTE_TXTIMEOUT ? " transmit not completed;" : "",
+		   notes & XSURF_NOTE_DMA ? " remote-DMA write not completed;" : "",
+		   notes & XSURF_NOTE_ABORT ? " transmit aborted;" : "",
+		   notes & XSURF_NOTE_TXERR ? " transmit error;" : "");
+	diag(st);
+    }
+    for (i = 0; i < n && i < (int)(sizeof names / sizeof names[0]); i++)
+	if (names[i])			/* the mac's two words are printed below */
+	    printf("%s %u\n", names[i], v[i]);
+    if (st->version >= 2)
+	printf("mac %02x:%02x:%02x:%02x:%02x:%02x\n",
+	       st->mac[0], st->mac[1], st->mac[2], st->mac[3], st->mac[4], st->mac[5]);
+    if (st->size >= sizeof *st) {
+	printf("prom");
+	for (i = 0; i < 32; i++)
+	    printf(" %02x", st->prom[i]);
+	printf("\n");
+    }
+}
+
+/* every board found through /dev/xsfctl; refused_only skips those in use */
+static int
+found(int refused_only, int *ctl_errno)
+{
+    xsurf_status_t st;
+    int fd, i, shown = 0;
+
+    if ((fd = open(CTL, O_RDONLY)) < 0) {
+	*ctl_errno = errno;
+	return -1;
+    }
+    for (i = 0; i < XSURF_MAXFOUND; i++) {
+	if (status(fd, XSURF_FOUND_STATUS(i), &st) < 0)
+	    break;
+	if (st.refused != XSURF_REFUSED_NONE) {
+	    refused(i, &st);
+	    shown++;
+	} else if (!refused_only) {
+	    inuse(&st);
+	    shown++;
+	}
+    }
+    close(fd);
+    return shown;
+}
+
+static void
+not_loaded(int e)
+{
+    if (e == ENOENT)
+	fprintf(stderr, "xsf: no %s: the xsurf package is older than 1.0.0-4 or not installed\n", CTL);
+    else
+	fprintf(stderr, "xsf: the xsurf driver is not loaded: AutoConfig found no "
+		"X-Surf or X-Surf-100 (%s: %s)\n", CTL, strerror(e));
+}
+
+int
+main(int argc, char **argv)
 {
     char dev[32];
-    int fd, silent = 0, unit = 0, i, n;
+    int fd, silent = 0, all = 0, unit = 0, e = 0, n;
     xsurf_status_t st;
-    unsigned int *v = (unsigned int *)&st;
-    struct strioctl si;
 
     if (argc > 1 && strcmp(argv[1], "-S") == 0) {
 	silent = 1;
 	argc--;
 	argv++;
+    } else if (argc > 1 && strcmp(argv[1], "-a") == 0) {
+	all = 1;
+	argc--;
+	argv++;
+    }
+    if (argc > 2 || (argc > 1 && (argv[1][0] < '0' || argv[1][0] > '9'))) {
+	fprintf(stderr, "usage: xsf [unit] | xsf -a | xsf -S [unit]\n");
+	return 2;
     }
     if (argc > 1)
 	unit = atoi(argv[1]);
+    if (all) {
+	if ((n = found(0, &e)) < 0) {
+	    not_loaded(e);
+	    return 1;
+	}
+	if (n == 0)
+	    printf("xsf: the driver found no board\n");
+	return 0;
+    }
     sprintf(dev, "/dev/xsf%d", unit);
     if ((fd = open(dev, O_RDWR)) < 0) {
-	if (!silent)
-	    fprintf(stderr, "xsf: %s: %s\n", dev,
-		    errno == ENXIO ? "no such board" : strerror(errno));
-	exit(1);
+	if (silent)
+	    return 1;
+	e = errno;
+	if (e != ENXIO) {
+	    fprintf(stderr, "xsf: %s: %s\n", dev, strerror(e));
+	    return 1;
+	}
+	printf("xsf%d: no such board in use\n", unit);
+	if (found(1, &e) < 0)
+	    not_loaded(e);
+	return 1;
     }
     if (silent)
-	exit(0);
-    memset((char *)&st, 0, sizeof st);
-    si.ic_cmd = XSURF_GET_STATUS;
-    si.ic_timout = 10;
-    si.ic_len = sizeof st;
-    si.ic_dp = (char *)&st;
-    if (ioctl(fd, I_STR, &si) < 0) {
+	return 0;
+    if (status(fd, XSURF_GET_STATUS, &st) < 0) {
 	fprintf(stderr, "xsf: %s: status: %s\n", dev, strerror(errno));
-	exit(1);
+	return 1;
     }
-    n = st.size / sizeof(unsigned int);
-    if (n > sizeof st / sizeof(unsigned int))
-	n = sizeof st / sizeof(unsigned int);
-    for (i = 0; i < n && names[i]; i++)
-	printf("%s %u\n", names[i], v[i]);
     close(fd);
-    exit(0);
+    inuse(&st);
+    (void)found(1, &e);
+    return 0;
 }

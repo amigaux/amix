@@ -17,6 +17,8 @@
 #define XS_TBCR1	0x06
 #define XS_ISR		0x07	/* interrupt status, write 1 to clear */
 #define XS_RSAR0	0x08	/* W: remote start address */
+#define XS_CRDA0	0x08	/* R: current remote DMA address */
+#define XS_CRDA1	0x09
 #define XS_RSAR1	0x09
 #define XS_RBCR0	0x0a	/* W: remote byte count */
 #define XS_RBCR1	0x0b
@@ -33,7 +35,7 @@
 #define XS_MAR0		0x08	/* multicast filter, 8 registers */
 /* past the register file */
 #define XS_DATA		0x10	/* remote-DMA data port */
-#define XS_GPOC		0x17	/* AX88796B only: general purpose output */
+#define XS_DSR		0x17	/* AX88796B only, read: device status (link) */
 #define XS_RESET	0x1f	/* read, then write the value back: reset */
 
 /* CR */
@@ -44,6 +46,7 @@
 #define XS_CR_RWRITE	0x10
 #define XS_CR_NODMA	0x20
 #define XS_CR_PAGE1	0x40
+#define XS_CR_PAGE3	0xc0	/* RTL8019AS: its configuration registers */
 
 /* ISR and IMR */
 #define XS_I_PRX	0x01	/* frame received */
@@ -73,8 +76,34 @@
 #define XS_DCR_BYTE	0x48	/* FIFO threshold 8, normal, byte transfers */
 #define XS_DCR_WORD	0x49	/* the same with word transfers (WTS) */
 
-/* the AX88796B's GPOC: bit 6 powers the PHY down */
-#define XS_GPOC_PPDSET	0x40
+/*
+ * The AX88796B's Device Status Register (datasheet V1.6 sec. 5.1.68).  A
+ * write to 0x17 is its back-pressure jam limit, not a GPOC: the driver
+ * never writes it.  The PHY is on from reset (MII register 0 = 0x3100).
+ */
+#define XS_DSR_LINK	0x01	/* link up */
+#define XS_DSR_DUPLEX	0x02	/* full duplex */
+#define XS_DSR_SPEED	0x04	/* 100 Mb/s */
+#define XS_DSR_RDY	0x10	/* D_RDY: the chip is ready (not reset, asleep, loading) */
+
+/*
+ * The RTL8019AS (datasheet LS003.8 sec. 5.1): page 0's ID bytes, and page
+ * 3's CONFIG0 (what it sends on) and CONFIG2 (the medium setting).
+ */
+#define XS_RTL_ID0	0x0a	/* page 0, read: 0x50 'P' */
+#define XS_RTL_ID1	0x0b	/* page 0, read: 0x70 'p' */
+#define XS_RTL_CONFIG0	0x03	/* page 3 */
+#define XS_RTL_CONFIG2	0x05	/* page 3 */
+#define XS_RTL_CONFIG3	0x06	/* page 3 */
+#define XS_CONFIG0_BNC	0x04	/* sending on coax (auto-detect: link test failed) */
+#define XS_CONFIG0_AUI	0x20	/* sending on AUI */
+#define XS_CONFIG2_PL(v) (((v) >> 6) & 3) /* 0 auto, 1 10BASE-T no test, 2 10BASE5, 3 10BASE2 */
+#define XS_CONFIG3_FUDUP 0x40	/* full duplex */
+
+/* the probe's write check: page 1's MAR2 and MAR3, read back */
+#define XS_CHECK_REG	0x0a
+#define XS_CHECK_A	0x55
+#define XS_CHECK_B	0xaa
 
 /*
  * Packet memory, the same on both cards: 16 KB from page 0x40.  Two transmit

@@ -22,6 +22,7 @@ unsigned char	*host_window;
 unsigned long	host_window_phys;
 static char	console[4096];
 static int	ipl, reset_fail_n, reset_calls;
+static int	regs_fail = -1, prom_fail, bprobe_fail, stop_calls;
 static unsigned char *z3_window;
 static int	spt_pages, spt_flag;
 static unsigned long spt_pfn;
@@ -43,7 +44,32 @@ cmn_err(int level, char *fmt, ...)
 int spl6() { int s = ipl; ipl = 4; return s; }
 int splx(int s) { int o = ipl; ipl = s; return o; }
 void xs_udelay(long us) { }
-int bprobe(caddr_t a, int v) { return 0; }
+int bprobe(caddr_t a, int v) { return bprobe_fail; }
+static int regs_seq[4], regs_seq_n, regs_seq_i, regs_seen[4], regs_calls;
+int
+xs_regs_check(xs_board_t *b)
+{
+    regs_seen[regs_calls++ & 3] = b->ops->access;
+    if (regs_seq_i < regs_seq_n)
+	return regs_seq[regs_seq_i++];
+    return regs_fail;
+}
+static int dma_seq[4], dma_seq_n, dma_seq_i, dma_paths[4];
+int
+xs_dma_test(xs_board_t *b)
+{
+    int r = dma_seq_i < dma_seq_n ? dma_seq[dma_seq_i] : XSURF_DMATEST_PASSED;
+
+    dma_paths[dma_seq_i & 3] = b->data_path;
+    dma_seq_i++;
+    b->st.dma_test = r;
+    b->st.dma_test_at = 17;
+    b->st.dma_test_wrote = 0x5a;
+    b->st.dma_test_read = 0xa5;
+    return r == XSURF_DMATEST_PASSED;
+}
+
+void xs_chip_stop(xs_board_t *b) { stop_calls++; }
 int
 xs_chip_reset(xs_board_t *b)
 {
@@ -54,7 +80,7 @@ xs_read_prom(xs_board_t *b, unsigned char *mac)
 {
     memset(mac, 0x22, 6);
     mac[0] = 0;
-    return 1;
+    return !prom_fail;
 }
 void xs_chip_init(xs_board_t *b, int start) { }
 caddr_t
@@ -143,10 +169,46 @@ t_xs100_access()
     CHECK((*b.ops->irq)(&b) == 1);
     *win(0x40) = 0x7f;
     CHECK((*b.ops->irq)(&b) == 0);
-    (*b.ops->phy)(&b, 0);
-    CHECK(*win(0x800 + 4 * 0x17) == XS_GPOC_PPDSET);
-    (*b.ops->phy)(&b, 1);
-    CHECK(*win(0x800 + 4 * 0x17) == 0);
+
+    cur = "xs100-link-from-dsr";
+    *win(0x800 + 4 * 0x17) = 0x17;		/* ready, link, 100, full */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link == XSURF_LINK_UP && b.st.link_speed == 100);
+    CHECK(b.st.link_duplex == XSURF_DUPLEX_FULL && b.st.link_medium == XSURF_MEDIUM_TP);
+    CHECK(b.st.link_raw == 0x17);
+    CHECK(*win(0x800 + 4 * 0x17) == 0x17);	/* read only: 0x17 is never written */
+    *win(0x800 + 4 * 0x17) = 0x11;		/* ready, link, 10, half */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link == XSURF_LINK_UP && b.st.link_speed == 10);
+    CHECK(b.st.link_duplex == XSURF_DUPLEX_HALF);
+    *win(0x800 + 4 * 0x17) = 0x13;		/* ready, link, 10, full */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link_speed == 10 && b.st.link_duplex == XSURF_DUPLEX_FULL);
+    *win(0x800 + 4 * 0x17) = 0x15;		/* ready, link, 100, half */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link_speed == 100 && b.st.link_duplex == XSURF_DUPLEX_HALF);
+    *win(0x800 + 4 * 0x17) = 0x16;		/* ready, no link (speed, duplex stale) */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link == XSURF_LINK_DOWN && b.st.link_speed == 0);
+    CHECK(b.st.link_duplex == XSURF_DUPLEX_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_TP);
+    *win(0x800 + 4 * 0x17) = 0x07;		/* not ready: the rest means nothing */
+    (*b.ops->link)(&b);
+    CHECK(b.st.link == XSURF_LINK_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_NOTREADY);
+    CHECK(b.st.link_speed == 0 && b.st.link_duplex == XSURF_DUPLEX_UNKNOWN);
+}
+
+/* the X-Surf's link from its RTL8019AS registers, in the window's memory */
+static void
+rtl(xs_board_t *b, int id0, int c0, int c2, int c3, int running)
+{
+    *win(0x8600 + 2 * 0x0a) = id0;
+    *win(0x8600 + 2 * 0x0b) = 0x70;
+    *win(0x8600 + 2 * 3) = c0;
+    *win(0x8600 + 2 * 5) = c2;
+    *win(0x8600 + 2 * 6) = c3;
+    *win(0x8600) = 0;
+    b->running = running;
+    (*b->ops->link)(b);
 }
 
 static void
@@ -178,7 +240,35 @@ t_xsurf_access()
     CHECK(win(0x8620)[0] == 9 && win(0x8620)[1] == 8);
     *win(0x40) = 0xa0;
     CHECK((*b.ops->irq)(&b) == 1);
-    CHECK(b.ops->phy == 0);
+
+    cur = "xsurf-link-from-config";
+    rtl(&b, 0x50, 0x00, 0x00, 0x00, 1);		/* auto-detect, on 10BASE-T */
+    CHECK(b.st.link == XSURF_LINK_UP && b.st.link_speed == 10);
+    CHECK(b.st.link_duplex == XSURF_DUPLEX_HALF && b.st.link_medium == XSURF_MEDIUM_TP);
+    CHECK(*win(0x8600) == (XS_CR_NODMA | XS_CR_STA));	/* page 0 again, still running */
+    CHECK(b.st.link_raw == 0x0000);
+    rtl(&b, 0x50, 0x00, 0x00, XS_CONFIG3_FUDUP, 0);
+    CHECK(b.st.link == XSURF_LINK_UP && b.st.link_duplex == XSURF_DUPLEX_FULL);
+    CHECK(*win(0x8600) == (XS_CR_NODMA | XS_CR_STP));	/* stopped stays stopped */
+    rtl(&b, 0x50, XS_CONFIG0_BNC, 0x00, 0, 1);	/* link test failed: coax */
+    CHECK(b.st.link == XSURF_LINK_DOWN && b.st.link_medium == XSURF_MEDIUM_COAX);
+    CHECK(b.st.link_raw == (XS_CONFIG0_BNC << 8));
+    rtl(&b, 0x50, XS_CONFIG0_AUI, 0x00, 0, 1);	/* link test failed: AUI */
+    CHECK(b.st.link == XSURF_LINK_DOWN && b.st.link_medium == XSURF_MEDIUM_AUI);
+    rtl(&b, 0x50, 0x00, 0x40, 0, 1);		/* 10BASE-T, link test off */
+    CHECK(b.st.link == XSURF_LINK_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_TP_NOTEST);
+    CHECK(b.st.link_raw == 0x40);
+    rtl(&b, 0x50, XS_CONFIG0_AUI, 0x80, 0, 1);	/* set to 10BASE5 */
+    CHECK(b.st.link == XSURF_LINK_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_AUI);
+    rtl(&b, 0x50, XS_CONFIG0_BNC, 0xc0, 0, 1);	/* set to 10BASE2 */
+    CHECK(b.st.link == XSURF_LINK_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_COAX);
+    rtl(&b, 0x51, 0x00, 0x00, 0, 1);		/* not an RTL8019 */
+    CHECK(b.st.link == XSURF_LINK_UNKNOWN && b.st.link_medium == XSURF_MEDIUM_NOTKNOWN);
+    CHECK(b.st.link_raw == 0);
+    *win(0x8600 + 2 * 0x0b) = 0x71;
+    *win(0x8600 + 2 * 0x0a) = 0x50;
+    (*b.ops->link)(&b);
+    CHECK(b.st.link_medium == XSURF_MEDIUM_NOTKNOWN);
 
     cur = "xsurf-plug-and-play";
     memset(host_window, 0, 0x10000);
@@ -245,6 +335,15 @@ t_find()
     CHECK(xs_board[1].st.zorro == 2 && xs_board[1].map_how == XS_MAP_IDENT);
     CHECK(strstr(console, "has shut itself up") != NULL);
     CHECK(strstr(console, "too small") != NULL);
+    CHECK(xs_nfound == 4);			/* every board AutoConfig gave, in order */
+    CHECK(xs_found[0].board == 0 && xs_found[3].board == 1);
+    CHECK(xs_found[1].board == -1 && xs_found[1].rec.refused == XSURF_REFUSED_HIGH);
+    CHECK(xs_found[1].rec.board_phys == 0x80000000UL && xs_found[1].rec.zorro == 3);
+    CHECK(xs_found[2].board == -1 && xs_found[2].rec.refused == XSURF_REFUSED_SMALL);
+    CHECK(xs_found[2].rec.refused_detail == 0x1000 && xs_found[2].rec.unit == 0xffffffff);
+    CHECK(xs_found[2].rec.board_kind == XSURF_KIND_XSURF100);
+    CHECK(xs_found[2].rec.version == XSURF_STATUS_VERSION);
+    CHECK(xs_board[0].st.unit == 0 && xs_board[1].st.unit == 1);
     xs_unmap(&xs_board[0]);
     CHECK(spt_freed == (caddr_t)z3_window && spt_pages == 18 && spt_flag == 1);
     CHECK(xs_board[0].va == 0 && xs_board[0].map_how == XS_MAP_NONE);
@@ -255,6 +354,205 @@ t_find()
     cur = "find-none";
     actab = NULL;
     CHECK(xs_find_boards() == 0);
+    CHECK(xs_nfound == 0);
+}
+
+/* a board whose probe refuses it: recorded, unmapped, its chip stopped */
+static void
+t_refuse()
+{
+    static struct ac t[] = {
+	{ 0x12120064, 0x40000000, 0x4000000 },		/* X-Surf-100, Zorro III */
+	{ 0x12120017, 0xE90000, 0x10000 },		/* X-Surf */
+	{ 0 },
+    };
+
+    actab = t;
+    cur = "refuse-registers-dead";
+    reset_calls = reset_fail_n = 0;
+    console[0] = 0;
+    regs_fail = 0x99;
+    stop_calls = 0;
+    spt_freed = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(xs_nfound == 2);
+    CHECK(xs_found[0].board == -1 && xs_found[0].rec.refused == XSURF_REFUSED_NOWRITES);
+    CHECK(xs_found[0].rec.refused_detail == 0x99);
+    CHECK(xs_found[0].rec.board_phys == 0x40000000 && xs_found[0].rec.zorro == 3);
+    CHECK(xs_found[1].rec.refused == XSURF_REFUSED_NOWRITES);
+    CHECK(xs_found[1].rec.board_kind == XSURF_KIND_XSURF);
+    CHECK(strstr(console, "X-Surf-100 at 0x40000000: its registers do not take writes") != NULL);
+    CHECK(strstr(console, "read 0x99") != NULL);
+    CHECK(stop_calls == 2);			/* both masked before they were unmapped */
+    CHECK(spt_freed == (caddr_t)z3_window);	/* the Zorro III window unmapped */
+    CHECK(xs_board[0].present == 0 && xs_board[0].map_how == XS_MAP_NONE);
+    regs_fail = -1;
+
+    cur = "refuse-no-address";
+    console[0] = 0;
+    prom_fail = 1;
+    stop_calls = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(xs_nfound == 2 && xs_found[0].rec.refused == XSURF_REFUSED_NOMAC);
+    CHECK(strstr(console, "no usable station address") != NULL && stop_calls == 2);
+    prom_fail = 0;
+
+    cur = "refuse-no-answer";
+    console[0] = 0;
+    bprobe_fail = 1;
+    stop_calls = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(xs_nfound == 2 && xs_found[0].rec.refused == XSURF_REFUSED_NOANSWER);
+    CHECK(stop_calls == 0);			/* a bus error: its registers untouched */
+    bprobe_fail = 0;
+
+    cur = "refuse-no-reset";
+    console[0] = 0;
+    reset_calls = 0;
+    reset_fail_n = 100;
+    stop_calls = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_NORESET);
+    CHECK(xs_found[1].rec.refused == XSURF_REFUSED_NORESET && stop_calls == 2);
+    reset_fail_n = 0;
+
+    cur = "refuse-dma";
+    console[0] = 0;
+    dma_seq[0] = dma_seq[1] = XSURF_DMATEST_MISMATCH;
+    dma_seq[2] = dma_seq[3] = XSURF_DMATEST_NOWRITE;
+    dma_seq_n = 4;
+    dma_seq_i = 0;
+    stop_calls = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_DMA && xs_found[0].rec.refused_detail == XSURF_DMATEST_MISMATCH);
+    CHECK(dma_paths[0] == XSURF_DATA_FIFO && dma_paths[1] == XSURF_DATA_PORT);	/* windows, then the port */
+    CHECK(xs_found[1].rec.refused == XSURF_REFUSED_DMA && dma_paths[2] == XSURF_DATA_PORT);	/* X-Surf: the port */
+    CHECK(xs_found[1].rec.refused_detail == XSURF_DMATEST_NOWRITE && dma_seq_i == 3);
+    CHECK(xs_found[0].rec.dma_test == XSURF_DMATEST_MISMATCH && xs_found[0].rec.dma_test_at == 17);	/* what the probe read */
+    CHECK(xs_found[0].rec.dma_test_read == 0xa5 && xs_found[0].rec.regs_read[0] == XSURF_REGS_PASSED);
+    CHECK(strstr(console, "X-Surf-100 at 0x40000000: remote-DMA self-test: byte 17 read back 0xa5, written 0x5a") != NULL);
+    CHECK(strstr(console, "X-Surf at 0xe90000: remote-DMA self-test: the write did not complete (remote address 0x11)") != NULL);
+    CHECK(stop_calls == 2);
+    dma_seq_n = 0;
+
+    cur = "refuse-one-of-two";
+    reset_calls = 0;
+    regs_fail = -1;
+    CHECK(xs_find_boards() == 2 && xs_nfound == 2);
+    CHECK(xs_found[0].board == 0 && xs_found[1].board == 1);
+}
+
+/* the probe's register and data-path fallbacks, and the parameters */
+static void
+t_fallbacks()
+{
+    static struct ac t[] = { { 0x12120064, 0x40000000, 0x4000000 }, { 0 } };
+    xs_board_t *b = &xs_board[0];
+    unsigned char buf[8];
+
+    actab = t;
+    cur = "regs-byte-then-word";
+    reset_calls = reset_fail_n = 0;
+    console[0] = 0;
+    z3_window[0x800] = 0x21;				/* CR and ISR as the probe finds them */
+    z3_window[0x800 + 4 * XS_ISR] = 0x80;
+    regs_seq[0] = 0x99; regs_seq[1] = -1; regs_seq_n = 2; regs_seq_i = 0; regs_calls = 0;
+    CHECK(xs_find_boards() == 1);
+    CHECK(regs_seen[0] == XSURF_ACCESS_BYTE && regs_seen[1] == XSURF_ACCESS_WORD);
+    CHECK(b->ops->access == XSURF_ACCESS_WORD && b->st.reg_access == XSURF_ACCESS_WORD);
+    CHECK(b->st.regs_read[0] == 0x99 && b->st.regs_read[1] == XSURF_REGS_PASSED);
+    CHECK(b->st.regs_read[2] == XSURF_REGS_NOT_TRIED);
+    CHECK(b->st.probe_cr == 0x21 && b->st.probe_isr == 0x80);
+    CHECK(b->st.data_path == XSURF_DATA_FIFO && b->data_path == XSURF_DATA_FIFO);
+    (*b->ops->wr)(b, XS_ISR, 0x5a);			/* word cycles: the byte in both halves */
+    CHECK(z3_window[0x800 + 4 * 7] == 0x5a && z3_window[0x800 + 4 * 7 + 1] == 0x5a);
+    z3_window[0x800 + 4 * XS_CURR] = z3_window[0x800 + 4 * XS_CURR + 1] = 0x66;
+    CHECK((*b->ops->rd)(b, XS_CURR) == 0x66);
+    z3_window[0x800 + 4 * 0x17] = z3_window[0x800 + 4 * 0x17 + 1] = 0x17;
+    (*b->ops->link)(b);
+    CHECK(b->st.link == XSURF_LINK_UP);		/* the link through the same cycles */
+
+    cur = "regs-word-low-half";
+    regs_seq[0] = 0x99; regs_seq[1] = 0x98; regs_seq[2] = -1; regs_seq_n = 3; regs_seq_i = 0; regs_calls = 0;
+    CHECK(xs_find_boards() == 1 && b->ops->access == XSURF_ACCESS_WORD_LO);
+    CHECK(b->st.regs_read[1] == 0x98 && b->st.regs_read[2] == XSURF_REGS_PASSED);
+    z3_window[0x800 + 4 * XS_CURR] = 0x11;
+    z3_window[0x800 + 4 * XS_CURR + 1] = 0x66;
+    {
+	unsigned short w = *(unsigned short *)&z3_window[0x800 + 4 * XS_CURR];
+	int lo = (*b->ops->rd)(b, XS_CURR);
+	CHECK(lo == (w & 0xff) && lo != ((w >> 8) & 0xff));	/* the low half, not the high */
+    }
+    regs_seq[0] = 0x99; regs_seq[1] = -1; regs_seq_n = 2; regs_seq_i = 0; regs_calls = 0;
+    CHECK(xs_find_boards() == 1 && b->ops->access == XSURF_ACCESS_WORD);
+    {
+	unsigned short w = *(unsigned short *)&z3_window[0x800 + 4 * XS_CURR];
+	CHECK((*b->ops->rd)(b, XS_CURR) == ((w >> 8) & 0xff));	/* the high half */
+    }
+
+    cur = "regs-all-forms-fail";
+    console[0] = 0;
+    regs_seq_n = 0; regs_seq_i = 0; regs_fail = 0x99; regs_calls = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(regs_calls == 3 && regs_seen[2] == XSURF_ACCESS_WORD_LO);	/* byte, word, word low */
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_NOWRITES);
+    CHECK(strstr(console, "read 0x99; by word cycles too") != NULL);
+    regs_fail = -1;
+
+    cur = "regs-param-byte-only";
+    console[0] = 0;
+    xs_regs_param = 1;
+    regs_seq[0] = 0x42; regs_seq[1] = -1; regs_seq_n = 2; regs_seq_i = 0;
+    CHECK(xs_find_boards() == 0);
+    CHECK(regs_seq_i == 1 && xs_found[0].rec.refused_detail == 0x42);
+    CHECK(strstr(console, "read 0x42)") != NULL);
+
+    cur = "regs-param-word";
+    xs_regs_param = 2;
+    regs_seq_n = 0; regs_seq_i = 0; regs_calls = 0;
+    CHECK(xs_find_boards() == 1);
+    CHECK(regs_seen[0] == XSURF_ACCESS_WORD && b->st.regs_read[0] == XSURF_REGS_NOT_TRIED);
+    CHECK(b->st.regs_param == 2 && b->st.reg_access == XSURF_ACCESS_WORD);
+    xs_regs_param = 0;
+
+    cur = "data-windows-then-port";
+    dma_seq[0] = XSURF_DMATEST_MISMATCH; dma_seq_n = 1; dma_seq_i = 0;
+    CHECK(xs_find_boards() == 1);
+    CHECK(dma_paths[0] == XSURF_DATA_FIFO && dma_paths[1] == XSURF_DATA_PORT);
+    CHECK(b->data_path == XSURF_DATA_PORT && b->st.data_path == XSURF_DATA_PORT);
+    CHECK(b->st.dma_test == XSURF_DMATEST_PASSED);
+
+    cur = "data-param-windows-only";
+    console[0] = 0;
+    xs_data_param = 1;
+    dma_seq_i = 0;
+    CHECK(xs_find_boards() == 0 && dma_seq_i == 1);
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_DMA);
+
+    cur = "data-param-port";
+    xs_data_param = 2;
+    dma_seq_n = 0; dma_seq_i = 0;
+    CHECK(xs_find_boards() == 1 && dma_paths[0] == XSURF_DATA_PORT);
+    CHECK(b->st.data_param == 2);
+    xs_data_param = 0;
+
+    cur = "data-port-path";
+    memset(z3_window + 0x8000, 0, 0x1000);
+    z3_window[0x840] = 0x11;
+    z3_window[0x841] = 0x22;
+    b->data_path = XSURF_DATA_PORT;
+    (*b->ops->bin)(b, buf, 7);
+    CHECK(buf[0] == 0x11 && buf[1] == 0x22 && buf[4] == 0x11 && buf[5] == 0x22 && buf[6] == 0x11);
+    buf[0] = 1; buf[1] = 2; buf[2] = 3; buf[3] = 4; buf[4] = 5; buf[5] = 6;
+    (*b->ops->bout)(b, buf, 6);
+    CHECK(z3_window[0x840] == 5 && z3_window[0x841] == 6);	/* the last word on the port */
+    CHECK(z3_window[0x8c80] == 0 && z3_window[0x8c83] == 0);	/* no window touched */
+
+    cur = "ready-waits-for-d_rdy";
+    z3_window[0x800 + 4 * 0x17] = XS_DSR_RDY;
+    CHECK((*b->ops->ready)(b) == 0);
+    z3_window[0x800 + 4 * 0x17] = z3_window[0x800 + 4 * 0x17 + 1] = 0x00;
+    CHECK((*b->ops->ready)(b) == -1);
 }
 
 int
@@ -267,6 +565,8 @@ main()
     t_xsurf_access();
     t_pnp_key();
     t_find();
+    t_refuse();
+    t_fallbacks();
     printf("t_boards: %d checks, %d failed\n", n_checks, n_fail);
     return n_fail != 0;
 }
