@@ -94,6 +94,10 @@ def main():
                   for s in ("i.conffile", "r.conffile")) if rc == 0 else False)
         check("says what it did", "CONFFILES 2: e conffile" in out, out)
 
+        rc, out, work = roll(tmp, "\t/etc/foo.conf\n\t/var/foo/state\n")
+        check("a list over lines, tab-indented, works too (as pkgmeta splits it)", rc == 0 and
+              "e conffile /var/foo/state 0600" in read(os.path.join(work, "prototype"))
+              and "e conffile /etc/foo.conf 0644" in read(os.path.join(work, "prototype")), out)
         rc, out, work = roll(tmp, "/etc/foo.conf,/var/foo/state")
         check("a comma-separated list works too", rc == 0 and read(os.path.join(
             work, "prototype")).count("e conffile ") == 2, out)
