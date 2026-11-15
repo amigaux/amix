@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-15 — major registry: c 68 va2000; kbootset(1M) on moving the root disk (575654ea, 7711591c)
+
+Character major 68 is registered to the MNT VA2000 graphics card module, short name `va2000`. kbootset's compiled table is regenerated, so a kbootset built from here accepts the module; C3-5 version 25 and spec 20 §6 carry the row. kbootset(1M) describes moving the root disk to another controller.
+
 ## 2026-11-14 — C2-4 version 30: a disk root needs no swap record (1c6c2f94)
 
 A disk root's swap is slice 2 of the root disk RTH1 chose, and the swap record is read only for a RAM-disk root's `swap none`, so the pristine build and the moved-disk step pass no --swap. Spec 10's manifest table says the same.
