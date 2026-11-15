@@ -162,13 +162,8 @@ users' reports, passed on as they came:
 - **Working:** an A4000D with a CyberStorm MkII 68060 and an X-Surf-100. The
   interface took a DHCP lease, and traffic went both ways (a ping by name
   answered). The card's Zorro mode was not reported.
-- **Failing:** an X-Surf-100 in an A4000 with a CyberStorm 68060 (model not
-  reported). The interface configured, but no frame was sent or received;
-  every transmit ended as an output error. The same machine also has
-  trouble with the card under AmigaOS, so its cause is not known.
-
-1.0.0-4's probe checks and xsf readings (see Link and diagnostics) are
-meant to tell such cases apart.
+- **Failing:** one user's set-up reported failing, where the card
+  afterwards did not work under AmigaOS either.
 
 **In emulation.** The
 rows below ran in the Amiberry emulator (amigaux fork, with its NE2000 receive
@@ -214,6 +209,56 @@ Each boot ran the checks above, and also:
 - `ifconfig xsf0 down` gave `flags=22`, and `up` gave 23 again;
 - the guest answered a ping of the network's broadcast address.
 
+Module 1.0.0-4 was checked from its packages on 2026-11-15. The plain rows
+ran on the emulator's earlier build, then on the build that models the
+X-Surf-100's link and its stricter board options:
+
+- **Each card on each line, two boots** (interrupts, then polled through
+  `param intr=0` with `kbootset build` and `commit`, as `xsurf(7)` gives
+  it): the X-Surf-100 in Zorro III (k46) and Zorro II (k30), the X-Surf on
+  both lines. Each boot ran the checks above. It also checked:
+  - the load line with its link words;
+  - that `xsf` prints the same line;
+  - `xsf -a`, `xsf -S` and `xsf 1` (no such board);
+  - `/dev/xsfctl` as c 56 15, the pages, and netstat's collision column;
+  - a version-2 status record with no note and no refusal.
+- **The link.** With the X-Surf-100's cable pulled in the emulator:
+  - `xsf` said `no link`, and the console line reached
+    `/var/log/bus-errors`;
+  - frames still counted as sent, with no restart.
+  After the cable went back: `link up 100 full`, two link changes in all.
+  A pull shorter than a second said nothing. The X-Surf's model has its
+  link test switched off, so a pull changes nothing the driver can see.
+- **The upgrade.** The released 1.1.1 k46 image, with its own apkg 0.3.11
+  and xsurf 1.0.0-3 from its installer, had xsf0 up. Then
+  `apkg upgrade xsurf-k46` ran from a file repository. After a power
+  cycle, xsf0 came up by itself, `xsf` worked, and `/dev/xsfctl` was there
+  with mode 0600. The same upgrade also passed from a 1.1 image with
+  kbootset -45.
+- **The probe's refusals and fallbacks,** with test builds of the module
+  that were never shipped:
+  - register writes that never land: the board is refused with
+    `its registers do not take writes (...; by word cycles too)`, the module
+    stays loaded, `/dev/xsf0` and `ifup` fail at once, and `xsf` says why;
+  - a self-test that fails on the longword windows: the driver moves to the
+    data port, the load line says so, and ping and a 10 MiB copy go through
+    it.
+- **The emulator's strict X-Surf-100 options:**
+  - byte writes dropped in Zorro III, with word cycles reaching one
+    register: `, registers by word cycles`, and traffic;
+  - windows that drop or corrupt data: `, data through the data port`, and
+    traffic;
+  - a busy time after the reset: `xsf` shows the wait (200 µs and 2000 µs
+    of busy time).
+  Two results go the other way:
+  - With the register in the low half of a word, the register check passes
+    but the board is refused (`no usable station address`). Its
+    station-address read takes the data port's byte from the high half.
+  - A 5000 µs busy time outlasts the driver's 20 ms limit in the emulator.
+    There the CPU runs ahead of the CIA timer the driver counts with; the
+    two shorter times showed about 5.3 counted microseconds for each
+    emulated one.
+
 Throughput **in the emulator** (100 MiB by FTP; it says nothing about a
 real card):
 
@@ -236,7 +281,19 @@ injects what the emulator cannot produce:
 
 They also cover every DLPI primitive, the interface ioctls IP sends down
 (the flags acknowledged with its request, the rest refused) and hostile
-frames from the wire.
+frames from the wire. From 1.0.0-4 they also cover:
+
+- the link state of both chips, its console lines and their rate limit;
+- the transmit notes;
+- the probe's register check: a lost write, a write landing in a
+  neighbouring register, the word-cycle fallback and the parameters;
+- the remote-DMA self-test and the data-port fallback;
+- `xsf`'s output, run against a model of its devices.
+
+In all: t_core 812 checks, t_boards 152, t_xsf 53. Of 93 deliberate faults
+put into the sources, the tests catch 92. The one they miss changes
+nothing: a page select before the link read that the tick has already
+done.
 
 What the emulator's model of these boards cannot show, so no row above
 covers it:
