@@ -65,7 +65,8 @@ apkg download <name>         fetch <repo>/pkgs/<filename> into cache, md5-verify
 apkg clean                    remove the package files from the cache (-n: say what it would)
 apkg licence <name>          print an installed package's saved notice, name its licence files
 apkg install <name>...       resolve deps (recursive, topological) -> download -> pkgadd each
-apkg upgrade <name>          if catalog version > installed: download, pkgrm old, pkgadd new
+apkg upgrade [<name>...]     if catalog version > installed: download, then one pkgadd over the
+                             installed instance (instance=overwrite); no pkgrm runs
 apkg remove <name>           pkgrm wrapper
 apkg version                 client version
 Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile>
@@ -402,7 +403,13 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   lowest kbootset that composes a generation with it: from the sidecar's `kbootset-min=` (C2-3
   v10), else from a `kbootset.conf` line `<catalog name> <version>: <kbootset version>` in either
   conf layer (amix keeps it in kernel/conf, for kernels cut before the key); a sidecar key and a
-  conf line that differ refuse the package. NOTES.md 2026-10-25 (late) and the sections after it
+  conf line that differ refuse the package. A module row may carry it too (C2-2 v7): from the
+  package's pkginfo `APKG_KBOOTSET=`, else a `kbootset.conf` line; the two different refuse the
+  package, and so does a floor below what one of its `.moddata` `majors=` needs by kernel/dlm's
+  `abi/registry/kbootset` (`--kbootset-table`; a need no higher than the table's lowest version
+  asks for no floor). apkg (0.3.12) brings the catalog's kbootset first into an install or upgrade
+  whose highest floor the installed one does not meet, and builds the generation again after a
+  transaction that changed kbootset. NOTES.md 2026-10-25 (late) and the sections after it
   are the record.
 
 - `gen-catalog.py` (python3): scan a staging dir of `.pkg`/`.pkg.Z` datastreams; for each, read the

@@ -51,6 +51,11 @@
  *                    transaction that changed kernel space (C2-4);
  *                    default /sbin/kbootset.  Like pkgadd it
  *                    runs FROM this system and is told -R <target>.
+ *   apkg             the installed apkg binary an upgrade runs for the
+ *                    rest of its packages once it has upgraded the
+ *                    package tools, apkg among them; default
+ *                    /usr/apkg/bin/apkg.  Under -R it is used only when
+ *                    given here (the target's apkg is not this system's).
  *   kbootset_journal the --journal handed to kbootset; empty (the
  *                    default) = <target>/var/kbootset/journal, the
  *                    contract's own default, passed explicitly.
@@ -104,6 +109,7 @@
 #define DEF_ADMIN     "/var/apkg/admin"
 #define DEF_CONF      "/etc/apkg.conf"
 #define DEF_KBOOTSET  "/sbin/kbootset"
+#define DEF_SELF      "/usr/apkg/bin/apkg"
 
 /* Strict decimal parse: the WHOLE string must be an optionally signed
  * integer.  Returns 0 and stores the value, or -1 on anything else
@@ -188,6 +194,8 @@ int conf_load(const char *conffile_opt, const char *target_opt,
     cf->pkgrm = cat2(cf->root, DEF_PKGRM);
     cf->admin = cat2(cf->root, DEF_ADMIN);
     cf->kbootset = cat2(cf->root, DEF_KBOOTSET);
+    cf->self = cat2(cf->root, DEF_SELF);
+    cf->self_set = 0;
     cf->kbootset_journal = xstrdup("");
     cf->timeout = APKG_DEF_TIMEOUT;
     cf->conn_timeout = APKG_DEF_CONNTIMEO;
@@ -267,6 +275,10 @@ int conf_load(const char *conffile_opt, const char *target_opt,
             } else if (strcmp(key, "kbootset") == 0) {
                 free(cf->kbootset);
                 cf->kbootset = xstrdup(val);
+            } else if (strcmp(key, "apkg") == 0) {
+                free(cf->self);
+                cf->self = xstrdup(val);
+                cf->self_set = 1;
             } else if (strcmp(key, "kbootset_journal") == 0) {
                 free(cf->kbootset_journal);
                 cf->kbootset_journal = xstrdup(val);

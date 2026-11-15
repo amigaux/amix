@@ -436,6 +436,7 @@ int main(int argc, char **argv)
     int rc;
     int ec;
 
+    apkg_argv = argv;
     conffile = NULL;
     root_opt = NULL;
     i = 1;
@@ -626,6 +627,13 @@ int main(int argc, char **argv)
         const char *name;
 
         resolve = 0;
+        if (i < argc && strcmp(argv[i], "prepare") == 0) {
+            if (argc - i != 1) {
+                usage();
+                return EX_USAGE;
+            }
+            return cmd_conffiles_prepare(&cf);
+        }
         if (i < argc && strcmp(argv[i], "list") == 0) {
             i++;
         } else if (i < argc && strcmp(argv[i], "resolve") == 0) {
