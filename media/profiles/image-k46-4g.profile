@@ -24,8 +24,9 @@ IMAGE_KIT=y
 KERNEL_KPKG=kernel-k46-m
 # the installed generation carries every hardware driver of the line; each loads only when its
 # match rule finds the card, so the cards a box lacks cost nothing and change no card order;
-# buddha drives a Buddha or Catweasel Z-II fitted beside the root's controller, xsurf an X-Surf as xsf0
-KERNEL_MODPKGS="z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46 paula-k46 z3660rtg-k46 zz9kbus-k46 zz9ksvc-k46 monsw-k46 cdfs-k46 random-k46 buddha-k46 xsurf-k46"
+# buddha drives a Buddha or Catweasel Z-II fitted beside the root's controller, xsurf an X-Surf as xsf0,
+# va2000 a VA2000 as /dev/va2000 (demand class: it loads at the first open, kept with a board)
+KERNEL_MODPKGS="z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46 paula-k46 z3660rtg-k46 zz9kbus-k46 zz9ksvc-k46 monsw-k46 cdfs-k46 random-k46 buddha-k46 xsurf-k46 va2000-k46"
 TARGET_FASTMEM_MB=32
 TARGET_DISK_MB=3600
 TARGET_ROOT_FSTYPE=ufs

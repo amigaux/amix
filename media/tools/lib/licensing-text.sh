@@ -9,7 +9,7 @@ exception. Their source is GCC 2.7.2.3, sha256
 16166e0f0f2064bb3114716650569065ef3855ae2331d7a29b85d4b9aa73773c, at
 https://github.com/amigaux/amix-distfiles/releases/download/gcc-2.7.2.3/gcc-2.7.2.3.tar.gz
 and the original at https://ftp.gnu.org/gnu/gcc/gcc-2.7.2.3.tar.gz. The compiler's patches, which
-change neither file, are at https://github.com/jusii/gcc-cross-amix, commit
+change neither file, are at https://github.com/amigaux/gcc-cross-amix, commit
 33ebadcf6976ee65dbd1e25a586f59da55e5942d. The licence text is $1.
 
 The zz9ksvc kernel module is under the GNU General Public License, version 3 or later. Its source
