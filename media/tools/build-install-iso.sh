@@ -47,6 +47,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
 . "$here/lib/media-paths.sh"
+. "$here/lib/medium-together.sh"
 PROFILE_DIR="${MEDIA_PROFILE_DIR:-$repo/profiles}"   # a rig run names its bench profiles
 LAB_REPO="$repo"; . "$repo/tools/lib/lab-env.sh"   # LAB_ENV: a test bench's own addresses (none in a release build)
 
@@ -901,6 +902,10 @@ if [ -n "$_want_l11" ]; then
   done < "$L11_IN/base/catalog.lines"
   grep -qx amxbase "$STAGE/l11/base/order" && [ -s "$STAGE/l11/base/amxbase.cf" ] \
     || { echo "STOP: the set's base packages lack amix-base (amxbase) or its conffiles" >&2; exit 1; }
+  # what the medium carries together, by its release's rules (release/together-<release>): an
+  # amix-base older than the card files need, say, whose xstart would refuse /etc/display
+  medium_together "$L11_IN" "$MEDIA_TOP" "$_bw" \
+    || { echo "STOP: the medium's packages break release/together (above): new inputs, not this medium" >&2; exit 1; }
   cp "$repo/payload/l11-seed.sh" "$STAGE/l11/base/seed.sh"
   # /etc/inittab as the target holds it once amix-base is in: amix-base's default, with
   # C3-5 §5's dlm line once, as the first sysinit entry (l11_inittab compares the target's)

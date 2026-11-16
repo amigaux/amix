@@ -375,8 +375,10 @@ l11_bootstore()
 	fi
 	# MODREG_LOCAL (a profile key, emulation rigs only): administrator lines for modules, as
 	# "module:line|module:line", laid in /etc/conf/modreg.local.d/<module> before the build so the
-	# generation carries them (e.g. "z3660rtg:param fixed=1" where an emulator's RTG board has no
-	# AutoConfig entry; never on a real Z3660, whose board has one)
+	# generation carries them (e.g. "z3660rtg:param fixed=1", the RTG at its fixed base, for a
+	# module before z3660rtg 1.1.2-3 on a Z3660 that lists no AutoConfig entry for its RTG: an
+	# emulated one, and a real Z3660 in 68030 mode, which lists only 144b:02 and 144b:03; from
+	# 1.1.2-3 the module finds the RTG by itself and no line is needed)
 	if [ -n "$MODREG_LOCAL" ]; then
 		[ -d "$TARGET/etc/conf/modreg.local.d" ] || run mkdir -p "$TARGET/etc/conf/modreg.local.d"
 		_ml="$MODREG_LOCAL"
@@ -585,11 +587,20 @@ l11_admin()
 	"$_cr" "$TARGET" /usr/sbin/ifup -n > /tmp/.l11if 2>&1 \
 		|| { cat /tmp/.l11if; die "/etc/inet/interfaces does not pass ifup -n"; }
 	# xstart -n also checks the card's X server, so only a set with X can pass it; without X
-	# the file is checked by xstart when X is added (the minimal set has no X)
+	# the file is checked by xstart when X is added (the minimal set has no X). A refusal is
+	# warned, with xstart's lines, and the install goes on: the file is the fixed text above,
+	# so what xstart refuses is the packages' (card files newer than the base's xstart, say),
+	# and the system boots and runs without X; xstart says the same at the first X start.
 	if [ -d "$TARGET/usr/X/bin" ]; then
-		"$_cr" "$TARGET" /usr/amix/bin/xstart -n > /tmp/.l11dp 2>&1 \
-			|| { cat /tmp/.l11dp; die "/etc/display does not pass xstart -n"; }
-		_xs="xstart -n passes"
+		"$_cr" "$TARGET" /usr/amix/bin/xstart -n > /tmp/.l11dp 2>&1
+		_rc=$?
+		if [ "$_rc" = 0 ]; then
+			_xs="xstart -n passes"
+		else
+			( while read _l; do warn "xstart -n: $_l"; done ) < /tmp/.l11dp
+			warn "/etc/display does not pass xstart -n (exit $_rc): X will not start until the packages agree; the install goes on"
+			_xs="xstart -n REFUSED it (exit $_rc, warned above)"
+		fi
 	else
 		_xs="no X in this set: xstart checks it when X is added"
 	fi
