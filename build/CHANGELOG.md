@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — release-together: the release step checks together-<release> (8ed5810c)
+
+build/release-together reads release/together-<release> and the release catalog's live rows; the release step refuses a tree that breaks a rule (apkg's version order). test-together 10/10.
+
 ## 2026-11-15 — pkgroll: CONFFILES split as pkgmeta splits it (7c01eec0)
 
 pkgroll.sh splits CONFFILES on tabs and newlines as well as blanks and commas, as pkgmeta does.

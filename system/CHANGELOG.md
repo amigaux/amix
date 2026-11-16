@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — amix-system 988b0f8: the stock usr/sbin/shutdown (ba14fb76)
+
+amix-system is pinned at 988b0f8, which adds the stock usr/sbin/shutdown (sha256 134e776f…). MANIFEST.sha256 gains its line, so a package can ship it patched with STOCK_PATCHED.
+
 ## 2026-11-07 — amix-system debb2e1: the stock usr/sbin/in.ftpd (833ae59)
 
 amix-system is pinned at debb2e1, which adds the stock usr/sbin/in.ftpd from the 2.1 net package (69760 bytes, sha256 29048aef…3940d). MANIFEST.sha256 gains its line, so a package can ship it patched with STOCK_PATCHED.
