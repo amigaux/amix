@@ -235,7 +235,8 @@ i=0
 while [ -z "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
 kill -15 \$\$
 EOF
-# xinit whose server never ran, with the pid file naming another process
+# xinit whose server died (status 0, as xinit exits then), with the pid file
+# naming another process by now
 cat > "$B/xstale" <<EOF
 #!/bin/sh
 c=\$1; shift; [ "\$1" = -- ] && shift
@@ -245,9 +246,22 @@ sleep 30 < /dev/null > /dev/null 2>&1 &
 echo \$! > "\$w.pid"
 echo \$! > $T/st/stalepid
 printf '    root %5d     1  0 14:03:22 ?        0:00 /usr/bin/sleep 30\n' \$! > $T/st/ps-extra
+exit 0
+EOF
+# xinit that caught a signal: it stops the server (TERM), then exits 1
+cat > "$B/xsig" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+"\$@" &
+i=0
+while [ -z "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+kill -15 \`ls $T/st/run\`
+i=0
+while [ -n "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
 exit 1
 EOF
-chmod +x "$B/ps2" "$B/Xkeep" "$B/xkill" "$B/xstale"
+chmod +x "$B/ps2" "$B/Xkeep" "$B/xkill" "$B/xstale" "$B/xsig"
 cat > "$T/d/keep" <<EOF
 node     $T/dev/console
 server   $B/Xkeep
@@ -286,7 +300,7 @@ o=$(XI=$B/xstale PS_=$B/ps2 KW_=2 run :10)
 sp=$(cat "$T/st/stalepid")
 kill -0 "$sp" 2>/dev/null && ok || bad "stale pid: another process was signalled"
 expect "stale pid: the server ended on its own" "the server ended on its own; running $B/kbdback" "$o"
-refuse "stale pid: not taken for the server" "xinit ended" "$o"
+refuse "stale pid: not taken for the server" "still ran" "$o"
 kill "$sp" 2>/dev/null
 # the same pid running this server, but on another display (another
 # session's): not ours either
@@ -302,9 +316,18 @@ EOF
 chmod +x "$B/xstale5"
 o=$(XI=$B/xstale5 PS_=$B/ps2 KW_=2 run :10)
 kill -0 "$sp" 2>/dev/null && ok || bad "another display's server was signalled"
-refuse "another display's server: not ours" "xinit ended" "$o"
+refuse "another display's server: not ours" "still ran" "$o"
 kill "$sp" 2>/dev/null
 rm -f "$T/st/ps-extra"
+# xinit caught a signal and stopped the server itself (status 1): not taken
+# for a crash, and the restore runs after the server is gone
+o=$(XI=$B/xsig PS_=$B/ps2 KW_=2 run :10)
+expect "xinit stopped it on a signal: said" "xinit ended the session (status 1) and the server is gone; running $B/kbdback" "$o"
+refuse "xinit stopped it on a signal: not a crash" "ended on its own" "$o"
+refuse "xinit stopped it on a signal: nothing to end" "still ran" "$o"
+same "xinit stopped it on a signal: the server's TERM, then the restore" "server :10
+server TERM
+restore" "$(grep -v '^xinit' "$T/calls")"
 # a card with no restore: the server still ended, nothing else run
 printf 'card keepnr\n' | conf
 o=$(XI=$B/xkill PS_=$B/ps2 KW_=3 run :10)

@@ -428,11 +428,13 @@ gone() {
 }
 # finish <status>: when xinit has returned but the server still runs (xinit
 # was killed: it did not stop the server), end the server, TERM first, then
-# KILL; then hand the display back, then exit. The restore command runs when
-# the server ended on its own (no mark of a normal end) or had to be ended
-# here; it never runs while the server holds the display. Signals are
-# ignored meanwhile. Not an EXIT trap: this sh exits with the trap's last
-# status, not the one exit was given.
+# KILL; then hand the display back, then exit. Without the mark of a normal
+# end, xinit's status tells the rest: 0 when the server ended and xinit
+# followed (it ended on its own), else xinit itself ended the session (1: on
+# a signal it caught, stopping the server first; above 128: killed) or
+# failed. The restore command runs in all of these, never while the server
+# holds the display. Signals are ignored meanwhile. Not an EXIT trap: this
+# sh exits with the trap's last status, not the one exit was given.
 finish() {
 	trap '' 1 2 3 15
 	_fs=$1
@@ -455,7 +457,15 @@ finish() {
 	fi
 	if [ -n "$restore" ] && { [ -n "$_ff" ] || [ ! -f $W.clean ]; }
 	then
-		[ -n "$_ff" ] || say "the server ended on its own; running $restore"
+		if [ -n "$_ff" ]
+		then
+			:
+		elif [ "$xs" = 0 ]
+		then
+			say "the server ended on its own; running $restore"
+		else
+			say "xinit ended the session (status ${xs:-unknown}) and the server is gone; running $restore"
+		fi
 		$restore
 	fi
 	[ -n "$tool" ] && "$tool" $monsw off > /dev/null
@@ -485,5 +495,7 @@ then
 	cli=$W.client
 fi
 [ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
+xs=
 $xinit $cli -- $srv
+xs=$?
 finish 0
