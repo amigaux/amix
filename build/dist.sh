@@ -702,6 +702,11 @@ step_release() {
 		--release "$release" --out "$out/release/$release" \
 		--release-check "$top/tools/release-check" \
 		--apkg-bin "$top/userland/pkgtools/src/apkg/apkg" || rc=$?
+	# packages that must ship together (release/together-<release>)
+	if [ $rc = 0 ] && [ -f "$top/release/together-$release" ]; then
+		python3 -I "$here/release-together" "$top/release/together-$release" \
+			"$out/release/$release/catalog" || rc=1
+	fi
 	exit $rc
 }
 

@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+# release-together: packages a release must carry together.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Python 3 standard library only.
+"""release-together -- packages a release must carry together.
+
+    build/release-together RULES CATALOG
+
+RULES is release/together-<release>: one rule a line,
+
+    <name> <version>: needs <name> <version>
+
+with `#` starting a comment.  CATALOG is the release tree's catalog.  A rule
+holds when the catalog's live row for the first name (an entry line, or a
+kernel-space #kpkg line; never an #old one) is older than its version, or the
+second name's live row is at least its version.  Versions compare as apkg
+compares them: segments split on '.' and '-', numeric ones as numbers, others
+as strings, a missing segment as 0.
+
+Exit status: 0 every rule holds, 1 one does not (each is named), 2 usage or a
+malformed file.
+"""
+
+import re
+import sys
+
+
+def segments(v):
+    return re.split(r"[.-]", v) if v else []
+
+
+def vercmp(a, b):
+    sa, sb = segments(a), segments(b)
+    for i in range(max(len(sa), len(sb))):
+        x = sa[i] if i < len(sa) else "0"
+        y = sb[i] if i < len(sb) else "0"
+        if x.isdigit() and y.isdigit():
+            if int(x) != int(y):
+                return -1 if int(x) < int(y) else 1
+        elif x != y:
+            return -1 if x < y else 1
+    return 0
+
+
+RULE_RE = re.compile(r"^(\S+)\s+(\S+):\s+needs\s+(\S+)\s+(\S+)$")
+
+
+def rules(path):
+    out = []
+    with open(path) as fp:
+        for n, line in enumerate(fp, 1):
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            m = RULE_RE.match(line)
+            if not m:
+                raise ValueError("%s:%d: not `<name> <version>: needs <name> <version>`" % (path, n))
+            out.append((n,) + m.groups())
+    return out
+
+
+def live(path):
+    """name -> version of the catalog's live rows (entries and #kpkg)."""
+    have = {}
+    with open(path) as fp:
+        for line in fp:
+            line = line.rstrip("\n")
+            if line.startswith("#kpkg "):
+                f = line.split()
+                if len(f) >= 3:
+                    have[f[1]] = f[2]
+            elif line and not line.startswith("#"):
+                f = line.split("|")
+                if len(f) >= 2:
+                    have[f[0]] = f[1]
+    return have
+
+
+def main(argv):
+    if len(argv) != 3:
+        print(__doc__.strip().splitlines()[2].strip(), file=sys.stderr)
+        return 2
+    try:
+        rs = rules(argv[1])
+        have = live(argv[2])
+    except (OSError, ValueError) as e:
+        print("release-together: %s" % e, file=sys.stderr)
+        return 2
+    bad = 0
+    for n, name, ver, need, needver in rs:
+        if name not in have or vercmp(have[name], ver) < 0:
+            continue
+        if need in have and vercmp(have[need], needver) >= 0:
+            continue
+        bad += 1
+        print("[FAIL] release-together: %s %s needs %s %s or later; the catalog has %s (%s:%d)"
+              % (name, have[name], need, needver,
+                 "%s %s" % (need, have[need]) if need in have else "no " + need, argv[1], n),
+              file=sys.stderr)
+    if bad:
+        return 1
+    print("release-together: %d rule(s), every one holds (%s)" % (len(rs), argv[1]))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
