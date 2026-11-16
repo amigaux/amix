@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — carried-1.1: the 1.1.1 versions 1.1.2 replaces (1f1b175b)
+
+Eleven older versions with their published bytes, rebuilt at 7d9e944f.
+
 ## 2026-11-16 — together-1.1: packages a release must carry together (8ed5810c)
 
 together-1.1 lists pairs a release must carry together (`<name> <version>: needs <name> <version>`), seeded with z3660rtg-k30/-k46 1.1.2-1 needing amix-base 1.0-35. The README describes the file.
