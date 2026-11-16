@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — KNOWN-ISSUES: the late shutdown stall is a child wait (40eb1f2c)
+
+The stall after the run-level change is init waiting on the child that prints the new level; neither a second `init 0` nor `kill -ALRM 1` ends it (each measured once), no user-space way out is known; wait, else sync and switch off. 4 stalls in 32 heavy-write shutdowns at 16 MB.
+
 ## 2026-11-16 — KNOWN-ISSUES: a resend does not end the late stall (1bd6291e)
 
 The stall after the level change is init's alarm being undone by its own clear; a second init 0 does not end it, kill -ALRM 1 should (not yet measured).
