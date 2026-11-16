@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-16 — amix-base 1.0-36: xstart ends a server xinit left (01cbd0d1, fa48c0ae, f7f32676, c363c481)
+
+- xstart ends a server xinit left running: when xinit is killed it does not stop the server, and xstart used to say the server had ended on its own and run the card's restore command with X still on the display. The server now always runs through a wrapper that records its pid. When xinit returns with that pid still running the card's server on this display (checked in ps -ef before each signal), xstart says so in one line, sends TERM, then KILL after XSTART_KILLWAIT seconds (10), and only then runs restore and switches the monitor back.
+- Without the end-of-session mark, xstart says "the server ended on its own" only when xinit exited 0; otherwise it says xinit ended the session, with its status (xinit exits 1 when it stops the session on a signal it catches).
+- man shutdown shows initwait(1M), which says what changed and that the system's page is /usr/bin/man shutdown (MAN_REPLACES, replaces.d/amxbase).
+- Known limit, documented in initwait(1M): init can also stall after taking the new run level, before rc0 starts; initwait does not see it, and a second request does not end it.
+
 ## 2026-11-16 — amix-base 1.0-35: initwait, the display.d probe key (a436b58a, f8ad577b, cf1af5ae, ccdd456b, 62801d1d)
 
 shutdown sees its request to init through: after heavy file writing on a small machine, stock init may act on a run-level request only much later, with shutdown already back at the prompt. The new /usr/sbin/initwait <level> sends the request and waits up to 30 s for the run level `who -r` shows to change; if it has not, it asks once more and prints one line, and after another 30 s says the system has not changed state and exits 1. It never halts the machine itself. /usr/sbin/shutdown (and its stock link /sbin/shutdown) is the stock script, sha256-checked, with its last line made the initwait request. Known: init can also stall after taking the new level, before rc0 starts; initwait does not cover that yet. Page initwait(1M).
