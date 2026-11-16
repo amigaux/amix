@@ -375,8 +375,10 @@ l11_bootstore()
 	fi
 	# MODREG_LOCAL (a profile key, emulation rigs only): administrator lines for modules, as
 	# "module:line|module:line", laid in /etc/conf/modreg.local.d/<module> before the build so the
-	# generation carries them (e.g. "z3660rtg:param fixed=1" where an emulator's RTG board has no
-	# AutoConfig entry; never on a real Z3660, whose board has one)
+	# generation carries them (e.g. "z3660rtg:param fixed=1", the RTG at its fixed base, for a
+	# module before z3660rtg 1.1.2-3 on a Z3660 that lists no AutoConfig entry for its RTG: an
+	# emulated one, and a real Z3660 in 68030 mode, which lists only 144b:02 and 144b:03; from
+	# 1.1.2-3 the module finds the RTG by itself and no line is needed)
 	if [ -n "$MODREG_LOCAL" ]; then
 		[ -d "$TARGET/etc/conf/modreg.local.d" ] || run mkdir -p "$TARGET/etc/conf/modreg.local.d"
 		_ml="$MODREG_LOCAL"
