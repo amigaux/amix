@@ -97,6 +97,22 @@ the seconds to wait for the change after each request; default 30.
 .B /sbin/init
 .TP
 .B /sbin/who
+.SH BUGS
+.B init
+can also stall after it has taken the new run level, before the level's
+own steps start: for 0,
+.B "who \-r"
+already shows the new level and the console says
+.BR "INIT: New run level: 0" ,
+but
+.B /sbin/rc0
+does not start.
+.B initwait
+does not see this, since the level has changed, and sending the request
+again does not end it: on the emulated 16 MB machine with heavy file
+writing it was seen on some boots, ending by itself after minutes or not
+at all.
+Switch the machine off only when the system says it has halted.
 .SH SEE ALSO
 .BR init (1M),
 .BR shutdown (1M),
