@@ -28,8 +28,9 @@ A point release with new kernels on both lines. Its packages go into the 1.1 rep
 The VA2000 and ZZ9000 support is tested in emulation only, not on real cards.
 
 - The MNT VA2000 graphics card: its kernel module (`va2000-k30`, `va2000-k46` 1.1.0-1, `/dev/va2000`) and X on it.
-- The MNT ZZ9000 in Zorro II or Zorro III, on its own or beside the Z3660, then as the second display unit `/dev/zz9001` (`z3660rtg-k30`, `z3660rtg-k46` 1.1.2-1); `zz9k_probe` tells which board is behind each unit. A Zorro III ZZ9000 on the 68030 needs the new 68030 kernel.
-- X: one server, `Xrtg`, for every card it knows (Z3660, ZZ9000, VA2000), with `-card` and `-dev` to choose; `xinit` ends the server and its clients when it is told to stop. An upgrade keeps edited X configuration files and puts the new ones beside them as `.new` (`x11r63` 6.3-11).
+- The MNT ZZ9000 in Zorro II or Zorro III, on its own or beside the Z3660, then as the second display unit `/dev/zz9001` (`z3660rtg-k30`, `z3660rtg-k46` 1.1.2-3); `zz9k_probe` tells which board is behind each unit. A Zorro III ZZ9000 on the 68030 needs the new 68030 kernel.
+- On a Z3660 running its emulated 68030, the Z3660's graphics are found automatically; 1.1 and 1.1.1 needed a hand-set `param fixed=1`. `fixed` is now a number: 0 (the default) automatic, 1 as before, -1 never (`z3660rtg` 1.1.2-3).
+- X: one server, `Xrtg`, for every card it knows (Z3660, ZZ9000, VA2000), with `-card` and `-dev` to choose; a TERM to `xinit` ends the session and the server, as a hangup does. An upgrade keeps edited X configuration files and puts the new ones beside them as `.new` (`x11r63` 6.3-11).
 - `xstart` picks the display by asking each card file's probe which board is there, and ends a server that `xinit` left running; `shutdown` waits until the system has really changed state (`amix-base` 1.0-36).
 - The X-Surf-100 and X-Surf follow the link (state, speed, duplex) and say when it is lost; the probe accepts more cards and gives the reason when it refuses one; the new `xsf` tool shows the board, its link and counters (`xsurf-k30`, `xsurf-k46` 1.0.0-4).
 - The 68040/68060 kernel `kern46m` k46.1.6.261115-67: a graphics card's framebuffer can use the fast non-cacheable class, and a root disk that cannot be mounted panics once, not twice.
