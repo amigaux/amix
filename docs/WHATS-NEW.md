@@ -27,7 +27,7 @@ Plans, with no dates; they may change.
 A point release with new kernels on both lines. Its packages go into the 1.1 repository (`http://pkg.amigaux.org/1.1`), and a 1.1 or 1.1.1 system takes them in place with `apkg`; the 1.1 module packages keep working with the new kernels.
 The VA2000 and ZZ9000 support is tested in emulation only, not on real cards.
 
-- The MNT VA2000 graphics card: its kernel module (`va2000-k30`, `va2000-k46` 1.1.0-1, `/dev/va2000`) and X on it.
+- The MNT VA2000 graphics card: its kernel module (`va2000-k30`, `va2000-k46` 1.1.0-2, `/dev/va2000`) and X on it, started with `xstart` from the card file the package installs (`/etc/display.d/va2000`); beside another card, `card` in `/etc/display` chooses.
 - The MNT ZZ9000 in Zorro II or Zorro III, on its own or beside the Z3660, then as the second display unit `/dev/zz9001` (`z3660rtg-k30`, `z3660rtg-k46` 1.1.2-3); `zz9k_probe` tells which board is behind each unit. A Zorro III ZZ9000 on the 68030 needs the new 68030 kernel.
 - On a Z3660 running its emulated 68030, the Z3660's graphics are found automatically; 1.1 and 1.1.1 needed a hand-set `param fixed=1`. `fixed` is now a number: 0 (the default) automatic, 1 as before, -1 never (`z3660rtg` 1.1.2-3).
 - X: one server, `Xrtg`, for every card it knows (Z3660, ZZ9000, VA2000), with `-card` and `-dev` to choose; a TERM to `xinit` ends the session and the server, as a hangup does. An upgrade keeps edited X configuration files and puts the new ones beside them as `.new` (`x11r63` 6.3-11).
