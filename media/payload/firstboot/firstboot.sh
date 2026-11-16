@@ -491,7 +491,7 @@ find_ifs()
 	if [ -c /dev/zen0 ]; then
 		:
 	else
-		mknod /dev/zen0 c 51 0 2>/dev/null && ZMADE=y
+		mknod /dev/zen0 c 51 0 2>/dev/null && chmod 0600 /dev/zen0 && ZMADE=y
 	fi
 	if ( : < /dev/zen0 ) 2>/dev/null; then
 		NET_IFS="$NET_IFS zen0"
@@ -507,7 +507,7 @@ find_ifs()
 	for XN in 0 1
 	do
 		XMADE=
-		[ -c /dev/xsf$XN ] || { mknod /dev/xsf$XN c 56 $XN 2>/dev/null && XMADE=y; }
+		[ -c /dev/xsf$XN ] || { mknod /dev/xsf$XN c 56 $XN 2>/dev/null && chmod 0600 "/dev/xsf$XN" && XMADE=y; }
 		if ( : < /dev/xsf$XN ) 2>/dev/null; then
 			NET_IFS="$NET_IFS xsf$XN"
 		elif [ -n "$XMADE" ]; then

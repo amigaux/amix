@@ -658,7 +658,7 @@ emit_zen_hook() {
 		echo '	;;'
 		echo 'esac'
 		echo ''
-		echo '[ -c /dev/zen0 ] || mknod /dev/zen0 c 51 0'
+		echo '[ -c /dev/zen0 ] || { mknod /dev/zen0 c 51 0; chmod 0600 /dev/zen0; }'
 		echo ''
 		echo 'ADDR=$FALLBACK'
 		echo 'if [ -f $CONF ]; then'
@@ -850,11 +850,11 @@ esac
 #                                 that disk's UNIX_Boot to this boot priority (a separate
 #                                 boot-only disk ships at -128, NOT bootable, so it cannot
 #                                 win a boot before it carries a chain and a record)
-#   X11KIT           <empty>      K1: the RTG desktop kit. "rtg" = lay down Xzz9000,
-#                                 startx-rtg, zz9k_monsw (/opt/amix/bin, 755),
-#                                 /.xinitrc-rtg (644), /dev/zz9000 c 49 0 and
-#                                 /usr/X/bin on /etc/profile's PATH -- the Z3660
-#                                 RTG kit; empty or "none" = nothing
+#   X11KIT           <empty>      the RTG desktop. "rtg" (1.1 disks only) = lay down
+#                                 /opt/amix/bin/startx-rtg (755) and /.xinitrc-rtg
+#                                 (644); the server is x11r63's, the RTG tools and
+#                                 /dev/zz9000[i] the z3660rtg package's; empty or
+#                                 "none" = nothing
 #   RTC              setclk       IN-rtc: the battery clock at boot. "setclk" = lay
 #                                 our Y2K-fixed, plausibility-gated setclk over the
 #                                 stock /usr/amiga/bin/setclk (which /etc/sysinit
@@ -1098,6 +1098,8 @@ case "$INSTALL_LAYOUT" in
 		l11_keys ;;
 	*)	die "profile INSTALL_LAYOUT='$INSTALL_LAYOUT' is not 1.0 or 1.1" ;;
 esac
+[ "$X11KIT" != rtg ] || [ "$INSTALL_LAYOUT" = 1.1 ] \
+	|| die "profile $PROFILE_NAME sets X11KIT=rtg on a 1.0 install: the RTG desktop is the z3660rtg package's, on a 1.1 disk"
 
 # --- SOURCE dimension: where the base packages come from -----------
 # SOURCE_KIND=cdfs (default, backward-compatible) sources the install CD via the
@@ -3362,24 +3364,13 @@ elif [ -n "$MONSW" ] && [ "$MONSW" != none ]; then
 	die "profile $PROFILE_NAME sets MONSW=$MONSW on a 1.0 install: 1.0 media carry no monitor-switch files"
 fi
 
-# --- LAY DOWN the RTG X11 kit (K1, X11KIT=rtg) ---------------------------------
-# The Z3660 RTG desktop exactly as it was installed on metal (the
-# maintainer's notes): the Xzz9000 server, the
-# startx-rtg launcher, rtg-kbdback (RT-10: gives the console keyboard back after
-# a killed server) and the zz9k_monsw fallback switch in /opt/amix/bin (755),
-# root's session file /.xinitrc-rtg (644), the ZZ9000 node /dev/zz9000 c 49 0, and
-# /usr/X/bin on /etc/profile's PATH (the session file starts olwm/xterm by name).
-# /etc/rtg-monswitch is never written: /dev/monsw owns the line. The five
-# files ride the medium under $INST/x11kit, staged by build-install-iso.sh only
-# after each hashed to its pin. Driver-written and additive, like S99zen and the
-# monsw bits -- EXCEPT the /etc/profile line, a one-line append to a core member
-# (the same edit the metal install made; the attestation is contents-DB-derived and does not see
-# it). A fresh install writes it once, so no guard is needed -- and the miniroot
-# has no grep to make one with.
-if [ "$X11KIT" = rtg ] && [ "$INSTALL_LAYOUT" = 1.1 ]; then
-	# 1.1: the server is x11r63's, rtg-kbdback, zz9k_monsw, the card file and the nodes
-	# /dev/zz9000 and /dev/zz9000i are the z3660rtg package's, PATH is firstboot's profile.d;
-	# the installer lays only the launcher and root's session file, each sum -r checked
+# --- LAY DOWN the RTG desktop's launcher (X11KIT=rtg, 1.1 disks only) ---------
+# The server is x11r63's; rtg-kbdback, zz9k_monsw, the card file and the nodes
+# /dev/zz9000 (0660 root sys) and /dev/zz9000i (0444) are the z3660rtg package's, so the
+# installer makes no device node here. It lays only the launcher and root's session file,
+# staged by build-install-iso.sh after each hashed to its pin, and checks each with sum -r.
+# (The 1.0 kit, which laid the server and its own /dev/zz9000, went with the 1.0 media.)
+if [ "$X11KIT" = rtg ]; then
 	for xf in 1.1/startx-rtg xinitrc-rtg; do
 		[ -f "$INST/x11kit/$xf" ] || die "profile $PROFILE_NAME sets X11KIT=rtg but this medium has no $INST/x11kit/$xf (re-master with tools/build-install-iso.sh)"
 	done
@@ -3401,45 +3392,6 @@ if [ "$X11KIT" = rtg ] && [ "$INSTALL_LAYOUT" = 1.1 ]; then
 		[ -n "$xs_want" ] && [ "$xs_got" = "$xs_want" ] || die "X11KIT=rtg: $xd sum -r $xs_got != medium $xs_want"
 	done
 	msg "RTG X11 (1.1): /opt/amix/bin/startx-rtg and /.xinitrc-rtg (sum -r verified); the server is x11r63's, the RTG tools and /dev/zz9000[i] the z3660rtg package's"
-elif [ "$X11KIT" = rtg ]; then
-	for xf in Xzz9000 rtg-kbdback startx-rtg zz9k_monsw xinitrc-rtg; do
-		[ -f "$INST/x11kit/$xf" ] || die "profile $PROFILE_NAME sets X11KIT=rtg but this medium has no $INST/x11kit/$xf (re-master with tools/build-install-iso.sh)"
-	done
-	[ -f "$TARGET/etc/profile" ] || die "X11KIT=rtg: the target has no /etc/profile to put /usr/X/bin on (is core installed?)"
-	[ -d "$TARGET/opt/amix/bin" ] || run mkdir -p "$TARGET/opt/amix/bin"
-	# the miniroot's umask is 0: a mkdir -p'd dir is 0777, and this one is on PATH.
-	run chmod 0755 "$TARGET/opt/amix" "$TARGET/opt/amix/bin"
-	run cp "$INST/x11kit/Xzz9000" "$TARGET/opt/amix/bin/Xzz9000"
-	run chmod 0755 "$TARGET/opt/amix/bin/Xzz9000"
-	run cp "$INST/x11kit/startx-rtg" "$TARGET/opt/amix/bin/startx-rtg"
-	run chmod 0755 "$TARGET/opt/amix/bin/startx-rtg"
-	run cp "$INST/x11kit/rtg-kbdback" "$TARGET/opt/amix/bin/rtg-kbdback"
-	run chmod 0755 "$TARGET/opt/amix/bin/rtg-kbdback"
-	run cp "$INST/x11kit/zz9k_monsw" "$TARGET/opt/amix/bin/zz9k_monsw"
-	run chmod 0755 "$TARGET/opt/amix/bin/zz9k_monsw"
-	run cp "$INST/x11kit/xinitrc-rtg" "$TARGET/.xinitrc-rtg"
-	run chmod 0644 "$TARGET/.xinitrc-rtg"
-	# Cut 4: every copy proven against the medium (which build-install-iso.sh staged
-	# only after each file matched the RTG kit's KIT.sha256). No sha256 on the
-	# miniroot: sum -r of the target file must equal the medium's. A plain for loop
-	# (not redirect-fed), so die stops the install.
-	XSUM="$INST/bin/sum"
-	[ -x "$XSUM" ] || die "X11KIT=rtg: no SVR4 sum at $XSUM to verify the kit"
-	for xf in Xzz9000 rtg-kbdback startx-rtg zz9k_monsw xinitrc-rtg; do
-		case "$xf" in
-			xinitrc-rtg) xd="$TARGET/.xinitrc-rtg" ;;
-			*)           xd="$TARGET/opt/amix/bin/$xf" ;;
-		esac
-		[ -s "$xd" ] || die "X11KIT=rtg: $xd is empty after cp"
-		xs_want=`"$XSUM" -r "$INST/x11kit/$xf"`; xs_want=`expr "$xs_want" : '\([0-9]*\)'`
-		xs_got=`"$XSUM" -r "$xd"`; xs_got=`expr "$xs_got" : '\([0-9]*\)'`
-		[ -n "$xs_want" ] && [ "$xs_got" = "$xs_want" ] || die "X11KIT=rtg: $xd sum -r $xs_got != medium $xs_want"
-	done
-	run rm -f "${TARGET:?}/etc/rtg-monswitch"
-	[ -c "$TARGET/dev/zz9000" ] || run mknod "$TARGET/dev/zz9000" c 49 0
-	run chmod 0644 "$TARGET/dev/zz9000"
-	echo 'PATH=$PATH:/usr/X/bin; export PATH' >> "$TARGET/etc/profile" || die "cannot append /usr/X/bin to $TARGET/etc/profile"
-	msg "laid down the RTG X11 kit (sum -r verified): /opt/amix/bin/{Xzz9000,rtg-kbdback,startx-rtg,zz9k_monsw}, /.xinitrc-rtg, /dev/zz9000 c 49 0, /usr/X/bin on /etc/profile PATH (additive; /etc/rtg-monswitch absent)"
 else
 	msg "RTG X11 kit: none (X11KIT='$X11KIT')"
 fi
