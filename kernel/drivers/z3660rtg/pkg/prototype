@@ -39,9 +39,12 @@ f none /opt/amix/bin/zz9k_monsw 0755 root bin
 f none /opt/amix/bin/rtg-kbdback 0755 root bin
 f none /opt/amix/bin/ztop 0755 root bin
 f none /opt/amix/bin/startx-rtg 0755 root bin
+f none /opt/amix/bin/zz9k_probe 0755 root bin
 d none /opt/amix/man 0755 root sys
 d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/ztop 0644 root bin
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/zz9k_probe 0644 root bin
 d none /opt/amix/man/7 0755 root sys
 f none /opt/amix/man/7/zz9000 0644 root bin
 d none /opt/amix/man/whatis.d 0755 root sys

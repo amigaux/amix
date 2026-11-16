@@ -13,7 +13,12 @@ A pin file is one line, `<git URL> <full commit hash>`; the build fetches that
 exact commit. The driver can move in later with its history.
 
 The packages also carry X's card files (display.d(4)): `z3660`, `zz9000` and
-`zz9001` (a ZZ9000 beside a Z3660, unit 1; it needs x11r63 6.3-10 or later, whose server takes `-dev`). The automatic card choice takes the
-first card whose node opens, so on a ZZ9000 the card is named in
-/etc/display (`card zz9000`, or `card zz9001` beside a Z3660). A Zorro III
+`zz9001` (a ZZ9000 beside a Z3660, unit 1; it needs x11r63 6.3-10 or later,
+whose server takes `-dev`), each with a `probe` line that runs `zz9k_probe`,
+which tells the boards apart by the identity the driver gives. With amix-base
+1.0-35 or later the automatic card choice uses it; an older base ignores the
+line, so on a ZZ9000 there the card is named in /etc/display (`card zz9000`, or
+`card zz9001` beside a Z3660). No card file names `%p`, so the files are safe
+with either base. The z3660 file is the package's own copy and equals the
+example of display.d(4). A Zorro III
 ZZ9000 on the 68030 line needs kern30m k30.1.5.261115-78 or later.

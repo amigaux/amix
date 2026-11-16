@@ -1,14 +1,15 @@
-# /etc/display.d/zz9000 -- the MNT ZZ9000 RTG card (display.d(4))
+# /etc/display.d/zz9000 -- an MNT ZZ9000 RTG card alone, unit 0 (display.d(4))
 # The card passes the Amiga picture through its own output and switches it
-# back when X ends, so it needs no monitor switch.  1920x1080 works only on
-# a Zorro III card: a Zorro II card refuses it and the server stops.
+# back when X ends, so it needs no monitor switch.  The probe answers only
+# for a ZZ9000 at unit 0 and adds 1920x1080 for a Zorro III card.
 name      MNT ZZ9000
 node      /dev/zz9000
+probe     /opt/amix/bin/zz9k_probe zz9000 0
 module    z3660rtg
 server    /opt/amix/X11R6/bin/Xzz9000
 modes     1024x768 640x480 800x600 1280x720 1280x1024 1920x800
 depths    16
-args      -mode %m -ac -kb
+args      -mode %m -kb
 limits    vmem=131072 data=65536
 monsw     no
 restore   /opt/amix/bin/rtg-kbdback

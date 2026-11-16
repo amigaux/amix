@@ -18,7 +18,9 @@
 # fixed, kvfb and maxarea; the package sets none (modreg: comments only).
 # Beside the module: /etc/display.d/z3660 (display.d(4)'s worked example),
 # /etc/display.d/zz9000 and zz9001 (pkg/*.display: a ZZ9000 alone, and one
-# beside a Z3660), the page zz9000(7) (the fork's module/zz9000.7),
+# beside a Z3660; the z3660 file too, the package's own copy, each with a
+# probe line for amix-base 1.0-35 and no %p), the page zz9000(7), zz9k_probe
+# with its page zz9k_probe(1M),
 # zz9k_monsw, rtg-kbdback, ztop with its manual page and whatis line, and
 # the 1.1 launcher startx-rtg, which kdrv_prepare builds (tools.sh, GCC 14).
 # xztop, which links X11R6.3, is the xztop userland package.
@@ -27,9 +29,10 @@
 # gcc-2.7.2.3-33ebadc kit, first rolled from amix; xztop moved out.
 # 1.1.1-4 (2026-11-04): the same module and objects; the copyright file's licence
 # headings name the component, without the build path.
-# 1.1.2-1 (2026-11-15): the module 1.1.2-1 (fork c7148e2): a real MNT ZZ9000
+# 1.1.2-1 (2026-11-15): the module 1.1.2-1 (fork c7148e2, then 5b9d49b): a real MNT ZZ9000
 # in Zorro II and III, two units, the card's pass-through switched at X exit,
-# the fast framebuffer class on k46.1.6; built with the kit of amix 09b89ffb.
+# the fast framebuffer class on k46.1.6, zz9k_probe for the card files'
+# probe lines (fork 5b9d49b); built with the kit of amix 09b89ffb.
 
 KM_NAME=z3660rtg
 KM_SHORT=zrtg
@@ -64,12 +67,14 @@ KM_FILES_COMMON="\
 /opt/amix/bin/rtg-kbdback $_zr/bin/rtg-kbdback e56a8bb7a7f8aaddb7b374111d1d01e3850095b820387038cb9bdf7451e560fb 0755
 /opt/amix/bin/ztop $_zr/bin/ztop 99b99291f767f579bbfc74d828bb573afaa8d602d8ec8622e477776fa5e527e6 0755
 /opt/amix/bin/startx-rtg $_zr/bin/startx-rtg 4c0173a3c001f68a9bbdaa122171e672da725a3fd4b99e3323918ee4aadf61a4 0755
+/opt/amix/bin/zz9k_probe $_zr/bin/zz9k_probe 6cd19cbdef0e58bc916621db1b520a93a25517f7b1f90ffe2a33323cf206026e 0755
 /opt/amix/man/1/ztop $_zr/man/1/ztop a7bbd8208aa29ad79a74044fc1e9077567d8f89a80de23ebdf2b4aa2c5197876 0644
-/opt/amix/man/7/zz9000 $_zr/man/7/zz9000 b3618de24ec87b480e2519f1cd0a9cdd29f69d6b428a452002e5e73b88b9f12a 0644
-/opt/amix/man/whatis.d/@PKG@ $_zr/man/whatis 9c9c4a24c69e57ff9bf73accb36097067b496c4f5ad3bdfde44f347bfa5c7dec 0644
-/etc/display.d/z3660 $_zr/display.d/z3660 421064a1dec95831a55940d9624ee816b5d3e692dfa6580dd2fbc8ac50fd529a 0444
-/etc/display.d/zz9000 $_zr/display.d/zz9000 0b7c1c0c213b2be75b524327a7fe4c314120c94fab7dc1bf292046c25bcf9973 0444
-/etc/display.d/zz9001 $_zr/display.d/zz9001 8511b412c031db6fe5358df98458d59e2175dcf478cb15265c2a4193919412dd 0444"
+/opt/amix/man/1m/zz9k_probe $_zr/man/1m/zz9k_probe 0daaef3a9630883a81a663e48fd61560f3651dd1990e3e458b9938e7332130e3 0644
+/opt/amix/man/7/zz9000 $_zr/man/7/zz9000 f4bcb7ee6e27bf847e444816eec1444940c2ca4fe85707dbb761c7691df497cf 0644
+/opt/amix/man/whatis.d/@PKG@ $_zr/man/whatis f4675380f5a5bf8e494836c811cd25a6c16cbb3f69e9db628670d9c72584b9f3 0644
+/etc/display.d/z3660 $_zr/display.d/z3660 9ad6feaf42a609a5ace770b8e8e6fb8a2ae466c3e152a07905558bb36a7f8048 0444
+/etc/display.d/zz9000 $_zr/display.d/zz9000 9886ce82d4f660159ead5c7ad322efa29236fb4d83e86226cb7728f5fef29ce1 0444
+/etc/display.d/zz9001 $_zr/display.d/zz9001 ccc9ec6658b64368e9f477f4d06f19a0f5b153be1e3b393dad65bef62630f67c 0444"
 
 # the tools, in GCC 14's environment rather than the roll's (TOOLCHAIN=none)
 kdrv_prepare() {
