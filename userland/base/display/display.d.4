@@ -1,4 +1,4 @@
-.TH DISPLAY.D 4 "15 November 2026" "amix-base"
+.TH DISPLAY.D 4 "16 November 2026" "amix-base"
 .SH NAME
 display.d \- the display cards X can use, one file each
 .SH SYNOPSIS
@@ -96,9 +96,16 @@ or
 .BR off .
 .TP
 .BI restore " command"
-run, by its full path, after a session whose server ended on its own
-(it crashed or was killed) rather than being stopped at the session's end;
-for a card whose server must give the keyboard back to the console itself.
+run, by its full path, after a session that did not end with the session
+itself: its server ended on its own (it crashed or was killed),
+.B xinit
+ended it (on a signal it caught), or
+.B xstart
+had to end the server because
+.B xinit
+was killed while the server ran (xstart(1)); never while the server still
+holds the display.
+For a card whose server must give the keyboard back to the console itself.
 .TP
 .BI once " option"
 the server's option to end with its first session instead of resetting

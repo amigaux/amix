@@ -1,4 +1,4 @@
-.TH XSTART 1 "15 November 2026" "amix-base"
+.TH XSTART 1 "16 November 2026" "amix-base"
 .SH NAME
 xstart \- start X on this machine's display
 .SH SYNOPSIS
@@ -63,21 +63,50 @@ of
 .BR /etc/display ,
 else
 .BR /usr/lib/amix/xsession .
-The card's environment
-.RB ( env )
-reaches the server alone, through a small script
+The server runs through a small script
 .B xstart
 writes in
 .B /tmp
-and removes afterwards.
+and removes afterwards: it gives the card's environment
+.RB ( env )
+to the server alone, notes the server's process id and starts the server
+in its own place, so that id is the server's.
 The server is given the card's
 .B once
 option, so it ends with the session instead of resetting for another
 .RB ( display.d (4)).
-When the session ends, the monitor is switched back; when the server ended
-on its own instead (it crashed or was killed), the card's
+When the session ends, the monitor is switched back.
+When it did not end that way, the card's
 .B restore
-command runs too.
+command runs too, and
+.B xstart
+says why in one line: the server ended on its own (it crashed or was
+killed, and
+.B xinit
+ended with status 0), or
+.B xinit
+ended the session itself (it caught a signal and stopped the server, and
+ended with status 1, or it failed), with its status.
+.PP
+When
+.B xinit
+ends while the server still runs (it was killed, and so did not stop the
+server), the display is still the server's.
+.B xstart
+says so in one line and ends the server: TERM, then KILL when it is still
+there after
+.B XSTART_KILLWAIT
+seconds (10 when not set).
+Before each signal it checks with
+.B "ps \-ef"
+that the process with the noted id still runs the card's server on this
+display, so another process that has the id by now is never signalled.
+Only when the server is gone does the card's
+.B restore
+command run and the monitor switch back.
+When the server cannot be ended,
+.B xstart
+says so, hands nothing back and exits 1.
 .PP
 When an X server for the display is still running (one still ending, or
 another session's),
@@ -129,7 +158,8 @@ nor the card used holds a mistake; a key it does not know and a mistake in
 another card's file do not count); 1 when the display cannot be set up (no
 card answers, a mode or depth the card does not have, no server, no
 .BR xinit ,
-an X server for the display that did not end in time);
+an X server for the display that did not end in time, a session's server
+that could not be ended);
 2 on a usage mistake.
 .SH FILES
 .TP

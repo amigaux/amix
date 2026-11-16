@@ -2,7 +2,7 @@
 NAME=amix-base
 PKG=amxbase
 VERSION=1.0
-PKGREV=35
+PKGREV=36
 SUMMARY="Amix base system: boot helpers, the network set-up, the base config files"
 DESC="rc.subr and /etc/rc.conf, ifup/ifdown over /etc/inet/interfaces, dlpi-mac, the DHCP hook, the new inetinit, the device-node and swap boot steps, the time sync (ntpsync), shutdown with its request to init seen through (initwait), the display set-up (xstart, with card probes), man, the stock /etc base files as conffiles, and /etc/group with the audio group and the sound device's node /dev/audio"
 CATEGORY=system
@@ -22,4 +22,8 @@ SYSTEM_PATHS="/usr/amix/bin /usr/lib/amix /usr/lib/inet /usr/sbin/ifup /usr/sbin
 # with its last line made the initwait request (rc/mkshutdown.sh): not a
 # conffile, so an update replaces it
 STOCK_ETC="/etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/inet/strcf"
+# the patched shutdown keeps the stock options, which the stock page
+# describes; man(1) shows initwait(1M), which says what changed and where
+# the stock page is
+MAN_REPLACES="/usr/sbin/shutdown 1m initwait /sbin/shutdown 1m initwait"
 CONFFILES="/etc/inittab /etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/default/login /etc/profile /etc/inet/strcf /etc/inet/network-config /etc/inet/rc.inet /etc/group"

@@ -39,6 +39,17 @@ mkdir -p "$T/st"
 	echo "cat $T/st/ps"
 	echo "echo \`expr \$n - 1\` > $T/st/ps-left"
 } > "$B/ps"
+# xinit: the session, then the server's line as the pid wrapper runs it (the
+# wrapper's exec line), the wrapper itself kept as st/lastwrap
+cat > "$B/xinit" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+w=\$1; shift
+case \$w in
+*/xstart.*.server) cp "\$w" $T/st/lastwrap; w=\`sed -n 's/^exec \\([^ ]*\\) .*/\\1/p' "\$w"\` ;;
+esac
+echo "xinit \$c -- \$w \$*" >> $T/calls
+EOF
 printf '#!/bin/sh\nexit 1\n' > "$B/monswctl-no"
 printf '#!/bin/sh\nexit 0\n' > "$B/monswctl-yes"
 chmod +x "$B/"*
@@ -70,7 +81,7 @@ run() { # run <args...>: xstart, its output and status
 	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="${D_:-$T/d}" HOME="$T/home" \
 	    XINITS="${XI:-$B/xinit}" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="${XS:-$T/xsession}" \
 	    MONSWCTL="${MCTL:-$B/monswctl-no}" XSTART_TMP="$T/tmp" \
-	    R6DIR="$T/r6" STOCKXDIR="$T/stockx" XSTART_PS="${PS_:-$B/ps}" XSTART_WAIT="${WAIT_:-60}" \
+	    R6DIR="$T/r6" STOCKXDIR="$T/stockx" XSTART_PS="${PS_:-$B/ps}" XSTART_WAIT="${WAIT_:-60}" XSTART_KILLWAIT="${KW_:-10}" \
 	    $SH "$here/xstart" "$@" 2>&1
 	echo "rc=$?"
 }
@@ -176,19 +187,156 @@ o=$(XI=$B/xlive XS=$T/livesession run :10)
 expect "env: the server has it" "server SG=10 :10" "$(cat "$T/calls")"
 expect "env: the session does not" "client SG=unset" "$(cat "$T/calls")"
 refuse "normal end: no restore" "restore" "$(cat "$T/calls")"
+same "normal end: nothing said" "rc=0" "$o"
 : > "$T/die"
 o=$(XI=$B/xlive XS=$T/livesession run :10)
 expect "server died: restore ran" "restore" "$(cat "$T/calls")"
 expect "server died: said" "the server ended on its own; running $B/kbdback" "$o"
+refuse "server died: not taken for a killed xinit" "xinit ended" "$o"
 rm -f "${T:?}/die"
 same "wrappers removed" "" "$(ls "$T/tmp")"
 o=$(run -n card=live)
 expect "-n: env for the server only" "(env for the server only)" "$o"
 expect "-n: the restore command" "restore  $B/kbdback, when the server ends on its own" "$o"
-# no env, no restore: no wrapper, the server's own path
+# no env, no restore: the server still runs through the wrapper that records
+# its pid, and the wrapper only execs it
 printf 'card z3660\nmode 640x480\n' | conf
 o=$(run)
-same "no env or restore: no wrapper" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+same "no env or restore: the server's line" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+expect "no env or restore: the wrapper records its pid" "echo \$\$ > $T/tmp/xstart." "$(cat "$T/st/lastwrap")"
+expect "no env or restore: then execs the server" "exec $B/Xzz \"\$@\"" "$(cat "$T/st/lastwrap")"
+refuse "no env or restore: no environment" "export" "$(cat "$T/st/lastwrap")"
+# --- xinit dies with the server still running (killed by TERM: it takes no
+# shutdown then). A server that lists itself in ps -ef while it lives, as the
+# box prints it; ps2 shows the live ones and st/ps-extra
+mkdir -p "$T/st/run"
+cat > "$B/ps2" <<EOF
+#!/bin/sh
+echo "     UID   PID  PPID  C    STIME TTY      TIME COMD"
+for f in $T/st/run/*; do [ -f "\$f" ] && kill -0 \`basename "\$f"\` 2>/dev/null && cat "\$f"; done
+cat $T/st/ps-extra 2>/dev/null
+exit 0
+EOF
+cat > "$B/Xkeep" <<EOF
+#!/bin/sh
+echo "server \$*" >> $T/calls
+echo "    root \$\$     1  0 14:03:22 ?        0:05 \$0 \$*" > $T/st/run/\$\$
+if [ -f $T/st/ignore-term ]; then trap '' 15
+else trap 'echo "server TERM" >> $T/calls; rm -f $T/st/run/\$\$; exit 0' 15; fi
+while :; do sleep 1; done
+EOF
+# xinit killed: the server started, then TERM to itself, no shutdown
+cat > "$B/xkill" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+"\$@" &
+i=0
+while [ -z "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+kill -15 \$\$
+EOF
+# xinit whose server died (status 0, as xinit exits then), with the pid file
+# naming another process by now
+cat > "$B/xstale" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+w=\`echo "\$1" | sed 's/\.server\$//'\`
+sleep 30 < /dev/null > /dev/null 2>&1 &
+echo \$! > "\$w.pid"
+echo \$! > $T/st/stalepid
+printf '    root %5d     1  0 14:03:22 ?        0:00 /usr/bin/sleep 30\n' \$! > $T/st/ps-extra
+exit 0
+EOF
+# xinit that caught a signal: it stops the server (TERM), then exits 1
+cat > "$B/xsig" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+"\$@" &
+i=0
+while [ -z "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+kill -15 \`ls $T/st/run\`
+i=0
+while [ -n "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+exit 1
+EOF
+chmod +x "$B/ps2" "$B/Xkeep" "$B/xkill" "$B/xstale" "$B/xsig"
+cat > "$T/d/keep" <<EOF
+node     $T/dev/console
+server   $B/Xkeep
+modes    auto
+restore  $B/kbdback
+EOF
+printf 'node %s/dev/console\nserver %s/Xkeep\nmodes auto\n' "$T" "$B" > "$T/d/keepnr"
+printf 'card keep\n' | conf
+rm -f "$T/st/run/"* "$T/st/ps-extra" "$T/st/ignore-term"
+# the server ends on TERM: said once, ended, then the restore
+o=$(XI=$B/xkill PS_=$B/ps2 KW_=3 run :10)
+expect "xinit killed: said" "xinit ended while the server (pid " "$o"
+expect "xinit killed: and what follows" "still ran; ending it, then running $B/kbdback" "$o"
+same "xinit killed: one line" 1 "$(echo "$o" | grep -c xstart:)"
+refuse "xinit killed: not taken for a crash" "ended on its own" "$o"
+refuse "xinit killed: TERM was enough" "killing it" "$o"
+same "xinit killed: the server, its TERM, then the restore" "server :10
+server TERM
+restore" "$(grep -v '^xinit' "$T/calls")"
+same "xinit killed: no server left" "" "$(ls "$T/st/run")"
+same "xinit killed: wrappers removed" "" "$(ls "$T/tmp")"
+expect "xinit killed: status 0" "rc=0" "$o"
+# a server that ignores TERM: KILL after the wait, then the restore
+: > "$T/st/ignore-term"
+o=$(XI=$B/xkill PS_=$B/ps2 KW_=2 run :10)
+sp=$(ls "$T/st/run")
+expect "TERM ignored: said" "the server (pid $sp) did not end in 2 s; killing it" "$o"
+kill -0 "$sp" 2>/dev/null && bad "TERM ignored: the server still runs" || ok
+same "TERM ignored: the restore after it" "server :10
+restore" "$(grep -v '^xinit' "$T/calls")"
+expect "TERM ignored: status 0" "rc=0" "$o"
+rm -f "$T/st/run/"* "$T/st/ignore-term"
+# the recorded pid is another process now: never signalled; the server is
+# gone, so it ended on its own
+o=$(XI=$B/xstale PS_=$B/ps2 KW_=2 run :10)
+sp=$(cat "$T/st/stalepid")
+kill -0 "$sp" 2>/dev/null && ok || bad "stale pid: another process was signalled"
+expect "stale pid: the server ended on its own" "the server ended on its own; running $B/kbdback" "$o"
+refuse "stale pid: not taken for the server" "still ran" "$o"
+kill "$sp" 2>/dev/null
+# the same pid running this server, but on another display (another
+# session's): not ours either
+sleep 30 < /dev/null > /dev/null 2>&1 & sp=$!
+printf '    root %5d     1  0 14:03:22 ?        0:00 %s/Xkeep :5\n' "$sp" "$B" > "$T/st/ps-extra"
+cat > "$B/xstale5" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+echo $sp > \`echo "\$1" | sed 's/\.server\$//'\`.pid
+exit 1
+EOF
+chmod +x "$B/xstale5"
+o=$(XI=$B/xstale5 PS_=$B/ps2 KW_=2 run :10)
+kill -0 "$sp" 2>/dev/null && ok || bad "another display's server was signalled"
+refuse "another display's server: not ours" "still ran" "$o"
+kill "$sp" 2>/dev/null
+rm -f "$T/st/ps-extra"
+# xinit caught a signal and stopped the server itself (status 1): not taken
+# for a crash, and the restore runs after the server is gone
+o=$(XI=$B/xsig PS_=$B/ps2 KW_=2 run :10)
+expect "xinit stopped it on a signal: said" "xinit ended the session (status 1) and the server is gone; running $B/kbdback" "$o"
+refuse "xinit stopped it on a signal: not a crash" "ended on its own" "$o"
+refuse "xinit stopped it on a signal: nothing to end" "still ran" "$o"
+same "xinit stopped it on a signal: the server's TERM, then the restore" "server :10
+server TERM
+restore" "$(grep -v '^xinit' "$T/calls")"
+# a card with no restore: the server still ended, nothing else run
+printf 'card keepnr\n' | conf
+o=$(XI=$B/xkill PS_=$B/ps2 KW_=3 run :10)
+expect "no restore: said" "still ran; ending it" "$o"
+refuse "no restore: no restore named" "then running" "$o"
+same "no restore: no server left" "" "$(ls "$T/st/run")"
+o=$(run -n card=keep)
+expect "-n: when the restore runs" "restore  $B/kbdback, when the server ends on its own or xstart ends it" "$o"
+rm -f "${T:?}/d/keep" "${T:?}/d/keepnr"
 # xdm keeps the env in its line
 printf 'card native\n' | conf
 o=$(run -xdm :10)
@@ -232,8 +380,8 @@ o=$(run card=z3660 mode=640x480)
 same "once: another server, nothing" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
 printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\nenv SCREEN_GROUP=%%n\n' "$T" "$T" > "$T/d/r6env"
 o=$(run card=r6env)
-expect "once: through the env wrapper too" "/tmp/xstart." "$(cat "$T/calls")"
-expect "once: the wrapper's line ends with it" " :0 -terminate" "$(cat "$T/calls")"
+expect "once: the env wrapper exports" 'SCREEN_GROUP="0"; export SCREEN_GROUP' "$(cat "$T/st/lastwrap")"
+same "once: the wrapper's line ends with it" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
 # the wrapper cannot be written (XSTART_TMP a file): said, status 1, no
 # session (the box's sh would lose the status to an EXIT trap)
 mv "$T/tmp" "$T/tmp.d"; : > "$T/tmp"

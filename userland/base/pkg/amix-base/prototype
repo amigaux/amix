@@ -90,6 +90,7 @@ f none /opt/amix/man/4/display 0644 root bin
 f none /opt/amix/man/4/display.d 0644 root bin
 f none /opt/amix/man/1/xstart 0644 root bin
 f none /opt/amix/man/whatis.d/amxbase 0644 root bin
+f none /opt/amix/man/replaces.d/amxbase 0644 root bin
 d none /opt/amix/doc 0755 root sys
 d none /opt/amix/doc/amix-base 0755 root sys
 f none /opt/amix/doc/amix-base/LICENSE 0644 root bin
