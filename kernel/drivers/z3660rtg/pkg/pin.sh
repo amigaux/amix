@@ -33,15 +33,19 @@
 # in Zorro II and III, two units, the card's pass-through switched at X exit,
 # the fast framebuffer class on k46.1.6, zz9k_probe for the card files'
 # probe lines (fork 5b9d49b); built with the kit of amix 09b89ffb.
+# 1.1.2-2 (2026-11-16): the module 1.1.2-2 (fork 65cf5b4): with fixed=1 the
+# fixed base is read when the AutoConfig list holds any Z3660 identity (0x144B
+# product 1, 2 or 3), so a Z3660 running its emulated 68030 attaches again as
+# with 1.1.1-4; the same kit.
 
 KM_NAME=z3660rtg
 KM_SHORT=zrtg
 KM_REPO=kernel/drivers/z3660rtg
-KM_VERSION=1.1.2-1
+KM_VERSION=1.1.2-2
 KM_VERSION_FILE=out/cache/forks/z3660rtg/module/VERSION
 
-KM_K30_SHA=e7e01852519fc59438de2cf017ca3c7452c4ee9f4c1711a641aaaf5a6e15653c
-KM_K46_SHA=f21eece0a7c4f7d390c5486c6c5f131e3af19b8ad2efdb634880a407bd1f6ddf
+KM_K30_SHA=ef177689ac01d933dc1db6a4257839215eb0a9ef533c9822c2f73d489bc5a8d7
+KM_K46_SHA=684213fccec9d90c297479004c424e0be05c0f790c7dd455695887effbf1b713
 # modcheck resolves depend=monsw against the monsw make dist builds
 KM_K30_DEPS="out/modules/k30/monsw 4bc8f57089b80baec94fa64e0a65dfd6a3b27a2ab4a66c63db345e9e35233a20"
 KM_K46_DEPS="out/modules/k46/monsw f9f6ed6b6a31a20d689f5cb8a30d53bf5804eae8b639ccf316b5feb1628f7623"
@@ -70,7 +74,7 @@ KM_FILES_COMMON="\
 /opt/amix/bin/zz9k_probe $_zr/bin/zz9k_probe 6cd19cbdef0e58bc916621db1b520a93a25517f7b1f90ffe2a33323cf206026e 0755
 /opt/amix/man/1/ztop $_zr/man/1/ztop a7bbd8208aa29ad79a74044fc1e9077567d8f89a80de23ebdf2b4aa2c5197876 0644
 /opt/amix/man/1m/zz9k_probe $_zr/man/1m/zz9k_probe 0daaef3a9630883a81a663e48fd61560f3651dd1990e3e458b9938e7332130e3 0644
-/opt/amix/man/7/zz9000 $_zr/man/7/zz9000 f4bcb7ee6e27bf847e444816eec1444940c2ca4fe85707dbb761c7691df497cf 0644
+/opt/amix/man/7/zz9000 $_zr/man/7/zz9000 d87ea9cd1a6701410ee586b7264b241ada23d05ab13550b42a14fd230b1db475 0644
 /opt/amix/man/whatis.d/@PKG@ $_zr/man/whatis f4675380f5a5bf8e494836c811cd25a6c16cbb3f69e9db628670d9c72584b9f3 0644
 /etc/display.d/z3660 $_zr/display.d/z3660 9ad6feaf42a609a5ace770b8e8e6fb8a2ae466c3e152a07905558bb36a7f8048 0444
 /etc/display.d/zz9000 $_zr/display.d/zz9000 9886ce82d4f660159ead5c7ad322efa29236fb4d83e86226cb7728f5fef29ce1 0444
