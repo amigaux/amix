@@ -225,24 +225,30 @@ known about it, and what to do. Measurements are from emulation unless the entry
   - *Before the change:* `INIT: New run level: 0` comes up to five minutes late. Init had taken the signal (none was
     pending or held on process 1) and slept in its idle wait until its own five-minute timer woke it.
   - *After the change:* `INIT: New run level: 0` is shown, `who -r` says run level 0 and the old level's processes are
-    gone, but the shutdown scripts (`/sbin/rc0`) do not start. Init sleeps with no timer set, and goes on only when
-    another signal reaches it.
-  Both fit one fault in the stock `/sbin/init`, read from its code: it tests a flag that a signal handler sets and
-  then calls `pause()`, so a signal that comes between the test and the call is handled but does not wake it. In the
-  first case the lost signal is the request, and the idle timer ends the wait. In the second it is the alarm of one of
-  the 3 to 5 second waits init makes while it ends the old level's processes, and nothing ends the wait. It follows
-  heavy file writing just before the shutdown, on a machine short of memory (idle daemons swapped out). Measured with
-  about 150 MB written before each shutdown on 16 MB:
+    gone, but the shutdown scripts (`/sbin/rc0`) do not start. Init sleeps in `pause()` with no timer set.
+  Both are lost wake-ups in the stock `/sbin/init`, read from its code. Init waits by calling `pause()` until a flag
+  that a signal handler sets is set; a signal that comes between its test of the flag and `pause()` is handled but
+  does not wake it. Before the change the lost signal is the request, and the idle timer ends the wait. After the
+  change, init ends the old level's processes with waits of 3 to 5 seconds, each timed by an alarm whose handler sets
+  the flag. If that alarm is lost between the test and `pause()`, the next signal of any kind ends the wait. But init
+  starts the alarm first and clears the flag after: if it does not run again for those seconds in between (a busy
+  machine), the handler runs before the clear, the clear undoes it, and only another alarm signal ends the wait. A
+  run-level request does not set that flag. It follows heavy file writing just before the shutdown, on a machine
+  short of memory (idle daemons swapped out), more often while the machine is busy. Measured with about 150 MB
+  written before each shutdown on 16 MB:
   - cut -77: late before the change in 2 of 4 shutdowns, after 172 and 164 s;
   - the stock 2.1c kernel: late before the change in 1 of 4, after 189 s;
   - cut -77 again, with `init 0` sent again after 30 s while the level had not changed: 2 of 4 halted after 80 s;
     2 stalled after the change, one going on about 150 s after the request, the other still stalled at 400 s;
+  - cut -77, the emulator's host busy with two other machines: 1 of 10 stalled after the change; `/sbin/init 0` sent
+    again 30 s later did not wake it, and it had not halted 380 s after that;
   - the shutdowns after only reading back halted at once.
   Not seen on 32 MB machines so far. The 040/060 line runs the same `/sbin/init` and can do the same. What to do: do
   not switch off on the prompt; wait for `The system is halted`. If `who -r` still shows the old run level half a
   minute after `shutdown`, run `/sbin/init 0` once more: a second request is acted on at once (27 s to the halt,
-  measured). If it shows run level 0 but the machine has not halted after a few minutes, another `/sbin/init 0`
-  should wake init the same way; that has not been measured yet.
+  measured). If it shows run level 0 but the shutdown scripts have not started after half a minute, a second
+  `/sbin/init 0` may not help (measured once); `kill -ALRM 1` as root sets the flag init waits on and should end
+  either kind of wait, but that has not been measured yet.
 
 ## Not explained
 
