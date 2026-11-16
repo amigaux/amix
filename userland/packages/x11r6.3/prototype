@@ -4,7 +4,7 @@
 # Listed from the stage hook's install (imake's install targets, the fonts, rgb.txt),
 # one line per object as this build ships it; the header and the lines outside
 # /opt/amix/X11R6 are written by hand.  pkginfo is generated from package.sh.
-# No install scripts.  X is a hard link to Xzz9000 (l): the stock pkgadd mangles
+# No install scripts.  Xzz9000 and X are hard links to Xrtg (l): the stock pkgadd mangles
 # a relative symlink target.  /usr/X11R6 is an absolute symlink (SYSTEM_PATHS),
 # as stock core's own links are; /usr itself belongs to core and is not
 # declared.  Directories 0755 root sys, files 0644 root bin, programs 0755 root
@@ -23,8 +23,9 @@ d none /opt 0755 root sys
 d none /opt/amix 0755 root sys
 d none /opt/amix/X11R6 0755 root sys
 d none /opt/amix/X11R6/bin 0755 root sys
-f none /opt/amix/X11R6/bin/Xzz9000 0755 root bin
-l none /opt/amix/X11R6/bin/X=/opt/amix/X11R6/bin/Xzz9000
+f none /opt/amix/X11R6/bin/Xrtg 0755 root bin
+l none /opt/amix/X11R6/bin/Xzz9000=/opt/amix/X11R6/bin/Xrtg
+l none /opt/amix/X11R6/bin/X=/opt/amix/X11R6/bin/Xrtg
 f none /opt/amix/X11R6/bin/bdftopcf 0755 root bin
 f none /opt/amix/X11R6/bin/iceauth 0755 root bin
 f none /opt/amix/X11R6/bin/mkfontdir 0755 root bin
@@ -1094,6 +1095,7 @@ f none /opt/amix/X11R6/doc/x11r63/LICENSE 0644 root bin
 f none /opt/amix/X11R6/doc/x11r63/LICENSE.ddx 0644 root bin
 d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/Xserver 0644 root bin
+f none /opt/amix/man/1/Xrtg 0644 root bin
 f none /opt/amix/man/1/Xzz9000 0644 root bin
 f none /opt/amix/man/1/bdftopcf 0644 root bin
 f none /opt/amix/man/1/iceauth 0644 root bin

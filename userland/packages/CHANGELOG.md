@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — x11r63 6.3-10, prngd 0.9.29-4 (ba372462..ec554da4)
+
+x11r63 6.3-10: the RTG layer is card-neutral (rtgCardOps). The server is Xrtg; Xzz9000 and X are links to it. New options: `-card` (zz9000, va2000, auto) and `-dev` (the card's device node). Adds the MNT VA2000 driver from xrtg-amix (pin 552968e); its probe asks the kernel driver, so a ZZ9000 node is never taken for a VA2000 and nothing is mapped or written on a refused node. The X configuration files are conffiles: an upgrade keeps edited files and puts the new version beside them as `.new`. prngd 0.9.29-4: prngd.conf is a conffile. Packages: x11r63-6.3-10.pkg sha256 1e417da0…, prngd-0.9.29-4.pkg sha256 960c7c8e…; two rolls byte-identical. Run in emulation on both lines as an upgrade from 1.1 with APKG 0.3.11 and with 0.3.13: files kept, pkgchk clean, the three server names come up, 72704 drawing cases with 0 bad. Against 6.3-8 the server is 6608 bytes larger in memory and x11perf is within run-to-run noise. Not yet run on a real VA2000.
+
 ## 2026-11-07 — ftpdfix 2.1-1 (98c0777, 19c9f87)
 
 New base package: the stock /usr/sbin/in.ftpd with 230 bytes changed so a download (RETR, LIST, NLST) no longer loses its last bytes while the server reports 226. The server half-closes the data connection with the SI_SHUTDOWN ioctl, reads non-blocking until the client's EOF (at most 60 s by time(), 20 ms naps; poll reports POLLERR after a half-close), then closes. The active path's SO_LINGER {1,60} setsockopt is skipped. The new routine sits in the unreferenced _putspent. Built from amix-system debb2e1 (STOCK_PATCHED, stock sha256 29048aef…, patched 6a7c4021…); man page ftpdfix(1M) for in.ftpd; essential; net keeps its claim on the path. Measured in emulation: PASV downloads at MSS 1360 short 13/20 stock, 0/20 fixed, on both -77 and -66; PORT 0/20 both; a client that never closes is let go after 59.8 s; throughput unchanged.

@@ -1,0 +1,2834 @@
+Ours.  The RTG layer made card-neutral: the ZZ9000/Z3660 driver sits
+behind the card record of patch 29, and nothing outside rtg/zz9000/ names
+the card.  The same drawing as before on the ZZ9000/Z3660.
+
+- rtg/rtgscreen.c (was zz9000/zz9000screen.c): the screen on cfb16, the
+  GC wrapper and the colormaps; the visual from the card's caps;
+- rtg/rtgdraw.c (from zz9000/zz9000draw.c): the run helpers, the CPU fill
+  and copy (rtgCpuFill, rtgCpuCopy; the fill's stride is the mapped pitch,
+  as the copy's always was, not the mode's width), the box order of a
+  region copy, the direct PutImage, -blitmin (rtgBlitMin: the card's
+  default unless given) and -move16 (rtgMove16); the blitter only through
+  rtgCard, a flush with nothing queued one compare;
+- rtg/zz9000/: the device, the mode, the map and the ZZ9KIOC_BLITS queue
+  behind zz9000CardOps; its monitor switch the layer's int ioctl, exactly
+  what the server always sent the zz9000 driver;
+- rtg/rtgcards.c: the card table (RTG_ZZ9000), in -card auto's order;
+- rtgInit.c takes the card once: -card NAME, else the card the server's
+  name says (Xzz9000: zz9000), else (-card auto, or a name such as Xrtg or
+  X) the first whose probe succeeds; a -mode is checked against the card's
+  modes when the card is known, else once it is found; a -card this
+  server has no driver for stops it with the list of its cards; the
+  card's caps are read when it is taken and again after its initHW (no
+  blitter: everything on the CPU; RTG_CAP_NOMOVE16: -move16 ignored);
+- amixIo.c: -card; -blitmin, -move16 and -mode through the layer;
+- the server is built under one name, AmixServerName (amix.cf; the
+  package's host.def sets it), not Xzz9000.
+MIT; the files' headers name their holders as before.
+
+--- a/config/cf/amix.cf
++++ b/config/cf/amix.cf
+@@ -50,8 +50,12 @@
+ /* no wchar.h/wctype.h: Xaw uses Xlib's own wide-character helpers */
+ #define XawI18nDefines		-DUSE_XWCHAR_STRING -DUSE_XMBTOWC
+ 
+-/* the server: Xzz9000, the Amiga DDX on a ZZ9000 or Z3660 RTG */
++/* the server: the Amiga DDX on an RTG card (the ZZ9000 or Z3660 RTG), under
++ * one name (the recipe's host.def sets it; Xzz9000 and X are links) */
+ #define XAmixServer		YES
++#ifndef AmixServerName
++#define AmixServerName		Xrtg
++#endif
+ #define BuildXKB		YES
+ #define BuildXKBlib		YES
+ /* not shipped: PEX, XIE, LBX, the print server, Xnest */
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -49,7 +49,7 @@
+ 
+ #include    "amix.h"
+ #include    "opaque.h"
+-#include    "rtg/zz9000/zz9000.h"
++#include    "rtg/rtg.h"
+ 
+ /* AMIX: prototypes for gcc 14 (calls that had none; narrow K&R parameters promoted) */
+ int mieqProcessInputEvents (void);
+@@ -445,22 +445,25 @@
+ 	amixFbs[AmixIndex].scrtype.dispz = atoi(argv[i]);
+ 	return 2;
+     }
++    if (!strcmp(argv[i], "-card")) {	/* RTG card: zz9000, ..., auto */
++	if (++i >= argc) UseMsg ();
++	if (!rtgSetCardName(argv[i]))
++	    FatalError("-card %s: no such card in this server\n", argv[i]);
++	return 2;
++    }
+     if (!strcmp(argv[i], "-blitmin")) {	/* card blitter from this area on */
+-	extern int zz9000BlitMin;
+ 	if (++i >= argc) UseMsg ();
+-	zz9000BlitMin = atoi(argv[i]);
+-	if (zz9000BlitMin < 0)
+-	    zz9000BlitMin = 0;
++	rtgBlitMin = atoi(argv[i]);
++	if (rtgBlitMin < 0)
++	    rtgBlitMin = 0;
+ 	return 2;
+     }
+     if (!strcmp(argv[i], "-move16")) {	/* 68040/060 line bursts in PutImage */
+-	extern int zz9000Move16;
+-	zz9000Move16 = 1;
++	rtgMove16 = 1;
+ 	return 1;
+     }
+     if (!strcmp(argv[i], "-nomove16")) {	/* no 68040/060 line bursts */
+-	extern int zz9000Move16;
+-	zz9000Move16 = 0;
++	rtgMove16 = 0;
+ 	return 1;
+     }
+     if (!strcmp(argv[i], "-blitmax")) {	/* ignored: the driver bands */
+@@ -469,11 +472,8 @@
+     }
+     if (!strcmp(argv[i], "-mode")) {	/* RTG mode: WxH (e.g. 1024x768) */
+ 	if (++i >= argc) UseMsg ();
+-	if (!ZZ9000SetMode(argv[i])) {
+-	    ErrorF("Unknown -mode: %s\n", argv[i]);
+-	    ErrorF("Supported modes: 640x480 800x600 1024x768 1280x720 1280x1024 1920x800\n");
++	if (!rtgSetModeName(argv[0], argv[i]))	/* it says why */
+ 	    UseMsg();
+-	}
+ 	return 2;
+     }
+     if (!strcmp(argv[i], "-type")) {	/* screen type */
+@@ -583,8 +583,9 @@
+     ErrorF("-width int             screen width in pixels.\n");
+     ErrorF("-height int            screen height in pixels.\n");
+     ErrorF("-depth int             screen depth in planes.\n");
++    ErrorF("-card name             RTG: the card (zz9000 or auto; default: X<card>'s card, else auto)\n");
+     ErrorF("-mode WxH              RTG video mode (e.g. 800x600, 1024x768)\n");
+-    ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default 1024, 0 = never)\n");
++    ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default: the card's, zz9000 1024; 0 = never)\n");
+     ErrorF("-blitmax int           ignored (the driver splits blitter operations itself)\n");
+     ErrorF("-move16                RTG: move16 line bursts in PutImage (68040/060 only; default off)\n");
+     ErrorF("-nomove16              RTG: no move16 line bursts in PutImage\n");
+--- a/programs/Xserver/hw/amix/rtg/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/Imakefile
+@@ -1,14 +1,17 @@
+ #include <Server.tmpl>
+ 
+-SRCS = rtgInit.c
++XCOMM the RTG layer (rtg.h); the card drivers are its subdirectories, each
++XCOMM one listed in RTGCARDS (rtgcards.c's table) and SUBDIRS
++SRCS = rtgInit.c rtgscreen.c rtgdraw.c rtgcards.c
+ 
+-OBJS = rtgInit.o
++OBJS = rtgInit.o rtgscreen.o rtgdraw.o rtgcards.o
+ 
+ SUBDIRS = zz9000
++RTGCARDS = -DRTG_ZZ9000
+ 
+-STD_DEFINES = ServerDefines -DRTG
++STD_DEFINES = ServerDefines -DRTG -DPSZ=16 $(RTGCARDS)
+ CDEBUGFLAGS = -g -O
+-   INCLUDES = -I. -I.. -I../../../include -I$(XINCLUDESRC) -I../../../mi -I../../../mfb -I$(FONTINCSRC) -I/usr/amiga/include
++   INCLUDES = -I. -I.. -I../../../include -I$(XINCLUDESRC) -I../../../mi -I../../../mfb -I../../../cfb -I$(FONTINCSRC) -I/usr/amiga/include
+ 
+ NormalLibraryObjectRule()
+ NormalLibraryTarget(rtg, $(OBJS))
+--- /dev/null
++++ b/programs/Xserver/hw/amix/rtg/rtgcards.c
+@@ -0,0 +1,30 @@
++/*
++ * rtgcards.c -- the RTG card table: every card driver linked into this
++ * server, in the order -card auto probes them.
++ *
++ * MIT, Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are
++ * in the package's doc/x11r63/LICENSE.ddx.
++ */
++
++#include "X.h"
++#include "misc.h"
++#include "rtg.h"
++
++/* each card directory defines its record (rtg.h) and is built with
++ * RTG_<CARD> set here (rtg/Imakefile) */
++#ifdef RTG_ZZ9000
++extern rtgCardOps zz9000CardOps;
++#endif
++#ifdef RTG_VA2000
++extern rtgCardOps va2000CardOps;
++#endif
++
++rtgCardOps *rtgCards[] = {
++#ifdef RTG_ZZ9000
++    &zz9000CardOps,
++#endif
++#ifdef RTG_VA2000
++    &va2000CardOps,
++#endif
++    (rtgCardOps *) 0
++};
+--- /dev/null
++++ b/programs/Xserver/hw/amix/rtg/rtgdraw.c
+@@ -0,0 +1,489 @@
++/*
++ * rtgdraw.c -- the RTG layer's drawing: CPU runs, fills and copies, the
++ * box order of a region copy, the direct PutImage.
++ *
++ * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
++ * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
++ * Soriano, MIT, Copyright (c) 2026 isoriano1968.  The changes for the Z3660
++ * and Amix (amix-z3660rtg, and the x11r63 package's patches): MIT,
++ * Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are in
++ * the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
++** rtgdraw.c - drawing for the cfb16 screen (rtgscreen.c) that does not
++** depend on the card: the CPU fills and copies for what the card's blitter
++** does not take, the ordered copy of a box list, and the direct PutImage
++** path.  The card's blitter is reached only through rtgCard (rtg.h).  All
++** coordinates are absolute screen coordinates; pRTG->fbBase is pixel (0,0),
++** pRTG->pitch bytes a line.
++*/
++
++#include <string.h>
++#include <errno.h>
++#include "X.h"
++#include "Xmd.h"
++#include "scrnintstr.h"
++#include "regionstr.h"
++#include "windowstr.h"
++#include "pixmapstr.h"
++#include "gcstruct.h"
++#include "servermd.h"
++#include "mi.h"
++#include "cfb.h"
++#include "../amix.h"
++#include "rtg.h"
++#include "rtgdraw.h"
++
++#ifndef max
++#define max(a,b) ((a) > (b) ? (a) : (b))
++#endif
++#ifndef min
++#define min(a,b) ((a) < (b) ? (a) : (b))
++#endif
++
++#define RTG_STRIDE(pRTG)  ((pRTG)->pitch / 2)  /* pixels per scanline */
++
++/* ---------------------------------------------------------------------- */
++/* Run helpers: 32-bit stores where both ends allow it.                     */
++
++/*
++** A 32-bit store moves two pixels in one bus cycle where a 16-bit store moves
++** one (Antti measured 0.41 against 0.79 us/pixel on the VA2000 over Zorro III).
++** The high word is the left pixel (big-endian).  Only aligned longs are used:
++** a misaligned 32-bit access to the card's space is split by the CPU in ways
++** this driver does not want to depend on, so a copy whose two ends differ in
++** alignment keeps the 16-bit loop.
++*/
++#define RUN_ODD(p)  (((unsigned long)(p)) & 2)
++
++/*
++** Below this many pixels the alignment work costs more than the longs save:
++** dots, 1x1 rectangles and short line spans (x11perf -dot/-rect1/-line10
++** lost 10-17 % to the 32-bit path on the rig), so short runs keep the plain
++** 16-bit loop.
++*/
++#define RUN_SHORT   4
++
++/* Fill w pixels with one colour. */
++static void
++fillRun(dst, pixel, w)
++unsigned short *dst;
++unsigned short  pixel;
++int             w;
++{
++    unsigned long  two;
++    unsigned long *l;
++    int            n;
++
++    if (w < RUN_SHORT) {
++        while (w-- > 0)
++            *dst++ = pixel;
++        return;
++    }
++    if (RUN_ODD(dst)) {
++        *dst++ = pixel;
++        w--;
++    }
++    two = ((unsigned long)pixel << 16) | pixel;
++    l = (unsigned long *)dst;
++    for (n = w >> 1; n > 0; n--)
++        *l++ = two;
++    if (w & 1)
++        *(unsigned short *)l = pixel;
++}
++
++/* Copy w pixels, left to right. */
++static void
++copyRun(dst, src, w)
++unsigned short *dst;
++unsigned short *src;
++int             w;
++{
++    unsigned long *ld, *ls;
++    int            n;
++
++    if (w < RUN_SHORT || RUN_ODD(dst) != RUN_ODD(src)) {
++        while (w-- > 0)
++            *dst++ = *src++;
++        return;
++    }
++    if (RUN_ODD(dst)) {
++        *dst++ = *src++;
++        w--;
++    }
++    ld = (unsigned long *)dst;
++    ls = (unsigned long *)src;
++    for (n = w >> 1; n > 0; n--)
++        *ld++ = *ls++;
++    if (w & 1)
++        *(unsigned short *)ld = *(unsigned short *)ls;
++}
++
++/* Copy w pixels, right to left (an overlapping move to the right). */
++static void
++copyRunBack(dst, src, w)
++unsigned short *dst;
++unsigned short *src;
++int             w;
++{
++    unsigned long *ld, *ls;
++    int            n;
++
++    if (w <= 0)
++        return;
++    dst += w;                       /* one past the last pixel */
++    src += w;
++    if (w < RUN_SHORT || RUN_ODD(dst) != RUN_ODD(src)) {
++        while (w-- > 0)
++            *--dst = *--src;
++        return;
++    }
++    if (RUN_ODD(dst)) {
++        *--dst = *--src;
++        w--;
++    }
++    ld = (unsigned long *)dst;
++    ls = (unsigned long *)src;
++    for (n = w >> 1; n > 0; n--)
++        *--ld = *--ls;
++    if (w & 1)
++        *((unsigned short *)ld - 1) = *((unsigned short *)ls - 1);
++}
++
++/* ---------------------------------------------------------------------- */
++/* CPU rectangle helpers                                                   */
++
++/* Fill the screen box [x1,x2) x [y1,y2) with pixel, on the CPU. */
++void
++rtgCpuFill(rtgScreenPtr pRTG, int x1, int y1, int x2, int y2,
++           unsigned long pixel)
++{
++    unsigned short *p;
++    int stride, y;
++
++    stride = RTG_STRIDE(pRTG);
++    p = pRTG->fbBase + (unsigned long)y1 * stride + x1;
++    for (y = y1; y < y2; ++y, p += stride)
++        fillRun(p, (unsigned short) pixel, x2 - x1);
++}
++
++/*
++** Pixel base and stride for a drawable (window -> VRAM; pixmap -> host mem).
++*/
++static unsigned short *
++drawBase(pDraw, pRTG)
++DrawablePtr  pDraw;
++rtgScreenPtr pRTG;
++{
++    if (pDraw->type == DRAWABLE_WINDOW)
++        return pRTG->fbBase;
++    return (unsigned short *) ((PixmapPtr)pDraw)->devPrivate.ptr;
++}
++
++static int
++drawStride(pDraw)
++DrawablePtr pDraw;
++{
++    if (pDraw->type == DRAWABLE_WINDOW)
++        return RTG_STRIDE(GetRTGScreen(pDraw->pScreen));
++    return (int)((PixmapPtr)pDraw)->devKind / 2;
++}
++
++/*
++** rtgCpuCopy - copy a screen rectangle in mapped framebuffer memory, rows
++** and columns ordered so that an overlapping move reads every source pixel
++** before it is overwritten.
++*/
++void
++rtgCpuCopy(rtgScreenPtr pRTG, int srcx, int srcy, int w, int h,
++           int dstx, int dsty)
++{
++    unsigned short *fbBase = pRTG->fbBase;
++    int             stride = RTG_STRIDE(pRTG);
++    unsigned short *src;
++    unsigned short *dst;
++    int row;
++    int row_start, row_end, row_step;
++    int back;
++
++    if (w <= 0 || h <= 0)
++        return;
++
++    if (dsty > srcy) {
++        row_start = h - 1; row_end = -1; row_step = -1;
++    } else {
++        row_start = 0; row_end = h; row_step = 1;
++    }
++    back = (dsty == srcy && dstx > srcx);
++
++    for (row = row_start; row != row_end; row += row_step) {
++        src = fbBase + ((unsigned long)(srcy + row) * stride) + srcx;
++        dst = fbBase + ((unsigned long)(dsty + row) * stride) + dstx;
++        if (back)
++            copyRunBack(dst, src, w);
++        else
++            copyRun(dst, src, w);
++    }
++}
++
++/* ---------------------------------------------------------------------- */
++/* The card's blitter, through rtgCard                                     */
++
++/*
++** -blitmin N: window fills (SolidRect GXcopy, PaintWindow) and window-to-
++** window copies (CopyArea GXcopy, CopyWindow) of N pixels or more go to the
++** card's blitter (rtgCard->fillBox, ->copyBox); anything smaller, any other
++** raster op and every pixmap stay on the CPU.  -blitmin 0 never blits.
++** Unset, it is the card's default (caps.blitMin; for the ZZ9000 1024, MG10's:
++** it keeps the 100x100 gains, rect100 585 -> 8140/s and scroll100 311 ->
++** 2260, that 16384 gives up).
++**
++** The common case -- a small area -- must cost no more than before the
++** blitter existed (MG10: -rect1 lost 20 % to three extra calls per 1x1
++** fill), so the tests are macros (RTG_BLIT_WANT) and a flush of an empty
++** queue is one compare (RTG_FLUSH).
++*/
++int rtgBlitMin = -1;            /* -1: unset, the card's caps.blitMin */
++
++/* Fill the screen box [x1,x2) x [y1,y2): the blitter or the CPU. */
++void
++rtgFillBox(pRTG, x1, y1, x2, y2, pixel)
++rtgScreenPtr  pRTG;
++int           x1, y1, x2, y2;
++unsigned long pixel;
++{
++    if (RTG_BLIT_WANT(x2 - x1, y2 - y1) &&
++        (*rtgCard->fillBox)(pRTG, x1, y1, x2, y2, pixel)) {
++        pRTG->queued = 1;
++        return;
++    }
++    RTG_FLUSH(pRTG);
++    rtgCpuFill(pRTG, x1, y1, x2, y2, pixel);
++}
++
++/* Copy a w x h screen box from (srcx,srcy) to (dstx,dsty): blitter or CPU. */
++static void
++copyVRAMBox(pRTG, srcx, srcy, w, h, dstx, dsty)
++rtgScreenPtr pRTG;
++int          srcx, srcy, w, h, dstx, dsty;
++{
++    if (w <= 0 || h <= 0)
++        return;
++    if (RTG_BLIT_WANT(w, h) &&
++        (*rtgCard->copyBox)(pRTG, srcx, srcy, w, h, dstx, dsty)) {
++        pRTG->queued = 1;
++        return;
++    }
++    RTG_FLUSH(pRTG);
++    rtgCpuCopy(pRTG, srcx, srcy, w, h, dstx, dsty);
++}
++
++/* Send what is queued; the card has finished when this returns. */
++void
++rtgFlush(pRTG)
++rtgScreenPtr pRTG;
++{
++    RTG_FLUSH(pRTG);
++}
++
++/* ---------------------------------------------------------------------- */
++/* rtgPutImage                                                             */
++
++/*
++** -move16 turns the move16 line burst on (68040/68060 only: a 68030 has no
++** move16, so it is off by default).  Measured on the A3000 with
++** the Z3660's 68060 (bench/vrambw.c, 2026-10-25): single long writes reach
++** about 10.6 MB/s into VRAM and into RAM alike (the data cache writes
++** through), move16 26 MB/s into VRAM.  move16 wants source and destination
++** on 16-byte boundaries, so it only applies when both rows have the same
++** phase; staging a misaligned row first costs as much as the plain copy.
++*/
++int rtgMove16 = 0;	/* -move16: 68040/68060 only, a 68030 has no move16 */
++
++/*
++** burstRun - copyRun for a host-memory source: the 16-byte-aligned middle
++** moved by move16 when src and dst share their phase in a line, misaligned
++** long reads when they differ by two bytes.  move16 (a0)+,(a1)+ is spelled
++** as words: the AMIX assembler knows no 68040 mnemonics.
++*/
++static void
++burstRun(dst, src, w)
++unsigned short *dst;
++unsigned short *src;
++int             w;
++{
++    register unsigned short *s asm("a0");
++    register unsigned short *d asm("a1");
++    int head, k;
++
++    if (w >= RUN_SHORT && RUN_ODD(dst) != RUN_ODD(src))
++    {
++        /*
++        ** Ends two bytes apart (an odd window x): copyRun would move one
++        ** pixel per store, 59 ms for 512x320 where longs take 34.  The
++        ** source of a PutImage is host memory, never the card, so its longs
++        ** may be read misaligned (the 060 splits them, mostly from the
++        ** cache); every store to the drawable stays an aligned long.
++        */
++        unsigned long *ld;
++        int n;
++
++        if (RUN_ODD(dst))
++        {
++            *dst++ = *src++;
++            w--;
++        }
++        ld = (unsigned long *) dst;
++        for (n = w >> 1; n > 0; n--, src += 2)
++            *ld++ = *(unsigned long *) src;
++        if (w & 1)
++            *(unsigned short *) ld = *src;
++        return;
++    }
++    if (!rtgMove16 || w < 16 ||
++        (((unsigned long) dst ^ (unsigned long) src) & 15) != 0)
++    {
++        copyRun(dst, src, w);
++        return;
++    }
++    head = ((16 - ((unsigned long) dst & 15)) & 15) >> 1;
++    if (head)
++        copyRun(dst, src, head);
++    s = src + head;
++    d = dst + head;
++    w -= head;
++    for (k = w >> 3; k > 0; k--)
++        __asm__ volatile (".word 0xf620,0x9000"     /* move16 (a0)+,(a1)+ */
++                          : "=a" (s), "=a" (d) : "0" (s), "1" (d) : "memory");
++    if (w & 7)
++        copyRun(d, s, w & 7);
++}
++
++/*
++** rtgPutImage - a ZPixmap of the screen's depth into a window under GXcopy,
++** all planes (every XPutImage of a picture), straight from the request into
++** the framebuffer, one clip-box intersection at a time, with 32-bit stores
++** and optionally move16.  rtgscreen.c installs it only for such GCs;
++** anything else that reaches it (bitmaps, XYPixmap) goes to cfb's PutImage.
++*/
++void
++rtgPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage)
++DrawablePtr pDraw;
++GCPtr       pGC;
++int         depth, x, y, w, h, leftPad, format;
++char       *pImage;
++{
++    rtgScreenPtr    pRTG;
++    unsigned short *base;
++    int             stride, srcPix, nbox, x1, x2, y1, y2, row;
++    RegionPtr       clip;
++    BoxPtr          pbox;
++    unsigned short *src;
++
++    pRTG = GetRTGScreen(pDraw->pScreen);
++    if (format != ZPixmap || depth != pRTG->depth || pGC->alu != GXcopy ||
++        (pGC->planemask & 0xffff) != 0xffff || w <= 0 || h <= 0)
++    {
++        cfbPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage);
++        return;
++    }
++    base   = drawBase(pDraw, pRTG);
++    stride = drawStride(pDraw);
++    clip   = cfbGetCompositeClip(pGC);
++    srcPix = PixmapBytePad(w, depth) / 2;
++    if (pGC->miTranslate)               /* the composite clip's frame */
++    {
++        x += pDraw->x;
++        y += pDraw->y;
++    }
++    if (pDraw->type == DRAWABLE_WINDOW)
++        RTG_FLUSH(pRTG);                /* no queued blit may land on top */
++
++    nbox = REGION_NUM_RECTS(clip);
++    pbox = REGION_RECTS(clip);
++    for (; nbox--; pbox++)
++    {
++        x1 = max(x, pbox->x1);
++        x2 = min(x + w, pbox->x2);
++        y1 = max(y, pbox->y1);
++        y2 = min(y + h, pbox->y2);
++        if (x1 >= x2 || y1 >= y2)
++            continue;
++        src = (unsigned short *) pImage + (long)(y1 - y) * srcPix + (x1 - x);
++        for (row = y1; row < y2; row++, src += srcPix)
++            burstRun(base + (long) row * stride + x1, src, x2 - x1);
++    }
++}
++
++
++/*
++** rtgCopyBoxes - copy the boxes of a YX-banded region, each from (box + dx,dy),
++** in an order that never overwrites a source pixel before it is read: bands
++** bottom-up when the copy moves down (dy < 0: the source lies above), boxes
++** within a band right-to-left when it moves right (dx < 0) -- as cfb does.
++** copyVRAMBox (and the card's copyBox) order rows and columns inside one
++** box.  (CopyWindow used to choose the order from the sign of old - new the
++** wrong way round, which smeared a partly covered window's contents into
++** itself on every move.)
++*/
++void
++rtgCopyBoxes(pRTG, pbox, nbox, dx, dy)
++rtgScreenPtr pRTG;
++BoxPtr       pbox;
++int          nbox, dx, dy;
++{
++    BoxPtr pboxEnd = pbox + nbox, pboxBand, pboxNext, first, last, b;
++    int    bandsUp = (dy < 0), boxesLeft = (dx < 0);
++
++    pboxBand = bandsUp ? pboxEnd : pbox;
++    while (bandsUp ? (pboxBand > pbox) : (pboxBand < pboxEnd))
++    {
++        if (bandsUp)
++        {
++            last  = pboxBand - 1;
++            first = last;
++            while (first > pbox && (first - 1)->y1 == last->y1)
++                first--;
++            pboxNext = first;
++        }
++        else
++        {
++            first = pboxBand;
++            last  = first;
++            while (last + 1 < pboxEnd && (last + 1)->y1 == first->y1)
++                last++;
++            pboxNext = last + 1;
++        }
++        for (b = boxesLeft ? last : first;
++             boxesLeft ? (b >= first) : (b <= last);
++             b += boxesLeft ? -1 : 1)
++            copyVRAMBox(pRTG, b->x1 + dx, b->y1 + dy,
++                        b->x2 - b->x1, b->y2 - b->y1, b->x1, b->y1);
++        pboxBand = pboxNext;
++    }
++}
++
++/*
++** The doBitBlt of cfb's BitBlt for a window-to-window CopyArea: every box
++** of prgnDst from its point in pptSrc, which for a copy within the screen is
++** the box moved by one offset.  GXcopy, all planes (rtgscreen.c checks).
++*/
++void
++rtgDoBitbltBlit(pSrc, pDst, alu, prgnDst, pptSrc, planemask)
++DrawablePtr   pSrc, pDst;
++int           alu;
++RegionPtr     prgnDst;
++DDXPointPtr   pptSrc;
++unsigned long planemask;
++{
++    BoxPtr       pbox = REGION_RECTS(prgnDst);
++    int          nbox = REGION_NUM_RECTS(prgnDst);
++    rtgScreenPtr pRTG;
++
++    if (nbox == 0)
++        return;
++    pRTG = GetRTGScreen(pDst->pScreen);
++    rtgCopyBoxes(pRTG, pbox, nbox, pptSrc->x - pbox->x1, pptSrc->y - pbox->y1);
++    RTG_FLUSH(pRTG);
++}
+--- /dev/null
++++ b/programs/Xserver/hw/amix/rtg/rtgdraw.h
+@@ -0,0 +1,22 @@
++/*
++ * rtgdraw.h -- inside the RTG layer: rtgdraw.c's and rtgscreen.c's entry
++ * points.  Card drivers use rtg.h only.
++ *
++ * MIT, Copyright (c) 2026 Jussi Alanärä.  The notices and licence texts are
++ * in the package's doc/x11r63/LICENSE.ddx.
++ */
++
++#ifndef AMIX_RTGDRAW_H
++#define AMIX_RTGDRAW_H
++
++/* rtgdraw.c */
++extern void rtgFillBox();       /* (pRTG, x1, y1, x2, y2, pixel): [x1,x2)   */
++extern void rtgFlush();         /* (pRTG)                                    */
++extern void rtgCopyBoxes();     /* (pRTG, pbox, nbox, dx, dy)                */
++extern void rtgPutImage();      /* the GC op                                 */
++extern void rtgDoBitbltBlit();  /* cfbBitBlt's doBitBlt                      */
++
++/* rtgscreen.c */
++extern Bool rtgScreenSetup();   /* (pScreen, pRTG, dpix, dpiy): cfb16 on it  */
++
++#endif /* AMIX_RTGDRAW_H */
+--- a/programs/Xserver/hw/amix/rtg/rtgInit.c
++++ b/programs/Xserver/hw/amix/rtg/rtgInit.c
+@@ -1,5 +1,6 @@
+ /*
+- * rtgInit.c -- the RTG layer: probe, screen creation, input, monitor switch.
++ * rtgInit.c -- the RTG layer: the card, probe, screen creation, input, the
++ * monitor switch.
+  *
+  * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
+  * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
+@@ -20,17 +21,17 @@
+ **       rtgProbe, rtgCreate,
+ **   #endif
+ **
+-** rtgProbe() checks that a supported RTG card is present and fills in
+-** amixFbs[].  Currently only ZZ9000 is supported; ZZ9000Probe() does
+-** the actual hardware detection.
++** rtgProbe() takes the card (rtgCard: -card, else the one the server's
++** name says, else the first in rtgCards[] whose probe succeeds), checks
++** that it is present and fills in amixFbs[].
+ **
+-** rtgCreate() registers pixmap formats for 16-bit TrueColor and queues
+-** the screen for AddScreen().
++** rtgCreate() registers the card's pixmap format and queues the screen for
++** AddScreen().
+ **
+ ** rtgScreenInit() is the AddScreen callback.  It allocates the
+-** rtgScreenRec, calls ZZ9000InitHW() to open the device and write the
+-** mode register sequence, then calls ZZ9000ScreenInit() to install the
+-** drawing function vector into the ScreenRec.
++** rtgScreenRec, has the card open its device, set the mode and map the
++** framebuffer (rtgCard->initHW), then puts cfb16 on it (rtgScreenSetup,
++** rtgscreen.c).  The layer reaches the card only through rtgCard (rtg.h).
+ */
+ 
+ #include "../amix.h"
+@@ -42,8 +43,8 @@
+ #include "miline.h"
+ #include "mi.h"
+ #include "rtg.h"
++#include "rtgdraw.h"
+ #include "opaque.h"		/* dispatchException, DE_TERMINATE */
+-#include "zz9000/zz9000.h"
+ 
+ extern int  XmonitorResolution;
+ extern int  YmonitorResolution;
+@@ -54,8 +55,7 @@
+ extern void amixWakeupHandler();
+ extern Bool amixCursorInitialize();
+ 
+-/* zz9000/zz9000screen.c: the screen on cfb16; cfb's default colormap */
+-extern Bool ZZ9000ScreenInit();
++/* cfb's default colormap */
+ extern Bool cfbCreateDefColormap();
+ 
+ /* input device globals from amixKbd.c / amixMouse.c / amixMono.c */
+@@ -72,6 +72,190 @@
+ static unsigned long rtgGeneration = 0;
+ 
+ /* ------------------------------------------------------------------ */
++/* The card                                                           */
++
++/*
++** rtgCard: the card this server drives, for its whole life.  -card NAME
++** names it; -card auto, or no -card under a name that is not X<card>
++** (Xrtg, X), takes the first card in rtgCards[] whose probe succeeds;
++** started as X<card> (Xzz9000) it is that card, so the scripts and
++** display.d lines that start Xzz9000 keep their card.
++*/
++rtgCardOps *rtgCard = (rtgCardOps *) NULL;
++
++static rtgCardOps *rtgCardAsked = (rtgCardOps *) NULL;  /* -card NAME */
++static Bool        rtgCardAuto = FALSE;                 /* -card auto */
++static char       *rtgModeName = (char *) NULL;         /* -mode WxH  */
++
++static rtgCardOps *
++rtgCardByName(name)
++char *name;
++{
++    rtgCardOps **c;
++
++    for (c = rtgCards; *c; c++)
++        if (strcmp((*c)->name, name) == 0)
++            return *c;
++    return (rtgCardOps *) NULL;
++}
++
++/* the card the server's name says: X<card>, after the last '/' */
++static rtgCardOps *
++rtgCardByArgv0(argv0)
++char *argv0;
++{
++    char *b;
++
++    if (!argv0)
++        return (rtgCardOps *) NULL;
++    b = strrchr(argv0, '/');
++    b = b ? b + 1 : argv0;
++    if (b[0] != 'X' || !b[1])
++        return (rtgCardOps *) NULL;
++    return rtgCardByName(b + 1);
++}
++
++/* the card as far as the options and the name decide it; NULL = auto */
++static rtgCardOps *
++rtgCardFixed(argv0)
++char *argv0;
++{
++    if (rtgCardAsked)
++        return rtgCardAsked;
++    if (rtgCardAuto)
++        return (rtgCardOps *) NULL;
++    return rtgCardByArgv0(argv0);
++}
++
++/* "zz9000 va2000": the cards in this server, for messages */
++static char *
++rtgCardNames()
++{
++    static char  names[128];
++    rtgCardOps **c;
++
++    names[0] = '\0';
++    for (c = rtgCards; *c; c++)
++        if (strlen(names) + strlen((*c)->name) + 2 < sizeof(names)) {
++            if (names[0])
++                strcat(names, " ");
++            strcat(names, (*c)->name);
++        }
++    return names;
++}
++
++/* -card NAME (amixIo.c); FALSE: no such card in this server, said here */
++Bool
++rtgSetCardName(name)
++char *name;
++{
++    if (strcmp(name, "auto") == 0) {
++        rtgCardAuto = TRUE;
++        rtgCardAsked = (rtgCardOps *) NULL;
++        return TRUE;
++    }
++    rtgCardAsked = rtgCardByName(name);
++    if (rtgCardAsked) {
++        rtgCardAuto = FALSE;
++        return TRUE;
++    }
++    ErrorF("-card %s: this server has no driver for that card (its cards: %s; or auto)\n",
++           name, rtgCardNames());
++    return FALSE;
++}
++
++/*
++** -mode WxH (amixIo.c).  When the card is already known it is checked
++** here, so a wrong mode stops the server with the card's own list, as it
++** always has; under -card auto it is checked once the card is found.
++*/
++Bool
++rtgSetModeName(argv0, name)
++char *argv0;
++char *name;
++{
++    rtgCardOps *c = rtgCardFixed(argv0);
++
++    rtgModeName = name;
++    if (c && !(*c->setMode)(name)) {
++        ErrorF("Unknown -mode: %s\n", name);
++        ErrorF("Supported modes: %s\n", c->modes);
++        return FALSE;
++    }
++    return TRUE;
++}
++
++/* The monitor switch of a card driver that reads an int (zz9000). */
++void
++rtgMonitorSwitchInt(int fd, int which)
++{
++    int v = which;
++
++    (void) ioctl(fd, SVGAIOCSetMonitorSwitch, &v);
++}
++
++/*
++** What the card says it cannot do, read when it is taken and again after
++** its initHW (which may find its blitter unusable): no blitter, every fill
++** and copy on the CPU; no move16, -move16 ignored.
++*/
++static void
++rtgCardCheck()
++{
++    rtgCardOps *c = rtgCard;
++
++    if (rtgBlitMin > 0 && (!(c->caps.flags & RTG_CAP_BLITTER) ||
++                           !c->fillBox || !c->copyBox || !c->flush)) {
++        ErrorF("rtg: %s: no blitter; fills and copies on the CPU\n", c->name);
++        rtgBlitMin = 0;
++    }
++    if (rtgMove16 && (c->caps.flags & RTG_CAP_NOMOVE16)) {
++        ErrorF("rtg: %s: no move16 into its framebuffer; -move16 ignored\n",
++               c->name);
++        rtgMove16 = 0;
++    }
++}
++
++/*
++** Take the card for this server: the one asked for or named, if its probe
++** succeeds; else, under auto, the first that answers.  Then the card's
++** defaults for what the options left open, and the -mode.
++*/
++static Bool
++rtgChooseCard(argv0)
++char *argv0;
++{
++    rtgCardOps  *c = rtgCardFixed(argv0);
++    rtgCardOps **t;
++
++    if (c) {
++        if (c->version != RTG_CARD_VERSION || !(*c->probe)()) {
++            ErrorF("rtgProbe: RTG card not found at %s\n", c->device);
++            return FALSE;
++        }
++    } else {
++        for (t = rtgCards; *t; t++)
++            if ((*t)->version == RTG_CARD_VERSION && (*(*t)->probe)())
++                break;
++        c = *t;
++        if (!c) {
++            ErrorF("rtgProbe: no RTG card found (cards tried: %s)\n",
++                   rtgCardNames());
++            return FALSE;
++        }
++        ErrorF("rtgProbe: -card auto: %s\n", c->name);
++    }
++    rtgCard = c;
++    if (rtgModeName && !(*c->setMode)(rtgModeName))
++        FatalError("-mode %s is not a mode of the %s card (its modes: %s)\n",
++                   rtgModeName, c->name, c->modes);
++    if (rtgBlitMin < 0)
++        rtgBlitMin = c->caps.blitMin;
++    rtgCardCheck();
++    return TRUE;
++}
++
++/* ------------------------------------------------------------------ */
+ 
+ /*
+ ** rtgWakeupHandler - fallback no-op wakeup handler.
+@@ -125,10 +309,8 @@
+ rtgMonitorSwitch(sw)
+ int sw;
+ {
+-    int v = sw;
+-
+-    if (rtgSwitchFd >= 0)
+-        (void) ioctl(rtgSwitchFd, SVGAIOCSetMonitorSwitch, &v);
++    if (rtgSwitchFd >= 0 && rtgCard && rtgCard->monitorSwitch)
++        (*rtgCard->monitorSwitch)(rtgSwitchFd, sw);
+ }
+ 
+ static void
+@@ -201,7 +383,8 @@
+         amixFbs[i].mapped = FALSE;
+     }
+ 
+-    ZZ9000CloseHW(pRTG);
++    RTG_FLUSH(pRTG);
++    (*rtgCard->closeHW)(pRTG);
+     xfree((pointer) pRTG);
+ 
+     return ret;
+@@ -285,8 +468,8 @@
+ /*
+ ** rtgScreenInit - AddScreen callback, called once per screen by DIX.
+ **
+-** Allocates the rtgScreenRec, initialises hardware via ZZ9000InitHW(),
+-** installs the drawing function vector via ZZ9000ScreenInit(), then
++** Allocates the rtgScreenRec, has the card initialise its hardware
++** (rtgCard->initHW), puts cfb16 on the framebuffer (rtgScreenSetup), then
+ ** wires up CloseScreen, SaveScreen, block handlers and cursor.
+ */
+ static Bool
+@@ -297,6 +480,7 @@
+ char    **argv;
+ {
+     rtgScreenPtr pRTG;
++    int          w, h;
+ 
+     ErrorF("rtgScreenInit: index=%d\n", index);
+ 
+@@ -311,34 +495,35 @@
+ 
+     pScreen->devPrivates[rtgScreenIndex].ptr = (pointer) pRTG;
+ 
+-    /* Screen geometry from selected mode */
+-    pRTG->width        = ZZ9000_selected_mode->w;
+-    pRTG->height       = ZZ9000_selected_mode->h;
+-    pRTG->pitch        = ZZ9000_selected_mode->w * 2;
+-    pRTG->bitsPerPixel = ZZ9000_BPP;
+-    pRTG->depth        = ZZ9000_DEPTH;
+-    pRTG->fbOffset     = ZZ9000_FB_OFFSET;
++    /* Screen geometry from the selected mode; the card's initHW corrects it */
++    (*rtgCard->modeSize)(&w, &h);
++    pRTG->width        = w;
++    pRTG->height       = h;
++    pRTG->pitch        = w * (rtgCard->caps.bitsPerPixel / 8);
++    pRTG->bitsPerPixel = rtgCard->caps.bitsPerPixel;
++    pRTG->depth        = rtgCard->caps.depth;
+ 
+-
+-    /* Open /dev/zz9000, set mode, mmap framebuffer */
+-    if (!ZZ9000InitHW(pRTG))
++    /* the card: open its device, set the mode, map the framebuffer */
++    if (!(*rtgCard->initHW)(pRTG))
+     {
+-        ErrorF("rtgScreenInit: ZZ9000InitHW failed\n");
++        ErrorF("rtgScreenInit: %s initHW failed\n", rtgCard->name);
+         xfree((pointer) pRTG);
+         return FALSE;
+     }
+ 
++    rtgCardCheck();             /* initHW may have lost the blitter */
++
+     /* The mode is set: the monitor to the RTG output. */
+     rtgMonitorOn(pRTG);
+ 
+-    ErrorF("rtgScreenInit: hw init done, calling ZZ9000ScreenInit\n");
++    ErrorF("rtgScreenInit: hw init done, calling rtgScreenSetup\n");
+ 
+     /* the screen: cfb16 on the framebuffer, with the card's blitter */
+-    if (!ZZ9000ScreenInit(pScreen, pRTG,
+-                          XmonitorResolution, YmonitorResolution))
++    if (!rtgScreenSetup(pScreen, pRTG,
++                        XmonitorResolution, YmonitorResolution))
+     {
+-        ErrorF("rtgScreenInit: ZZ9000ScreenInit failed\n");
+-        ZZ9000CloseHW(pRTG);
++        ErrorF("rtgScreenInit: rtgScreenSetup failed\n");
++        (*rtgCard->closeHW)(pRTG);
+         xfree((pointer) pRTG);
+         return FALSE;
+     }
+@@ -367,7 +552,7 @@
+ 
+     ErrorF("rtgScreenInit: calling amixCursorInitialize\n");
+ 
+-    /* Software cursor - ZZ9000 has no hardware sprite */
++    /* Software cursor: the hardware sprites are not used */
+     if (!amixCursorInitialize(pScreen))
+     {
+         ErrorF("rtgScreenInit: amixCursorInitialize returned FALSE, using miDC\n");
+@@ -420,23 +605,23 @@
+ int         argc;
+ char      **argv;
+ {
++    int w, h;
++
+     ErrorF("rtgProbe: index=%d\n", index);
+ 
+-    if (!ZZ9000Probe())
+-    {
+-        ErrorF("rtgProbe: RTG card not found at %s\n", ZZ9000_DEV);
++    if (!rtgChooseCard(argc > 0 ? argv[0] : (char *) NULL))
+         return FALSE;
+-    }
+ 
+     /* Open the AMIX screen device for input events.  rtgScreenInit() also
+     ** calls this on later server generations, since this probeProc itself
+     ** only runs once per process (see rtgOpenInput's comment above). */
+     rtgOpenInput(index);
+ 
+-    amixFbs[index].bp.width  = ZZ9000_selected_mode->w;
+-    amixFbs[index].bp.height = ZZ9000_selected_mode->h;
++    (*rtgCard->modeSize)(&w, &h);
++    amixFbs[index].bp.width  = w;
++    amixFbs[index].bp.height = h;
+ 
+-    ErrorF("rtgProbe: ok, width=%d height=%d\n", ZZ9000_selected_mode->w, ZZ9000_selected_mode->h);
++    ErrorF("rtgProbe: ok, %s, width=%d height=%d\n", rtgCard->name, w, h);
+     return TRUE;
+ }
+ 
+@@ -444,9 +629,9 @@
+ ** rtgCreate - createProc entry in amixFbData[].
+ **
+ ** Called by InitOutput() after a successful rtgProbe().  Allocates the
+-** per-generation screen and GC private indices, initialises the
+-** TrueColor VisualRec for RGB565, sets the 16-bit pixmap format, and
+-** registers the screen with the DIX layer via AddScreen().
++** per-generation screen private index, sets the card's pixmap format
++** (16-bit TrueColor) and registers the screen with the DIX layer via
++** AddScreen().
+ */
+ Bool
+ rtgCreate(pScreenInfo, argc, argv)
+@@ -471,8 +656,8 @@
+ 
+     pScreenInfo->numPixmapFormats = 2;
+ 
+-    pScreenInfo->formats[0].depth        = ZZ9000_DEPTH;
+-    pScreenInfo->formats[0].bitsPerPixel = ZZ9000_BPP;
++    pScreenInfo->formats[0].depth        = rtgCard->caps.depth;
++    pScreenInfo->formats[0].bitsPerPixel = rtgCard->caps.bitsPerPixel;
+     pScreenInfo->formats[0].scanlinePad  = BITMAP_SCANLINE_PAD;
+ 
+     pScreenInfo->formats[1].depth        = 1;
+--- /dev/null
++++ b/programs/Xserver/hw/amix/rtg/rtgscreen.c
+@@ -0,0 +1,463 @@
++/*
++ * rtgscreen.c -- the RTG screen on X's cfb16 code.
++ *
++ * Written for the x11r63 package: MIT, Copyright (c) 2026 Jussi Alanärä.
++ * It replaces the screen code of Ignacio Soriano's ZZ9000 driver (MIT,
++ * Copyright (c) 2026 isoriano1968), which was based on Antti Sokero's
++ * xrtg-amix (its rtg/ layer and VA2000 driver; MIT, Copyright (c) 2025-2026
++ * Antti Sokero), and keeps a few of its lines.  The notices and licence
++ * texts are in the package's doc/x11r63/LICENSE.ddx.
++ */
++
++/*
++** rtgscreen.c -- the RTG screen: X's own 16-bit framebuffer code (cfb16) on
++** the card's framebuffer, with the card's blitter for large copies and fills.
++**
++** cfbScreenInit (cfb16: PSZ 16) owns the screen: visuals, windows, pixmaps
++** (mfb for depth 1), GCs and their validation, every drawing operation,
++** colormaps and text.  Four places hand work to the card's blitter instead
++** (rtgdraw.c calls the card through rtgCard):
++**   - CopyArea, window to window, GXcopy, all planes: cfb's own BitBlt
++**     (clipping, exposures) with a doBitBlt that sends the boxes to the
++**     blitter in a safe order;
++**   - CopyWindow, the same box walk;
++**   - PolyFillRect, window, FillSolid, GXcopy, all planes;
++**   - PaintWindowBackground and PaintWindowBorder with a solid pixel.
++** Each of them flushes the card's queue before it returns, so the queue is
++** empty whenever cfb's CPU code touches the framebuffer.  PutImage of a
++** picture of the screen's depth into a window under GXcopy uses the direct
++** path (rtgPutImage); everything else is cfb's.
++**
++** MIT licence: holder and text in /opt/amix/X11R6/doc/x11r63/LICENSE.
++*/
++
++#include "X.h"
++#include "Xmd.h"
++#include "Xproto.h"
++#include "scrnintstr.h"
++#include "pixmapstr.h"
++#include "windowstr.h"
++#include "gcstruct.h"
++#include "regionstr.h"
++#include "servermd.h"
++#include "colormapst.h"
++#include "resource.h"
++#include "mi.h"
++#include "cfb.h"
++#include "../amix.h"
++#include "rtg.h"
++#include "rtgdraw.h"
++
++extern RegionPtr cfbBitBlt();
++
++/* The GC wrapper: cfb's funcs and ops, and our copy of the ops when the
++** GC's state lets the blitter or the direct PutImage take some of them. */
++typedef struct {
++    GCFuncs *funcs;         /* cfb's GC funcs */
++    GCOps   *cfbOps;        /* cfb's ops, as its last ValidateGC chose them */
++    GCOps    ops;           /* cfb's ops with ours in; pGC->ops when wrapped */
++    int      wrapped;       /* pGC->ops is &ops */
++} RTGGCPrivRec, *RTGGCPrivPtr;
++
++static int           rtgGCPrivateIndex = -1;
++static unsigned long rtgScrGeneration = 0;
++
++/* cfb's screen functions we wrap (one RTG screen) */
++static Bool (*rtgCfbCreateGC)();
++static void (*rtgCfbCopyWindow)();
++static void (*rtgCfbPaintWindowBackground)();
++static void (*rtgCfbPaintWindowBorder)();
++
++#define RTGGCPriv(pGC) ((RTGGCPrivPtr) (pGC)->devPrivates[rtgGCPrivateIndex].ptr)
++#define ALLPLANES(pm) (((pm) & 0xffff) == 0xffff)
++
++/* ---------------------------------------------------------------------- */
++/* Operations                                                              */
++
++/* CopyArea: window to window goes through cfb's BitBlt with the blitter. */
++static RegionPtr
++rtgCopyArea(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty)
++DrawablePtr pSrc, pDst;
++GCPtr       pGC;
++int         srcx, srcy, w, h, dstx, dsty;
++{
++    RTGGCPrivPtr pPriv = RTGGCPriv(pGC);
++
++    if (pSrc->type == DRAWABLE_WINDOW && pDst->type == DRAWABLE_WINDOW &&
++        rtgBlitMin > 0 && (long) w * h >= rtgBlitMin)
++        return cfbBitBlt(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty,
++                         rtgDoBitbltBlit, 0L);
++    return (*pPriv->cfbOps->CopyArea)(pSrc, pDst, pGC, srcx, srcy, w, h,
++                                      dstx, dsty);
++}
++
++/* PolyFillRect, solid: the clipped boxes to the blitter (or the CPU). */
++static void
++rtgPolyFillRect(pDraw, pGC, nrect, prect)
++DrawablePtr pDraw;
++GCPtr       pGC;
++int         nrect;
++xRectangle *prect;
++{
++    RTGGCPrivPtr  pPriv = RTGGCPriv(pGC);
++    rtgScreenPtr pRTG = GetRTGScreen(pDraw->pScreen);
++    RegionPtr    clip = cfbGetCompositeClip(pGC);
++    BoxPtr       pextent, pbox;
++    int          i, n, any, x1, y1, x2, y2, bx1, by1, bx2, by2;
++
++    /* nothing large enough for the blitter: cfb's own fill is the fastest */
++    any = 0;
++    if (rtgBlitMin > 0)
++        for (i = 0; i < nrect && !any; i++)
++            if ((long) prect[i].width * prect[i].height >= rtgBlitMin)
++                any = 1;
++    if (!any) {
++        (*pPriv->cfbOps->PolyFillRect)(pDraw, pGC, nrect, prect);
++        return;
++    }
++
++    pextent = REGION_EXTENTS(pDraw->pScreen, clip);
++    for (; nrect > 0; nrect--, prect++) {
++        x1 = prect->x + pDraw->x;
++        y1 = prect->y + pDraw->y;
++        x2 = x1 + (int) prect->width;
++        y2 = y1 + (int) prect->height;
++        if (x1 < pextent->x1) x1 = pextent->x1;
++        if (y1 < pextent->y1) y1 = pextent->y1;
++        if (x2 > pextent->x2) x2 = pextent->x2;
++        if (y2 > pextent->y2) y2 = pextent->y2;
++        if (x1 >= x2 || y1 >= y2)
++            continue;
++        n = REGION_NUM_RECTS(clip);
++        pbox = REGION_RECTS(clip);
++        for (; n > 0; n--, pbox++) {
++            bx1 = x1 > pbox->x1 ? x1 : pbox->x1;
++            by1 = y1 > pbox->y1 ? y1 : pbox->y1;
++            bx2 = x2 < pbox->x2 ? x2 : pbox->x2;
++            by2 = y2 < pbox->y2 ? y2 : pbox->y2;
++            if (bx1 < bx2 && by1 < by2)
++                rtgFillBox(pRTG, bx1, by1, bx2, by2, pGC->fgPixel);
++        }
++    }
++    rtgFlush(pRTG);
++}
++
++/* CopyWindow: as cfbCopyWindow, with the blitter. */
++static void
++rtgCopyWindow(pWin, ptOldOrg, prgnSrc)
++WindowPtr   pWin;
++DDXPointRec ptOldOrg;
++RegionPtr   prgnSrc;
++{
++    ScreenPtr    pScreen = pWin->drawable.pScreen;
++    rtgScreenPtr pRTG = GetRTGScreen(pScreen);
++    RegionRec    rgnDst;
++    int          dx, dy;
++
++    if (rtgBlitMin <= 0) {
++        (*rtgCfbCopyWindow)(pWin, ptOldOrg, prgnSrc);
++        return;
++    }
++    REGION_INIT(pScreen, &rgnDst, NullBox, 0);
++    dx = ptOldOrg.x - pWin->drawable.x;
++    dy = ptOldOrg.y - pWin->drawable.y;
++    REGION_TRANSLATE(pScreen, prgnSrc, -dx, -dy);
++    REGION_INTERSECT(pScreen, &rgnDst, &pWin->borderClip, prgnSrc);
++    rtgCopyBoxes(pRTG, REGION_RECTS(&rgnDst), REGION_NUM_RECTS(&rgnDst),
++                 dx, dy);
++    rtgFlush(pRTG);
++    REGION_UNINIT(pScreen, &rgnDst);
++}
++
++/* PaintWindow: a solid background or border to the blitter, else cfb's. */
++static void
++rtgPaintWindow(pWin, pRegion, what)
++WindowPtr pWin;
++RegionPtr pRegion;
++int       what;
++{
++    rtgScreenPtr  pRTG = GetRTGScreen(pWin->drawable.pScreen);
++    unsigned long pixel;
++    BoxPtr        pbox;
++    int           n;
++
++    if (what == PW_BACKGROUND) {
++        if (pWin->backgroundState != BackgroundPixel) {
++            (*rtgCfbPaintWindowBackground)(pWin, pRegion, what);
++            return;
++        }
++        pixel = pWin->background.pixel;
++    } else {
++        if (!pWin->borderIsPixel) {
++            (*rtgCfbPaintWindowBorder)(pWin, pRegion, what);
++            return;
++        }
++        pixel = pWin->border.pixel;
++    }
++    n = REGION_NUM_RECTS(pRegion);
++    pbox = REGION_RECTS(pRegion);
++    for (; n > 0; n--, pbox++)
++        rtgFillBox(pRTG, pbox->x1, pbox->y1, pbox->x2, pbox->y2, pixel);
++    rtgFlush(pRTG);
++}
++
++/* ---------------------------------------------------------------------- */
++/* The GC wrapper                                                          */
++
++static void rtgValidateGC(), rtgChangeGC(), rtgCopyGC(), rtgDestroyGC();
++static void rtgChangeClip(), rtgDestroyClip(), rtgCopyClip();
++
++static GCFuncs rtgGCFuncs = {
++    rtgValidateGC, rtgChangeGC, rtgCopyGC, rtgDestroyGC,
++    rtgChangeClip, rtgDestroyClip, rtgCopyClip,
++};
++
++/* back to cfb's funcs and ops, before calling cfb */
++static void
++rtgUnwrap(pGC)
++GCPtr pGC;
++{
++    RTGGCPrivPtr pPriv = RTGGCPriv(pGC);
++
++    pGC->funcs = pPriv->funcs;
++    if (pPriv->wrapped)
++        pGC->ops = pPriv->cfbOps;
++    pPriv->wrapped = FALSE;
++}
++
++/*
++** Ours over cfb's: whatever cfb chose, plus our ops where the state allows
++** (window, GXcopy, all planes; a solid fill for PolyFillRect).  Only a
++** ValidateGC knows the drawable; the other funcs leave cfb's ops in place
++** until the next ValidateGC, which DIX runs before any drawing after them.
++*/
++static void
++rtgWrap(pGC, onWindow)
++GCPtr pGC;
++int   onWindow;
++{
++    RTGGCPrivPtr pPriv = RTGGCPriv(pGC);
++
++    pPriv->funcs = pGC->funcs;
++    pGC->funcs = &rtgGCFuncs;
++    pPriv->cfbOps = pGC->ops;
++    if (!onWindow || pGC->alu != GXcopy || !ALLPLANES(pGC->planemask))
++        return;
++    pPriv->ops = *pGC->ops;
++    pPriv->ops.CopyArea = rtgCopyArea;
++    pPriv->ops.PutImage = rtgPutImage;
++    if (pGC->fillStyle == FillSolid)
++        pPriv->ops.PolyFillRect = rtgPolyFillRect;
++    pGC->ops = &pPriv->ops;
++    pPriv->wrapped = TRUE;
++}
++
++static void
++rtgValidateGC(pGC, changes, pDraw)
++GCPtr         pGC;
++unsigned long changes;
++DrawablePtr   pDraw;
++{
++    rtgUnwrap(pGC);
++    (*pGC->funcs->ValidateGC)(pGC, changes, pDraw);
++    rtgWrap(pGC, pDraw->type == DRAWABLE_WINDOW);
++}
++
++static void
++rtgChangeGC(pGC, mask)
++GCPtr         pGC;
++unsigned long mask;
++{
++    rtgUnwrap(pGC);
++    (*pGC->funcs->ChangeGC)(pGC, mask);
++    rtgWrap(pGC, FALSE);
++}
++
++static void
++rtgCopyGC(pGCSrc, mask, pGCDst)
++GCPtr         pGCSrc, pGCDst;
++unsigned long mask;
++{
++    rtgUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyGC)(pGCSrc, mask, pGCDst);
++    rtgWrap(pGCDst, FALSE);
++}
++
++static void
++rtgDestroyGC(pGC)
++GCPtr pGC;
++{
++    rtgUnwrap(pGC);
++    (*pGC->funcs->DestroyGC)(pGC);
++}
++
++static void
++rtgChangeClip(pGC, type, pvalue, nrects)
++GCPtr   pGC;
++int     type, nrects;
++pointer pvalue;
++{
++    rtgUnwrap(pGC);
++    (*pGC->funcs->ChangeClip)(pGC, type, pvalue, nrects);
++    rtgWrap(pGC, FALSE);
++}
++
++static void
++rtgDestroyClip(pGC)
++GCPtr pGC;
++{
++    rtgUnwrap(pGC);
++    (*pGC->funcs->DestroyClip)(pGC);
++    rtgWrap(pGC, FALSE);
++}
++
++static void
++rtgCopyClip(pGCDst, pGCSrc)
++GCPtr pGCDst, pGCSrc;
++{
++    rtgUnwrap(pGCDst);
++    (*pGCDst->funcs->CopyClip)(pGCDst, pGCSrc);
++    rtgWrap(pGCDst, FALSE);
++}
++
++static Bool
++rtgCreateGC(pGC)
++GCPtr pGC;
++{
++    RTGGCPrivPtr pPriv = RTGGCPriv(pGC);
++
++    if (!(*rtgCfbCreateGC)(pGC))
++        return FALSE;
++    pPriv->wrapped = FALSE;
++    rtgWrap(pGC, FALSE);
++    return TRUE;
++}
++
++/* ---------------------------------------------------------------------- */
++/* Colormaps                                                               */
++
++/*
++** TrueColor has no colour table to load, but one map is always the
++** installed one and clients are told when it changes.  rtgInstalledMap is
++** cleared at every screen init, so a reset never leaves it pointing at a
++** freed map.
++*/
++static ColormapPtr rtgInstalledMap = (ColormapPtr) NULL;
++
++static int
++rtgListInstalledColormaps(pScreen, pmaps)
++ScreenPtr pScreen;
++Colormap *pmaps;
++{
++    if (!rtgInstalledMap)
++        return 0;
++    *pmaps = rtgInstalledMap->mid;
++    return 1;
++}
++
++static void
++rtgInstallColormap(pmap)
++ColormapPtr pmap;
++{
++    ColormapPtr old = rtgInstalledMap;
++
++    if (pmap == old)
++        return;
++    if (old)
++        WalkTree(pmap->pScreen, TellLostMap, (pointer) &old->mid);
++    rtgInstalledMap = pmap;
++    WalkTree(pmap->pScreen, TellGainedMap, (pointer) &pmap->mid);
++}
++
++static void
++rtgUninstallColormap(pmap)
++ColormapPtr pmap;
++{
++    ColormapPtr def;
++
++    if (pmap != rtgInstalledMap || pmap->mid == pmap->pScreen->defColormap)
++        return;
++    def = (ColormapPtr) LookupIDByType(pmap->pScreen->defColormap, RT_COLORMAP);
++    if (def)
++        (*pmap->pScreen->InstallColormap)(def);
++}
++
++/* ---------------------------------------------------------------------- */
++/* Screen                                                                  */
++
++/* the shift of a mask: its lowest set bit */
++static int
++maskShift(m)
++unsigned long m;
++{
++    int s;
++
++    for (s = 0; m && !(m & 1); s++)
++        m >>= 1;
++    return s;
++}
++
++/*
++** rtgScreenSetup - cfb16 on the mapped framebuffer, the visual made the
++** card's pixel layout (caps), and the blitter's wrappers in.  The caller
++** (rtgInit.c) adds the cursor, input, SaveScreen and CloseScreen, and the
++** default colormap.
++*/
++Bool
++rtgScreenSetup(pScreen, pRTG, dpix, dpiy)
++ScreenPtr    pScreen;
++rtgScreenPtr pRTG;
++int          dpix, dpiy;
++{
++    rtgCardCaps *caps = &rtgCard->caps;
++    VisualPtr    v;
++    int          i;
++
++    if (rtgScrGeneration != serverGeneration) {
++        rtgGCPrivateIndex = AllocateGCPrivateIndex();
++        if (rtgGCPrivateIndex < 0)
++            return FALSE;
++        rtgScrGeneration = serverGeneration;
++    }
++
++    /* no colour table at 16 bits: TrueColor only */
++    if (!cfbSetVisualTypes(caps->depth, 1 << TrueColor, caps->bitsPerRGB))
++        return FALSE;
++    if (!cfbScreenInit(pScreen, (pointer) pRTG->fbBase, pRTG->width,
++                       pRTG->height, dpix, dpiy, pRTG->pitch / 2))
++        return FALSE;
++
++    /* cfb's depth-16 TrueColor is 6-5-5 red-low; the card says its own */
++    for (i = 0, v = pScreen->visuals; i < pScreen->numVisuals; i++, v++) {
++        if (v->class != TrueColor || v->nplanes != caps->depth)
++            continue;
++        v->redMask         = caps->redMask;
++        v->greenMask       = caps->greenMask;
++        v->blueMask        = caps->blueMask;
++        v->offsetRed       = maskShift(caps->redMask);
++        v->offsetGreen     = maskShift(caps->greenMask);
++        v->offsetBlue      = maskShift(caps->blueMask);
++        v->bitsPerRGBValue = caps->bitsPerRGB;
++        v->ColormapEntries = 1 << caps->bitsPerRGB;
++    }
++
++    /* cfb sets the colormap hooks only when built STATIC_COLOR, which it
++     * is not here: the DDX sets them.  TrueColor: no StoreColors */
++    rtgInstalledMap = (ColormapPtr) NULL;
++    pScreen->InstallColormap        = rtgInstallColormap;
++    pScreen->UninstallColormap      = rtgUninstallColormap;
++    pScreen->ListInstalledColormaps = rtgListInstalledColormaps;
++    pScreen->StoreColors            = (void (*)()) NoopDDA;
++
++    if (!AllocateGCPrivate(pScreen, rtgGCPrivateIndex, sizeof(RTGGCPrivRec)))
++        return FALSE;
++    rtgCfbCreateGC = pScreen->CreateGC;
++    pScreen->CreateGC = rtgCreateGC;
++    rtgCfbCopyWindow = pScreen->CopyWindow;
++    pScreen->CopyWindow = rtgCopyWindow;
++    rtgCfbPaintWindowBackground = pScreen->PaintWindowBackground;
++    pScreen->PaintWindowBackground = rtgPaintWindow;
++    rtgCfbPaintWindowBorder = pScreen->PaintWindowBorder;
++    pScreen->PaintWindowBorder = rtgPaintWindow;
++    return TRUE;
++}
+--- a/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/zz9000/Imakefile
+@@ -1,12 +1,12 @@
+ #include <Server.tmpl>
+ 
+-SRCS = zz9000hw.c zz9000screen.c zz9000draw.c
++SRCS = zz9000hw.c zz9000draw.c
+ 
+-OBJS = zz9000hw.o zz9000screen.o zz9000draw.o
++OBJS = zz9000hw.o zz9000draw.o
+ 
+-STD_DEFINES = ServerDefines -DRTG -DZZ9000 -DPSZ=16
++STD_DEFINES = ServerDefines -DRTG -DZZ9000
+ CDEBUGFLAGS = -g -O
+-   INCLUDES = -I. -I.. -I../.. -I../../../../include -I$(XINCLUDESRC) -I../../../../mi -I../../../../mfb -I../../../../cfb -I$(FONTINCSRC) -I/usr/amiga/include
++   INCLUDES = -I. -I.. -I../.. -I../../../../include -I$(XINCLUDESRC) -I../../../../mi -I../../../../mfb -I$(FONTINCSRC) -I/usr/amiga/include
+ 
+ NormalLibraryObjectRule()
+ NormalLibraryTarget(zz9000, $(OBJS))
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000draw.c
+@@ -1,5 +1,5 @@
+ /*
+- * zz9000draw.c -- the ZZ9000/Z3660 blitter queue and CPU drawing helpers.
++ * zz9000draw.c -- the ZZ9000/Z3660 card blitter: the queue to ZZ9KIOC_BLITS.
+  *
+  * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
+  * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
+@@ -10,11 +10,11 @@
+  */
+ 
+ /*
+-** zz9000draw.c - the ZZ9000/Z3660 card's blitter and CPU helpers for the
+-** cfb16 screen (zz9000screen.c): the blitter queue, CPU fills and copies
+-** for what the blitter does not take, the ordered copy of a box list, and
+-** the direct PutImage path.  All coordinates are absolute screen
+-** coordinates; pRTG->fbBase is pixel (0,0), pRTG->pitch bytes a line.
++** zz9000draw.c - the ZZ9000/Z3660 card's blitter, the card's fillBox,
++** copyBox and flush operations (rtg.h): records queued and sent to the
++** driver's ZZ9KIOC_BLITS.  The CPU drawing, the box order and the direct
++** PutImage are the layer's (rtg/rtgdraw.c).  All coordinates are absolute
++** screen coordinates.
+ */
+ 
+ #include <string.h>
+@@ -22,232 +22,17 @@
+ #include "X.h"
+ #include "Xmd.h"
+ #include "scrnintstr.h"
+-#include "regionstr.h"
+-#include "windowstr.h"
+-#include "pixmapstr.h"
+-#include "gcstruct.h"
+-#include "servermd.h"
+-#include "mi.h"
+-#include "cfb.h"
+ #include "../../amix.h"
+ #include "../rtg.h"
+ #include "zz9000.h"
+ 
+-/* ---------------------------------------------------------------------- */
+-/* Private helpers                                                         */
+-
+-#ifndef max
+-#define max(a,b) ((a) > (b) ? (a) : (b))
+-#endif
+-#ifndef min
+-#define min(a,b) ((a) < (b) ? (a) : (b))
+-#endif
+-
+-#define ZZ9000_STRIDE(pRTG)  ((pRTG)->pitch / 2)  /* pixels per scanline */
+-
+-/* ---------------------------------------------------------------------- */
+-/* Run helpers: 32-bit stores where both ends allow it.                     */
+-
+-/*
+-** A 32-bit store moves two pixels in one bus cycle where a 16-bit store moves
+-** one (Antti measured 0.41 against 0.79 us/pixel on the VA2000 over Zorro III).
+-** The high word is the left pixel (big-endian).  Only aligned longs are used:
+-** a misaligned 32-bit access to the card's space is split by the CPU in ways
+-** this driver does not want to depend on, so a copy whose two ends differ in
+-** alignment keeps the 16-bit loop.
+-*/
+-#define RUN_ODD(p)  (((unsigned long)(p)) & 2)
+-
+-/*
+-** Below this many pixels the alignment work costs more than the longs save:
+-** dots, 1x1 rectangles and short line spans (x11perf -dot/-rect1/-line10
+-** lost 10-17 % to the 32-bit path on the rig), so short runs keep the plain
+-** 16-bit loop.
+-*/
+-#define RUN_SHORT   4
+-
+-/* Fill w pixels with one colour. */
+-static void
+-fillRun(dst, pixel, w)
+-unsigned short *dst;
+-unsigned short  pixel;
+-int             w;
+-{
+-    unsigned long  two;
+-    unsigned long *l;
+-    int            n;
+-
+-    if (w < RUN_SHORT) {
+-        while (w-- > 0)
+-            *dst++ = pixel;
+-        return;
+-    }
+-    if (RUN_ODD(dst)) {
+-        *dst++ = pixel;
+-        w--;
+-    }
+-    two = ((unsigned long)pixel << 16) | pixel;
+-    l = (unsigned long *)dst;
+-    for (n = w >> 1; n > 0; n--)
+-        *l++ = two;
+-    if (w & 1)
+-        *(unsigned short *)l = pixel;
+-}
+-
+-/* Copy w pixels, left to right. */
+-static void
+-copyRun(dst, src, w)
+-unsigned short *dst;
+-unsigned short *src;
+-int             w;
+-{
+-    unsigned long *ld, *ls;
+-    int            n;
+-
+-    if (w < RUN_SHORT || RUN_ODD(dst) != RUN_ODD(src)) {
+-        while (w-- > 0)
+-            *dst++ = *src++;
+-        return;
+-    }
+-    if (RUN_ODD(dst)) {
+-        *dst++ = *src++;
+-        w--;
+-    }
+-    ld = (unsigned long *)dst;
+-    ls = (unsigned long *)src;
+-    for (n = w >> 1; n > 0; n--)
+-        *ld++ = *ls++;
+-    if (w & 1)
+-        *(unsigned short *)ld = *(unsigned short *)ls;
+-}
+-
+-/* Copy w pixels, right to left (an overlapping move to the right). */
+-static void
+-copyRunBack(dst, src, w)
+-unsigned short *dst;
+-unsigned short *src;
+-int             w;
+-{
+-    unsigned long *ld, *ls;
+-    int            n;
+-
+-    if (w <= 0)
+-        return;
+-    dst += w;                       /* one past the last pixel */
+-    src += w;
+-    if (w < RUN_SHORT || RUN_ODD(dst) != RUN_ODD(src)) {
+-        while (w-- > 0)
+-            *--dst = *--src;
+-        return;
+-    }
+-    if (RUN_ODD(dst)) {
+-        *--dst = *--src;
+-        w--;
+-    }
+-    ld = (unsigned long *)dst;
+-    ls = (unsigned long *)src;
+-    for (n = w >> 1; n > 0; n--)
+-        *--ld = *--ls;
+-    if (w & 1)
+-        *((unsigned short *)ld - 1) = *((unsigned short *)ls - 1);
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* CPU rectangle helpers                                                   */
+-
+-static void
+-cpuFill(pRTG, x1, y1, x2, y2, color)
+-rtgScreenPtr   pRTG;
+-unsigned short x1, y1, x2, y2, color;
+-{
+-    unsigned short *base;
+-    unsigned short *p;
+-    int stride;
+-    int x, y;
+-
+-    base = pRTG->fbBase;
+-    stride = ZZ9000_selected_mode->w;
+-
+-    for (y = y1; y <= y2; ++y) {
+-        p = base + ((unsigned long)y * stride) + x1;
+-        fillRun(p, color, x2 - x1 + 1);
+-    }
+-}
+-/*
+-** Pixel base and stride for a drawable (window -> VRAM; pixmap -> host mem).
+-*/
+-static unsigned short *
+-drawBase(pDraw, pRTG)
+-DrawablePtr  pDraw;
+-rtgScreenPtr pRTG;
+-{
+-    if (pDraw->type == DRAWABLE_WINDOW)
+-        return pRTG->fbBase;
+-    return (unsigned short *) ((PixmapPtr)pDraw)->devPrivate.ptr;
+-}
+-
+-static int
+-drawStride(pDraw)
+-DrawablePtr pDraw;
+-{
+-    if (pDraw->type == DRAWABLE_WINDOW)
+-        return ZZ9000_STRIDE(GetRTGScreen(pDraw->pScreen));
+-    return (int)((PixmapPtr)pDraw)->devKind / 2;
+-}
+-
+-/*
+-** cpuCopy - copy a screen rectangle in mapped framebuffer memory, rows and
+-** columns ordered so that an overlapping move reads every source pixel
+-** before it is overwritten.
+-*/
+-static void
+-cpuCopy(pRTG, srcx, srcy, w, h, dstx, dsty)
+-rtgScreenPtr    pRTG;
+-int             srcx, srcy, w, h, dstx, dsty;
+-{
+-    unsigned short *fbBase = pRTG->fbBase;
+-    int             stride = ZZ9000_STRIDE(pRTG);
+-    unsigned short *src;
+-    unsigned short *dst;
+-    int row, col;
+-    int row_start, row_end, row_step;
+-    int col_start, col_end, col_step;
+-
+-    if (w <= 0 || h <= 0)
+-        return;
+-
+-    if (dsty > srcy) {
+-        row_start = h - 1; row_end = -1; row_step = -1;
+-    } else {
+-        row_start = 0; row_end = h; row_step = 1;
+-    }
+-
+-    if (dsty == srcy && dstx > srcx) {
+-        col_start = w - 1; col_end = -1; col_step = -1;
+-    } else {
+-        col_start = 0; col_end = w; col_step = 1;
+-    }
+-
+-    for (row = row_start; row != row_end; row += row_step) {
+-        src = fbBase + ((unsigned long)(srcy + row) * stride) + srcx;
+-        dst = fbBase + ((unsigned long)(dsty + row) * stride) + dstx;
+-        if (col_step < 0)
+-            copyRunBack(dst, src, w);
+-        else
+-            copyRun(dst, src, w);
+-    }
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* The card's blitter                                                      */
+-
+ /*
+ ** -blitmin N: window fills (SolidRect GXcopy, PaintWindow) and window-to-
+ ** window copies (CopyArea GXcopy, CopyWindow) of N pixels or more go to the
+-** card's own blitter through the driver's ZZ9KIOC_BLITS; anything smaller,
+-** any other raster op and every pixmap stay on the CPU.  -blitmin 0 never
+-** blits.  The default, 1024, is MG10's: it keeps the 100x100 gains (rect100
+-** 585 -> 8140/s, scroll100 311 -> 2260) that 16384 gives up.
++** card's own blitter through the driver's ZZ9KIOC_BLITS (the layer,
++** rtgdraw.c, decides which; rtgBlitMin).  The card's default, 1024, is
++** MG10's: it keeps the 100x100 gains (rect100 585 -> 8140/s, scroll100 311
++** -> 2260) that 16384 gives up.
+ **
+ ** One record per operation: the driver splits every operation into bands
+ ** itself (its maxarea, 8192 px by default), so interrupts are taken between
+@@ -265,8 +50,6 @@
+ ** records not yet run on the CPU and turns blitting off for the life of
+ ** the server.  No record is ever drawn twice.
+ */
+-int zz9000BlitMin = 1024;
+-
+ #define BLITQ   64
+ 
+ static struct zz9k_blit blitQ[BLITQ];
+@@ -274,26 +57,17 @@
+ static rtgScreenPtr     blitRTG;
+ static int              blitSaid;       /* the server log has the first batch */
+ 
+-/*
+-** The common case -- no -blitmin, or a small area -- must cost no more than
+-** before the blitter existed (MG10: -rect1 lost 20 % to three extra calls
+-** per 1x1 fill), so the tests are macros and a flush of an empty queue is
+-** one compare.
+-*/
+-#define BLIT_WANT(w, h) (zz9000BlitMin > 0 && (long)(w) * (h) >= zz9000BlitMin)
+-#define BLIT_FLUSH()    do { if (blitN) blitFlush(); } while (0)
+-
+ /* Draw one queued record on the CPU. */
+ static void
+ blitCpu(b)
+ struct zz9k_blit *b;
+ {
+     if (b->op == ZZ9K_BLIT_FILL)
+-        cpuFill(blitRTG, b->x, b->y, b->x + b->width - 1,
+-                b->y + b->height - 1, (unsigned short) b->color);
++        rtgCpuFill(blitRTG, b->x, b->y, b->x + b->width, b->y + b->height,
++                   b->color);
+     else
+-        cpuCopy(blitRTG, b->src_x, b->src_y, b->width, b->height,
+-                b->x, b->y);
++        rtgCpuCopy(blitRTG, b->src_x, b->src_y, b->width, b->height,
++                   b->x, b->y);
+ }
+ 
+ static void
+@@ -326,14 +100,14 @@
+         /* ENXIO, or anything else (0 cannot happen: the first record of a
+          * call always runs): none of [i, n) ran */
+         ErrorF("zz9000: the driver refused the card blitter (errno %d); -blitmin %d off\n",
+-               r < 0 ? errno : 0, zz9000BlitMin);
+-        zz9000BlitMin = 0;
++               r < 0 ? errno : 0, rtgBlitMin);
++        rtgBlitMin = 0;
+         for (; i < n; i++)
+             blitCpu(&blitQ[i]);
+         return;
+     }
+     if (!blitSaid)
+-        ErrorF("zz9000: card blitter in use from %d pixels\n", zz9000BlitMin);
++        ErrorF("zz9000: card blitter in use from %d pixels\n", rtgBlitMin);
+     blitSaid = 1;
+ }
+ 
+@@ -348,7 +122,7 @@
+ 
+     if (blitN == BLITQ)
+         blitFlush();
+-    if (zz9000BlitMin <= 0)         /* that flush was refused */
++    if (rtgBlitMin <= 0)         /* that flush was refused */
+         return FALSE;
+     b = &blitQ[blitN++];
+     b->op     = op;
+@@ -364,270 +138,29 @@
+     return TRUE;
+ }
+ 
+-/*
+-** Queue one blitter operation when the area qualifies; FALSE = draw it
+-** yourself.  FALSE also when the flush that makes room is refused: that
+-** flush has drawn the earlier records on the CPU, and this operation was
+-** not queued.
+-*/
+-static int
+-blitQueue(pRTG, op, x, y, w, h, sx, sy, color)
+-rtgScreenPtr   pRTG;
+-int            op, x, y, w, h, sx, sy;
+-unsigned short color;
+-{
+-    if (zz9000BlitMin <= 0 || (long) w * h < zz9000BlitMin)
+-        return FALSE;
+-    return blitRecord(pRTG, op, x, y, w, h, sx, sy, color);
+-}
+-
+-/* Fill the inclusive screen box (x1,y1)-(x2,y2): the blitter or the CPU. */
+-static void
+-blitFill(pRTG, x1, y1, x2, y2, color)
+-rtgScreenPtr   pRTG;
+-unsigned short x1, y1, x2, y2, color;
+-{
+-    if (BLIT_WANT(x2 - x1 + 1, y2 - y1 + 1) &&
+-        blitQueue(pRTG, ZZ9K_BLIT_FILL, x1, y1, x2 - x1 + 1, y2 - y1 + 1,
+-                  0, 0, color))
+-        return;
+-    BLIT_FLUSH();
+-    cpuFill(pRTG, x1, y1, x2, y2, color);
+-}
+-
+-/* Copy a w x h screen box from (srcx,srcy) to (dstx,dsty): blitter or CPU. */
+-static void
+-copyVRAMBox(pRTG, srcx, srcy, w, h, dstx, dsty)
+-rtgScreenPtr pRTG;
+-int          srcx, srcy, w, h, dstx, dsty;
+-{
+-    if (w <= 0 || h <= 0)
+-        return;
+-    if (BLIT_WANT(w, h) &&
+-        blitQueue(pRTG, ZZ9K_BLIT_COPY, dstx, dsty, w, h, srcx, srcy, 0))
+-        return;
+-    BLIT_FLUSH();
+-    cpuCopy(pRTG, srcx, srcy, w, h, dstx, dsty);
+-}
+-
+-
+ /* ---------------------------------------------------------------------- */
+-/* ZZ9000PutImage                                                          */
+-
+-/*
+-** -move16 turns the move16 line burst on (68040/68060 only: a 68030 has no
+-** move16, so it is off by default).  Measured on the A3000 with
+-** the Z3660's 68060 (bench/vrambw.c, 2026-10-25): single long writes reach
+-** about 10.6 MB/s into VRAM and into RAM alike (the data cache writes
+-** through), move16 26 MB/s into VRAM.  move16 wants source and destination
+-** on 16-byte boundaries, so it only applies when both rows have the same
+-** phase; staging a misaligned row first costs as much as the plain copy.
+-*/
+-int zz9000Move16 = 0;	/* -move16: 68040/68060 only, a 68030 has no move16 */
++/* The card operations                                                     */
+ 
+-/*
+-** burstRun - copyRun for a host-memory source: the 16-byte-aligned middle
+-** moved by move16 when src and dst share their phase in a line, misaligned
+-** long reads when they differ by two bytes.  move16 (a0)+,(a1)+ is spelled
+-** as words: the AMIX assembler knows no 68040 mnemonics.
+-*/
+-static void
+-burstRun(dst, src, w)
+-unsigned short *dst;
+-unsigned short *src;
+-int             w;
++/* fillBox: queue a fill of [x1,x2) x [y1,y2); FALSE = not taken */
++Bool
++zz9000FillBox(rtgScreenPtr pRTG, int x1, int y1, int x2, int y2,
++              unsigned long pixel)
+ {
+-    register unsigned short *s asm("a0");
+-    register unsigned short *d asm("a1");
+-    int head, k;
+-
+-    if (w >= RUN_SHORT && RUN_ODD(dst) != RUN_ODD(src))
+-    {
+-        /*
+-        ** Ends two bytes apart (an odd window x): copyRun would move one
+-        ** pixel per store, 59 ms for 512x320 where longs take 34.  The
+-        ** source of a PutImage is host memory, never the card, so its longs
+-        ** may be read misaligned (the 060 splits them, mostly from the
+-        ** cache); every store to the drawable stays an aligned long.
+-        */
+-        unsigned long *ld;
+-        int n;
+-
+-        if (RUN_ODD(dst))
+-        {
+-            *dst++ = *src++;
+-            w--;
+-        }
+-        ld = (unsigned long *) dst;
+-        for (n = w >> 1; n > 0; n--, src += 2)
+-            *ld++ = *(unsigned long *) src;
+-        if (w & 1)
+-            *(unsigned short *) ld = *src;
+-        return;
+-    }
+-    if (!zz9000Move16 || w < 16 ||
+-        (((unsigned long) dst ^ (unsigned long) src) & 15) != 0)
+-    {
+-        copyRun(dst, src, w);
+-        return;
+-    }
+-    head = ((16 - ((unsigned long) dst & 15)) & 15) >> 1;
+-    if (head)
+-        copyRun(dst, src, head);
+-    s = src + head;
+-    d = dst + head;
+-    w -= head;
+-    for (k = w >> 3; k > 0; k--)
+-        __asm__ volatile (".word 0xf620,0x9000"     /* move16 (a0)+,(a1)+ */
+-                          : "=a" (s), "=a" (d) : "0" (s), "1" (d) : "memory");
+-    if (w & 7)
+-        copyRun(d, s, w & 7);
++    return blitRecord(pRTG, ZZ9K_BLIT_FILL, x1, y1, x2 - x1, y2 - y1, 0, 0,
++                      (unsigned short) pixel);
+ }
+ 
+-/*
+-** ZZ9000PutImage - a 16-bit ZPixmap into a window under GXcopy, all planes
+-** (every XPutImage of a picture), straight from the request into the
+-** framebuffer, one clip-box intersection at a time, with 32-bit stores and
+-** optionally move16.  zz9000screen.c installs it only for such GCs;
+-** anything else that reaches it (bitmaps, XYPixmap) goes to cfb's PutImage.
+-*/
+-void
+-ZZ9000PutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-int         depth, x, y, w, h, leftPad, format;
+-char       *pImage;
++/* copyBox: queue a copy of the w x h box at (sx,sy) to (dx,dy) */
++Bool
++zz9000CopyBox(rtgScreenPtr pRTG, int sx, int sy, int w, int h, int dx, int dy)
+ {
+-    rtgScreenPtr    pRTG;
+-    unsigned short *base;
+-    int             stride, srcPix, nbox, x1, x2, y1, y2, row;
+-    RegionPtr       clip;
+-    BoxPtr          pbox;
+-    unsigned short *src;
+-
+-    if (format != ZPixmap || depth != ZZ9000_DEPTH || pGC->alu != GXcopy ||
+-        (pGC->planemask & 0xffff) != 0xffff || w <= 0 || h <= 0)
+-    {
+-        cfbPutImage(pDraw, pGC, depth, x, y, w, h, leftPad, format, pImage);
+-        return;
+-    }
+-    pRTG   = GetRTGScreen(pDraw->pScreen);
+-    base   = drawBase(pDraw, pRTG);
+-    stride = drawStride(pDraw);
+-    clip   = cfbGetCompositeClip(pGC);
+-    srcPix = PixmapBytePad(w, depth) / 2;
+-    if (pGC->miTranslate)               /* the composite clip's frame */
+-    {
+-        x += pDraw->x;
+-        y += pDraw->y;
+-    }
+-    if (pDraw->type == DRAWABLE_WINDOW)
+-        BLIT_FLUSH();                   /* no queued blit may land on top */
+-
+-    nbox = REGION_NUM_RECTS(clip);
+-    pbox = REGION_RECTS(clip);
+-    for (; nbox--; pbox++)
+-    {
+-        x1 = max(x, pbox->x1);
+-        x2 = min(x + w, pbox->x2);
+-        y1 = max(y, pbox->y1);
+-        y2 = min(y + h, pbox->y2);
+-        if (x1 >= x2 || y1 >= y2)
+-            continue;
+-        src = (unsigned short *) pImage + (long)(y1 - y) * srcPix + (x1 - x);
+-        for (row = y1; row < y2; row++, src += srcPix)
+-            burstRun(base + (long) row * stride + x1, src, x2 - x1);
+-    }
+-}
+-
+-
+-/*
+-** ZZ9000CopyBoxes - copy the boxes of a YX-banded region, each from (box + dx,dy),
+-** in an order that never overwrites a source pixel before it is read: bands
+-** bottom-up when the copy moves down (dy < 0: the source lies above), boxes
+-** within a band right-to-left when it moves right (dx < 0) -- as cfb does and
+-** as ZZ9000CopyArea walks its bands.  copyVRAMBox orders rows and columns
+-** inside one box.  (CopyWindow used to choose the order from the sign of
+-** old - new the wrong way round, which smeared a partly covered window's
+-** contents into itself on every move.)
+-*/
+-void
+-ZZ9000CopyBoxes(pRTG, pbox, nbox, dx, dy)
+-rtgScreenPtr pRTG;
+-BoxPtr       pbox;
+-int          nbox, dx, dy;
+-{
+-    BoxPtr pboxEnd = pbox + nbox, pboxBand, pboxNext, first, last, b;
+-    int    bandsUp = (dy < 0), boxesLeft = (dx < 0);
+-
+-    pboxBand = bandsUp ? pboxEnd : pbox;
+-    while (bandsUp ? (pboxBand > pbox) : (pboxBand < pboxEnd))
+-    {
+-        if (bandsUp)
+-        {
+-            last  = pboxBand - 1;
+-            first = last;
+-            while (first > pbox && (first - 1)->y1 == last->y1)
+-                first--;
+-            pboxNext = first;
+-        }
+-        else
+-        {
+-            first = pboxBand;
+-            last  = first;
+-            while (last + 1 < pboxEnd && (last + 1)->y1 == first->y1)
+-                last++;
+-            pboxNext = last + 1;
+-        }
+-        for (b = boxesLeft ? last : first;
+-             boxesLeft ? (b >= first) : (b <= last);
+-             b += boxesLeft ? -1 : 1)
+-            copyVRAMBox(pRTG, b->x1 + dx, b->y1 + dy,
+-                        b->x2 - b->x1, b->y2 - b->y1, b->x1, b->y1);
+-        pboxBand = pboxNext;
+-    }
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* Entry points for zz9000screen.c                                         */
+-
+-/* Fill the screen box [x1,x2) x [y1,y2): the blitter from -blitmin pixels,
+-** else the CPU (queued records are flushed first). */
+-void
+-ZZ9000FillBox(pRTG, x1, y1, x2, y2, color)
+-rtgScreenPtr   pRTG;
+-int            x1, y1, x2, y2;
+-unsigned short color;
+-{
+-    blitFill(pRTG, x1, y1, x2 - 1, y2 - 1, color);
++    return blitRecord(pRTG, ZZ9K_BLIT_COPY, dx, dy, w, h, sx, sy, 0);
+ }
+ 
+-/* Send what is queued; the card has finished when this returns. */
++/* flush: send what is queued; the card has finished when BLITS returns */
+ void
+-ZZ9000BlitFlush()
++zz9000Flush(rtgScreenPtr pRTG)
+ {
+-    BLIT_FLUSH();
+-}
+-
+-/*
+-** The doBitBlt of cfb's BitBlt for a window-to-window CopyArea: every box
+-** of prgnDst from its point in pptSrc, which for a copy within the screen is
+-** the box moved by one offset.  GXcopy, all planes (zz9000screen.c checks).
+-*/
+-void
+-ZZ9000DoBitbltBlit(pSrc, pDst, alu, prgnDst, pptSrc, planemask)
+-DrawablePtr   pSrc, pDst;
+-int           alu;
+-RegionPtr     prgnDst;
+-DDXPointPtr   pptSrc;
+-unsigned long planemask;
+-{
+-    BoxPtr pbox = REGION_RECTS(prgnDst);
+-    int    nbox = REGION_NUM_RECTS(prgnDst);
+-
+-    if (nbox == 0)
+-        return;
+-    ZZ9000CopyBoxes(GetRTGScreen(pDst->pScreen), pbox, nbox,
+-                    pptSrc->x - pbox->x1, pptSrc->y - pbox->y1);
+-    BLIT_FLUSH();
++    if (blitN)
++        blitFlush();
+ }
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000.h
+@@ -57,8 +57,6 @@
+     unsigned long     n;
+ };
+ 
+-extern int zz9000BlitMin;       /* -blitmin: pixels; 0 = never */
+-
+ struct _ZZ9000ModeRec {
+     char *name;
+     int   w;
+@@ -68,8 +66,6 @@
+ typedef struct _ZZ9000ModeRec ZZ9000ModeRec;
+ typedef struct _ZZ9000ModeRec *ZZ9000ModePtr;
+ 
+-extern ZZ9000ModePtr ZZ9000_selected_mode;
+-
+ #define ZZ9000_RED_MASK     0xF800
+ #define ZZ9000_GREEN_MASK   0x07E0
+ #define ZZ9000_BLUE_MASK    0x001F
+@@ -166,19 +162,14 @@
+ #define GetZZ9000Screen(rtgp) \
+     ((ZZ9000ScreenPtr)(rtgp)->cardPrivate)
+ 
+-Bool    ZZ9000Probe();
+-Bool    ZZ9000InitHW();
+-void    ZZ9000CloseHW();
+-Bool    ZZ9000SetMode();
+-
+-/* zz9000screen.c: the screen on cfb16 */
+-Bool    ZZ9000ScreenInit();
+-
+-/* zz9000draw.c: the blitter and the CPU helpers */
+-void    ZZ9000PutImage();
+-void    ZZ9000FillBox();
+-void    ZZ9000BlitFlush();
+-void    ZZ9000CopyBoxes();
+-void    ZZ9000DoBitbltBlit();
++/* zz9000hw.c: the card record (rtg.h), in the card table */
++extern rtgCardOps zz9000CardOps;
++
++/* zz9000draw.c: the card's blitter, its fillBox, copyBox and flush */
++Bool    zz9000FillBox(rtgScreenPtr pRTG, int x1, int y1, int x2, int y2,
++                      unsigned long pixel);
++Bool    zz9000CopyBox(rtgScreenPtr pRTG, int sx, int sy, int w, int h,
++                      int dx, int dy);
++void    zz9000Flush(rtgScreenPtr pRTG);
+ 
+ #endif /* ZZ9000_H */
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
+@@ -1,5 +1,5 @@
+ /*
+- * zz9000hw.c -- ZZ9000/Z3660 hardware: mode, framebuffer map, monitor.
++ * zz9000hw.c -- ZZ9000/Z3660 hardware: mode, framebuffer map; the card record.
+  *
+  * Based on Antti Sokero's xrtg-amix (its rtg/ layer and VA2000 driver),
+  * MIT, Copyright (c) 2025-2026 Antti Sokero.  The ZZ9000 version: Ignacio
+@@ -10,7 +10,9 @@
+  */
+ 
+ /*
+-** zz9000hw.c - MNT ZZ9000 hardware init/close for xamix-rtg.
++** zz9000hw.c - MNT ZZ9000 (and the Z3660 RTG, which speaks its driver's
++** interface) hardware init/close for xamix-rtg, and zz9000CardOps, the card
++** record the layer drives it through (rtg.h).
+ */
+ 
+ #include <sys/types.h>
+@@ -34,11 +36,10 @@
+     { (char *)0 }
+ };
+ 
+-ZZ9000ModePtr ZZ9000_selected_mode = &zz9000_modes[5];
++static ZZ9000ModePtr ZZ9000_selected_mode = &zz9000_modes[5];
+ 
+-Bool
+-ZZ9000SetMode(name)
+-char *name;
++static Bool
++ZZ9000SetMode(char *name)
+ {
+     ZZ9000ModePtr m;
+ 
+@@ -51,8 +52,15 @@
+     return FALSE;
+ }
+ 
+-Bool
+-ZZ9000Probe()
++static void
++ZZ9000ModeSize(int *w, int *h)
++{
++    *w = ZZ9000_selected_mode->w;
++    *h = ZZ9000_selected_mode->h;
++}
++
++static Bool
++ZZ9000Probe(void)
+ {
+     int fd;
+ 
+@@ -67,9 +75,8 @@
+     return TRUE;
+ }
+ 
+-Bool
+-ZZ9000InitHW(pRTG)
+-rtgScreenPtr pRTG;
++static Bool
++ZZ9000InitHW(rtgScreenPtr pRTG)
+ {
+     ZZ9000ScreenPtr pZZ;
+     struct zz9k_mode mode;
+@@ -203,9 +210,8 @@
+     return TRUE;
+ }
+ 
+-void
+-ZZ9000CloseHW(pRTG)
+-rtgScreenPtr pRTG;
++static void
++ZZ9000CloseHW(rtgScreenPtr pRTG)
+ {
+     ZZ9000ScreenPtr pZZ = GetZZ9000Screen(pRTG);
+ 
+@@ -238,3 +244,31 @@
+     pRTG->frameBase = (pointer)NULL;
+     pRTG->fbBase = (unsigned short *)NULL;
+ }
++
++/*
++** The card record.  The monitor switch is the layer's int ioctl
++** (rtgMonitorSwitchInt): the zz9000 driver reads an int, which is what the
++** server has always sent it.
++*/
++rtgCardOps zz9000CardOps = {
++    RTG_CARD_VERSION,
++    "zz9000",
++    ZZ9000_DEV,
++    "640x480 800x600 1024x768 1280x720 1280x1024 1920x800 1920x1080 1280x800",
++    {
++        ZZ9000_DEPTH, ZZ9000_BPP,
++        ZZ9000_RED_MASK, ZZ9000_GREEN_MASK, ZZ9000_BLUE_MASK,
++        6,                      /* bitsPerRGB */
++        1024,                   /* -blitmin's default: MG10 (zz9000draw.c) */
++        RTG_CAP_BLITTER,
++    },
++    ZZ9000Probe,
++    ZZ9000SetMode,
++    ZZ9000ModeSize,
++    ZZ9000InitHW,
++    ZZ9000CloseHW,
++    zz9000FillBox,
++    zz9000CopyBox,
++    zz9000Flush,
++    rtgMonitorSwitchInt,
++};
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000screen.c
++++ /dev/null
+@@ -1,451 +0,0 @@
+-/*
+- * zz9000screen.c -- the ZZ9000/Z3660 screen on X's cfb16 code.
+- *
+- * Written for the x11r63 package: MIT, Copyright (c) 2026 Jussi Alanärä.
+- * It replaces the screen code of Ignacio Soriano's ZZ9000 driver (MIT,
+- * Copyright (c) 2026 isoriano1968), which was based on Antti Sokero's
+- * xrtg-amix (its rtg/ layer and VA2000 driver; MIT, Copyright (c) 2025-2026
+- * Antti Sokero), and keeps a few of its lines.  The notices and licence
+- * texts are in the package's doc/x11r63/LICENSE.ddx.
+- */
+-
+-/*
+-** zz9000screen.c -- the ZZ9000/Z3660 RTG screen: X's own 16-bit framebuffer
+-** code (cfb16) on the card's framebuffer, with the card's blitter for large
+-** copies and fills.
+-**
+-** cfbScreenInit (cfb16: PSZ 16) owns the screen: visuals, windows, pixmaps
+-** (mfb for depth 1), GCs and their validation, every drawing operation,
+-** colormaps and text.  Four places hand work to the blitter instead
+-** (zz9000draw.c does the queueing):
+-**   - CopyArea, window to window, GXcopy, all planes: cfb's own BitBlt
+-**     (clipping, exposures) with a doBitBlt that sends the boxes to the
+-**     blitter in a safe order;
+-**   - CopyWindow, the same box walk;
+-**   - PolyFillRect, window, FillSolid, GXcopy, all planes;
+-**   - PaintWindowBackground and PaintWindowBorder with a solid pixel.
+-** Each of them flushes the blitter queue before it returns, so the queue is
+-** empty whenever cfb's CPU code touches the framebuffer (BLITS returns when
+-** the card has finished).  PutImage of a 16-bit picture into a window under
+-** GXcopy uses the direct path (ZZ9000PutImage); everything else is cfb's.
+-**
+-** MIT licence: holder and text in /opt/amix/X11R6/doc/x11r63/LICENSE.
+-*/
+-
+-#include "X.h"
+-#include "Xmd.h"
+-#include "Xproto.h"
+-#include "scrnintstr.h"
+-#include "pixmapstr.h"
+-#include "windowstr.h"
+-#include "gcstruct.h"
+-#include "regionstr.h"
+-#include "servermd.h"
+-#include "colormapst.h"
+-#include "resource.h"
+-#include "mi.h"
+-#include "cfb.h"
+-#include "../../amix.h"
+-#include "../rtg.h"
+-#include "zz9000.h"
+-
+-extern RegionPtr cfbBitBlt();
+-
+-/* The GC wrapper: cfb's funcs and ops, and our copy of the ops when the
+-** GC's state lets the blitter or the direct PutImage take some of them. */
+-typedef struct {
+-    GCFuncs *funcs;         /* cfb's GC funcs */
+-    GCOps   *cfbOps;        /* cfb's ops, as its last ValidateGC chose them */
+-    GCOps    ops;           /* cfb's ops with ours in; pGC->ops when wrapped */
+-    int      wrapped;       /* pGC->ops is &ops */
+-} ZZGCPrivRec, *ZZGCPrivPtr;
+-
+-static int           zzGCPrivateIndex = -1;
+-static unsigned long zzGeneration = 0;
+-
+-/* cfb's screen functions we wrap (one RTG screen) */
+-static Bool (*zzCfbCreateGC)();
+-static void (*zzCfbCopyWindow)();
+-static void (*zzCfbPaintWindowBackground)();
+-static void (*zzCfbPaintWindowBorder)();
+-
+-#define ZZGCPriv(pGC) ((ZZGCPrivPtr) (pGC)->devPrivates[zzGCPrivateIndex].ptr)
+-#define ALLPLANES(pm) (((pm) & 0xffff) == 0xffff)
+-
+-/* ---------------------------------------------------------------------- */
+-/* Operations                                                              */
+-
+-/* CopyArea: window to window goes through cfb's BitBlt with the blitter. */
+-static RegionPtr
+-zzCopyArea(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty)
+-DrawablePtr pSrc, pDst;
+-GCPtr       pGC;
+-int         srcx, srcy, w, h, dstx, dsty;
+-{
+-    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+-
+-    if (pSrc->type == DRAWABLE_WINDOW && pDst->type == DRAWABLE_WINDOW &&
+-        zz9000BlitMin > 0 && (long) w * h >= zz9000BlitMin)
+-        return cfbBitBlt(pSrc, pDst, pGC, srcx, srcy, w, h, dstx, dsty,
+-                         ZZ9000DoBitbltBlit, 0L);
+-    return (*pPriv->cfbOps->CopyArea)(pSrc, pDst, pGC, srcx, srcy, w, h,
+-                                      dstx, dsty);
+-}
+-
+-/* PolyFillRect, solid: the clipped boxes to the blitter (or the CPU). */
+-static void
+-zzPolyFillRect(pDraw, pGC, nrect, prect)
+-DrawablePtr pDraw;
+-GCPtr       pGC;
+-int         nrect;
+-xRectangle *prect;
+-{
+-    ZZGCPrivPtr  pPriv = ZZGCPriv(pGC);
+-    rtgScreenPtr pRTG = GetRTGScreen(pDraw->pScreen);
+-    RegionPtr    clip = cfbGetCompositeClip(pGC);
+-    BoxPtr       pextent, pbox;
+-    int          i, n, any, x1, y1, x2, y2, bx1, by1, bx2, by2;
+-
+-    /* nothing large enough for the blitter: cfb's own fill is the fastest */
+-    any = 0;
+-    if (zz9000BlitMin > 0)
+-        for (i = 0; i < nrect && !any; i++)
+-            if ((long) prect[i].width * prect[i].height >= zz9000BlitMin)
+-                any = 1;
+-    if (!any) {
+-        (*pPriv->cfbOps->PolyFillRect)(pDraw, pGC, nrect, prect);
+-        return;
+-    }
+-
+-    pextent = REGION_EXTENTS(pDraw->pScreen, clip);
+-    for (; nrect > 0; nrect--, prect++) {
+-        x1 = prect->x + pDraw->x;
+-        y1 = prect->y + pDraw->y;
+-        x2 = x1 + (int) prect->width;
+-        y2 = y1 + (int) prect->height;
+-        if (x1 < pextent->x1) x1 = pextent->x1;
+-        if (y1 < pextent->y1) y1 = pextent->y1;
+-        if (x2 > pextent->x2) x2 = pextent->x2;
+-        if (y2 > pextent->y2) y2 = pextent->y2;
+-        if (x1 >= x2 || y1 >= y2)
+-            continue;
+-        n = REGION_NUM_RECTS(clip);
+-        pbox = REGION_RECTS(clip);
+-        for (; n > 0; n--, pbox++) {
+-            bx1 = x1 > pbox->x1 ? x1 : pbox->x1;
+-            by1 = y1 > pbox->y1 ? y1 : pbox->y1;
+-            bx2 = x2 < pbox->x2 ? x2 : pbox->x2;
+-            by2 = y2 < pbox->y2 ? y2 : pbox->y2;
+-            if (bx1 < bx2 && by1 < by2)
+-                ZZ9000FillBox(pRTG, bx1, by1, bx2, by2,
+-                              (unsigned short) pGC->fgPixel);
+-        }
+-    }
+-    ZZ9000BlitFlush();
+-}
+-
+-/* CopyWindow: as cfbCopyWindow, with the blitter. */
+-static void
+-zzCopyWindow(pWin, ptOldOrg, prgnSrc)
+-WindowPtr   pWin;
+-DDXPointRec ptOldOrg;
+-RegionPtr   prgnSrc;
+-{
+-    ScreenPtr pScreen = pWin->drawable.pScreen;
+-    RegionRec rgnDst;
+-    int       dx, dy;
+-
+-    if (zz9000BlitMin <= 0) {
+-        (*zzCfbCopyWindow)(pWin, ptOldOrg, prgnSrc);
+-        return;
+-    }
+-    REGION_INIT(pScreen, &rgnDst, NullBox, 0);
+-    dx = ptOldOrg.x - pWin->drawable.x;
+-    dy = ptOldOrg.y - pWin->drawable.y;
+-    REGION_TRANSLATE(pScreen, prgnSrc, -dx, -dy);
+-    REGION_INTERSECT(pScreen, &rgnDst, &pWin->borderClip, prgnSrc);
+-    ZZ9000CopyBoxes(GetRTGScreen(pScreen), REGION_RECTS(&rgnDst),
+-                    REGION_NUM_RECTS(&rgnDst), dx, dy);
+-    ZZ9000BlitFlush();
+-    REGION_UNINIT(pScreen, &rgnDst);
+-}
+-
+-/* PaintWindow: a solid background or border to the blitter, else cfb's. */
+-static void
+-zzPaintWindow(pWin, pRegion, what)
+-WindowPtr pWin;
+-RegionPtr pRegion;
+-int       what;
+-{
+-    rtgScreenPtr  pRTG = GetRTGScreen(pWin->drawable.pScreen);
+-    unsigned long pixel;
+-    BoxPtr        pbox;
+-    int           n;
+-
+-    if (what == PW_BACKGROUND) {
+-        if (pWin->backgroundState != BackgroundPixel) {
+-            (*zzCfbPaintWindowBackground)(pWin, pRegion, what);
+-            return;
+-        }
+-        pixel = pWin->background.pixel;
+-    } else {
+-        if (!pWin->borderIsPixel) {
+-            (*zzCfbPaintWindowBorder)(pWin, pRegion, what);
+-            return;
+-        }
+-        pixel = pWin->border.pixel;
+-    }
+-    n = REGION_NUM_RECTS(pRegion);
+-    pbox = REGION_RECTS(pRegion);
+-    for (; n > 0; n--, pbox++)
+-        ZZ9000FillBox(pRTG, pbox->x1, pbox->y1, pbox->x2, pbox->y2,
+-                      (unsigned short) pixel);
+-    ZZ9000BlitFlush();
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* The GC wrapper                                                          */
+-
+-static void zzValidateGC(), zzChangeGC(), zzCopyGC(), zzDestroyGC();
+-static void zzChangeClip(), zzDestroyClip(), zzCopyClip();
+-
+-static GCFuncs zzGCFuncs = {
+-    zzValidateGC, zzChangeGC, zzCopyGC, zzDestroyGC,
+-    zzChangeClip, zzDestroyClip, zzCopyClip,
+-};
+-
+-/* back to cfb's funcs and ops, before calling cfb */
+-static void
+-zzUnwrap(pGC)
+-GCPtr pGC;
+-{
+-    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+-
+-    pGC->funcs = pPriv->funcs;
+-    if (pPriv->wrapped)
+-        pGC->ops = pPriv->cfbOps;
+-    pPriv->wrapped = FALSE;
+-}
+-
+-/*
+-** Ours over cfb's: whatever cfb chose, plus our ops where the state allows
+-** (window, GXcopy, all planes; a solid fill for PolyFillRect).  Only a
+-** ValidateGC knows the drawable; the other funcs leave cfb's ops in place
+-** until the next ValidateGC, which DIX runs before any drawing after them.
+-*/
+-static void
+-zzWrap(pGC, onWindow)
+-GCPtr pGC;
+-int   onWindow;
+-{
+-    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+-
+-    pPriv->funcs = pGC->funcs;
+-    pGC->funcs = &zzGCFuncs;
+-    pPriv->cfbOps = pGC->ops;
+-    if (!onWindow || pGC->alu != GXcopy || !ALLPLANES(pGC->planemask))
+-        return;
+-    pPriv->ops = *pGC->ops;
+-    pPriv->ops.CopyArea = zzCopyArea;
+-    pPriv->ops.PutImage = ZZ9000PutImage;
+-    if (pGC->fillStyle == FillSolid)
+-        pPriv->ops.PolyFillRect = zzPolyFillRect;
+-    pGC->ops = &pPriv->ops;
+-    pPriv->wrapped = TRUE;
+-}
+-
+-static void
+-zzValidateGC(pGC, changes, pDraw)
+-GCPtr         pGC;
+-unsigned long changes;
+-DrawablePtr   pDraw;
+-{
+-    zzUnwrap(pGC);
+-    (*pGC->funcs->ValidateGC)(pGC, changes, pDraw);
+-    zzWrap(pGC, pDraw->type == DRAWABLE_WINDOW);
+-}
+-
+-static void
+-zzChangeGC(pGC, mask)
+-GCPtr         pGC;
+-unsigned long mask;
+-{
+-    zzUnwrap(pGC);
+-    (*pGC->funcs->ChangeGC)(pGC, mask);
+-    zzWrap(pGC, FALSE);
+-}
+-
+-static void
+-zzCopyGC(pGCSrc, mask, pGCDst)
+-GCPtr         pGCSrc, pGCDst;
+-unsigned long mask;
+-{
+-    zzUnwrap(pGCDst);
+-    (*pGCDst->funcs->CopyGC)(pGCSrc, mask, pGCDst);
+-    zzWrap(pGCDst, FALSE);
+-}
+-
+-static void
+-zzDestroyGC(pGC)
+-GCPtr pGC;
+-{
+-    zzUnwrap(pGC);
+-    (*pGC->funcs->DestroyGC)(pGC);
+-}
+-
+-static void
+-zzChangeClip(pGC, type, pvalue, nrects)
+-GCPtr   pGC;
+-int     type, nrects;
+-pointer pvalue;
+-{
+-    zzUnwrap(pGC);
+-    (*pGC->funcs->ChangeClip)(pGC, type, pvalue, nrects);
+-    zzWrap(pGC, FALSE);
+-}
+-
+-static void
+-zzDestroyClip(pGC)
+-GCPtr pGC;
+-{
+-    zzUnwrap(pGC);
+-    (*pGC->funcs->DestroyClip)(pGC);
+-    zzWrap(pGC, FALSE);
+-}
+-
+-static void
+-zzCopyClip(pGCDst, pGCSrc)
+-GCPtr pGCDst, pGCSrc;
+-{
+-    zzUnwrap(pGCDst);
+-    (*pGCDst->funcs->CopyClip)(pGCDst, pGCSrc);
+-    zzWrap(pGCDst, FALSE);
+-}
+-
+-static Bool
+-zzCreateGC(pGC)
+-GCPtr pGC;
+-{
+-    ZZGCPrivPtr pPriv = ZZGCPriv(pGC);
+-
+-    if (!(*zzCfbCreateGC)(pGC))
+-        return FALSE;
+-    pPriv->wrapped = FALSE;
+-    zzWrap(pGC, FALSE);
+-    return TRUE;
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* Colormaps                                                               */
+-
+-/*
+-** TrueColor has no colour table to load, but one map is always the
+-** installed one and clients are told when it changes.  zzInstalledMap is
+-** cleared at every screen init, so a reset never leaves it pointing at a
+-** freed map.
+-*/
+-static ColormapPtr zzInstalledMap = (ColormapPtr) NULL;
+-
+-static int
+-zzListInstalledColormaps(pScreen, pmaps)
+-ScreenPtr pScreen;
+-Colormap *pmaps;
+-{
+-    if (!zzInstalledMap)
+-        return 0;
+-    *pmaps = zzInstalledMap->mid;
+-    return 1;
+-}
+-
+-static void
+-zzInstallColormap(pmap)
+-ColormapPtr pmap;
+-{
+-    ColormapPtr old = zzInstalledMap;
+-
+-    if (pmap == old)
+-        return;
+-    if (old)
+-        WalkTree(pmap->pScreen, TellLostMap, (pointer) &old->mid);
+-    zzInstalledMap = pmap;
+-    WalkTree(pmap->pScreen, TellGainedMap, (pointer) &pmap->mid);
+-}
+-
+-static void
+-zzUninstallColormap(pmap)
+-ColormapPtr pmap;
+-{
+-    ColormapPtr def;
+-
+-    if (pmap != zzInstalledMap || pmap->mid == pmap->pScreen->defColormap)
+-        return;
+-    def = (ColormapPtr) LookupIDByType(pmap->pScreen->defColormap, RT_COLORMAP);
+-    if (def)
+-        (*pmap->pScreen->InstallColormap)(def);
+-}
+-
+-/* ---------------------------------------------------------------------- */
+-/* Screen                                                                  */
+-
+-/*
+-** ZZ9000ScreenInit - cfb16 on the mapped framebuffer, the visual made the
+-** card's RGB565, and the blitter's wrappers in.  The caller (rtgInit.c) adds
+-** the cursor, input, SaveScreen and CloseScreen, and the default colormap.
+-*/
+-Bool
+-ZZ9000ScreenInit(pScreen, pRTG, dpix, dpiy)
+-ScreenPtr    pScreen;
+-rtgScreenPtr pRTG;
+-int          dpix, dpiy;
+-{
+-    VisualPtr v;
+-    int       i;
+-
+-    if (zzGeneration != serverGeneration) {
+-        zzGCPrivateIndex = AllocateGCPrivateIndex();
+-        if (zzGCPrivateIndex < 0)
+-            return FALSE;
+-        zzGeneration = serverGeneration;
+-    }
+-
+-    /* the card has no colour table at 16 bits: TrueColor only */
+-    if (!cfbSetVisualTypes(ZZ9000_DEPTH, 1 << TrueColor, 6))
+-        return FALSE;
+-    if (!cfbScreenInit(pScreen, (pointer) pRTG->fbBase, pRTG->width,
+-                       pRTG->height, dpix, dpiy, pRTG->pitch / 2))
+-        return FALSE;
+-
+-    /* cfb's depth-16 TrueColor is 6-5-5 red-low; the card is RGB565 */
+-    for (i = 0, v = pScreen->visuals; i < pScreen->numVisuals; i++, v++) {
+-        if (v->class != TrueColor || v->nplanes != ZZ9000_DEPTH)
+-            continue;
+-        v->redMask         = ZZ9000_RED_MASK;
+-        v->greenMask       = ZZ9000_GREEN_MASK;
+-        v->blueMask        = ZZ9000_BLUE_MASK;
+-        v->offsetRed       = ZZ9000_RED_SHIFT;
+-        v->offsetGreen     = ZZ9000_GREEN_SHIFT;
+-        v->offsetBlue      = ZZ9000_BLUE_SHIFT;
+-        v->bitsPerRGBValue = 6;
+-        v->ColormapEntries = 64;
+-    }
+-
+-    /* cfb sets the colormap hooks only when built STATIC_COLOR, which it
+-     * is not here: the DDX sets them.  TrueColor: no StoreColors */
+-    zzInstalledMap = (ColormapPtr) NULL;
+-    pScreen->InstallColormap        = zzInstallColormap;
+-    pScreen->UninstallColormap      = zzUninstallColormap;
+-    pScreen->ListInstalledColormaps = zzListInstalledColormaps;
+-    pScreen->StoreColors            = (void (*)()) NoopDDA;
+-
+-    if (!AllocateGCPrivate(pScreen, zzGCPrivateIndex, sizeof(ZZGCPrivRec)))
+-        return FALSE;
+-    zzCfbCreateGC = pScreen->CreateGC;
+-    pScreen->CreateGC = zzCreateGC;
+-    zzCfbCopyWindow = pScreen->CopyWindow;
+-    pScreen->CopyWindow = zzCopyWindow;
+-    zzCfbPaintWindowBackground = pScreen->PaintWindowBackground;
+-    pScreen->PaintWindowBackground = zzPaintWindow;
+-    zzCfbPaintWindowBorder = pScreen->PaintWindowBorder;
+-    pScreen->PaintWindowBorder = zzPaintWindow;
+-    return TRUE;
+-}
+--- a/programs/Xserver/Imakefile
++++ b/programs/Xserver/Imakefile
+@@ -1044,9 +1044,11 @@
+ 
+ #if XAmixServer
+ XCOMM
+-XCOMM Xzz9000: the Amiga DDX (hw/amix) on the ZZ9000/Z3660 RTG framebuffer, with
+-XCOMM mfb, cfb and cfb16 (the dirs SUBDIRS builds).  The print server's DIX stubs come
+-XCOMM with CFB16Libs.
++XCOMM The Amiga server, under one name (amix.cf's, which the package's host.def
++XCOMM sets; Xzz9000 and X link to it): the Amiga DDX (hw/amix) on an RTG card's
++XCOMM framebuffer (hw/amix/rtg and its card drivers, the ZZ9000/Z3660 now), with
++XCOMM mfb, cfb and cfb16 (the dirs SUBDIRS builds).  The print server's DIX stubs
++XCOMM come with CFB16Libs.
+ XCOMM
+ MFBDIR = mfb
+ CFB8DIR = cfb
+@@ -1056,9 +1058,9 @@
+ AMIXOBJS = hw/amix/amixInit.o
+ AMIXLIBS = hw/amix/LibraryTargetName(amix) hw/amix/rtg/LibraryTargetName(rtg) \
+ 	   hw/amix/rtg/zz9000/LibraryTargetName(zz9000) CFB16Libs
+-ServerTarget(Xzz9000,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
++ServerTarget(AmixServerName,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
+ #ifndef ServerToInstall
+-#define ServerToInstall Xzz9000
++#define ServerToInstall AmixServerName
+ #endif
+ #endif /* XAmixServer */
+ 

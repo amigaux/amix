@@ -1,0 +1,63 @@
+Ours.  The MNT VA2000 card under the RTG layer: the card directory that
+FORKDIRS copies into programs/Xserver/hw/amix/rtg/va2000 (xrtg-amix's
+x11r6.3/hw/amix/rtg/va2000 at the pin; Antti Sokero's VA2000 driver, MIT,
+ported to the layer's card record, MIT) is built and linked in.
+
+- rtg/Imakefile: va2000 in SUBDIRS, RTG_VA2000 in RTGCARDS, so the card
+  table lists va2000CardOps after the ZZ9000's (-card auto probes in that
+  order);
+- the server links the va2000 library after the rtg library;
+- the -card usage line names va2000.
+
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -583,9 +583,9 @@
+     ErrorF("-width int             screen width in pixels.\n");
+     ErrorF("-height int            screen height in pixels.\n");
+     ErrorF("-depth int             screen depth in planes.\n");
+-    ErrorF("-card name             RTG: the card (zz9000 or auto; default: X<card>'s card, else auto)\n");
++    ErrorF("-card name             RTG: the card (zz9000, va2000 or auto; default: X<card>'s card, else auto)\n");
+     ErrorF("-mode WxH              RTG video mode (e.g. 800x600, 1024x768)\n");
+-    ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default: the card's, zz9000 1024; 0 = never)\n");
++    ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default: the card's, 1024; 0 = never)\n");
+     ErrorF("-blitmax int           ignored (the driver splits blitter operations itself)\n");
+     ErrorF("-move16                RTG: move16 line bursts in PutImage (68040/060 only; default off)\n");
+     ErrorF("-nomove16              RTG: no move16 line bursts in PutImage\n");
+--- a/programs/Xserver/hw/amix/rtg/Imakefile
++++ b/programs/Xserver/hw/amix/rtg/Imakefile
+@@ -6,8 +6,8 @@
+ 
+ OBJS = rtgInit.o rtgscreen.o rtgdraw.o rtgcards.o
+ 
+-SUBDIRS = zz9000
+-RTGCARDS = -DRTG_ZZ9000
++SUBDIRS = zz9000 va2000
++RTGCARDS = -DRTG_ZZ9000 -DRTG_VA2000
+ 
+ STD_DEFINES = ServerDefines -DRTG -DPSZ=16 $(RTGCARDS)
+ CDEBUGFLAGS = -g -O
+--- a/programs/Xserver/Imakefile
++++ b/programs/Xserver/Imakefile
+@@ -1046,9 +1046,9 @@
+ XCOMM
+ XCOMM The Amiga server, under one name (amix.cf's, which the package's host.def
+ XCOMM sets; Xzz9000 and X link to it): the Amiga DDX (hw/amix) on an RTG card's
+-XCOMM framebuffer (hw/amix/rtg and its card drivers, the ZZ9000/Z3660 now), with
+-XCOMM mfb, cfb and cfb16 (the dirs SUBDIRS builds).  The print server's DIX stubs
+-XCOMM come with CFB16Libs.
++XCOMM framebuffer (hw/amix/rtg and its card drivers: the ZZ9000/Z3660 and the
++XCOMM VA2000), with mfb, cfb and cfb16 (the dirs SUBDIRS builds).  The print
++XCOMM server's DIX stubs come with CFB16Libs.
+ XCOMM
+ MFBDIR = mfb
+ CFB8DIR = cfb
+@@ -1057,7 +1057,8 @@
+ AMIXDIRS = include dix os mi $(EXTDIRS) $(MFBDIR) $(CFB8DIR) $(CFB16DIR) $(DDXDIR1) $(DEPDIRS)
+ AMIXOBJS = hw/amix/amixInit.o
+ AMIXLIBS = hw/amix/LibraryTargetName(amix) hw/amix/rtg/LibraryTargetName(rtg) \
+-	   hw/amix/rtg/zz9000/LibraryTargetName(zz9000) CFB16Libs
++	   hw/amix/rtg/zz9000/LibraryTargetName(zz9000) \
++	   hw/amix/rtg/va2000/LibraryTargetName(va2000) CFB16Libs
+ ServerTarget(AmixServerName,$(AMIXDIRS),$(AMIXOBJS),$(AMIXLIBS),$(SYSLIBS))
+ #ifndef ServerToInstall
+ #define ServerToInstall AmixServerName
