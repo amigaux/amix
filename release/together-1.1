@@ -7,3 +7,8 @@
 # not know: the installer's `xstart -n` on the target refuses an unknown key.
 z3660rtg-k30 1.1.2-1: needs amix-base 1.0-35
 z3660rtg-k46 1.1.2-1: needs amix-base 1.0-35
+#
+# A release carrying x11r63 6.3-11 or later carries amix-base 1.0-36 or later: with an
+# older amix-base, ending xinit by a signal makes xstart print a wrong message (what it
+# does is right).  A release rule, not a package dependency.
+x11r6.3 6.3-11: needs amix-base 1.0-36
