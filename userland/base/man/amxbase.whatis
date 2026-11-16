@@ -7,7 +7,7 @@ dlpi-mac(1m)     dlpi-mac - print the station address of a network interface
 group(4)         group - the group file
 ifdown(1m)       ifup, ifdown - bring network interfaces up or down
 ifup(1m)         ifup, ifdown - bring network interfaces up or down
-initwait(1m)     initwait - change the run level, and see that init does it
+initwait(1m)     initwait - change the run level, and see that init does it (the last step of shutdown)
 inittab(4)       inittab - what init starts, at boot and at each run level
 interfaces(4)    interfaces - how each network interface is set up at boot
 link.d(4)        link.d - the network drivers present, one file each
