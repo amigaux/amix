@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — images built on amix-system 988b0f8; gcc-cross-amix's address (6a5874b9, 87a674fe)
+
+gcc-cross-amix.pin names github.com/amigaux/gcc-cross-amix (commit 33ebadcf unchanged). The GCC 14 sysroot holds the stock usr/sbin/shutdown, so gcc14-cross-amix.tree is 174b16e0. image.ref names the published images built from this: dist @sha256:2df4aad2…, media @sha256:bee8f2d0….
+
 ## 2026-11-11 — make tools pulls the published build images (630e5f71)
 
 image.ref names the published build images, ghcr.io/amigaux/amix-toolchain dist @sha256:2fa480cf… and media @sha256:5e063fef…, so make tools pulls and checks them instead of building them; TOOLS_FROM_SOURCE=1 builds them and compares.

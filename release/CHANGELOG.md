@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — together-1.1: packages a release must carry together (a90bef2a)
+
+together-1.1 lists pairs a release must carry together (`<name> <version>: needs <name> <version>`), seeded with z3660rtg-k30/-k46 1.1.2-1 needing amix-base 1.0-35. The README describes the file.
+
 ## 2026-11-15 — README: the lock's `source userland` line (f1654565)
 
 The lock carries a `source userland` line for each FORKDIRS directory.
