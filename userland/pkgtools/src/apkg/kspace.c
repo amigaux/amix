@@ -1198,6 +1198,7 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         if (todo[i]->refused != NULL) {
             warnx2("%s: the catalog entry is refused: %s", todo[i]->name,
                    todo[i]->refused);
+            catalog_hint(todo[i]);
             return EX_VERIFY;
         }
         /* the loader has no kabi and serves both lines (C2-2 v3 §1.1) */
@@ -1240,12 +1241,13 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
         }
     }
 
-    /* a kernel's kbootset= (C2-2 v6 §1.1): the kbootset that builds the
-     * generation -- the transaction's, else the installed one -- must be
-     * at least that version, or the new kernel's generation is composed
-     * by a kbootset that does not know it */
+    /* a kernel's or module's kbootset= (C2-2 v6 §1.1, v7): the kbootset
+     * that builds the generation -- the transaction's, else the installed
+     * one -- must be at least that version, or the generation is composed
+     * by a kbootset that does not know the package (kspace_floor() has
+     * added the catalog's when it is new enough) */
     for (i = 0; i < nt; i++) {
-        if (!todo[i]->kspace || strcmp(todo[i]->role, "kernel") != 0 ||
+        if (!todo[i]->kspace || strcmp(todo[i]->role, "loader") == 0 ||
             todo[i]->kbootmin == NULL)
             continue;
         kb = NULL;
@@ -1268,8 +1270,8 @@ int kspace_preflight(const struct conf *cf, struct pkgent **todo, int nt)
             warnx2("%s needs kbootset %s or newer; none is installed",
                    todo[i]->name, todo[i]->kbootmin);
         }
-        warnx2("the committed generation is unchanged; the kernel waits "
-               "for that kbootset");
+        warnx2("the committed generation is unchanged; %s waits for that "
+               "kbootset", todo[i]->name);
         bad = 1;
     }
 
@@ -1431,6 +1433,77 @@ void kspace_expand(const struct conf *cf, struct catalog *cat,
         installed_version(cf, e->pkginst, ver, sizeof(ver)) &&
         apkg_vercmp(e->version, ver) > 0)
         add_todo(todo, ow, nt, e, "the new kernel", ver);
+}
+
+/* C2-2 v7: the highest kbootset= of the transaction's kernel and module
+ * rows.  When neither kbootset in the transaction nor the installed one
+ * meets it, the catalog's kbootset joins the transaction FIRST, if it
+ * does; else the pre-flight refuses, naming the version. */
+void kspace_floor(const struct conf *cf, struct catalog *cat,
+                  struct pkgent ***todo, int **ow, int *nt)
+{
+    struct pkgent *e;
+    const char *max;
+    char ver[128];
+    int inst;
+    int i;
+
+    max = NULL;
+    for (i = 0; i < *nt; i++) {
+        e = (*todo)[i];
+        if (!e->kspace) {
+            if (strcmp(e->name, KBOOTSET_PKG) == 0)
+                return;                 /* the pre-flight checks it */
+            continue;
+        }
+        if (e->kbootmin != NULL &&
+            (max == NULL || apkg_vercmp(e->kbootmin, max) > 0))
+            max = e->kbootmin;
+    }
+    if (max == NULL)
+        return;
+    inst = installed_version(cf, KBOOTSET_PKG, ver, sizeof(ver));
+    if (inst && apkg_vercmp(ver, max) >= 0)
+        return;
+    e = catalog_find(cat, KBOOTSET_PKG);
+    if (e == NULL || e->kspace || e->refused != NULL ||
+        apkg_vercmp(e->version, max) < 0)
+        return;
+    *todo = (struct pkgent **)xrealloc((char *)*todo,
+        (unsigned)((*nt + 1) * sizeof(struct pkgent *)));
+    *ow = (int *)xrealloc((char *)*ow, (unsigned)((*nt + 1) * sizeof(int)));
+    for (i = *nt; i > 0; i--) {
+        (*todo)[i] = (*todo)[i - 1];
+        (*ow)[i] = (*ow)[i - 1];
+    }
+    (*todo)[0] = e;
+    (*ow)[0] = inst;
+    (*nt)++;
+    if (inst)
+        printf("with kbootset %s or newer needed: upgrading kbootset %s -> "
+               "%s first\n", max, ver, e->version);
+    else
+        printf("with kbootset %s or newer needed: installing kbootset %s "
+               "first\n", max, e->version);
+}
+
+/* 1 when the target has a kernel-space record (an installed kernel,
+ * loader or module package) */
+int kspace_has_records(const struct conf *cf)
+{
+    DIR *d;
+    struct dirent *de;
+    int any;
+
+    d = opendir(cf->kpkgdir);
+    if (d == NULL)
+        return 0;
+    any = 0;
+    while (!any && (de = readdir(d)) != NULL)
+        if (!rec_skip(de->d_name))
+            any = 1;
+    closedir(d);
+    return any;
 }
 
 void kspace_diagnose(const struct conf *cf)

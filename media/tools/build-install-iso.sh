@@ -957,16 +957,25 @@ cp -p "$CORE_T/var/sadm/install/admin/default" "$STAGE/admin/default"
 #   requested     -- ONLY the --profile names. A public disc must not carry the
 #                    LAN profiles beside its own: they name the bench's addresses,
 #                    zone and card MACs, and they would grep straight off the disc.
+# A profile's @VERSION@ (the version a user is shown: PROFILE_DESC) becomes the media's own version,
+# media/VERSION (absent: none may be left), so the text cannot fall behind a point release.
+MEDIA_VER="$(sed -n '1p' "$repo/VERSION" 2>/dev/null)"
+stage_profile() {	# stage_profile SRC DST
+  lab_localize < "$1" | sed "s/@VERSION@/${MEDIA_VER:-@VERSION@}/g" > "$2" && touch -r "$1" "$2"
+}
 _mp="$(sed -n 's/^MEDIUM_PROFILES=//p' "$PROFILE_DIR/${PROFILES[0]}.profile" 2>/dev/null | tail -1 | tr -d '"')"
 case "$_mp" in
   ''|all)    for _f in "$PROFILE_DIR"/*.profile; do
-               lab_localize < "$_f" > "$STAGE/profiles/${_f##*/}" && touch -r "$_f" "$STAGE/profiles/${_f##*/}"; done ;;
+               stage_profile "$_f" "$STAGE/profiles/${_f##*/}"; done ;;
   requested) for _p in "${PROFILES[@]}"; do
-               lab_localize < "$PROFILE_DIR/$_p.profile" > "$STAGE/profiles/$_p.profile" \
-                 && touch -r "$PROFILE_DIR/$_p.profile" "$STAGE/profiles/$_p.profile"; done
+               stage_profile "$PROFILE_DIR/$_p.profile" "$STAGE/profiles/$_p.profile"; done
              echo "build-install-iso: MEDIUM_PROFILES=requested -> /install/profiles carries only: ${PROFILES[*]}" ;;
   *) echo "STOP: profile ${PROFILES[0]}: MEDIUM_PROFILES='$_mp' is not 'all' or 'requested'" >&2; exit 1 ;;
 esac
+if grep -l '@VERSION@' "$STAGE"/profiles/*.profile > /dev/null 2>&1; then
+  echo "STOP: $(grep -l '@VERSION@' "$STAGE"/profiles/*.profile | tr '\n' ' ')carry @VERSION@ and there is no media/VERSION" >&2; exit 1
+fi
+[ -z "$MEDIA_VER" ] || echo "build-install-iso: profiles staged for version $MEDIA_VER (media/VERSION)"
 
 # C4-1: on a CD-boot disc the install kernel is the line's kernel package, and a four-card
 # one (its sidecar's sdcards=4) numbers the controllers by class: each staged 1.1 profile of

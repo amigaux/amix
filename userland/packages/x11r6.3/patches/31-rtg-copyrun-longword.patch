@@ -1,0 +1,130 @@
+Antti Sokero's misaligned-source longword copy (xrtg-amix, va2000draw.c,
+va2000CopyRun; MIT, Copyright (c) 2025-2026 Antti Sokero, one of the
+holders rtgdraw.c's header names), in the RTG layer's copyRun.
+
+copyRun moved two pixels per store only when source and destination
+shared their 2-byte phase, and one per store otherwise.  Now it aligns
+the destination and, when the source is not longword-aligned, builds each
+long from two word reads (the first pixel the high half): every store to
+the framebuffer is one aligned long and no access is misaligned.  It
+serves the CPU copies within the screen and the direct PutImage, whose
+own misaligned long reads of the request go: an odd window x now takes
+copyRun's path.
+
+--- a/programs/Xserver/hw/amix/rtg/rtgdraw.c
++++ b/programs/Xserver/hw/amix/rtg/rtgdraw.c
+@@ -52,8 +52,10 @@
+ ** one (Antti measured 0.41 against 0.79 us/pixel on the VA2000 over Zorro III).
+ ** The high word is the left pixel (big-endian).  Only aligned longs are used:
+ ** a misaligned 32-bit access to the card's space is split by the CPU in ways
+-** this driver does not want to depend on, so a copy whose two ends differ in
+-** alignment keeps the 16-bit loop.
++** this driver does not want to depend on.  A copy whose two ends differ in
++** alignment aligns the destination and builds each long from two word reads
++** (copyRun, after Antti's va2000CopyRun); a fill or a backward copy of that
++** kind keeps the 16-bit loop.
+ */
+ #define RUN_ODD(p)  (((unsigned long)(p)) & 2)
+ 
+@@ -93,7 +95,18 @@
+         *(unsigned short *)l = pixel;
+ }
+ 
+-/* Copy w pixels, left to right. */
++/*
++** Copy w pixels, left to right, two per store.
++**
++** From Antti Sokero's va2000CopyRun (xrtg-amix, va2000draw.c; MIT): "align
++** the DESTINATION and let the source be whatever it is."  Requiring both
++** ends to share a 2-byte phase sent about half of the calls back to word
++** stores, since the destination's phase follows the x coordinate and the
++** source's does not; on the VA2000 that cost 2.04 against 0.41 us a pixel.
++** When the source is not longword-aligned each long is put together from
++** two word reads (MSBFirst: the first pixel is the high half), so no access
++** is ever misaligned and every store to the drawable is one aligned long.
++*/
+ static void
+ copyRun(dst, src, w)
+ unsigned short *dst;
+@@ -103,7 +116,7 @@
+     unsigned long *ld, *ls;
+     int            n;
+ 
+-    if (w < RUN_SHORT || RUN_ODD(dst) != RUN_ODD(src)) {
++    if (w < RUN_SHORT) {
+         while (w-- > 0)
+             *dst++ = *src++;
+         return;
+@@ -113,11 +126,17 @@
+         w--;
+     }
+     ld = (unsigned long *)dst;
+-    ls = (unsigned long *)src;
+-    for (n = w >> 1; n > 0; n--)
+-        *ld++ = *ls++;
++    if (!RUN_ODD(src)) {
++        ls = (unsigned long *)src;
++        for (n = w >> 1; n > 0; n--)
++            *ld++ = *ls++;
++        src = (unsigned short *)ls;
++    } else {
++        for (n = w >> 1; n > 0; n--, src += 2)
++            *ld++ = ((unsigned long)src[0] << 16) | (unsigned long)src[1];
++    }
+     if (w & 1)
+-        *(unsigned short *)ld = *(unsigned short *)ls;
++        *(unsigned short *)ld = *src;
+ }
+ 
+ /* Copy w pixels, right to left (an overlapping move to the right). */
+@@ -302,10 +321,10 @@
+ int rtgMove16 = 0;	/* -move16: 68040/68060 only, a 68030 has no move16 */
+ 
+ /*
+-** burstRun - copyRun for a host-memory source: the 16-byte-aligned middle
+-** moved by move16 when src and dst share their phase in a line, misaligned
+-** long reads when they differ by two bytes.  move16 (a0)+,(a1)+ is spelled
+-** as words: the AMIX assembler knows no 68040 mnemonics.
++** burstRun - copyRun for a host-memory source, with the 16-byte-aligned
++** middle moved by move16 when src and dst share their phase in a line.
++** move16 (a0)+,(a1)+ is spelled as words: the AMIX assembler knows no 68040
++** mnemonics.
+ */
+ static void
+ burstRun(dst, src, w)
+@@ -317,30 +336,11 @@
+     register unsigned short *d asm("a1");
+     int head, k;
+ 
+-    if (w >= RUN_SHORT && RUN_ODD(dst) != RUN_ODD(src))
+-    {
+-        /*
+-        ** Ends two bytes apart (an odd window x): copyRun would move one
+-        ** pixel per store, 59 ms for 512x320 where longs take 34.  The
+-        ** source of a PutImage is host memory, never the card, so its longs
+-        ** may be read misaligned (the 060 splits them, mostly from the
+-        ** cache); every store to the drawable stays an aligned long.
+-        */
+-        unsigned long *ld;
+-        int n;
+-
+-        if (RUN_ODD(dst))
+-        {
+-            *dst++ = *src++;
+-            w--;
+-        }
+-        ld = (unsigned long *) dst;
+-        for (n = w >> 1; n > 0; n--, src += 2)
+-            *ld++ = *(unsigned long *) src;
+-        if (w & 1)
+-            *(unsigned short *) ld = *src;
+-        return;
+-    }
++    /*
++    ** Ends two bytes apart (an odd window x): copyRun builds the longs from
++    ** word reads (one pixel per store took 59 ms for 512x320 where longs
++    ** take 34).
++    */
+     if (!rtgMove16 || w < 16 ||
+         (((unsigned long) dst ^ (unsigned long) src) & 15) != 0)
+     {

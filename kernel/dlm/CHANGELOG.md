@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-11-15 — the compiler fork at its new address (e088aec1)
+
+toolchain.pin and the README name the compiler fork at its new address, amigaux/gcc-cross-amix (commit 33ebadc unchanged; no kit or module byte changes).
+
+## 2026-11-15 — make core runs against an unbuilt port clone (89ea2080)
+
+tests/core/run.sh assembles the port's devkvmap040.o and dma_cache040.o from PORT's src/, so make core runs against an unbuilt clone at the pin; a checkout with neither the sources nor built copies is refused by name.
+
+## 2026-11-15 — core 0058: prt_where kept around a module's lifecycle calls (68a043da)
+
+The core saves prt_where and puts it back around a module's `_load`, `_unload`, halt entry and deferred calls, so one plain cmn_err there (a "no board" notice) no longer leaves every later line doubled in putbuf. State harness module pw1, five checks. Entry points a module installs are left as they are; ddi.md still says to start formats with `^`.
+
+## 2026-11-15 — core 0057: a refused load no longer doubles later log lines (ae615e8e)
+
+dlm_undef puts prt_where back to 2 after its note: a plain cmn_err left 3, and with syslogd running every later line went into putbuf twice. ddi.md says the stock cmn_err leaves prt_where as the format's first character set it, so a module's formats start with `^`. The bench README explains prt_where 0x3 with conslogging 1. Takes effect with the next kernel cut on each line.
+
+## 2026-11-15 — C2-2 version 7: a module row's kbootset floor (9793b156)
+
+A module's catalog row may carry `kbootset=`, the oldest kbootset that composes a generation with it; apkg 0.3.12 adds kbootset at install and upgrade, from `APKG_KBOOTSET` or a kbootset.conf line. `abi/registry/kbootset` gives each major the oldest kbootset that has it (c 56: 1.1.0.261114-45, c 68: 1.1.0.261115-46) and goes into the kit. A module whose majors are all 1.1's asks for no floor; a major the table does not list is refused (f181ab58). C2-4 version 31: a kbootset upgrade runs the trigger. C3-5 version 26.
+
+## 2026-11-15 — C3-6 version 14: where the VA2000 module calls fb_register (cee96138)
+
+The VA2000 module calls `fb_register` from its `_load` once the first board is found, for the framebuffer window only; a second board keeps the default class. Docs only.
+
+## 2026-11-15 — fb_register, DDI k46.1.6: a module's framebuffer cache class (73884536)
+
+A module may put its board's framebuffer window into the port's non-cacheable, not serialised class with `fb_register`, from `_load` only: the range is page-aligned and inside one non-RAM AutoConfig board, and the kernel's two slots are held by module name for the boot (EINVAL, EBUSY, ENOSPC; never released). Core patch 0056 `dlm_curname`. The kit's `<sys/ddiline.h>` and `DDI_FB_REGISTER` let one source build for both lines and every kernel: a weak reference on k46 that returns ENOSYS on an older kernel, ENOSYS with no reference on k30. modcheck warns on a weak name that is in no list. C3-2 version 6, C3-6 version 13, ddi.md, spec 30 §8.
+
+## 2026-11-15 — kbootset -46 (e765bb05)
+
+kbootset 1.1.0.261115-46, pinned at 575654e on both lines: character major 68, the va2000 module's, and kbootset(1M) on moving the root disk to another controller. Box binary 69d71509, package a2dd93f4.
+
+## 2026-11-15 — major registry: c 68 va2000 (b7f52962)
+
+Character major 68 is registered to the MNT VA2000 graphics card module, short name `va2000`. kbootset's compiled table is regenerated, so a kbootset built from here accepts the module; C3-5 version 25 and spec 20 §6 carry the row.
+
+## 2026-11-14 — one set of bytes for kbootset -45; kbootset(1M) on moving the root disk (25881832, edbdfcfc)
+
+kbootset -45's pin names commit 92c8712 on both lines, so the package is one set of bytes (5c64f22f). kbootset(1M) describes moving the root disk to another controller, for the next kbootset version; -45's payload is unchanged.
+
+## 2026-11-14 — C2-4 version 30: a disk root needs no swap record (bee82c42)
+
+A disk root's swap is slice 2 of the root disk RTH1 chose, and the swap record is read only for a RAM-disk root's `swap none`, so the pristine build and the moved-disk step pass no --swap. Spec 10's manifest table says the same.
+
 ## 2026-11-14 — C3-6 version 12: the modules that fall back to polling, and one that does not (b40a6eed)
 
 The buddha and xsurf modules default to interrupts under version 11's two conditions. The Gayle IDE module as of 1.1 meets the first and does not fall back when interrupts stop, a known gap for its next version. Spec 30 §4 says the same.

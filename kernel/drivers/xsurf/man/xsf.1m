@@ -1,0 +1,134 @@
+.TH XSF 1M "15 November 2026" "xsurf"
+.SH NAME
+xsf \- the state of the X-Surf and X-Surf-100 ethernet boards
+.SH SYNOPSIS
+.B xsf
+.RI [ unit ]
+.br
+.B "xsf -a"
+.br
+.B "xsf -S"
+.RI [ unit ]
+.SH DESCRIPTION
+.B xsf
+shows what the
+.BR xsurf (7)
+driver knows about board
+.I unit
+(0 when not given), that is interface
+.BI xsf unit\fR.
+It first prints the line the driver printed on the console at load, which
+is gone once the system is up:
+.PP
+.RS
+.ft CW
+.nf
+xsf0: X-Surf-100, Zorro 3 at 0x40000000, 00:80:10:12:34:56, interrupt I/O, link up 100 full
+.fi
+.ft R
+.RE
+.PP
+with the link as it is now. Then, indented, the frames received and sent
+with their errors and collisions, the transmit failures by kind (not
+completed, remote-DMA write not completed, aborted), what they point at
+when no frame was ever sent, and which failures were said on the console.
+Then what the driver read when it probed the board: the chip's command
+and interrupt registers before its reset, how long it took to become
+ready after it, what the register check read back by each kind of cycle,
+the station-address PROM as read, the remote-DMA self-test's result, and
+the chip's registers at the first transmit timeout and the first
+remote-DMA write timeout. These lines are what to send when the board
+does not work.
+Then every counter of the driver's status record, one per line as
+.IR "name value" ,
+for scripts and for reports.
+.PP
+After a board in use, and when
+.BI xsf unit
+does not exist,
+.B xsf
+lists each board the driver found but refused at load, with the reason
+its console line gave:
+.PP
+.RS
+.ft CW
+.nf
+board 0: X-Surf-100, Zorro 3 at 0x40000000: refused at load: its registers do not take writes (wrote 0x55 or 0xaa, read 0x99)
+.fi
+.ft R
+.RE
+.TP
+.B \-a
+every board the driver found, in use or refused, in the order it probed
+them.
+.TP
+.B \-S
+silent: exit status 0 when
+.BI xsf unit
+is in use, 1 when it is not.
+.SH READING IT
+.TP
+.B "no link"
+the cable, the hub or switch port, or the card's PHY. Look at the link
+lights of the card and of the port.
+.TP
+.B "refused at load: its registers do not take writes"
+what the driver writes to the chip's registers does not come back: the
+fault lies between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed. Not the network.
+.TP
+.B "no frame reached the chip: its remote-DMA writes do not complete"
+frames written into the chip's memory never complete: the fault lies
+between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed.
+.TP
+.B "no transmit has completed"
+the chip takes frames but never reports them sent or failed. The chips'
+transmitters do not wait for a link (their datasheets), so a missing link
+alone does not explain it: the fault lies between the Amiga and the chip: the card, its slot, the bus or the
+driver; the readings below the counters say which step failed.
+.TP
+.B "every transmit aborted on collisions"
+the medium. On the X-Surf, a 10BASE-T link test that fails makes the chip
+send on its coax port; with nothing on it every frame collides.
+.TP
+.B "polled (interrupt self-test failed)"
+the board's interrupt did not arrive at load; the driver polls instead and
+the network still works.
+.PP
+The counters' names are the status record's fields
+.RB ( xsurfuser.h
+in the driver's sources): the
+.B tx_
+and
+.B rx_
+counters, the interrupts taken
+.RB ( irq_claims ),
+the chip restarts
+.RB ( resets ),
+and the link as numbers
+.RB ( link ": 0 down, 1 up, 2 not known;"
+.BR link_raw :
+the register the chip reports it in).
+.SH FILES
+.TP
+.B /dev/xsf0, /dev/xsf1
+the interfaces.
+.TP
+.B /dev/xsfctl
+the driver's status node: every board found, also refused ones.
+.SH DIAGNOSTICS
+Exit status 0 when a board in use was shown, 1 when
+.BI xsf unit
+is not in use or the driver is not loaded, 2 for a usage error.
+.TP
+.B "xsf: the xsurf driver is not loaded"
+AutoConfig showed neither card at boot, so the module was not loaded.
+.TP
+.B "xsf: no /dev/xsfctl"
+the xsurf package is older than 1.0.0-4: only the counters of a board in
+use can be shown, without words.
+.SH SEE ALSO
+.BR xsurf (7),
+.BR ifconfig (1M),
+.BR netstat (1M)

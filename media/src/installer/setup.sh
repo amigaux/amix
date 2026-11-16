@@ -478,6 +478,8 @@ card_name()
 		mobo:a3000-wd)		echo "A3000 SCSI" ;;
 		mobo:a4000t-710)	echo "A4000T SCSI" ;;
 		mobo:gayle)		echo "IDE" ;;
+		zorro:1212:00)		echo "Buddha IDE" ;;
+		zorro:1212:2a)		echo "Catweasel Z-II IDE" ;;
 		"")			echo "" ;;
 		*)			echo "$1" ;;
 	esac
@@ -492,6 +494,8 @@ card_hba()
 		mobo:a3000-wd)		echo a3000 ;;
 		mobo:a4000t-710)	echo a4000t ;;
 		mobo:gayle)		echo gayle ;;
+		zorro:1212:00)		echo buddha ;;
+		zorro:1212:2a)		echo catweasel ;;
 	esac
 }
 # card_units -- the ids to scan on every card the kernel registered: with the probe, the units
@@ -1081,14 +1085,16 @@ choose_disk()
 	else
 		# stock, verbatim
 		echo "\nNo hard disks are attached to this system."
-		# ...and the lines stock never had to write: an A4000's own IDE port
-		# is a target (the gayle module, the master only), and an IDE disk
+		# ...and the lines stock never had to write: an A4000's or A1200's own IDE
+		# port is a target (the gayle module, the master only), and an IDE disk
 		# that is not seen is most likely set as the slave. Saying "no disks"
 		# and stopping would leave the reader to conclude the disk is broken.
 		echo ""
-		echo "An IDE disk on the A4000's own port is used as the MASTER only:"
-		echo "set the disk (or the CF adapter) to master; a CD-ROM may be the"
-		echo "slave.  The IDE port of an A1200 or A600 is not supported."
+		echo "An IDE disk on the A4000's or A1200's own port is used as the"
+		echo "MASTER only: set the disk (or the CF adapter) to master.  A CD-ROM"
+		echo "may be the slave beside it; a drive alone on the port is found only"
+		echo "as the master.  The IDE port of an A600 is not supported."
+		echo "A Buddha or Catweasel Z-II takes a master or a slave on any port."
 		echo "Otherwise UNIX needs a SCSI host adapter (the A3000 or A4000T"
 		echo "onboard controller, an A4091, or the Z3660's) with a disk on it."
 		restart

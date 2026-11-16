@@ -36,6 +36,9 @@
 XMULIBONLY = -lXmu @@\
 XMULIB = -lXmu
 /* the tree under /opt/amix/X11R6 (/usr/X11R6 links to it) */
+/* the server's one name (build.sh's XSERVER; Xzz9000 and X are links to it) */
+#undef AmixServerName
+#define AmixServerName @XSERVER@
 #undef ProjectRoot
 #define ProjectRoot @PREFIX@
 #undef UsrLibDir

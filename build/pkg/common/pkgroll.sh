@@ -121,7 +121,8 @@ amix_s5_mark() {
 # once, and pkginfo must say CLASSES=none conffile, which other classes may
 # follow (pkgmeta lists the prototype's in its order).  No paths: nothing.
 amix_conffiles() {
-	_cf_list=$(echo "$2" | tr ',' ' ' | tr -s ' ' | sed 's/^ //; s/ $//')
+	# words split on blanks, tabs, newlines and commas, as pkgmeta splits them
+	_cf_list=$(printf '%s\n' "$2" | tr ',\t\n' '   ' | tr -s ' ' | sed 's/^ //; s/ $//')
 	[ -n "$_cf_list" ] || return 0
 	_cf_dir="${AMIX_CONFFILE_DIR:-$AMIX_PKGMGR/src/conffile}"
 	for _cf_s in i.conffile r.conffile; do

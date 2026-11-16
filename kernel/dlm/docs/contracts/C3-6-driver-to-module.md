@@ -1,4 +1,4 @@
-# C3-6 — what a driver changes to become a module, version 12
+# C3-6 — what a driver changes to become a module, version 14
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26, from the z3660rtg module build): the console
@@ -31,7 +31,10 @@
   and falls back to polling when interrupts stop may default to
   interrupts (§1.3); version 12 (2026-11-14): the modules that do are
   buddha and xsurf; the Gayle IDE module as of 1.1 meets the first
-  condition and not the second (§1.3). The
+  condition and not the second (§1.3); version 13 (2026-11-15, for the
+  VA2000 and z3660rtg modules): a framebuffer window's cache class on
+  k46, `fb_register` (k46.1.6), settles the open item (§1.5, §3, §5,
+  §6); version 14 (2026-11-15): where the VA2000 module calls it (§5). The
   driver-change brief for z3660eth, z3660rtg and monsw.
   Other repositories build against this text; a change from here is a
   contract change with a version bump.
@@ -277,6 +280,13 @@ packages.
     `_unload`; on k46 `dev_kvmap`/`dev_kvunmap` are in the DDI as well;
   - a `d_mmap` returns `phystopfn()` of device memory only.
 - A mapping made in `_load` or at open is released in `_unload`.
+- **A framebuffer's cache class** (version 13, k46). The pages a
+  `d_mmap` hands out are mapped non-cacheable serialised on k46. A
+  framebuffer needs no serialisation: `fb_register(pa, len)` from
+  `_load` puts its window in the non-cacheable, not serialised class,
+  as `hat_cm_fb_add` does for a static driver. Never the register page.
+  Through the kit's `DDI_FB_REGISTER` one source builds for both lines
+  and loads on a kernel without it (§5).
 
 ### 1.6 Only allowlisted symbols
 
@@ -433,7 +443,7 @@ The module:
 | `_load` | `zz9k_probe(0)`; `ENXIO` if no board. No console at load: as today it is the ioctl's |
 | Console | `ZZ9KIOC_CONSOLE` ENABLE and REDIRECT (the same today): `cons_hook_set(zz9k_cons_hook)`, where the hook takes `(cp, p, n)` and returns nonzero only for writes with `cp->screen == displayedscreen` that it drew (not passed on); the per-character `zz9k_conputc` becomes a loop over `p`. DISABLE: `cons_hook_clear()`. No `conputc`. **By design the hook also takes virtual-terminal writes** to the displayed screen, where the `conputc` swap saw only the kernel's `printf`: the RTG then shows that screen as the native code would |
 | Memory | `d_mmap` hands out device pages only (§1.5). A board window below `VSECT1` is reached through `phystokv()`, as the static driver does. A window above it (a Z3660 whose RTG AutoConfig puts it at `0x40000000`, or `0x50000000` behind a 256 MB RAM board) is mapped in two parts only: the register page and the first `kvfb` MiB of the framebuffer, which the console and the driver's own drawing stay inside. On k46 `dev_kvmap` (cache class `0x40`, non-cacheable serialised, for the registers; `0x60`, non-cacheable, for the framebuffer; flags 1, no sleep); on k30 `sptalloc(…, PG_V, phystopfn(…), 0)`, whose pages are not data-cached there, from the 4 MiB pool other drivers share. The framebuffer part halves until it fits; a mapping that fails fails the probe. Both are released in `_unload`. `d_mmap` still returns physical page frames and reaches the whole framebuffer. Only board rows whose device space is the framebuffer alone are attached this way |
-| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`; for a window above `VSECT1` `dev_kvmap`/`dev_kvunmap` (k46) or `sptalloc`/`sptfree` (k30), all DDI v1 minor 0. **`hat_cm_fb_add` is not in the DDI:** build without `-DZZ9K_FB_NC` (§5, §6) |
+| Symbols | `conputc` → `cons_hook_set`/`cons_hook_clear`, plus `displayedscreen`; `monsw_*` through `depend=monsw`; for a window above `VSECT1` `dev_kvmap`/`dev_kvunmap` (k46) or `sptalloc`/`sptfree` (k30), all DDI v1 minor 0. the framebuffer's cache class through `DDI_FB_REGISTER` (§5, version 13), not `hat_cm_fb_add`: the module is built without `-DZZ9K_FB_NC` |
 | Font | `sunfont.o` linked into the module object (§1.7), and the module built **without** `ZZ9K_NO_BUILTINFONT` (that option stays for the static k46 relinks). The kit provides a `sunfont.o` the cross tools can link (the stock `sunfont.s` is m4 and SVR4 assembler syntax). `builtinfont` is also a stock k30 kernel name: the module makes it local (`objcopy --localize-symbol=builtinfont`, the make fragment's `LOCALIZE`) so it never shadows or exports it |
 | Parameters | the kernel-patchable `zz9k_*` knobs have no patch path in a module, so each is a parameter: `param=blit:bool:1` (use the card's blitter); `param=maxarea:int:8192:0:3686400` (pixels per blitter band; 0 is the default, 8192); `param=fixed:bool:0` (1 also tries the board rows at a fixed base, `0x10000000`, which have no AutoConfig entry, as an emulator's stand-in; off by default, because such a probe reads a fixed address on any machine with the right chipset); `param=kvfb:int:0:0:46` (MiB of the framebuffer mapped for a window above `VSECT1`; 0 is the line's default, 8 on k46 and 2 on k30) |
 | Targets | one module per line serves both targets: the probe tells the ZZ9000 and the Z3660 apart at run time, so the target is no longer a compile-time switch in the module form; one name, one major (§6) |
@@ -464,18 +474,91 @@ The module:
 | Symbols | unchanged; all in DDI v1 |
 | `_halt` | none, the wrapper's entry 0 |
 
-## 5. Open DDI item (not a stage-3 blocker)
+## 5. The framebuffer cache class (version 13)
 
-- **`hat_cm_fb_add`**, the 68040/68060 non-cached framebuffer mapping
-  z3660rtg uses with `-DZZ9K_FB_NC`, is not in DDI v1.0. If RTG
-  performance needs it, it comes as a DDI minor (k46) after the port's
-  review.
+On k46 a page with no page structure, which is what a driver's `d_mmap`
+hands out, is mapped non-cacheable serialised (0x40), so every store to
+it waits for the one before. A framebuffer is memory-like: in the
+non-cacheable, not serialised class (0x60) its stores drain through the
+68060's store buffer, and write-to-write order is kept on both CPUs, so
+a framebuffer store is never overtaken by a later register store. The
+port gives a static driver that class with `hat_cm_fb_add(lo_pfn,
+hi_pfn)` (`hat040.s`, its table `hat_cm_fb`): two slots, each a
+half-open range of page frames, installed before the device can be
+mapped and never changed or removed, because a mapping can outlive the
+open, and a page classed two ways is the alias the port's page-table
+rules refuse. The first users are the VA2000 module (two boards at
+most) and z3660rtg.
+
+A module gets it from **`fb_register(pa, len)`**, k46.1.6, the core's own
+provider (`core/plat/k46/line.c`), not `hat_cm_fb_add` itself:
+- **From `_load` only** (core patch 0056's `dlm_curname`, as
+  `vfs_register` and `root_defer` know their caller), which is before
+  any open or mapping of the device, as the port's contract asks.
+  `EINVAL` from anywhere else.
+- **The range is checked:** `pa` and `len` page-aligned (4 KiB), not
+  empty, not wrapping, and inside one AutoConfig board's window in
+  bootinfo (`cd_BoardAddr`, `cd_BoardSize`) whose memory is not the
+  kernel's (`ERTF_MEMLIST` clear). So a module can neither class another
+  board's registers nor RAM. `EINVAL` otherwise. The framebuffer only:
+  the register page stays outside, serialised.
+- **The two slots are held by name.** The first free slot goes to the
+  calling module for the rest of the boot. A window that overlaps one
+  another module holds, or one the kernel's own drivers installed, is
+  `EBUSY`; with both slots held, `ENOSPC`. Nothing is released at
+  unload: the port's table cannot change. The same module asking for
+  the same window again, after an unload and a reload, gets 0; any
+  other window of its own overlapping it is `EBUSY`.
+- **One console line** for each refusal and for each window installed
+  (`dlm: <module>: framebuffer 0x…+0x… non-cacheable, not serialised`).
+  A refusal is never fatal: the window stays serialised and the driver
+  works on.
+
+Why a wrapper and not `hat_cm_fb_add` in the DDI: `hat_cm_fb_add` takes
+any range from anyone (another board's registers, all of a slot's
+space), says nothing of who holds a slot, so a second driver's identical
+range is "accepted" while the first owns it, and it ties every module to
+the port's table, its units and its two slots. `fb_register` keeps the
+port's contract (before any mapping, never changed) and adds the range
+rule and the holders. If the port grows its table, only the provider
+changes.
+
+**The kernel side.** A k46 cut that claims 1.6 carries core 0056 and
+the provider in `core/plat/k46/line.c`, both from this repository; the
+block generator then lists `fb_register`, and the post-link gate checks
+that it is defined. The port's sources do not change: `hat_cm_fb` and
+`hat_cm_fb_add` are globals of `hat040.s` already, and the provider
+reads the table as two `{lo, hi}` pairs. If the port changes that
+layout or the number of slots, the provider changes with it.
+
+**k30.** The 68030 has no such class: its page descriptors have a
+cache-inhibit bit only, a device page is never cached, and no store
+waits in a buffer. There is no `fb_register` on k30 and no k30 minor 6.
+
+**One source for both lines.** The kit's `<sys/amixddi.h>` (with the
+line's `<sys/ddiline.h>`) gives `DDI_FB_REGISTER_DECL;` once at file
+scope and `DDI_FB_REGISTER(pa, len)`. On k46 the reference is weak
+(C3-2 §2): the module keeps the minor its other names give it, loads on
+a kernel before 1.6, and there the call gives `ENOSYS`. On k30 it is
+`ENOSYS` with no reference. A driver treats `ENOSYS` as "nothing to do"
+and any other refusal as one console line. The VA2000 module calls it
+from its `_load`, in the module wrapper file, once `va2000init` has
+found the first board (version 14), not in `va2000_map_regs` where the
+static form calls `hat_cm_fb_add`: that routine is also reached from
+open for a second board found late, where the call would always get
+`EINVAL`. The window is the board's base + 0x10000 to the end of its
+aperture; the register page below it stays serialised. A second board
+keeps the default class in the module form, which leaves the second
+slot free. z3660rtg calls it where it calls `hat_cm_fb_add` under
+`-DZZ9K_FB_NC` (the framebuffer window, `fb_phys` and `fb_size`).
 
 ## 6. Settled at agreement (2026-10-26)
 
 - §1's rules as written, for every driver turned into a module.
 - **`hat_cm_fb_add` stays out of the stage-3 z3660rtg module.** The module
   maps its windows without it and builds without `-DZZ9K_FB_NC` (§5).
+  Version 13 gives a module the class through `fb_register` instead
+  (§5).
 - **monsw's source location** (2026-10-26): amix-modules. `<sys/monsw.h>`, which
   z3660rtg's module build includes on both lines, ships with the ABI kit
   (`include/sys/monsw.h`): from the port's copy (version 2) today, and

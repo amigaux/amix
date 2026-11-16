@@ -3410,14 +3410,110 @@ echo "$OUT" | grep -q "every installed module fits its kernel by kabi and pin; k
     && ok "... says no module misfits and points at kbootset's line" || bad "gate diagnosis, no misfit" "$OUT"
 kreset
 
-# the catalog: kbootset= only on a kernel row
-xcat "$XS/repoX" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+# the catalog: kbootset= on a kernel or module row (C2-2 v7), never a loader's
+xreset
+xcat "$XS/repoX" $KB35 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
     "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg kbootset=$KB34)" 3
 mkkconf "$XS/confX" "file://$XS/repoX"
+sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/confX"
 xa -c "$XS/confX" update >/dev/null 2>&1
 run 0 "info on a module row carrying kbootset=" xa -c "$XS/confX" info ma
-echo "$OUT" | grep -q "Refused:     only a kernel entry may carry kbootset=" \
-    && ok "a module row with kbootset= is refused" || bad "kbootset= on a module" "$OUT"
+echo "$OUT" | grep -q "Refused" && bad "kbootset= on a module refused" "$OUT" \
+    || ok "a module row with kbootset= is accepted (C2-2 v7)"
+kreset
+run 0 "upgrade ma (kbootset=-34; -33 installed, -35 in the catalog): rc 0" \
+    xa -c "$XS/confX" upgrade ma
+ORDER=$(sed -n 's/^pkgadd .* \([A-Za-z]*\)$/\1/p' "$SHIMLOG" | tr '\n' ' ')
+echo "$OUT" | grep -qx "with kbootset $KB34 or newer needed: upgrading kbootset $KB33 -> $KB35 first" && \
+[ "$ORDER" = "kbootset MODA " ] && [ "$(grep -c build "$KLOG")" = 1 ] \
+    && ok "... kbootset comes first, said so; one build" || bad "module floor brings kbootset" "$OUT $ORDER"
+xreset
+xcat "$XS/repoY" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg kbootset=$KB34)" 3
+mkkconf "$XS/confY" "file://$XS/repoY"
+sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/confY"
+xa -c "$XS/confY" update >/dev/null 2>&1
+kreset
+run 5 "the same with only -33 anywhere: refused (exit 5)" xa -c "$XS/confY" upgrade ma
+echo "$OUT" | grep -q "ma needs kbootset $KB34 or newer; $KB33 is installed and the catalog has none newer" && \
+echo "$OUT" | grep -q "ma waits for that kbootset" && [ ! -s "$SHIMLOG" ] \
+    && ok "... it names the floor; nothing ran" || bad "module floor refusal" "$OUT"
+xreset
+xa -c "$XS/confX" update >/dev/null 2>&1
+kreset
+run 0 "-f install ma takes the floor the same way (rc 0)" xa -f -c "$XS/confX" install ma
+ORDER=$(sed -n 's/^pkgadd .* \([A-Za-z]*\)$/\1/p' "$SHIMLOG" | tr '\n' ' ')
+[ "$ORDER" = "kbootset MODA " ] && ok "... kbootset first in an install too" || bad "install floor order" "$OUT $ORDER"
+xcat "$XS/repoZ" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" "" 3
+sed -i "s|^\(#kpkg loader .*\)$|\1 kbootset=$KB34|" "$XS/repoZ/catalog"
+mkkconf "$XS/confZ" "file://$XS/repoZ"
+xa -c "$XS/confZ" update >/dev/null 2>&1
+run 0 "info on a loader row carrying kbootset=" xa -c "$XS/confZ" info loader
+echo "$OUT" | grep -q "Refused:     only a kernel or module entry may carry kbootset=" \
+    && ok "a loader row with kbootset= is refused" || bad "kbootset= on a loader" "$OUT"
+
+# an entry this apkg is too old for: !apkg=<v> on a kernel-space row, or an
+# unknown mandatory key; the refusal names the remedy when the catalog has
+# a newer apkg
+AV=$("$APKG" version | sed 's/^apkg //')
+xtoonew() {     # xtoonew <repo> <extra key> <apkg row version or ->
+    xcat "$1" $KB33 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+        "$(xk ma 2.0 module k46.1.0 $PIN kernel/ma-2.0.pkg "$2")" 3
+    [ "$3" != - ] && sed -i "2i apkg|$3|APKG|APKG-$3.pkg|00000000000000000000000000000000|1|none|application|the client" "$1/catalog"
+    mkkconf "$1.conf" "file://$1"
+    sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$1.conf"
+    xa -c "$1.conf" update >/dev/null 2>&1
+}
+xreset
+xtoonew "$XS/repoN1" '!apkg=99.0' 99.0
+run 0 "info on a row with !apkg=99.0" xa -c "$XS/repoN1.conf" info ma
+echo "$OUT" | grep -q "Refused:     it needs apkg 99.0 (this apkg is too old for it)" \
+    && ok "... refused: it needs apkg 99.0, this apkg too old" || bad "!apkg= refusal" "$OUT"
+kreset
+run 3 "upgrade ma with !apkg=99.0 (exit 3)" xa -c "$XS/repoN1.conf" upgrade ma
+echo "$OUT" | grep -q "this apkg ($AV) is too old for ma; the catalog has apkg 99.0: run 'apkg upgrade apkg', then try again" && \
+[ ! -s "$SHIMLOG" ] && ok "... names the remedy, the catalog's apkg 99.0; nothing ran" || bad "!apkg= hint" "$OUT"
+kreset
+run 0 "a no-name upgrade leaves it out" xa -c "$XS/repoN1.conf" upgrade
+echo "$OUT" | grep -q "ma 2.0 is left out: the catalog entry is refused: it needs apkg 99.0" && \
+echo "$OUT" | grep -q "run 'apkg upgrade apkg', then try again" \
+    && ok "... named, with the remedy" || bad "!apkg= left out" "$OUT"
+xtoonew "$XS/repoN2" '!apkg=0.0.1' -
+run 0 "info on a row with !apkg=0.0.1" xa -c "$XS/repoN2.conf" info ma
+echo "$OUT" | grep -q "Refused" && bad "an older !apkg= refused" "$OUT" || ok "... an older !apkg= is met"
+xtoonew "$XS/repoN3" '!frobnicate=1' 99.0
+kreset
+run 3 "an unknown mandatory key (exit 3)" xa -c "$XS/repoN3.conf" upgrade ma
+echo "$OUT" | grep -q "the catalog entry is refused: unknown mandatory key !frobnicate" && \
+echo "$OUT" | grep -q "the catalog has apkg 99.0: run 'apkg upgrade apkg'" \
+    && ok "... refused, and the remedy named" || bad "unknown key hint" "$OUT"
+xtoonew "$XS/repoN4" '!frobnicate=1' -
+kreset
+run 3 "the same with no newer apkg in the catalog (exit 3)" xa -c "$XS/repoN4.conf" upgrade ma
+echo "$OUT" | grep -q "this apkg ($AV) is too old for ma, and the catalog has no newer apkg" \
+    && ok "... says the catalog has no newer apkg" || bad "unknown key, no newer apkg" "$OUT"
+
+# a transaction that changes kbootset composes the generation again
+xreset
+xcat "$XS/repoW" $KB35 "$(xk kset-k 1.0 kernel k46.1.0 $PIN kernel/ksetk-1.0.pkg)" \
+    "$(xmods 1.0 k46.1.0 $PIN 'a b c d')" 3
+mkkconf "$XS/confW" "file://$XS/repoW"
+sed -i -e "s|^cachedir=.*|cachedir=$XR/var/apkg/cache|" -e "s|^admin=.*|admin=$XR/var/apkg/admin|" "$XS/confW"
+xa -c "$XS/confW" update >/dev/null 2>&1
+kreset
+run 0 "upgrade kbootset alone, kernel-space records present (rc 0)" xa -c "$XS/confW" upgrade kbootset
+echo "$OUT" | grep -qx "kbootset $KB35 is installed; composing the generation with it" && \
+[ "$(cat "$KLOG")" = "kbootset --journal /var/kbootset/journal build
+kbootset --journal /var/kbootset/journal commit" ] \
+    && ok "... one build and commit with the new kbootset" || bad "kbootset upgrade trigger" "$OUT $(cat "$KLOG")"
+xreset
+xa -c "$XS/confW" update >/dev/null 2>&1
+mkdir -p "$XR/etc/default"; echo "bootset=manual" > "$XR/etc/default/bootset"
+kreset
+run 0 "the same under bootset=manual (rc 0)" xa -c "$XS/confW" upgrade kbootset
+echo "$OUT" | grep -q "bootset=manual; compose the next generation" && [ ! -s "$KLOG" ] \
+    && ok "... prints the commands, runs none" || bad "kbootset upgrade, manual" "$OUT $(cat "$KLOG")"
+rm -f "$XR/etc/default/bootset"
 run 0 "info on the kernel row with kbootset=" xa -c "$XS/confB" info kset-k
 echo "$OUT" | grep -q "Refused" && bad "a kernel row with kbootset= refused" "$OUT" \
     || ok "a kernel row with kbootset= is accepted"

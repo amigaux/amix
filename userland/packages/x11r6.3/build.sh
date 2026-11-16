@@ -3,6 +3,10 @@
 
 ASM_REVIEWED="other platforms' .s files (xfree86, cfb/stip*); none is in an AMIX build"
 
+# the X server's one name (host.def's AmixServerName); Xzz9000 and X are hard
+# links to it, and the name it is started under picks its card (README)
+XSERVER=Xrtg
+
 # the Amiga screen manager (amiga/screen.h, libscreen.so) and libdbm, from the
 # stock /usr/amiga and /usr/ucblib: the sysroot links to them but lacks them
 AMIX_USR_AMIGA=${AMIX_USR_AMIGA:-$AMIX_SYSROOT/usr}
@@ -60,7 +64,7 @@ XCC
 	chmod +x "$BUILD/xcpp"
 	_b=$(dirname "$AR")
 	sed -e "s|@XCC@|$BUILD/xcc|g" -e "s|@XCPP@|$BUILD/xcpp|g" -e "s|@AR@|$AR|g" -e "s|@RANLIB@|$RANLIB|g" -e "s|@AS@|$_b/$AMIX_TARGET-as|g" \
-		-e "s|@LD@|$LD|g" -e "s|@PREFIX@|$PREFIX|g" -e "s|@SYSROOT@|$AMIX_SYSROOT|g" -e "s|@USRAMIGA@|$AMIX_USR_AMIGA|g" \
+		-e "s|@LD@|$LD|g" -e "s|@PREFIX@|$PREFIX|g" -e "s|@XSERVER@|$XSERVER|g" -e "s|@SYSROOT@|$AMIX_SYSROOT|g" -e "s|@USRAMIGA@|$AMIX_USR_AMIGA|g" \
 		"$HERE/host.def.in" > config/cf/host.def
 	# build-time tools the tree runs on the build host
 	( cd config/imake && make -f Makefile.ini BOOTSTRAPCFLAGS="-DAMIX -DSVR4 -Dm68k" CC="gcc -std=gnu89 -fcommon -w" imake ) > "$BUILD/x-imake.log" 2>&1 || {
@@ -139,8 +143,12 @@ stage() {
 	xinst i-lib.log lib install
 	xinst i-nls.log nls install
 	xinst i-server.log programs/Xserver install install.man
-	# X is Xzz9000 under its usual name: a hard link (stock pkgadd mangles a relative symlink)
-	rm -f -- "${DEST:?}${PREFIX:?}/bin/X" && ln "$DEST$PREFIX/bin/Xzz9000" "$DEST$PREFIX/bin/X"
+	# Xzz9000 (the ZZ9000/Z3660 card) and X (the card found) are the server under
+	# other names: hard links (stock pkgadd mangles a relative symlink)
+	[ -f "$DEST$PREFIX/bin/$XSERVER" ] || { echo "[FAIL] no server $XSERVER installed" >&2; exit 1; }
+	for _l in Xzz9000 X; do
+		rm -f -- "${DEST:?}${PREFIX:?}/bin/$_l" && ln "$DEST$PREFIX/bin/$XSERVER" "$DEST$PREFIX/bin/$_l" || exit 1
+	done
 	# the XIE and PEX client libraries: their extensions are not built
 	rm -f -- "${DEST:?}${PREFIX:?}/lib/libXIE.a" "${DEST:?}${PREFIX:?}/lib/libPEX5.a"
 	for c in $XCLIENTS; do
@@ -193,10 +201,12 @@ stage() {
 	# man pages: /opt/amix/man/<sect>/<name> and whatis.d (docs/man-pages.md)
 	. "$HERE/../tools/manpages.sh"
 	amix_man_relayout
-	# Xzz9000 (and X, its link): our own page.  The DDX's Xamix page is the R5
-	# Xsun page with the names swapped, and there is no Xamix command
+	# Xrtg (and Xzz9000, X, its links): our own page, Xzz9000 an alias of it.
+	# The DDX's Xamix page is the R5 Xsun page with the names swapped, and
+	# there is no Xamix command
 	rm -f -- "${DEST:?}/opt/amix/man/1/Xamix"
-	amix_man "$HERE/man/Xzz9000.1" 1
+	amix_man "$HERE/man/$XSERVER.1" 1
+	amix_man_alias Xzz9000 1 "$XSERVER"
 	amix_man "$HERE/man/x11r63.sh.4" 4 x11r63.sh
 	amix_man_whatis
 }

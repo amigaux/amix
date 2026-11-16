@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-16 — together-1.1: packages a release must carry together (8ed5810c)
+
+together-1.1 lists pairs a release must carry together (`<name> <version>: needs <name> <version>`), seeded with z3660rtg-k30/-k46 1.1.2-1 needing amix-base 1.0-35. The README describes the file.
+
+## 2026-11-15 — README: the lock's `source userland` line (cf99407e)
+
+The lock carries a `source userland` line for each FORKDIRS directory.
+
+## 2026-11-15 — the 1.1.1 locks (75ef713f..75abc4ea)
+
+amix-1.1.1.lock (the public rebuild, sha256 29f765ae…) and amix-1.1.1-published.lock (on the published 1.1 tree, b37fb273…), both from make dist at amix 7d9e944f with every RAM-disk image fetched by URL. The README names xsurf 1.0.0-3 and both locks with their sha256 and how they differ.
+
+## 2026-11-14 — 1.1.1 on the published 1.1 tree; kbootset -43 carried (a83e00bc)
+
+carried-1.1 lists kbootset 1.1.0.261105-43 (c75f62d5, built at the tag 1.1), which 1.1.1's kbootset -45 moves to the older block. The README says how a point release is built, on the published tree with RELEASE_PREVIOUS, and names 1.1.1's two locks.
+
 ## 2026-11-10 — the 1.1 locks (c1d4a11)
 
 amix-1.1.lock (671008ee) is what a public rebuild of the tag 1.1 gives; amix-1.1-published.lock (caeca530) records what pkg.amigaux.org/1.1 holds. The README names both by sha256 and explains the difference.

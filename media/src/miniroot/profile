@@ -708,7 +708,7 @@ source_built()
 # pick_cd SPEC... -- more than one 1.1 install disc answered: list them and ask which; the pick goes to $CD_FOUND.pick
 pick_cd()
 {
-	echo "\nMore than one amigaux 1.1 install disc is in a drive:\n"
+	echo "\nMore than one amigaux install disc is in a drive:\n"
 	_pi=0
 	while read _ps _pb
 	do
@@ -834,7 +834,9 @@ unattended_run()
 # estimates. Hands over with SRC_KIND=net and INST, NET_REPO, NET_KREPO, NET_RATE.
 # The interface: zen0, the Z3660's own ethernet, when its driver answers an open of
 # /dev/zen0 (the boot-class z3660eth loaded: its board matched and its MAC registers read);
-# aen0 when the A2065 answers `aen -S`; both: a choice, zen0 first. Neither: say so, restart.
+# aen0 when the A2065 answers `aen -S`; xsf0, the X-Surf-100 or X-Surf, when its driver answers
+# an open of /dev/xsf0 (the boot-class xsurf loaded: a board matched). More than one: a choice,
+# in that order, the first the default. None: say so, restart.
 # Nothing here reads the card's MAC: the address is the one typed, so a MAC that userland
 # cannot read (zenmac on metal) changes nothing; S99zen's zen.conf lookup is the installed
 # system's, at its first boot.
@@ -846,33 +848,50 @@ net_secs()
 	expr $1 \* 3600 + $2 \* 60 + $3
 }
 
+# net_ifname IF -- the board an interface name stands for, for the messages above
+net_ifname()
+{
+	case "$1" in
+		zen0) echo "Z3660 native Ethernet" ;;
+		aen0) echo "A2065 Ethernet" ;;
+		xsf0) echo "X-Surf Ethernet" ;;
+	esac
+}
+
 net_source()
 {
 	echo "\nNo installation CD or installation disk was found."
 	echo "This medium installs the system over the network."
-	NZEN=n
-	NAEN=n
-	[ -c /dev/zen0 ] && ( exec < /dev/zen0 ) > /dev/null 2>&1 && NZEN=y
-	/usr/amiga/bin/aen -S > /dev/null 2>&1 && NAEN=y
-	if [ $NZEN = y ] && [ $NAEN = y ]
-	then
-		echo "\n   1)   zen0     Z3660 native Ethernet"
-		echo "   2)   aen0     A2065 Ethernet"
+	NIFS=
+	[ -c /dev/zen0 ] && ( exec < /dev/zen0 ) > /dev/null 2>&1 && NIFS="$NIFS zen0"
+	/usr/amiga/bin/aen -S > /dev/null 2>&1 && NIFS="$NIFS aen0"
+	[ -c /dev/xsf0 ] && ( exec < /dev/xsf0 ) > /dev/null 2>&1 && NIFS="$NIFS xsf0"
+	set -- $NIFS
+	case $# in
+	0)
+		echo "\nNo network interface was found: neither the Z3660's ethernet (zen0),"
+		echo "an A2065 board (aen0) nor an X-Surf board (xsf0) answers."
+		restart ;;
+	1)
+		NIF=$1
+		echo "\nThe network interface is $NIF (`net_ifname $NIF`)." ;;
+	*)
+		echo
+		ni=0
+		for nf in $NIFS
+		do
+			ni=`expr $ni + 1`
+			echo "   $ni)   $nf     `net_ifname $nf`"
+		done
+		NIF=$1
 		readask "\nWhich interface do you want to use? [1] "
-		case "$ask" in 2) NIF=aen0 ;; *) NIF=zen0 ;; esac
-	elif [ $NZEN = y ]
-	then
-		NIF=zen0
-		echo "\nThe network interface is zen0 (Z3660 native Ethernet)."
-	elif [ $NAEN = y ]
-	then
-		NIF=aen0
-		echo "\nThe network interface is aen0 (A2065 Ethernet)."
-	else
-		echo "\nNo network interface was found: neither the Z3660's ethernet (zen0)"
-		echo "nor an A2065 board (aen0) answers."
-		restart
-	fi
+		ni=0
+		for nf in $NIFS
+		do
+			ni=`expr $ni + 1`
+			[ "$ask" = $ni ] && NIF=$nf
+		done ;;
+	esac
 	NIP=
 	while [ "$NIP" = "" ]
 	do
@@ -1009,7 +1028,7 @@ find_source()
 			return 0
 		fi
 		# ejected (or another medium): its installer is not readable here
-		echo "\nThe medium mounted on $CDROM is not a readable amigaux 1.1 install disc: unmounting it."
+		echo "\nThe medium mounted on $CDROM is not a readable amigaux install disc: unmounting it."
 		drop_source
 	fi
 
@@ -1052,7 +1071,7 @@ find_source()
 						break
 					fi
 				else
-					echo "\nThe CD at $s is not an amigaux 1.1 install disc for this machine (built `source_built`); it is skipped."
+					echo "\nThe CD at $s is not an amigaux install disc for this machine (built `source_built`); it is skipped."
 				fi
 			fi
 			drop_source

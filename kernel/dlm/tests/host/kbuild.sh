@@ -347,6 +347,7 @@ cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantma
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
 grep -a -q "^major c 56 xsurf$" $T/disk.img
+grep -a -q "^major c 68 va2000$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 echo "param blit=off   # the administrator's" > $R/etc/conf/modreg.local.d/z3660rtg
 $KB build $FACTS > $T/out && id=$(sed -n 's/^kbootset: generation \([0-9]*\) built.*/\1/p' $T/out)
@@ -375,6 +376,7 @@ cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantma
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
 grep -a -q "^major c 56 xsurf$" $T/disk.img
+grep -a -q "^major c 68 va2000$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 # check: a module copy changed, then gone
 cp $R/stand/gen/$id/mod/monsw $T/monsw.keep
@@ -483,6 +485,15 @@ grep -q "has no majors= and no fs=: nothing would load it" $T/out
 three; modpkg monsw class=demand majors=c:51
 refused 3 $KB build $FACTS			# another module's major
 grep -q "major c:51 is registered to another module" $T/out
+# c 68 is va2000's (2026-11-15): its demand record is composed; another module's c:68 is refused
+three; modpkg va2000 class=demand majors=c:68
+$KB build $FACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module va2000 demand .* majors=c:68$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+three; modpkg vaother class=demand majors=c:68
+refused 3 $KB build $FACTS			# va2000's major
+grep -q "major c:68 is registered to another module" $T/out
 three; modpkg monsw class=demand majors=c:52 depend=z3660rtg
 refused 3 $KB build $FACTS			# a depend cycle
 three; modpkg z3660eth class=boot match=always majors=c:51 depend=monsw

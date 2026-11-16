@@ -83,7 +83,10 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   `/etc/rc.conf`, `/etc/display`; no S99zen, S20monsw, syslog unit, S89rootswap,
   S01kbnamelist or S99zkbootset (their packages carry them). `docs/l11-disk.md`.
 - **The first boot** (`FB_L11=y`): DHCP or one static interface, the answers into
-  `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed.
+  `/etc/inet/interfaces` and `/etc/rc.conf`, an empty name allowed. The interfaces offered are
+  those that answer an open: aen0 (`aen -S`), zen0 (the Z3660's), xsf0 and xsf1 (an X-Surf or
+  X-Surf-100, the xsurf module every installed generation carries); with more than one, the
+  choice lists what was found. With none, `* dhcp` brings up a card fitted later.
 - **The repository.** A 1.1 install's `/etc/apkg.conf` names `http://pkg.amigaux.org/1.1`,
   the release's own tree (the profiles' `FB_REPO_URL`, and the driver's default on 1.1).
 - **Checks.** `tools/l11-target-check.py` reads all of it host-side; the first-boot rig's
@@ -103,14 +106,16 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   Without the key, 30 MiB on the 68030 line and the whole slice on the 68040/68060 line. The
   same list goes to /etc/rc.conf as `swap_add=` for the boot swap step.
   `swap -l` shows what is in use.
-- **The CD probe.** The miniroot looks for the install CD at cdfs `1,3`, `0,3`, `0,2`, `1,2`,
-  `0,5`, `1,5`, `2,5`, `3,5`, mounting each address once (`CD_CANDIDATES` in
-  `src/miniroot/profile`, equal to `MINIROOT_CD_CANDIDATES` in `setup.sh`). `k,5` is an ATAPI
-  drive on the IDE slave (gayle unit 5) with the IDE port as card k.
-  **Limitation:** the miniroot does not say which address answered, so the interview's disk
-  scan skips every candidate unit the medium's profile cannot install to (`scan_safe_ids`).
-  With `k,5` in the list that includes SCSI id 5 (and `d`, `15`, `1d`): a disk at id 5 is
-  not offered as a target unless the profile's `INSTALLABLE_IDS` names it.
+- **The CD probe.** The miniroot finds the install CD on the cards the running kernel
+  registered: each card's units by one bounded `kbootset` inquiry (the units that answer as CD
+  drives; the A3000's WD, which takes no inquiry, by mounting each unit once), else every unit
+  of every card, else the fixed list `1,3`, `0,3`, `0,2`, `1,2`, `0,5`, `1,5`, `2,5`, `3,5`
+  (`CD_CANDIDATES` in `src/miniroot/profile`, equal to `MINIROOT_CD_CANDIDATES` in `setup.sh`;
+  `k,5` is an ATAPI drive on the IDE slave of card k). It records the address that answered in
+  `/tmp/cd.spec`, and the interview keeps only that unit out of the disk scan: a disk at id 5
+  (a SCSI id 5, a Buddha's first-port slave) is offered unless the CD itself is there. Only
+  with no recorded address does the scan skip every candidate unit the profile cannot install
+  to (`scan_safe_ids`).
 - **The IDE port's card.** A four-card kernel numbers the sd cards by class (z3660 < zorro <
   mobo < ide), so the IDE port is card 0 alone, card 1 beside a Z3660 or one Zorro SCSI card,
   card 2 beside both. For a profile with `TARGET_HBA=gayle` the interview reads
@@ -120,6 +125,22 @@ The installer lays the 1.1 system down from packages; it writes only what no pac
   `IDE_CARD`, `CD_SPEC` and `ROOTDEV`. Without a kbootset or an IDE card in the table the
   profile's own values stand. `l11.sh` stops when `kbootset cards` names another controller
   for that master (kbootset -34 and earlier misread `c10`-`c17`).
+- **The Buddha and the Catweasel Z-II.** Their IDE ports are driven by one root-class module,
+  `buddha` (amix-dlm C4-2 §8.2), carried by the install media's boot generation and by every
+  installed generation (the universal profiles' `KERNEL_MODPKGS`). Every unit that answers as a
+  disk is offered: port 0 master 6 and slave 5, port 1 3 and 2, the Catweasel's port 2 1 and 0;
+  a lone Buddha is card 0 (`c6d0`), beside a Z3660 card 1 (`ced0`). `kbootset cards` names the
+  board `zorro:1212:00` (`zorro:1212:2a`), the interview "Buddha IDE" ("Catweasel Z-II IDE"),
+  and `l11.sh` writes `bootdev=` and `rootdev=` with that key and the root record
+  `sd id=12120000 base=00000000 unit=<U> slice=1` (`id=12122a00`). On the 1.1 kernels the module
+  lists the stand-in key `mobo:buddha`, which kbootset -44 and later take for the Buddha's; the
+  medium's kpkg carries kbootset -45, which the installer lays first.
+- **Two boards of one kind.** A Zorro root's record has `base=00000000` (the board found by its
+  id wherever Kickstart put it) unless `kbootset cards` lists the root's key on two or more cards;
+  then `base=` is the root board's own base, the third word of `kbootset cards DISK`
+  (C4-2 §8.2 item 5). It holds while the boards and their slots stay as they are; after a
+  change, the moved-disk step (C2-4 §6). Covered by the selftest (audit RR) only: the emulator
+  offers one board of a kind.
 - **Boot priority.** The installer writes the target's UNIX_Boot slice bootable at
   `TARGET_BOOT_BOOTPRI` (default 2, the stock value). Kickstart boots the bootable partition
   with the highest priority on any disk, so an AmigaOS disk at the usual 0 loses to the new

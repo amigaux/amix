@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-16 — release-together: the release step checks together-<release> (8ed5810c)
+
+build/release-together reads release/together-<release> and the release catalog's live rows; the release step refuses a tree that breaks a rule (apkg's version order). test-together 10/10.
+
+## 2026-11-15 — pkgroll: CONFFILES split as pkgmeta splits it (7c01eec0)
+
+pkgroll.sh splits CONFFILES on tabs and newlines as well as blanks and commas, as pkgmeta does.
+
+## 2026-11-15 — CONFFILES under a package's own PREFIX (189f6100)
+
+pkgmeta lets CONFFILES name files under the package's own PREFIX as well as /etc and /var (X keeps its configuration in /opt/amix/X11R6/lib/X11); the class scripts and the roll are unchanged.
+
+## 2026-11-15 — FORKDIRS; dist.sh builds va2000 (cf99407e, 5e281ea4, f52cc90d)
+
+pkgbuild.sh takes FORKDIRS: directories of pinned forks are copied into a package's source before the patches; BUILD.txt and the lock name each (source <pin> <url> <commit> <path> digest <sha256>); pkgmeta checks the triples. dist.sh builds va2000 from its fork pin. build/pkg/README.md no longer names an internal reference.
+
 ## 2026-11-14 — kdrv rolls a recipe once its pinned source has the module (187b934e)
 
 kdrv.sh takes KM_ONLY_IF_FILE, a file the pinned source holds once it has the recipe's module. While that file is absent, the recipe is said not to be in the pinned source yet, rolls nothing and is no gap; once it is there, a missing object is [MISSING] as usual. test-kdrv 11/11.

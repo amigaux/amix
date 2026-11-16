@@ -155,8 +155,10 @@ def lock(top, out):
                      if os.path.isfile(os.path.join(top, rel))])
     # the stock files of amix-system the userland packages carry, as copied
     # (STOCK_ETC) or patched (STOCK_PATCHED): each recipe's BUILD.txt says
-    # which, with the package's name and version
-    stock = []
+    # which, with the package's name and version; and the directories of
+    # pinned forks a recipe copies into its source (FORKDIRS), as its BUILD.txt
+    # names them: `source <pin> <url> <commit> <path> digest <sha256>`
+    stock, forkdirs = [], []
     built_root = os.path.join(out, "build", "userland")
     if os.path.isdir(built_root):
         for name in sorted(os.listdir(built_root)):
@@ -170,7 +172,11 @@ def lock(top, out):
                 raise LockError("%s does not start with the package's name and version" % path)
             stock += ["stock userland %s-%s %s" % (f[0], f[1], l[6:])
                       for l in text if l.startswith("stock ")]
+            forkdirs += ["source userland %s-%s %s" % (f[0], f[1], l[7:])
+                         for l in text if l.startswith("source ") and len(l.split()) == 7
+                         and l.split()[5] == "digest"]
     sections.append(sorted(stock))
+    sections.append(sorted(forkdirs))
     # outputs
     digests = os.path.join(out, "kit", "kit.digests")
     if os.path.isfile(digests):

@@ -20,6 +20,11 @@
 #define NLEAF	64
 
 char kvseg[16];
+/* fb_register's (t_fb46.c tests it): only links here */
+unsigned long hat_cm_fb[4];
+int hat_cm_fb_add(unsigned long lo, unsigned long hi) { (void)lo, (void)hi; return 0; }
+char *dlm_curname(void) { return 0; }
+int plat_board_window(unsigned long pa, unsigned long len) { (void)pa, (void)len; return 0; }
 char buildid[] = " 68060-261101-01";
 static char zpage[PG] __attribute__((aligned(4096)));
 static unsigned long zleaf, leaf[NLEAF], sde;

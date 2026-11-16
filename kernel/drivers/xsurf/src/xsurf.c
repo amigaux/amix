@@ -7,7 +7,9 @@
  * network set-up expects of every ethernet driver (ifup, dhcpc).  Minor
  * number: board in the low nibble, stream slot + 1 in the high one, which
  * the open rewrites (the stock aen driver's scheme, so slink's two opens
- * of /dev/xsf0 get two streams).
+ * of /dev/xsf0 get two streams).  Minor 15 is /dev/xsfctl: status only,
+ * no DLPI, open whenever the module is loaded (also when every board was
+ * refused at load), for xsf(1M) to say what each board found is doing.
  *
  * INTERRUPTS.  The module parameter intr selects them: 2 (the default) puts
  * a handler on the level-2 chain at load, checks it with a real interrupt
@@ -51,6 +53,8 @@ xs_board_t	xs_board[XS_MAXBOARDS] = { { 0 } };
 int		xs_nboards = 0;
 static int	xs_tick_id, xs_tick_on;
 static long	xs_intr_param;
+static xs_stream_t xs_ctl;		/* every /dev/xsfctl stream's q_ptr */
+static int	xs_ctl_open;
 static unsigned char xs_bcast[XS_ETHERADDRL] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 };
@@ -74,6 +78,12 @@ cred_t *credp;
     if (sflag == MODOPEN || sflag == CLONEOPEN)
 	return EINVAL;
     minor_device = getminor(*devp);
+    if (minor_device == XSURF_CTL_MINOR) {
+	q->q_ptr = (char *)&xs_ctl;
+	WR(q)->q_ptr = (char *)&xs_ctl;
+	xs_ctl_open = 1;
+	return 0;
+    }
     bi = minor_device & 0x0f;
     si = (minor_device & 0xf0) >> 4;
     if (bi >= xs_nboards || !xs_board[bi].present)
@@ -119,6 +129,12 @@ queue_t *q;
 
     if (sp == NULL)
 	return 0;
+    if (sp == &xs_ctl) {		/* the last close of /dev/xsfctl */
+	q->q_ptr = NULL;
+	WR(q)->q_ptr = NULL;
+	xs_ctl_open = 0;
+	return 0;
+    }
     b = &xs_board[sp->board];
     s = splxs();
     sp->q = NULL;
@@ -278,7 +294,7 @@ mblk_t *mp;
     xs_stream_t *sp = (xs_stream_t *)q->q_ptr;
     ulong prim;
 
-    if (sp && blklen(mp) >= (int)sizeof(ulong))
+    if (sp && sp != &xs_ctl && blklen(mp) >= (int)sizeof(ulong))
 	prim = ((union DL_primitives *)mp->b_rptr)->dl_primitive;
     else
 	prim = DL_UNITDATA_REQ;		/* dropped by xs_proto1 */
@@ -298,8 +314,8 @@ mblk_t *mp;
     xs_board_t *b;
     ulong prim;
 
-    if (sp == NULL || blklen(mp) < (int)sizeof(ulong)) {
-	freemsg(mp);
+    if (sp == NULL || sp == &xs_ctl || blklen(mp) < (int)sizeof(ulong)) {
+	freemsg(mp);			/* /dev/xsfctl has no DLPI */
 	return 1;
     }
     b = &xs_board[sp->board];
@@ -601,6 +617,54 @@ int size;
     qreply(q, mp);
 }
 
+/* a board's status record as of now, at IPL 4 */
+static void
+xs_status(b, st)
+xs_board_t *b;
+xsurf_status_t *st;
+{
+    b->st.version = XSURF_STATUS_VERSION;
+    b->st.size = sizeof(xsurf_status_t);
+    b->st.intr_mode = b->intr;
+    b->st.intr_param = (unsigned int)xs_intr_param;
+    b->st.running = b->running;
+    b->st.if_ipackets = b->ifs.ifs_ipackets;
+    b->st.if_opackets = b->ifs.ifs_opackets;
+    b->st.if_ierrors = b->ifs.ifs_ierrors;
+    b->st.if_oerrors = b->ifs.ifs_oerrors;
+    b->st.if_collisions = b->ifs.ifs_collisions;
+    bcopy((caddr_t)b->mac, (caddr_t)b->st.mac, XS_ETHERADDRL);
+    *st = b->st;
+}
+
+/* /dev/xsfctl: the board count, and each board found */
+static void
+xs_ctl_ioctl(q, mp)
+queue_t *q;
+mblk_t *mp;
+{
+    struct iocblk *iocbp = (struct iocblk *)mp->b_rptr;
+    xsurf_status_t st;
+    int i, s;
+
+    if (iocbp->ioc_cmd == XSURF_NUMBER_OF_BOARDS) {
+	xs_ioc_data(q, mp, (caddr_t)&xs_nboards, sizeof(int));
+	return;
+    }
+    i = iocbp->ioc_cmd - XSURF_FOUND_STATUS(0);
+    if (i < 0 || i >= xs_nfound) {
+	xs_ioc_reply(q, mp, EINVAL);
+	return;
+    }
+    s = splxs();
+    if (xs_found[i].board >= 0)
+	xs_status(&xs_board[xs_found[i].board], &st);
+    else
+	st = xs_found[i].rec;
+    splx(s);
+    xs_ioc_data(q, mp, (caddr_t)&st, sizeof(xsurf_status_t));
+}
+
 static void
 xs_ioctl(q, mp)
 queue_t *q;
@@ -625,12 +689,31 @@ mblk_t *mp;
 	xs_ioc_reply(q, mp, EINVAL);
 	return;
     }
+    if (sp == &xs_ctl) {
+	xs_ctl_ioctl(q, mp);
+	return;
+    }
     b = &xs_board[sp->board];
 
     switch (iocbp->ioc_cmd) {
     case SIOCSIFFLAGS:
     case SIOCGIFFLAGS:
-	xs_ioc_reply(q, mp, 0);
+	/*
+	 * IP sends these down with its ifreq in b_cont and its flags word
+	 * after the iocblk (struct iocblk_in), and passes the acknowledgement
+	 * back up as the answer: return the message as it came, as aen does.
+	 * Freeing b_cont here made ifconfig read flags 0.  The transparent
+	 * form (a plain ioctl() on the device) carries no ifreq: refused, as
+	 * the stock slip driver does.
+	 */
+	if (iocbp->ioc_count == TRANSPARENT) {
+	    xs_ioc_reply(q, mp, EINVAL);
+	    return;
+	}
+	mp->b_datap->db_type = M_IOCACK;
+	iocbp->ioc_error = 0;
+	iocbp->ioc_rval = 0;
+	qreply(q, mp);
 	return;
 
     case XSURF_NUMBER_OF_BOARDS:
@@ -639,16 +722,7 @@ mblk_t *mp;
 
     case XSURF_GET_STATUS:
 	s = splxs();
-	b->st.version = XSURF_STATUS_VERSION;
-	b->st.size = sizeof(xsurf_status_t);
-	b->st.intr_mode = b->intr;
-	b->st.link = XSURF_LINK_UNKNOWN;
-	b->st.running = b->running;
-	b->st.if_ipackets = b->ifs.ifs_ipackets;
-	b->st.if_opackets = b->ifs.ifs_opackets;
-	b->st.if_ierrors = b->ifs.ifs_ierrors;
-	b->st.if_oerrors = b->ifs.ifs_oerrors;
-	st = b->st;
+	xs_status(b, &st);
 	splx(s);
 	xs_ioc_data(q, mp, (caddr_t)&st, sizeof(xsurf_status_t));
 	return;
@@ -690,9 +764,79 @@ char *arg;
 }
 
 /*
+ * The link, read every XS_LINK_TICKS ticks into the status record (never
+ * during the interrupt self-test).  A change is said on the console once
+ * it has read alike XS_LINK_STABLE times, and at most once per
+ * XS_LINK_QUIET per board; a steady link says nothing.
+ */
+static void
+xs_link_poll(b)
+xs_board_t *b;
+{
+    int k;
+
+    if (b->selftest || --b->link_wait > 0)
+	return;
+    b->link_wait = XS_LINK_TICKS;
+    xs_page0(b);
+    (*b->ops->link)(b);
+    k = xs_link_key(b);
+    if (k == b->link_said) {
+	b->link_alike = 0;
+	return;
+    }
+    if (k == b->link_cand)
+	b->link_alike++;
+    else {
+	b->link_cand = k;
+	b->link_alike = 1;
+    }
+    if (b->link_alike >= XS_LINK_STABLE && lbolt - b->link_when >= XS_LINK_QUIET) {
+	b->link_said = k;
+	b->link_alike = 0;
+	b->link_when = lbolt;
+	b->st.link_changes++;
+	cmn_err(CE_NOTE, "xsf%d: %s", b->unit, xs_link_str(b));
+    }
+}
+
+/*
+ * Transmit failures, each kind said once per boot, from the tick (the
+ * interrupt path only sets note_due); later ones are only counted.
+ */
+static void
+xs_say_notes(b)
+xs_board_t *b;
+{
+    int due = b->note_due & ~b->st.notes;
+
+    b->note_due = 0;
+    if (due == 0)
+	return;
+    b->st.notes |= due;
+    if (due & XSURF_NOTE_TXTIMEOUT)
+	cmn_err(CE_NOTE,
+	    "xsf%d: a transmit did not complete, chip restarted (%s); further ones are counted, see xsf(1M)",
+	    b->unit, xs_link_str(b));
+    if (due & XSURF_NOTE_DMA)
+	cmn_err(CE_NOTE,
+	    "xsf%d: a remote-DMA write to the chip did not complete, frame dropped and chip restarted; further ones are counted, see xsf(1M)",
+	    b->unit);
+    if (due & XSURF_NOTE_ABORT)
+	cmn_err(CE_NOTE,
+	    "xsf%d: a transmit was aborted after 16 collisions (%s); further ones are counted, see xsf(1M)",
+	    b->unit, xs_link_str(b));
+    if (due & XSURF_NOTE_TXERR)
+	cmn_err(CE_NOTE,
+	    "xsf%d: a transmit ended in an error; further ones are counted, see xsf(1M)",
+	    b->unit);
+}
+
+/*
  * Every clock tick, at IPL 4: polled boards are serviced; in interrupt mode
  * the tick only checks that the interrupt still comes.  Then the watchdog,
- * and the write queues a lack of memory or of slots left waiting.
+ * the link, the transmit notes, and the write queues a lack of memory or
+ * of slots left waiting.
  */
 static void
 xs_tick(arg)
@@ -720,6 +864,8 @@ caddr_t arg;
 	    b->stuck = 0;
 	b->last_claims = b->st.irq_claims;
 	xs_watch(b);
+	xs_link_poll(b);
+	xs_say_notes(b);
 	xs_tx_restart(b);
 	splx(s);
     }
@@ -833,8 +979,6 @@ xs_teardown()
 	if (b->present) {
 	    s = splxs();
 	    xs_chip_stop(b);
-	    if (b->ops->phy)
-		(*b->ops->phy)(b, 0);
 	    splx(s);
 	}
 	if (b->attached) {
@@ -849,14 +993,18 @@ xs_teardown()
 	b->present = 0;
     }
     xs_nboards = 0;
+    xs_nfound = 0;
 }
 
 /*
  * _load: process context, IPL 0, before the core installs the cdevsw row.
  * Find and set up the boards (xs_boards.c), put each on the interface list,
  * start the chips and the tick, then the interrupt and its self-test.  One
- * console line per board names the card, its address and the mode it ended
- * in.  ENXIO without a board; any failure leaves nothing behind.
+ * console line per board names the card, its address, the mode it ended in
+ * and its link.  ENXIO when AutoConfig gave no board; when it gave boards
+ * but every one was refused (each with its own console line), 0 with
+ * nothing attached, so that /dev/xsfctl can say why.  Any failure leaves
+ * nothing behind.
  */
 int
 xsurf_load(params)
@@ -870,8 +1018,22 @@ char *params;
 	cmn_err(CE_NOTE, "xsurf: intr=%d is not 0 or 2; using 2", (int)xs_intr_param);
 	xs_intr_param = 2;
     }
+    xs_regs_param = (int)xs_param(params, "regs", 0L);
+    if (xs_regs_param > 2) {
+	cmn_err(CE_NOTE, "xsurf: regs=%d is not 0, 1 or 2; using 0", xs_regs_param);
+	xs_regs_param = 0;
+    }
+    xs_data_param = (int)xs_param(params, "data", 0L);
+    if (xs_data_param > 2) {
+	cmn_err(CE_NOTE, "xsurf: data=%d is not 0, 1 or 2; using 0", xs_data_param);
+	xs_data_param = 0;
+    }
 
     if (xs_find_boards() == 0) {
+	if (xs_nfound > 0) {
+	    cmn_err(CE_CONT, "xsurf: no board usable; xsf(1M) says why\n");
+	    return 0;
+	}
 	xs_teardown();
 	return ENXIO;
     }
@@ -890,6 +1052,11 @@ char *params;
 	b->intr = XSURF_MODE_POLLED;
 	s = splxs();
 	xs_chip_init(b, 1);
+	(*b->ops->link)(b);
+	b->link_said = b->link_cand = xs_link_key(b);
+	b->link_alike = 0;
+	b->link_when = lbolt - XS_LINK_QUIET;
+	b->link_wait = XS_LINK_TICKS;
 	splx(s);
     }
     xs_tick_on = 1;
@@ -902,12 +1069,17 @@ char *params;
 	b->intr = intr ? XSURF_MODE_INTR : XSURF_MODE_POLLED;
 	b->stuck = 0;
 	b->last_claims = b->st.irq_claims;
+	b->st.selftest_failed = xs_intr_param == 2 && !intr;
 	xs_chip_mask(b, intr);
-	splx(s);
-	cmn_err(CE_CONT, "xsf%d: %s, Zorro %d at 0x%x, %s, %s\n",
+	cmn_err(CE_CONT, "xsf%d: %s, Zorro %d at 0x%x, %s, %s, %s%s%s\n",
 	    b->unit, b->ops->name, (int)b->st.zorro, (int)b->phys, xs_macstr(b->mac),
 	    intr ? "interrupt I/O" :
-	    xs_intr_param == 2 ? "polled (interrupt self-test failed)" : "polled");
+	    xs_intr_param == 2 ? "polled (interrupt self-test failed)" : "polled",
+	    xs_link_str(b),
+	    b->st.reg_access == XSURF_ACCESS_WORD ? ", registers by word cycles" :
+	    b->st.reg_access == XSURF_ACCESS_WORD_LO ? ", registers by word cycles (low byte)" : "",
+	    b->ops->paths == 2 && b->data_path == XSURF_DATA_PORT ? ", data through the data port" : "");
+	splx(s);
     }
     return 0;
 }
@@ -923,6 +1095,8 @@ xsurf_unload()
 {
     int i, j;
 
+    if (xs_ctl_open)
+	return EBUSY;
     for (i = 0; i < xs_nboards; i++)
 	for (j = 0; j < XS_MAXDEV; j++)
 	    if (xs_board[i].s[j].q)

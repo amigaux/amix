@@ -101,9 +101,10 @@ def self_test():
     print("dmamask self-test (synthetic, no media)")
     # the table: the rule's values, and every controller sdnames knows is named in it
     want = {"a4091": 0x07FFFFFE, "a4092": 0x07FFFFFE, "a3000": 0x07FFFFFE, "a2091": 0x00FFFFFE,
-            "a2090": 0x00FFFFFE, "a4000t": 0xFFFFFFFC, "gayle": 0xFFFFFFFC, "z3660scsi": 0xFFFFFFFC}
+            "a2090": 0x00FFFFFE, "a4000t": 0xFFFFFFFC, "gayle": 0xFFFFFFFC, "z3660scsi": 0xFFFFFFFC,
+            "buddha": 0xFFFFFFFC, "catweasel": 0xFFFFFFFC}
     t(all(dm.mask_for(k) == (v, True) for k, v in want.items()) and len(dm.TABLE) == len(want),
-      "the table holds the rule's eight controllers and values")
+      "the table holds the rule's ten controllers and values")
     t(dm.mask_for("a4kt710") == (0xFFFFFFFC, True), "a4kt710 is the A4000T onboard 710")
     t(dm.mask_for("") == (0x07FFFFFE, False) and dm.mask_for("ncr9999") == (0x07FFFFFE, False),
       "an unknown or empty controller: 0x07FFFFFE, not known (the caller warns)")

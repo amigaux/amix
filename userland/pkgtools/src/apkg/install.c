@@ -74,6 +74,7 @@
 /* ---------------- installed state ---------------- */
 
 int opt_force_essential = 0;   /* --force-remove-essential (main.c) */
+char **apkg_argv = NULL;       /* main()'s argv, for the re-exec */
 
 /* the value of parameter key (e.g. "VERSION") in the installed pkginfo,
  * CR/LF and one level of quotes stripped, "" when the line is absent:
@@ -130,6 +131,62 @@ int installed_version(const struct conf *cf, const char *pkginst,
                       char *ver, unsigned verlen)
 {
     return installed_param(cf, pkginst, "VERSION", ver, verlen);
+}
+
+/* The engine's record of an install cut short (pkginstall/main.c):
+ *  - <pkgloc>/!I-Lock!, made before the package's files are touched and
+ *    removed only when the install ends without a warning or a failure;
+ *    a cut or a failed script leaves it, with pkginfo already saying the
+ *    new VERSION and the contents database holding the new entries;
+ *  - <PKGLOC>/.save.<pkginst>: an update to another version first moves
+ *    the installed record there (mv_pkgdirs) and writes a new one only
+ *    later; a cut in between leaves the record moved aside and none in
+ *    its place (quit() moves it back on an orderly failure).
+ * pkgremove's !R-Lock! marks a removal cut short (2). */
+int pkg_partial(const struct conf *cf, const char *pkginst)
+{
+    char *dir;
+    char *p;
+    int r;
+
+    if (pkginst == NULL || pkginst[0] == '\0' || strcmp(pkginst, "-") == 0)
+        return 0;
+    dir = cat3(cf->sadmpkg, "/", pkginst);
+    p = cat2(dir, "/!I-Lock!");
+    r = file_exists(p);
+    free(p);
+    if (!r) {
+        p = cat3(cf->sadmpkg, "/.save.", pkginst);
+        r = file_exists(p);
+        free(p);
+    }
+    if (!r) {
+        p = cat2(dir, "/!R-Lock!");
+        r = file_exists(p) ? 2 : 0;
+        free(p);
+    }
+    free(dir);
+    return r;
+}
+
+/* after a good pkgadd of pkginst: the record an update cut short had
+ * moved aside (<PKGLOC>/.save.<pkginst>) is the old version's, and the
+ * engine removes it only on its own way out; it goes */
+static void drop_saved_record(const struct conf *cf, const char *pkginst)
+{
+    char *sav;
+
+    if (opt_dryrun)
+        return;
+    sav = cat3(cf->sadmpkg, "/.save.", pkginst);
+    if (file_exists(sav)) {
+        if (rm_tree(sav) == 0)
+            note("removed %s, the record an interrupted update had moved "
+                 "aside", sav);
+        else
+            warnx2("cannot remove %s", sav);
+    }
+    free(sav);
 }
 
 int pkg_essential(const struct conf *cf, const char *pkginst,
@@ -386,6 +443,12 @@ static int ent_installed(const struct conf *cf, const struct pkgent *e,
     return installed_version(cf, e->pkginst, ver, verlen);
 }
 
+/* 1 when the entry's install was cut short (pkg_partial() == 1) */
+static int ent_partial(const struct conf *cf, const struct pkgent *e)
+{
+    return pkg_partial(cf, e->pkginst) == 1;
+}
+
 /* the record's `source` (C2-2 §2/§3): the catalog URL for HTTP, the
  * mount path or the raw device as apkg saw it for a medium */
 static char *source_id(const struct source *s)
@@ -588,10 +651,20 @@ static int install_one(const struct conf *cf, const char *pkgadd,
                        const char *file, const char *pkginst, int ow,
                        const struct txnpkg *p)
 {
+    char iver[128];
     int rc;
 
+    /* a file that becomes a conffile: untouched ones take the new
+     * default (conffile.c); an installed instance only, or one an
+     * install cut short (the contents entries say which files) */
+    if (!p->kspace && (installed_version(cf, pkginst, iver, sizeof(iver)) ||
+                       pkg_partial(cf, pkginst) == 1)) {
+        (void)conffile_prepare(cf, file, pkginst);
+        (void)conffile_unconf(cf, file, pkginst);
+    }
     if (run_pkgadd(cf, pkgadd, file, pkginst, ow) != 0)
         return EX_PKGCMD;
+    drop_saved_record(cf, pkginst);
     if (!p->kspace)
         return EX_OK;
     rc = kpkg_write_record_fields(cf, p->reckey, p->name, p->version,
@@ -703,6 +776,17 @@ static int commit_txn(const struct conf *cf, const struct source *src,
         if (from[i] != NULL)
             free(from[i]);
     free((char *)from);
+    /* a new kbootset composes the generation again, so what an older one
+     * refused (a major it did not know) is built now */
+    if (rc == EX_OK && !t.kspace && kspace_has_records(cf))
+        for (i = 0; i < nt; i++)
+            if (!todo[i]->kspace && t.p[nrep + i].done &&
+                strcmp(todo[i]->name, KBOOTSET_PKG) == 0) {
+                t.kspace = 1;
+                if (!opt_dryrun)
+                    printf("kbootset %s is installed; composing the "
+                           "generation with it\n", todo[i]->version);
+            }
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);
     /* good, and the journal cleared: recover will not read them */
@@ -737,6 +821,7 @@ int cmd_download(const struct conf *cf, struct catalog *cat,
     }
     if (ent->refused != NULL) {
         warnx2("%s: the catalog entry is refused: %s", name, ent->refused);
+        catalog_hint(ent);
         return EX_VERIFY;
     }
     if (src_open(cf->repo, &src) != 0)
@@ -839,6 +924,16 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     for (i = 0; i < no; i++) {
         ent = order[i];
         named = is_named(names, nnames, ent);
+        if (ent_partial(cf, ent)) {
+            /* an install cut short: lay the package again, over the
+             * instance the engine left */
+            printf("%s is partially installed (an install was cut short); "
+                   "installing %s again\n", ent->name, ent->version);
+            todo[nt] = ent;
+            ow[nt] = 1;
+            nt++;
+            continue;
+        }
         if (!ent_installed(cf, ent, iver, sizeof(iver))) {
             todo[nt] = ent;
             ow[nt] = 0;
@@ -891,6 +986,7 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     /* one transaction at a time on a target; then the plan of one kernel
      * package per line and the kernel-space pre-flight, before anything
      * is fetched */
+    kspace_floor(cf, cat, &todo, &ow, &nt);
     rep = NULL;
     nrep = 0;
     rc = txn_refuse_if_pending(cf) != 0 ? EX_USAGE :
@@ -1003,19 +1099,87 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
  * question the way SVR4 always could: the old inode stays alive for the
  * running process while the directory entry is replaced.
  */
-/* the place of a package in an upgrade (0.3.5): kbootset first, the
- * other ordinary packages, the loader, the modules, the kernel last.  The
+/* the place of a package in an upgrade: the package tools first (0.3.12:
+ * the engine, apkg, kbootset; 0.3.5 had kbootset alone), the other
+ * ordinary packages, the loader, the modules, the kernel last.  The
  * generation is built once, after all of them; the order decides what a
  * failure midway leaves (the journal, 'apkg recover'). */
+#define RANK_TOOLS 1            /* ranks 0..1: the tools that install
+                                 * packages, upgraded before the re-exec;
+                                 * kbootset leads the rest, so the
+                                 * generation is built once, at the end */
 static int set_rank(const struct pkgent *e)
 {
-    if (!e->kspace)
-        return strcmp(e->name, KBOOTSET_PKG) == 0 ? 0 : 1;
+    if (!e->kspace) {
+        if (strcmp(e->name, APKGENG_PKG) == 0)
+            return 0;
+        if (strcmp(e->name, APKG_PKG) == 0)
+            return 1;
+        return strcmp(e->name, KBOOTSET_PKG) == 0 ? 2 : 3;
+    }
     if (strcmp(e->role, "loader") == 0)
-        return 2;
+        return 4;
     if (strcmp(e->role, "module") == 0)
-        return 3;
-    return 4;
+        return 5;
+    return 6;
+}
+
+/* After an upgrade of the package tools that took apkg itself, run the
+ * new apkg with this call's arguments for the rest; it finds the tools
+ * up to date.  It must answer `apkg version` first; when it cannot, this
+ * returns and the running apkg does the rest. */
+static void reexec_self(const struct conf *cf)
+{
+    static char envset[] = APKG_REEXEC_ENV "=1";
+    char *argv[3];
+    char line[128];
+    int fd[2];
+    int pid;
+    int st;
+    int n;
+    int got;
+
+    line[0] = '\0';
+    got = 0;
+    fflush(stdout);
+    fflush(stderr);
+    if (access(cf->self, X_OK) == 0 && pipe(fd) == 0) {
+        pid = fork();
+        if (pid == 0) {
+            (void)close(fd[0]);
+            (void)dup2(fd[1], 1);
+            (void)close(fd[1]);
+            argv[0] = cf->self;
+            argv[1] = (char *)"version";
+            argv[2] = NULL;
+            execv(argv[0], argv);
+            _exit(127);
+        }
+        (void)close(fd[1]);
+        if (pid > 0) {
+            while (got < (int)sizeof(line) - 1 &&
+                   (n = (int)read(fd[0], line + got,
+                                  (unsigned)(sizeof(line) - 1 - got))) > 0)
+                got += n;
+            line[got] = '\0';
+            if (waitpid(pid, &st, 0) < 0 || !WIFEXITED(st) ||
+                WEXITSTATUS(st) != 0)
+                got = 0;
+        }
+        (void)close(fd[0]);
+    }
+    if (got < 6 || strncmp(line, "apkg ", 5) != 0) {
+        warnx2("the new apkg %s does not run; this apkg (%s) does the "
+               "rest", cf->self, APKG_VERSION);
+        return;
+    }
+    line[strcspn(line, "\n")] = '\0';
+    printf("the package tools are upgraded; %s does the rest\n", line);
+    fflush(stdout);
+    (void)putenv(envset);
+    execv(cf->self, apkg_argv);
+    warnx2("cannot run %s; this apkg (%s) does the rest", cf->self,
+           APKG_VERSION);
 }
 
 /* stable: insertion sort by rank, todo[] and ow[] together */
@@ -1042,6 +1206,51 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
 
 /* set for the one cmd_upgrade call upgrade_all makes */
 static int upgrading_all = 0;
+/* an entry was left out because this apkg is too old for it: when apkg
+ * itself is upgraded, the new one is run for the rest even if nothing
+ * else follows, so it takes that entry in the same call */
+static int reexec_wanted = 0;
+
+/* the partial packages (an install cut short) the catalog cannot repair:
+ * named, with the way out */
+static void warn_partial_elsewhere(const struct conf *cf,
+                                   struct catalog *cat)
+{
+    DIR *d;
+    struct dirent *de;
+    const char *name;
+    char *sav;
+    int i;
+
+    d = opendir(cf->sadmpkg);
+    if (d == NULL)
+        return;
+    while ((de = readdir(d)) != NULL) {
+        name = de->d_name;
+        if (strncmp(name, ".save.", 6) == 0)
+            name += 6;          /* an update cut short (pkg_partial) */
+        else if (name[0] == '.')
+            continue;
+        if (pkg_partial(cf, name) != 1)
+            continue;
+        if (name != de->d_name) {
+            /* named once: by its .save. entry only when there is no
+             * record directory to be named by */
+            sav = cat3(cf->sadmpkg, "/", name);
+            i = file_exists(sav);
+            free(sav);
+            if (i)
+                continue;
+        }
+        for (i = 0; i < cat->n; i++)
+            if (strcmp(cat->ents[i].pkginst, name) == 0)
+                break;
+        if (i == cat->n)
+            warnx2("%s is partially installed and not in the catalog: "
+                   "pkgadd it again from its package file", name);
+    }
+    closedir(d);
+}
 
 /* a no-name upgrade refused for its kernel space: the userland packages in
  * it have no part in that, and go when named */
@@ -1082,17 +1291,22 @@ static int upgrade_all(const struct conf *cf, struct catalog *cat)
     nleft = 0;
     for (i = 0; i < cat->n; i++) {
         e = &cat->ents[i];
-        if (!ent_installed(cf, e, iver, sizeof(iver)) ||
-            apkg_vercmp(e->version, iver) <= 0)
+        if (!ent_partial(cf, e) &&
+            (!ent_installed(cf, e, iver, sizeof(iver)) ||
+             apkg_vercmp(e->version, iver) <= 0))
             continue;
         if (e->refused != NULL) {
             warnx2("%s %s is left out: the catalog entry is refused: %s",
                    e->name, e->version, e->refused);
+            catalog_hint(e);
+            if (e->toonew)
+                reexec_wanted = 1;
             nleft++;
             continue;
         }
         names[n++] = e->name;
     }
+    warn_partial_elsewhere(cf, cat);
     if (n == 0) {
         printf(nleft > 0 ? "no other installed package has a newer version\n"
                          : "every installed package is up to date\n");
@@ -1125,6 +1339,8 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
     int nrep;
     int i, j;
     int nk;
+    int ntools;
+    int self;
     int rc;
 
     /* Several names, ONE transaction (one journal, one kbootset build +
@@ -1156,19 +1372,22 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
                 break;
         if (j < nt)
             continue;                         /* named twice */
-        if (!ent_installed(cf, ent, iver, sizeof(iver))) {
+        if (ent_partial(cf, ent)) {
+            printf("%s is partially installed (an install was cut short); "
+                   "installing %s again\n", names[i], ent->version);
+        } else if (!ent_installed(cf, ent, iver, sizeof(iver))) {
             warnx2("%s is not installed; use 'apkg install %s'",
                    names[i], names[i]);
             rc = EX_USAGE;
             break;
-        }
-        if (apkg_vercmp(ent->version, iver) <= 0) {
+        } else if (apkg_vercmp(ent->version, iver) <= 0) {
             printf("%s is up to date (installed %s, catalog %s)\n",
                    names[i], disp_ver(iver), ent->version);
             continue;
+        } else {
+            printf("upgrading %s %s -> %s\n", names[i], disp_ver(iver),
+                   ent->version);
         }
-        printf("upgrading %s %s -> %s\n", names[i], disp_ver(iver),
-               ent->version);
         todo[nt] = ent;
         ow[nt] = 1;
         nt++;
@@ -1181,6 +1400,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         return rc;
     }
     kspace_expand(cf, cat, &todo, &ow, &nt);
+    kspace_floor(cf, cat, &todo, &ow, &nt);
     order_set(todo, ow, nt);
     /* an upgrade keeps its pkginst, so it replaces no other kernel
      * package; kspace_replaces() still refuses a line with two kernel
@@ -1257,8 +1477,36 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         insts[i] = xstrdup(todo[i]->kspace ? inst : todo[i]->pkginst);
     }
 
-    rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
-                    pkgadd, rep, nrep);
+    /* the engine and apkg in a transaction of their own when apkg itself
+     * is among them and other packages follow: the new apkg does the rest
+     * (kbootset first) */
+    ntools = 0;
+    self = 0;
+    for (i = 0; i < nt; i++)
+        if (set_rank(todo[i]) <= RANK_TOOLS) {
+            ntools++;
+            if (strcmp(todo[i]->name, APKG_PKG) == 0)
+                self = 1;
+        }
+    if (self && (ntools < nt || reexec_wanted) && !opt_dryrun &&
+        getenv(APKG_REEXEC_ENV) == NULL &&
+        (cf->target[0] == '\0' || cf->self_set)) {
+        rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, ntools,
+                        pkgadd, NULL, 0);
+        if (rc == EX_OK) {
+            reexec_self(cf);
+            if (nt > ntools)
+                rc = commit_txn(cf, &src, "upgrade", todo + ntools,
+                                ow + ntools, files + ntools, insts + ntools,
+                                nt - ntools, pkgadd, rep, nrep);
+        } else {
+            warnx2("the package tools were not all upgraded; nothing else "
+                   "was");
+        }
+    } else {
+        rc = commit_txn(cf, &src, "upgrade", todo, ow, files, insts, nt,
+                        pkgadd, rep, nrep);
+    }
     free_strv(files, nt);
     free_strv(insts, nt);
     if (rep != NULL)
@@ -1351,6 +1599,7 @@ int cmd_remove(const struct conf *cf, struct catalog *cat,
         (void)txn_save(cf, &t);
         if (!opt_dryrun)
             printf("removed %s\n", pkginst);
+        conffile_prune(cf, pkginst);
     }
     rc = txn_finish(cf, &t, rc);
     txn_free(&t);
@@ -1424,6 +1673,9 @@ static void warn_kernelless(const struct txn *t)
         }
     }
 }
+
+/* set while recover_before_upgrade() runs cmd_recover() */
+static int recover_for_upgrade = 0;
 
 int cmd_recover(const struct conf *cf)
 {
@@ -1506,8 +1758,8 @@ int cmd_recover(const struct conf *cf)
         } else {
             if (!staged_ok(p)) {
                 warnx2("cannot finish %s from the journal: 'apkg -f "
-                       "recover' discards it, then install %s again",
-                       p->name, p->name);
+                       "recover' discards it, then 'apkg upgrade' installs "
+                       "%s again", p->name, p->name);
                 rc = EX_VERIFY;
                 break;
             }
@@ -1530,7 +1782,9 @@ int cmd_recover(const struct conf *cf)
     if (rmeng != NULL)
         free(rmeng);
     if (rc != EX_OK) {
-        warnx2("the journal %s is kept", cf->txnfile);
+        if (!recover_for_upgrade || rc != EX_VERIFY || t.kspace ||
+            remove)
+            warnx2("the journal %s is kept", cf->txnfile);
         txn_free(&t);
         return rc;
     }
@@ -1547,6 +1801,58 @@ int cmd_recover(const struct conf *cf)
             drop_staged(cf, t.p[i].staged);
     }
     txn_free(&t);
+    return rc;
+}
+
+/* Before `apkg upgrade`: finish the journaled transaction (apkg recover).
+ * A journal of ordinary packages whose staged datastream is gone or has
+ * changed (apkg clean, a repository that moved on) cannot be finished from
+ * itself: it is dropped, said so, and the upgrade installs the packages it
+ * left partial again from the catalog.  A journal with kernel-space work
+ * or a removal is kept, and the upgrade stops with recover's words. */
+int recover_before_upgrade(const struct conf *cf)
+{
+    struct txn t;
+    int rc;
+
+    if (!txn_exists(cf))
+        return EX_OK;
+    printf("finishing the interrupted transaction first (apkg recover)\n");
+    recover_for_upgrade = 1;
+    rc = cmd_recover(cf);
+    recover_for_upgrade = 0;
+    if (rc != EX_VERIFY || !txn_exists(cf) || txn_load(cf, &t) != 0)
+        return rc;
+    if (t.kspace || strcmp(t.verb, "remove") == 0) {
+        txn_free(&t);
+        return rc;
+    }
+    txn_free(&t);
+    warnx2("the journal is dropped; what it left partial is installed "
+           "again from the catalog");
+    txn_clear(cf);
+    return EX_OK;
+}
+
+/* `apkg recover` with no journal: every package of the catalog whose
+ * install was cut short, installed again (an upgrade by name) */
+int cmd_repair(const struct conf *cf, struct catalog *cat)
+{
+    char **names;
+    int n;
+    int i;
+    int rc;
+
+    names = (char **)xmalloc((unsigned)((cat->n + 1) * sizeof(char *)));
+    n = 0;
+    for (i = 0; i < cat->n; i++)
+        if (ent_partial(cf, &cat->ents[i]))
+            names[n++] = cat->ents[i].name;
+    warn_partial_elsewhere(cf, cat);
+    rc = EX_OK;
+    if (n > 0)
+        rc = cmd_upgrade(cf, cat, names, n);
+    free((char *)names);
     return rc;
 }
 

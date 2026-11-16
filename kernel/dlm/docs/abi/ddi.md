@@ -1,4 +1,4 @@
-# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2, stage 5 in minor 3: each name's minor is its `ddi.list` line)
+# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2, stage 5 in minor 3, k46.1.6 `fb_register`: each name's minor is its `ddi.list` line)
 
 These are the names a module may use from the kernel. The list of record
 is the ABI kit's `ddi.list` (`abi/<line>/ddi.list` here). The kernel's
@@ -33,9 +33,28 @@ The C is K&R. The kernel compiler runs with `-traditional`.
 | Name | Form | Context | Provider | Contract |
 |---|---|---|---|---|
 | `printf` | `printf(fmt, ...)` | any | stock | to the console; `%s %d %u %x %o %c` |
-| `cmn_err` | `cmn_err(level, fmt, ...)` | any | stock | `CE_CONT`, `CE_NOTE`, `CE_WARN`, `CE_PANIC` (`<sys/cmn_err.h>`); a leading `!` sends the message to the log only |
+| `cmn_err` | `cmn_err(level, fmt, ...)` | any | stock | `CE_CONT`, `CE_NOTE`, `CE_WARN`, `CE_PANIC` (`<sys/cmn_err.h>`); start the format with `^`, below |
 | `panic` | `panic(fmt)` | any | stock | does not return |
 | `panicstr` | `char *` (data, read-only) | any | stock | nonzero once the system is panicking: a driver's halt or flush paths test it |
+
+The stock `cmn_err` sets the kernel's print destination (`prt_where`)
+from the format's first character and leaves it there, for every later
+`printf` and `cmn_err` until the next `cmn_err`, on both lines:
+
+- `^`: the console only, the value the kernel sets after boot. With
+  `syslogd` registered as the console logger, the line goes to it and
+  once into the message buffer. A module's formats start with `^`.
+- `!`: the message buffer only. Every later `printf` then misses the
+  console and the logger.
+- anything else: the console and the message buffer. Once `syslogd` is
+  the console logger, every later line enters the buffer twice, directly
+  and as the logger's copy (`modadmin -L` shows each twice).
+
+A core with patch 0058 puts `prt_where` back after a module's `_load`,
+`_unload`, halt entry and deferred calls. A `cmn_err` in an entry point
+the module installs (open, ioctl, an interrupt, a STREAMS or filesystem
+routine) still leaves it, and so does any `cmn_err` on a kernel whose core
+is older. Start the formats with `^` in either case.
 
 ## Memory
 
@@ -70,6 +89,20 @@ lines map it differs:
 
 On k46 the kit's `sys/immu.h` and `sys/param.h` are the 4 KiB-page forms,
 so `phystopfn()` and `btop()` are right.
+
+## The framebuffer cache class (k46.1.6)
+
+| Name | Form | Context | Provider | Contract |
+|---|---|---|---|---|
+| `fb_register` | `int fb_register(pa, len)` (unsigned long each) | proc, from the module's `_load` only | core (k46) | Pages a `d_mmap` hands out inside `[pa, pa+len)` are mapped non-cacheable, not serialised (0x60) instead of non-cacheable serialised (0x40), for the rest of the boot. `pa` and `len` page-aligned, the window inside one AutoConfig board's that is not RAM; the framebuffer only, never a register page. 0 (also the same module's same window again, after a reload); `EINVAL` (not from `_load`, a bad range); `EBUSY` (it overlaps a window another module or the kernel holds); `ENOSPC` (both of the kernel's two slots held). Nothing is released at unload. One console line per refusal; the window then stays serialised. C3-6 §5 |
+
+k30 has no such class (the 68030 never caches a device page and buffers
+no store) and no `fb_register`. One source serves both lines and every
+kernel through `<sys/amixddi.h>`: `DDI_FB_REGISTER_DECL;` once at file
+scope, then `DDI_FB_REGISTER(pa, len)` (with `<sys/errno.h>`). On k46
+that is a weak reference: the module keeps its minor, and on a kernel
+before 1.6 the call gives `ENOSYS`. On k30 it is `ENOSYS`, with no
+reference. Called by name, `fb_register` makes the module k46.1.6.
 
 ## Copy and strings
 

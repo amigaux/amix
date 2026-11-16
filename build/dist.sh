@@ -21,7 +21,8 @@
 #                (the module directories that hold files git tracks)
 #   drivers      every driver module on both lines, on the kit:
 #                kernel/drivers/{a4091,z3660scsi,z3660eth,xsurf}/module and
-#                the forks at their pins (cdfs, gayle-ide, paula, z3660rtg):
+#                the forks at their pins (cdfs, gayle-ide, paula, va2000,
+#                z3660rtg):
 #                out/modules/<line>/<name>
 #   kspace       the kernel-space packages: each kernel/<dir>/pkg/build.sh,
 #                provider before consumer (dlm, k30, port, the modules, the
@@ -321,7 +322,7 @@ step_modules() {
 }
 
 # the drivers: ours in kernel/drivers, and the forks at their pins
-DRIVERS="a4091 z3660scsi z3660eth xsurf cdfs gayle-ide paula z3660rtg"
+DRIVERS="a4091 z3660scsi z3660eth xsurf cdfs gayle-ide paula va2000 z3660rtg"
 
 fork_at_pin() {	# fork_at_pin <name>: the fork at kernel/drivers/<name>/<name>.pin, in out/cache/forks
 	read -r url commit < "$top/kernel/drivers/$1/$1.pin"
@@ -350,7 +351,7 @@ build_driver() {	# build_driver <name>: its module on both lines, built against 
 		f=$(fork_at_pin cdfs)
 		make -C "$f/platform/amix-kernel/module" DLM="$dlm"
 		;;
-	gayle-ide|paula)
+	gayle-ide|paula|va2000)
 		f=$(fork_at_pin "$1")
 		make -C "$f/module" DLM="$dlm"
 		;;
@@ -701,6 +702,11 @@ step_release() {
 		--release "$release" --out "$out/release/$release" \
 		--release-check "$top/tools/release-check" \
 		--apkg-bin "$top/userland/pkgtools/src/apkg/apkg" || rc=$?
+	# packages that must ship together (release/together-<release>)
+	if [ $rc = 0 ] && [ -f "$top/release/together-$release" ]; then
+		python3 -I "$here/release-together" "$top/release/together-$release" \
+			"$out/release/$release/catalog" || rc=1
+	fi
 	exit $rc
 }
 

@@ -681,6 +681,66 @@ key=`kbootset cards /dev/dsk/c8d0s1` || exit 1
 kbootset \-R /mnt build \-\-bootdev $key \-\-rootdev $key ...
 .fi
 .RE
+.SS "Moving the root disk to another controller"
+Every
+.B build
+carries the root record from the default generation, so after the disk
+moves it still names the old controller.
+The
+.B bootdev=
+and
+.B rootdev=
+lines of
+.B /etc/default/bootset
+are read only where kinfo does not give the facts
+.RB ( \-R ,
+.BR \-\-image ,
+a boot without a loader record), and kbootset does not rewrite them.
+Before the move, or after it from a boot that mounted the root, name the
+new controller.
+.B kbootset cards
+gives its key
+.I K
+(and its base, when two boards of one kind are fitted); then, with
+.I U
+the disk's unit and
+.I id
+the controller's id
+.RB ( 12120000
+for a Buddha):
+.PP
+.RS
+.nf
+kbootset build \-\-bootdev K \-\-rootdev K \e
+    \-\-root "sd id=\fIid\fP base=00000000 unit=\fIU\fP slice=1"
+kbootset commit
+.fi
+.RE
+.PP
+then power-cycle; the trial boots, and
+.B mark-good
+makes it the default.
+Give
+.B base=
+the board's base instead of 00000000 only when
+.B kbootset cards
+lists the key on more than one card.
+A motherboard controller's record is
+.BI "sd id=0000000" N " base=00000000"
+with
+.I N
+its motherboard id (1 a3000-wd, 2 gayle, 3 a4000t-710).
+No
+.B \-\-swap
+is needed: the kernel takes slice 2 of the root disk as swap.
+Edit the file's
+.B bootdev=
+and
+.B rootdev=
+to
+.I K
+too, for a later repair under
+.BR \-R .
 .SH SEE ALSO
 .BR apkg (1),
 .BR rc.subr (1M),

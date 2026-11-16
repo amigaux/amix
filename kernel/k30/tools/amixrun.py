@@ -75,7 +75,8 @@ def readuntil(sock, needles, timeout, until=None):
             break
         if not chunk:
             break
-        buf += strip_iac(sock, chunk)
+        # telnet sends a bare CR as CR NUL (RFC 854): fold it on the whole buffer, so a pair split over two reads folds too
+        buf = (buf + strip_iac(sock, chunk)).replace(b'\r\x00', b'\r')
         if any(nd in buf for nd in needles) or (until is not None and until.search(buf)):
             break
     return buf

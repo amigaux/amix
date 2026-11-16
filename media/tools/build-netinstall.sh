@@ -13,7 +13,7 @@
 #   1. tools/build-install-iso.sh --profile universal-k46 --profile universal-k30 --set full --four-card
 #        --stage STAGE --keep-stage --out MASTER.iso   (the installer tree and the full set)
 #   2. this tool, --boot-mods DIR: each line's boot- and demand-class module objects at DIR/<line>/<name>
-#        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth
+#        -- every `module NAME boot` record of the line's generation, the exact bytes: z3660eth, xsurf
 #        and, since catalog b1f564f4, the kernel package's ufs on k30 (s5 is the root)
 #   3. tools/build-ramdisk-miniroot.sh --line k46|k30 --kb 6144 [--fp-patch] --net
 #        (6 MiB: the first stage installs the base packages from the image, dropbear among them;
@@ -30,10 +30,10 @@
 # system's second stage installs (a set's own base packages, x11r63)
 #
 # The generations are build-ramdisk-cd.sh's with the netinstall module lists: the RAM disk,
-# the root controllers and z3660eth as a boot-class module (50 section 5; zen0), no
-# cdfs (there is no CD to read packages from). Each image is gated against its generation by
-# tools/ramdisk-image-check.py --zen0 (every boot record's path= holds its sha256=; /dev/zen0 is
-# c 51,0). The disc is mastered as tools/build-iso.sh masters a CD-boot disc (System ID
+# the root controllers (buddha among them) and z3660eth and xsurf as boot-class modules (50 section 5;
+# zen0, xsf0), no cdfs (there is no CD to read packages from). Each image is gated against its generation
+# by tools/ramdisk-image-check.py --zen0 (every boot record's path= holds its sha256=; /dev/zen0 is
+# c 51,0, /dev/xsf0 c 56,0). The disc is mastered as tools/build-iso.sh masters a CD-boot disc (System ID
 # AMIGA BOOT, Rock Ridge, the loader 0755) and read back: the boot tree must pass lsstore -C.
 # --raw PREFIX: form B's second half (50 section 5), PREFIX-k46.img for the Z3660 cards (--raw-k30:
 # PREFIX-k30.img as well, for the bench's l11-nr-k30 cell; it is not a release medium), each
@@ -76,9 +76,9 @@ esac; done
 L11="$L11_IN"
 # the netinstall generations' module lists (tools/lib/ramdisk-media.sh reads them): every disk
 # controller driver the installed generation carries (so the cards number as at the first boot),
-# and z3660eth for the network the packages come over
-export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 z3660eth-k46"
-export K30_MODS="ramdisk-k30 a4091-k30 z3660scsi-k30 a4kt710-k30 gayle-k30 z3660eth-k30"
+# and z3660eth and xsurf (zen0, xsf0) for the network the packages come over
+export K46_MODS="ramdisk-k46 z3660scsi-k46 a4091-k46 a4kt710-k46 gayle-k46 buddha-k46 z3660eth-k46 xsurf-k46"
+export K30_MODS="ramdisk-k30 a4091-k30 z3660scsi-k30 a4kt710-k30 gayle-k30 buddha-k30 z3660eth-k30 xsurf-k30"
 if [ -n "$BMODS" ]; then
   # step 2: stage each line as its generation will be, and hand out the boot- and demand-class objects
   . "$here/lib/ramdisk-media.sh"
@@ -86,6 +86,7 @@ if [ -n "$BMODS" ]; then
   for l in k46 k30; do
     rd_bootmods "$l" "$BMODS" > "$W/bm-$l.names"
     grep -qx z3660eth "$W/bm-$l.names" || die "$l: the netinstall generation records no boot-class z3660eth"
+    grep -qx xsurf "$W/bm-$l.names" || die "$l: the netinstall generation records no boot-class xsurf"
     for m in $(cat "$W/bm-$l.names"); do
       f="$BMODS/$l/$m"
       echo "build-netinstall: $f ($(wc -c < "$f") bytes, sha256 $(sha256sum < "$f" | cut -c1-16))"
@@ -107,10 +108,12 @@ find "$root/BOOT" "$root/S" -type d -exec chmod 0755 {} +
 find "$root/BOOT" "$root/S" -type f -exec chmod 0644 {} +
 chmod 0755 "$root/BOOT/amix-cdboot"
 . "$here/lib/licensing-text.sh"
+# the installer's version as the user is told it: media/VERSION (1.1 before the file existed)
+NIVER="$(sed -n '1p' "$repo/VERSION" 2>/dev/null)"; NIVER="${NIVER:-1.1}"
 cat > "$root/LICENSING" <<EOF
 Amix 2.1 netinstall medium -- release-cleared 2026-09-23.
 
-This disc boots the Amix 1.1 installer into memory (68030 and 68040/68060 lines). Its RAM disk
+This disc boots the Amix $NIVER installer into memory (68030 and 68040/68060 lines). Its RAM disk
 carries the base packages the installer needs; the rest of the system's packages are read over
 the network from the package repository.
 

@@ -13,7 +13,7 @@ same key) by rank class -- z3660 < zorro < mobo < ide -- then base. A profile ke
 two-card values: TARGET_SCSI_ID (card*8 + unit, hex), CD_SPEC (card,unit) and ROOTDEV
 (sd block major 18 << 18 | minor). Its physical facts say what the rig carries:
   SD_BOARDS  the disk controllers, in base order: a3000 a4000t gayle z3660scsi a2090
-             a2091 a4091 a4092
+             a2091 a4091 a4092 buddha catweasel
   TARGET_HBA the target's controller, CD_HBA the install CD's (SOURCE_KIND=cdfs).
 With N=4 the cards are derived again and every value that moves is printed as KEY=VALUE
 under a comment, for build-install-iso.sh to append to the staged profile (the last
@@ -25,7 +25,7 @@ import re
 import sys
 
 CLASS = {"z3660scsi": 1, "a4091": 2, "a4092": 2, "a2091": 2, "a2090": 2,
-         "a3000": 3, "a4000t": 3, "gayle": 4}
+         "a3000": 3, "a4000t": 3, "gayle": 4, "buddha": 4, "catweasel": 4}
 SD_BMAJ = 18
 
 

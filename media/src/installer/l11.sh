@@ -64,6 +64,36 @@ L11_DLM='dlm::sysinit:/sbin/modadmin -B </dev/console >/dev/console 2>&1'	# C3-5
 L11_STORE_MB=64
 L11_STORE_BYTES=67108864
 
+# l11_rootbase -- L11_RBASE, the base of a Zorro root's record: 00000000 when the root's key is on one card
+# (the board is found by its id, wherever Kickstart configured it), the root board's own base
+# when two or more cards carry it (two boards of one kind: RTH1 then compares the record's base
+# with sdcardbase, the base `kbootset cards` prints; C4-2 8.2 item 5). The base holds while the
+# boards and their slots stay as they are.
+L11_CBASE=
+l11_rootbase()
+{
+	# one x per card with the key (the miniroot has no wc; the loop is a subshell)
+	_n=
+	[ -x "$L11/bin/kbootset" ] && _n=`"$L11/bin/kbootset" cards 2>/dev/null | while read _w _c _r _key _rest
+	do
+		[ "$_w" = card ] && [ "$_key" = "$KBOOTSET_ROOTDEV" ] && echo x
+	done`
+	L11_RBASE=00000000
+	case "$_n" in
+		*x*x*)	;;
+		*)	return 0 ;;
+	esac
+	[ "$KBOOTSET_ROOTDEV" = "$KBOOTSET_BOOTDEV" ] || return 0
+	_b=`expr "$L11_CBASE" : '0[xX]\([0-9a-fA-F][0-9a-fA-F]*\)$'`
+	[ -n "$_b" ] || die "two cards carry $KBOOTSET_ROOTDEV, and kbootset cards gives no base for the target's (${L11_CBASE:-none}); set KBOOTSET_ROOTREC"
+	while [ `expr "$_b" : '.*'` -lt 8 ]
+	do
+		_b="0$_b"
+	done
+	[ `expr "$_b" : '.*'` = 8 ] || die "kbootset cards gives the base $L11_CBASE, not 32 bits"
+	L11_RBASE="$_b"
+}
+
 # l11_keys -- validate the 1.1 keys and derive the box facts. Called once, right
 # after the profile is loaded.
 l11_keys()
@@ -118,6 +148,7 @@ l11_keys()
 		case "$1" in
 			mobo:?*|zorro:?*:?*)
 				KBOOTSET_BOOTDEV="$1"
+				[ "$2" = base ] && L11_CBASE="$3"
 				L11_CTL="kbootset cards: the target disk's own card; profile TARGET_HBA=$TARGET_HBA" ;;
 			*)	L11_CTL="the profile's TARGET_HBA=$TARGET_HBA; kbootset cards: ${_k:-no answer}" ;;
 		esac
@@ -135,6 +166,10 @@ l11_keys()
 			# the onboard 53C710 Kickstart boots through its ROM's NCR scsi.device;
 			# a4kt710's match key (C4-2 sec 8, C4-1 sec 5.2: motherboard id 3)
 			a4000t|a4kt710)	KBOOTSET_BOOTDEV=mobo:a4000t-710 ;;
+			# the Buddha's key as `kbootset cards` gives it (product 00; on the 1.1 kernels its
+			# module lists the stand-in mobo:buddha, which kbootset -44 and later take for it)
+			buddha)		KBOOTSET_BOOTDEV=zorro:1212:00 ;;
+			catweasel)	KBOOTSET_BOOTDEV=zorro:1212:2a ;;
 			*)		die "INSTALL_LAYOUT=1.1: no controller key known for TARGET_HBA='$TARGET_HBA'; set KBOOTSET_BOOTDEV" ;;
 		esac
 	fi
@@ -154,7 +189,8 @@ l11_keys()
 			zorro:*:*)
 				_m=`expr "$KBOOTSET_ROOTDEV" : 'zorro:\([0-9a-fA-F]*\):'`
 				_p=`expr "$KBOOTSET_ROOTDEV" : 'zorro:[0-9a-fA-F]*:\([0-9a-fA-F]*\)$'`
-				KBOOTSET_ROOTREC="sd id=${_m}${_p}00 base=00000000 unit=$_u slice=$TARGET_ROOT_SLICE" ;;
+				l11_rootbase
+				KBOOTSET_ROOTREC="sd id=${_m}${_p}00 base=$L11_RBASE unit=$_u slice=$TARGET_ROOT_SLICE" ;;
 			mobo:*)	KBOOTSET_ROOTREC="sd id=00000000 base=00000000 unit=$_u slice=$TARGET_ROOT_SLICE mobo" ;;
 			*)	die "KBOOTSET_ROOTDEV='$KBOOTSET_ROOTDEV' is not a zorro: or mobo: match key" ;;
 		esac

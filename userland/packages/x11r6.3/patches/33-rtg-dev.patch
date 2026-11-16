@@ -1,0 +1,130 @@
+Ours.  -dev PATH: the device node of the RTG card, for a machine with two
+graphics cards (a real ZZ9000 beside a Z3660 is /dev/zz9001), so the
+display start-up can hand the server the node its card file names.
+
+- the layer: rtgDevice (-dev; unset, each card opens its own node,
+  rtgCardOps.device, as before) and rtgCardDevice(card), which a card's
+  probe and initHW open instead of a fixed path;
+- with -card auto and -dev, each card's probe is tried on that node and
+  the first that answers is taken;
+- a node no card answers on stops the server with "RTG card not found at
+  <node>" (a named card) or "no RTG card found at <node>" (auto);
+- the ZZ9000 driver opens rtgCardDevice(&zz9000CardOps); the -dev usage
+  line.
+
+--- a/programs/Xserver/hw/amix/amixIo.c
++++ b/programs/Xserver/hw/amix/amixIo.c
+@@ -451,6 +451,11 @@
+ 	    FatalError("-card %s: no such card in this server\n", argv[i]);
+ 	return 2;
+     }
++    if (!strcmp(argv[i], "-dev")) {	/* RTG card's device node */
++	if (++i >= argc) UseMsg ();
++	rtgDevice = argv[i];
++	return 2;
++    }
+     if (!strcmp(argv[i], "-blitmin")) {	/* card blitter from this area on */
+ 	if (++i >= argc) UseMsg ();
+ 	rtgBlitMin = atoi(argv[i]);
+@@ -584,6 +589,7 @@
+     ErrorF("-height int            screen height in pixels.\n");
+     ErrorF("-depth int             screen depth in planes.\n");
+     ErrorF("-card name             RTG: the card (zz9000, va2000 or auto; default: X<card>'s card, else auto)\n");
++    ErrorF("-dev path              RTG: the card's device node (default: the card's own, /dev/zz9000, /dev/va2000)\n");
+     ErrorF("-mode WxH              RTG video mode (e.g. 800x600, 1024x768)\n");
+     ErrorF("-blitmin int           RTG: card blitter for fills/copies of this many pixels or more (default: the card's, 1024; 0 = never)\n");
+     ErrorF("-blitmax int           ignored (the driver splits blitter operations itself)\n");
+--- a/programs/Xserver/hw/amix/rtg/rtg.h
++++ b/programs/Xserver/hw/amix/rtg/rtg.h
+@@ -71,7 +71,9 @@
+ ** own beyond fillBox and copyBox.
+ **
+ **   probe()          is the card there?  No side effects that last: open,
+-**                    ask, close.
++**                    ask, close.  probe and initHW open rtgCardDevice(the
++**                    card's own record), never a fixed path, so the node
++**                    -dev names reaches them.
+ **   setMode(name)    -mode WxH: select that mode for the next initHW;
+ **                    FALSE = not a mode of this card (modes lists them).
+ **   modeSize(&w,&h)  the selected mode's size (the mode default until a
+@@ -164,6 +166,9 @@
+ */
+ extern int  rtgBlitMin;             /* -blitmin; a card sets 0 to stop       */
+ extern int  rtgMove16;              /* -move16 (68040/68060 line bursts)     */
++extern char *rtgDevice;             /* -dev PATH; NULL: each card its own    */
++extern char *rtgCardDevice(rtgCardOps *c); /* the node card c opens: -dev's, */
++                                    /* else c->device                        */
+ extern void rtgCpuFill(rtgScreenPtr pRTG, int x1, int y1, int x2, int y2,
+                        unsigned long pixel);        /* [x1,x2) x [y1,y2)     */
+ extern void rtgCpuCopy(rtgScreenPtr pRTG, int sx, int sy, int w, int h,
+--- a/programs/Xserver/hw/amix/rtg/rtgInit.c
++++ b/programs/Xserver/hw/amix/rtg/rtgInit.c
+@@ -87,6 +87,20 @@
+ static Bool        rtgCardAuto = FALSE;                 /* -card auto */
+ static char       *rtgModeName = (char *) NULL;         /* -mode WxH  */
+ 
++/*
++** -dev PATH: the device node of the card, for a machine with two graphics
++** cards (a real ZZ9000 beside a Z3660 is /dev/zz9001).  Unset, each card
++** opens its own node (rtgCardOps.device).  With -card auto, each card's
++** probe is tried on this node and the first that answers is taken.
++*/
++char *rtgDevice = (char *) NULL;
++
++char *
++rtgCardDevice(rtgCardOps *c)
++{
++    return rtgDevice ? rtgDevice : c->device;
++}
++
+ static rtgCardOps *
+ rtgCardByName(name)
+ char *name;
+@@ -230,7 +244,7 @@
+ 
+     if (c) {
+         if (c->version != RTG_CARD_VERSION || !(*c->probe)()) {
+-            ErrorF("rtgProbe: RTG card not found at %s\n", c->device);
++            ErrorF("rtgProbe: RTG card not found at %s\n", rtgCardDevice(c));
+             return FALSE;
+         }
+     } else {
+@@ -239,8 +253,12 @@
+                 break;
+         c = *t;
+         if (!c) {
+-            ErrorF("rtgProbe: no RTG card found (cards tried: %s)\n",
+-                   rtgCardNames());
++            if (rtgDevice)
++                ErrorF("rtgProbe: no RTG card found at %s (cards tried: %s)\n",
++                       rtgDevice, rtgCardNames());
++            else
++                ErrorF("rtgProbe: no RTG card found (cards tried: %s)\n",
++                       rtgCardNames());
+             return FALSE;
+         }
+         ErrorF("rtgProbe: -card auto: %s\n", c->name);
+--- a/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
++++ b/programs/Xserver/hw/amix/rtg/zz9000/zz9000hw.c
+@@ -64,7 +64,7 @@
+ {
+     int fd;
+ 
+-    fd = open(ZZ9000_DEV, O_RDWR);
++    fd = open(rtgCardDevice(&zz9000CardOps), O_RDWR);
+     if (fd < 0)
+         return FALSE;
+     if (ioctl(fd, ZZ9KIOC_PROBE, 0) < 0) {
+@@ -97,10 +97,10 @@
+     }
+     memset((char *)pZZ, 0, sizeof(ZZ9000ScreenRec));
+ 
+-    fd = open(ZZ9000_DEV, O_RDWR);
++    fd = open(rtgCardDevice(&zz9000CardOps), O_RDWR);
+     if (fd < 0) {
+         ErrorF("ZZ9000InitHW: cannot open %s (%s)\n",
+-               ZZ9000_DEV, strerror(errno));
++               rtgCardDevice(&zz9000CardOps), strerror(errno));
+         xfree((pointer)pZZ);
+         return FALSE;
+     }

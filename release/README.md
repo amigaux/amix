@@ -25,6 +25,35 @@ make dist SYSTEM=$PWD/../amix-system RELEASE_PUBLIC=1 LOCK=$PWD/../amix-1.1.lock
 The tag is older than this file, so the lock goes in as a copy from outside
 the checkout, and at the tag the paths must be absolute (`docs/BUILDING.md`).
 
+## A point release: 1.1.1
+
+A point release adds to its release's repository; it does not start a new
+one. 1.1.1 is built at its commit on the published 1.1 tree:
+
+```sh
+make dist SYSTEM=… RELEASE_PREVIOUS=<the published 1.1 tree>
+```
+
+The release step keeps every published file byte for byte (a published name
+and version whose bytes differ is refused), adds the new versions, and moves
+a live version that a newer one replaces to the catalog's older block, where
+`carried-1.1` must name it. Against 1.1, 1.1.1 adds buddha-k30 and buddha-k46
+1.1.0-4 and xsurf-k30 and xsurf-k46 1.0.0-3, and kbootset 1.1.0.261114-45
+replaces 1.1.0.261105-43, which `carried-1.1` lists at the tag `1.1`. The
+kernels and every other package are 1.1's. Its locks are as for 1.1, both
+built at amix 7d9e944f:
+
+- `amix-1.1.1.lock` (sha256 `29f765aecb959dbb1e031e10d1db513af09625d7f0c75c3b1f1cf72c0f6eec9f`):
+  1.1.1 as anyone rebuilds it, with `RELEASE_PUBLIC=1` and no published tree.
+  A rebuild is proven against it.
+- `amix-1.1.1-published.lock` (sha256 `b37fb273039da097a2afc9477d11c8b09a956df18d0f3b81dda1ab0d674143fd`):
+  the record of what `http://pkg.amigaux.org/1.1` holds with 1.1.1, the same
+  build on the published 1.1 tree. It differs from the first only in its
+  `previous` line (the digest of 1.1's catalog), the catalog (md5
+  `ec6ab6f48fa71aec70df78717f35ab86` for the rebuild's
+  `394ff54b7715ee3818beb8a575ac880d`) and the 26 older versions `carried-1.1`
+  names. The media are the same bytes in both.
+
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
 of record, `+` in this build).
@@ -56,6 +85,10 @@ stock userland <name>-<version> <path> <sha256> [patched <sha256>]
                                       each amix-system file a userland package carries:
                                       copied (STOCK_ETC), or patched by its stage hook
                                       (STOCK_PATCHED); from the recipe's BUILD.txt
+source userland <name>-<version> <pin> <URL> <commit> <path> digest <sha256>
+                                      each directory of a pinned fork a userland package
+                                      copies into its source (FORKDIRS): the path in the
+                                      fork and the digest of its files; from BUILD.txt
 
 kit <line> <kabi> <manifest> <norev> KIT_REV=<c> PORT_REV=<c>|-
                                       out/kit/kit.digests, verbatim (kernel/dlm)
@@ -79,6 +112,15 @@ The exceptions are the kits' revision lines (`kit.conf` and `NOTICE` name the
 commits, so across commits the kit's `norev` digest is the one compared) and the installed
 disk and SD images (bench-built, proven by their contents). A release is built from a clean commit: a lock with a `dirty`
 line is not one of record.
+
+## Packages that ship together
+
+`together-<release>` lists pairs a release tree must carry together, one rule a
+line: `<name> <version>: needs <name> <version>`. When the release catalog's live
+row for the first name is at least its version, the second's must be at least
+its version, or the release step refuses the tree (`build/release-together`,
+versions in apkg's order). A module's own kbootset floor is not listed here: its
+catalog row carries it (`kbootset=`).
 
 ## What a release's packages are
 

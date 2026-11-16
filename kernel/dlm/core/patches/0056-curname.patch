@@ -1,0 +1,83 @@
+Subject: dlm_curname, the loading module's name for core/plat
+
+A line's own DDI provider in core/plat (fb_register on k46, contract
+C3-6 section 5) needs to know which module calls it, and from _load
+only, as vfs_register and root_defer do; it does not see the core's
+structures.  dlm_curname() gives dlm_curmod's name while a _load runs,
+and 0 otherwise.  The state harness checks both.
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -304,6 +304,17 @@
+ 	return 0;
+ }
+ 
++/*
++ * The name of the module whose _load is running, else 0: how a line's own
++ * DDI provider in core/plat (fb_register on k46) knows its caller without
++ * the core's structures.  The name stays valid for the call only.
++ */
++char *
++dlm_curname()
++{
++	return dlm_curmod ? dlm_curmod->m_name : (char *)0;
++}
++
+ /* the first sysinit entry: each deferred call once, in order; safe mode too */
+ void
+ dlm_defer_run()
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -137,6 +137,8 @@
+ fsmod('vf3', 'ufs')
+ fsmod('vf5', 'vf5', unload='allowed')
+ mod('vfbad', extra=['fs=Bad-Name'])
++# dlm_curname: ln1's _load asks for the caller's name
++mod('ln1')
+ # demand filesystems (C4-6 section 5): fd1 registers its type when the
+ # first mount loads it, and mounts; fd2 fails its _load after registering;
+ # fd3 loads without registering
+--- a/test/state.c
++++ b/test/state.c
+@@ -1038,6 +1038,33 @@
+ 	moduload(i1);
+ }
+ 
++/* ---- dlm_curname: the caller's name, for core/plat's providers ---- */
++extern char *dlm_curname();
++static char ln_seen[MODMAXNAMELEN + 1];
++
++int
++h_ln(m, a, b)
++	char *m, *a;
++	long b;
++{
++	char *n = dlm_curname();
++
++	strncpy(ln_seen, n ? n : "(none)", MODMAXNAMELEN);
++	return 0;
++}
++
++void
++curname_tests()
++{
++	int id;
++
++	host_handler("ln1_load", h_ln);
++	check(dlm_curname() == 0, "curname: 0 outside a module's _load");
++	check(modload("ln1", &id) == 0 && strcmp(ln_seen, "ln1") == 0,
++	    "curname: the loading module's own name during its _load");
++	check(dlm_curname() == 0, "curname: 0 again once _load returned");
++}
++
+ /* ---- vfs_register (C4-6 section 3) ---- */
+ static int vf_e[8], vf_n, vf_inits, vf_idx;
+ static char *vf_row;
+@@ -2440,6 +2467,7 @@
+ 	rdimg_tests();
+ 	promote_tests();
+ 	rdblk_tests();
++	curname_tests();
+ 	vfs_tests();
+ 	fsdem_tests();
+ 	nowait_tests();

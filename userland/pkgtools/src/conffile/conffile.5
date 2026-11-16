@@ -1,6 +1,6 @@
 .\" conffile.5 - manual page for the conffile mechanism of Amix packages.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH CONFFILE 5 "October 2026" "apkg 0.3.4" "Amix File Formats"
+.TH CONFFILE 5 "November 2026" "apkg 0.3.12" "Amix File Formats"
 .SH NAME
 conffile \- package configuration files that keep your edits across upgrades
 .SH DESCRIPTION
@@ -70,6 +70,29 @@ a package owns to exist after the install, so a removed conffile cannot
 stay removed.
 .PP
 In every case the new default becomes the baseline.
+.PP
+A file that an upgrade turns into a config file (the installed version
+shipped it as a plain file) has no baseline yet.
+.B apkg
+compares it with what the installed version recorded for it (size,
+checksum and modification time) before the upgrade: when you never
+touched it, apkg stores it as the baseline, so the new default replaces
+it silently; when you edited it, it is kept and the new default goes
+beside it as above.  An older apkg, or a bare
+.BR pkgadd ,
+keeps both kinds, with a
+.B .new
+file beside each.
+.PP
+Installing a version that ships a config file as a plain file (a
+downgrade) lays the package's default over it: apkg saves a file you
+edited as
+.IB file .old
+first and drops the file's baseline, its
+.B .new
+and its
+.B PENDING
+line.
 .SS What to do with a .new file
 Compare the two, for example with
 .BR diff (1):

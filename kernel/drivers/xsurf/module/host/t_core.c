@@ -243,7 +243,8 @@ shutdown()
     CHECK(!host_attached());
     CHECK(!host_tick_armed());
     CHECK(host_ifs_count == 0);
-    CHECK(chip.gpoc_in_dma == 0);
+    CHECK(chip.dsr_writes == 0);
+    CHECK(chip.link_bad_page == 0 && chip.link_in_dma == 0);
     CHECK(chip.overread == 0);
     CHECK(chip.bad_addr == 0);
     CHECK(chip.odd_bout == 0);
@@ -531,6 +532,105 @@ ioctl_msg(int cmd, unsigned int count, int with_cont)
     return mp;
 }
 
+/*
+ * The interface ioctls as IP sends them down: struct iocblk_in (the iocblk,
+ * two queue pointers, IP's flags word) with the ifreq in b_cont.
+ */
+struct t_iocblk_in {
+    struct iocblk iocblk; void *tclient, *nclient; int ioc_ifflags;
+};
+struct t_ifreq {
+    char ifr_name[16]; short ifr_flags; char ifr_rest[14];
+};
+
+static mblk_t *
+ifreq_msg(int cmd, int len, short flags)
+{
+    mblk_t *mp = allocb(sizeof(struct t_iocblk_in), BPRI_MED);
+    struct t_iocblk_in *io = (struct t_iocblk_in *)mp->b_wptr;
+    struct t_ifreq *ifr;
+
+    mp->b_datap->db_type = M_IOCTL;
+    memset(io, 0, sizeof *io);
+    io->iocblk.ioc_cmd = cmd;
+    io->iocblk.ioc_count = len;
+    io->ioc_ifflags = flags;
+    mp->b_wptr += sizeof *io;
+    mp->b_cont = allocb(sizeof *ifr, BPRI_MED);
+    ifr = (struct t_ifreq *)mp->b_cont->b_wptr;
+    memset(ifr, 0, sizeof *ifr);
+    strcpy(ifr->ifr_name, "xsf0");
+    ifr->ifr_flags = flags;
+    mp->b_cont->b_wptr += len;
+    return mp;
+}
+
+/* IFF_UP | IFF_BROADCAST | IFF_NOTRAILERS, what IP holds for an ethernet */
+#define T_IFFLAGS	0x23
+
+static void
+t_ifioctl()
+{
+    static struct { int cmd; int len; } nak[] = {
+	{ SIOCSIFADDR, 32 }, { SIOCGIFADDR, 32 }, { SIOCSIFDSTADDR, 32 },
+	{ SIOCGIFDSTADDR, 32 }, { SIOCSIFBRDADDR, 32 }, { SIOCGIFBRDADDR, 32 },
+	{ SIOCSIFNETMASK, 32 }, { SIOCGIFNETMASK, 32 }, { SIOCSIFMETRIC, 32 },
+	{ SIOCGIFMETRIC, 32 }, { SIOCSIFMTU, 32 }, { SIOCGIFMTU, 32 },
+	{ SIOCSIFMEM, 32 }, { SIOCGIFMEM, 32 }, { SIOCSIFNAME, 32 },
+	{ SIOCIFDETACH, 32 }, { IF_UNITSEL, 4 }, { SIOCSPROMISC, 4 },
+	{ SIOCADDMULTI, 32 }, { SIOCDELMULTI, 32 }, { SIOCGENADDR, 32 },
+	{ SIOCGENPSTATS, 32 },
+    };
+    static int ack[] = { SIOCGIFFLAGS, SIOCSIFFLAGS };
+    struct iocblk *io;
+    struct t_ifreq *ifr;
+    mblk_t *mp;
+    int i;
+
+    cur = "ifioctl";
+    boot("intr=0");
+    s_open(&S[0], 0);
+    /* the flags: acknowledged with the message as it came */
+    for (i = 0; i < 2; i++) {
+	s_put(&S[0], ifreq_msg(ack[i], sizeof *ifr, T_IFFLAGS));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	CHECK(mp && mp->b_datap->db_type == M_IOCACK && io->ioc_cmd == ack[i]);
+	CHECK(io && io->ioc_error == 0 && io->ioc_count == sizeof *ifr);
+	CHECK(mp && mp->b_wptr - mp->b_rptr == sizeof(struct t_iocblk_in) &&
+	      ((struct t_iocblk_in *)io)->ioc_ifflags == T_IFFLAGS);
+	CHECK(mp && mp->b_cont && mp->b_cont->b_wptr - mp->b_cont->b_rptr == sizeof *ifr);
+	if (mp && mp->b_cont) {
+	    ifr = (struct t_ifreq *)mp->b_cont->b_rptr;
+	    CHECK(ifr->ifr_flags == T_IFFLAGS && strcmp(ifr->ifr_name, "xsf0") == 0);
+	}
+	freemsg(mp);
+    }
+    /* the transparent form, a plain ioctl() on the device: refused */
+    for (i = 0; i < 2; i++) {
+	s_put(&S[0], ioctl_msg(ack[i], TRANSPARENT, 1));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	CHECK(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_error == EINVAL &&
+	      io->ioc_count == 0 && mp->b_cont == NULL);
+	freemsg(mp);
+    }
+    /* everything else IP, arp or slink could send: refused, as aen does */
+    for (i = 0; i < sizeof nak / sizeof nak[0]; i++) {
+	s_put(&S[0], ifreq_msg(nak[i].cmd, nak[i].len, T_IFFLAGS));
+	mp = s_up(&S[0]);
+	io = mp ? (struct iocblk *)mp->b_rptr : NULL;
+	if (!(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_error == EINVAL &&
+	      io->ioc_count == 0 && mp->b_cont == NULL))
+	    printf("ifioctl: 0x%x not refused\n", nak[i].cmd);
+	CHECK(mp && mp->b_datap->db_type == M_IOCNAK && io->ioc_cmd == nak[i].cmd);
+	CHECK(io && io->ioc_error == EINVAL && io->ioc_count == 0 && mp->b_cont == NULL);
+	freemsg(mp);
+    }
+    CHECK(s_upcount(&S[0]) == 0);
+    shutdown();
+}
+
 static void
 t_ioctl()
 {
@@ -546,7 +646,12 @@ t_ioctl()
     if (mp && mp->b_cont) {
 	st = (xsurf_status_t *)mp->b_cont->b_rptr;
 	CHECK(st->version == XSURF_STATUS_VERSION && st->size == sizeof(xsurf_status_t));
-	CHECK(st->link == XSURF_LINK_UNKNOWN && st->intr_mode == XSURF_MODE_POLLED);
+	CHECK(st->link == XSURF_LINK_UP && st->intr_mode == XSURF_MODE_POLLED);
+	CHECK(st->link_speed == 100 && st->link_duplex == XSURF_DUPLEX_FULL);
+	CHECK(st->link_medium == XSURF_MEDIUM_TP && st->link_changes == 0);
+	CHECK(st->unit == 0 && st->refused == XSURF_REFUSED_NONE);
+	CHECK(memcmp(st->mac, MAC, 6) == 0 && st->intr_param == 0);
+	CHECK(st->selftest_failed == 0 && st->notes == 0);
     }
     freemsg(mp);
     s_put(&S[0], ioctl_msg(XSURF_GET_STATUS, TRANSPARENT, 0));	/* no address */
@@ -852,13 +957,15 @@ t_interrupts()
 	CHECK(xsurf_load("intr=2") == 0);
     }
     CHECK(B->intr == XSURF_MODE_POLLED && !host_attached());
-    CHECK(strstr(host_console, "polled (interrupt self-test failed)") != NULL);
+    CHECK(strstr(host_console, "polled (interrupt self-test failed), link up 100 full\n") != NULL);
+    CHECK(B->st.selftest_failed == 1);
     shutdown();
 
     cur = "intr-zero";
     boot("intr=0");
     CHECK(B->intr == XSURF_MODE_POLLED && !host_attached());
-    CHECK(strstr(host_console, ", polled\n") != NULL);
+    CHECK(strstr(host_console, ", polled, link up 100 full\n") != NULL);
+    CHECK(B->st.selftest_failed == 0);
     shutdown();
 
     cur = "intr-attach-fails";
@@ -923,6 +1030,473 @@ t_load_unload()
     shutdown();
 }
 
+static int
+count(char *hay, char *needle)
+{
+    int n = 0;
+
+    while ((hay = strstr(hay, needle)) != NULL) {
+	n++;
+	hay += strlen(needle);
+    }
+    return n;
+}
+
+/* one link-poll period of ticks */
+static void
+period()
+{
+    ticks(XS_LINK_TICKS);
+}
+
+static void
+t_link()
+{
+    int reads;
+
+    cur = "link-at-load";
+    boot("intr=0");
+    CHECK(chip.link_reads == 1);		/* read once for the load line */
+    CHECK(strstr(host_console, "xsf0: Model, Zorro 2 at 0xe90000, 00:80:10:12:34:56, polled, link up 100 full\n") != NULL);
+    period();
+    CHECK(chip.link_reads == 2);		/* then every XS_LINK_TICKS */
+    ticks(XS_LINK_TICKS - 1);
+    CHECK(chip.link_reads == 2);
+
+    cur = "link-steady-says-nothing";
+    host_console[0] = 0;
+    ticks(20 * HZ);
+    CHECK(host_console[0] == 0 && B->st.link_changes == 0);
+
+    cur = "link-down-said-once-stable";
+    chip.link = XSURF_LINK_DOWN;
+    chip.link_speed = 0;
+    chip.link_duplex = XSURF_DUPLEX_UNKNOWN;
+    ticks(1);					/* the read due now */
+    CHECK(B->st.link == XSURF_LINK_DOWN);	/* the record is live at once */
+    CHECK(host_console[0] == 0);		/* one read is not a change yet */
+    period();
+    CHECK(strstr(host_console, "xsf0: no link") != NULL && B->st.link_changes == 1);
+    ticks(30 * HZ);
+    CHECK(count(host_console, "xsf0:") == 1);	/* steady: nothing more */
+
+    cur = "link-rate-limited";
+    host_console[0] = 0;
+    chip.link = XSURF_LINK_UP;
+    chip.link_speed = 10;
+    chip.link_duplex = XSURF_DUPLEX_HALF;
+    period();
+    period();
+    CHECK(strstr(host_console, "xsf0: link up 10 half") != NULL);	/* quiet time over */
+    host_console[0] = 0;
+    chip.link = XSURF_LINK_DOWN;
+    period();
+    period();
+    period();
+    CHECK(host_console[0] == 0);		/* within XS_LINK_QUIET of the last line */
+    ticks(XS_LINK_QUIET);
+    CHECK(count(host_console, "xsf0: no link") == 1 && B->st.link_changes == 3);
+
+    cur = "link-flap-back-says-nothing";
+    host_console[0] = 0;
+    chip.link = XSURF_LINK_UP;
+    period();				/* one read up ... */
+    chip.link = XSURF_LINK_DOWN;
+    period();				/* ... and back to what was said */
+    ticks(XS_LINK_QUIET * 2);
+    CHECK(host_console[0] == 0 && B->st.link_changes == 3);
+
+    cur = "link-read-in-page-0";
+    chip.cr |= XS_CR_PAGE1;			/* left in page 1 by something */
+    period();
+    CHECK(chip.link_bad_page == 0);
+
+    cur = "link-not-during-selftest";
+    reads = chip.link_reads;
+    B->selftest = 1;
+    ticks(5 * XS_LINK_TICKS);
+    CHECK(chip.link_reads == reads);
+    B->selftest = 0;
+    period();
+    CHECK(chip.link_reads == reads + 1);
+
+    cur = "link-unknown-words";
+    host_console[0] = 0;
+    chip.link = XSURF_LINK_UNKNOWN;
+    chip.link_medium = XSURF_MEDIUM_NOTREADY;
+    ticks(XS_LINK_QUIET + 3 * XS_LINK_TICKS);
+    CHECK(strstr(host_console, "xsf0: link state unknown (chip not ready)") != NULL);
+    shutdown();
+}
+
+/* the words for each state (xs_link_str) */
+static void
+t_link_words()
+{
+    static struct { int link, speed, duplex, medium; char *words; } w[] = {
+	{ XSURF_LINK_UP, 100, XSURF_DUPLEX_FULL, XSURF_MEDIUM_TP, "link up 100 full" },
+	{ XSURF_LINK_UP, 10, XSURF_DUPLEX_HALF, XSURF_MEDIUM_TP, "link up 10 half" },
+	{ XSURF_LINK_DOWN, 0, XSURF_DUPLEX_UNKNOWN, XSURF_MEDIUM_TP, "no link" },
+	{ XSURF_LINK_DOWN, 0, XSURF_DUPLEX_UNKNOWN, XSURF_MEDIUM_COAX,
+	  "no link (10BASE-T link test failed; sending on coax)" },
+	{ XSURF_LINK_DOWN, 0, XSURF_DUPLEX_UNKNOWN, XSURF_MEDIUM_AUI,
+	  "no link (10BASE-T link test failed; sending on AUI)" },
+	{ XSURF_LINK_UNKNOWN, 0, 2, XSURF_MEDIUM_NOTREADY, "link state unknown (chip not ready)" },
+	{ XSURF_LINK_UNKNOWN, 0, 2, XSURF_MEDIUM_TP_NOTEST,
+	  "link state not available (10BASE-T, link test off)" },
+	{ XSURF_LINK_UNKNOWN, 0, 2, XSURF_MEDIUM_COAX,
+	  "link state not available (set to coax, 10BASE2)" },
+	{ XSURF_LINK_UNKNOWN, 0, 2, XSURF_MEDIUM_AUI,
+	  "link state not available (set to AUI, 10BASE5)" },
+	{ XSURF_LINK_UNKNOWN, 0, 2, XSURF_MEDIUM_NOTKNOWN, "link state not available on this card" },
+    };
+    xs_board_t b;
+    int i, ok, k[10];
+
+    cur = "link-words";
+    for (ok = 1, i = 0; i < 10; i++) {
+	memset(&b, 0, sizeof b);
+	b.st.link = w[i].link;
+	b.st.link_speed = w[i].speed;
+	b.st.link_duplex = w[i].duplex;
+	b.st.link_medium = w[i].medium;
+	if (strcmp(xs_link_str(&b), w[i].words) != 0) {
+	    printf("  got '%s'\n", xs_link_str(&b));
+	    ok = 0;
+	}
+	k[i] = xs_link_key(&b);
+    }
+    CHECK(ok);
+    for (ok = 1, i = 0; i < 10; i++) {
+	int j;
+	for (j = 0; j < i; j++)
+	    ok &= k[i] != k[j];			/* every state its own key */
+    }
+    CHECK(ok);
+}
+
+/* each transmit failure said once, from the tick */
+static void
+t_notes()
+{
+    mblk_t *mp;
+    xsurf_status_t *st;
+
+    cur = "note-tx-timeout";
+    boot("intr=0");
+    s_open(&S[0], 0);
+    bind(&S[0], 0x800);
+    chip.tx_mode = TX_HANG;
+    s_put(&S[0], send_ok(PEER, 20, 1));
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(count(host_console, "xsf0: a transmit did not complete, chip restarted (link up 100 full); further ones are counted, see xsf(1M)") == 1);
+    chip.tx_mode = TX_HANG;
+    s_put(&S[0], send_ok(PEER, 20, 2));
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(B->st.tx_timeouts == 2);
+    CHECK(count(host_console, "did not complete, chip restarted") == 1);	/* once */
+    CHECK(B->st.notes == XSURF_NOTE_TXTIMEOUT);
+
+    cur = "note-abort-collisions";
+    chip.tx_mode = TX_ABORT;
+    s_put(&S[0], send_ok(PEER, 20, 3));
+    host_tick();
+    CHECK(count(host_console, "xsf0: a transmit was aborted after 16 collisions (link up 100 full)") == 1);
+    CHECK(B->ifs.ifs_collisions == 16 && B->st.tx_collisions == 16);
+    chip.tx_mode = TX_ABORT;
+    s_put(&S[0], send_ok(PEER, 20, 4));
+    host_tick();
+    CHECK(count(host_console, "aborted after 16 collisions") == 1 && B->ifs.ifs_collisions == 32);
+
+    cur = "collision-counted-no-note";
+    chip.tx_mode = TX_COLLIDED;
+    s_put(&S[0], send_ok(PEER, 20, 7));
+    host_tick();
+    CHECK(B->ifs.ifs_collisions == 33 && B->st.tx_collisions == 33);
+    CHECK(count(host_console, "further ones are counted") == 2);	/* the timeout, the abort */
+
+    cur = "note-other-error";
+    chip.tx_mode = TX_UNDERRUN;
+    s_put(&S[0], send_ok(PEER, 20, 5));
+    host_tick();
+    CHECK(count(host_console, "xsf0: a transmit ended in an error; further ones are counted") == 1);
+    CHECK(B->ifs.ifs_collisions == 33);	/* not a collision */
+    chip.tx_mode = TX_OK;
+
+    cur = "note-dma";
+    chip.rdc_never = 1;
+    s_put(&S[0], send_ok(PEER, 20, 6));
+    chip.rdc_never = 0;
+    host_tick();
+    CHECK(count(host_console, "xsf0: a remote-DMA write to the chip did not complete, frame dropped and chip restarted") == 1);
+    CHECK(B->st.notes == (XSURF_NOTE_TXTIMEOUT | XSURF_NOTE_ABORT | XSURF_NOTE_TXERR | XSURF_NOTE_DMA));
+
+    cur = "note-status-v2";
+    s_put(&S[0], ioctl_msg(XSURF_GET_STATUS, 0, 0));
+    mp = s_up(&S[0]);
+    while (mp && mp->b_datap->db_type != M_IOCACK) {
+	freemsg(mp);
+	mp = s_up(&S[0]);
+    }
+    CHECK(mp && mp->b_cont);
+    if (mp && mp->b_cont) {
+	st = (xsurf_status_t *)mp->b_cont->b_rptr;
+	CHECK(st->if_collisions == 33 && st->notes == B->st.notes);
+	CHECK(st->tx_dma_timeouts == 1 && st->tx_timeouts == 2);
+    }
+    freemsg(mp);
+    shutdown();
+
+    cur = "note-abort-with-ptx";
+    boot("intr=0");
+    s_open(&S[0], 0);
+    bind(&S[0], 0x800);
+    chip.tx_mode = TX_PTX_ABORT;
+    s_put(&S[0], send_ok(PEER, 20, 1));
+    host_tick();
+    CHECK(B->st.tx_errors == 1 && B->ifs.ifs_oerrors == 1 && B->ifs.ifs_collisions == 1);
+    CHECK(count(host_console, "aborted after 16 collisions") == 1);
+    CHECK(B->st.notes == XSURF_NOTE_ABORT);
+    chip.tx_mode = TX_OK;
+    shutdown();
+
+    cur = "note-from-tick-not-interrupt";
+    boot("");
+    CHECK(B->intr == XSURF_MODE_INTR);
+    s_open(&S[0], 0);
+    bind(&S[0], 0x800);
+    host_console[0] = 0;
+    chip.tx_mode = TX_ABORT;
+    s_put(&S[0], send_ok(PEER, 20, 1));
+    CHECK(host_interrupt() == 1);
+    CHECK(B->st.tx_aborts == 1 && strstr(host_console, "aborted") == NULL);
+    host_tick();
+    CHECK(count(host_console, "aborted after 16 collisions") == 1);
+    chip.tx_mode = TX_OK;
+    shutdown();
+}
+
+static xsurf_status_t *
+found(struct strm *s, int i, mblk_t **mpp)
+{
+    mblk_t *mp;
+
+    s_put(s, ioctl_msg(XSURF_FOUND_STATUS(i), 0, 0));
+    *mpp = mp = s_up(s);
+    if (mp && mp->b_datap->db_type == M_IOCACK && mp->b_cont &&
+	mp->b_cont->b_wptr - mp->b_cont->b_rptr == sizeof(xsurf_status_t))
+	return (xsurf_status_t *)mp->b_cont->b_rptr;
+    return NULL;
+}
+
+/* /dev/xsfctl, and a load that refuses every board */
+static void
+t_ctl()
+{
+    mblk_t *mp;
+    xsurf_status_t *st;
+
+    cur = "ctl-board-in-use";
+    boot("");
+    CHECK(s_open(&S[1], XSURF_CTL_MINOR) == 0);
+    CHECK(S[1].dev == makedevice(56, XSURF_CTL_MINOR));	/* not rewritten */
+    st = found(&S[1], 0, &mp);
+    CHECK(st && st->unit == 0 && st->refused == XSURF_REFUSED_NONE);
+    CHECK(st && st->link == XSURF_LINK_UP && memcmp(st->mac, MAC, 6) == 0);
+    CHECK(st && st->version == XSURF_STATUS_VERSION);
+    CHECK(st && st->intr_param == 2 && st->intr_mode == XSURF_MODE_INTR);
+    freemsg(mp);
+    st = found(&S[1], 1, &mp);
+    CHECK(st == NULL && mp && mp->b_datap->db_type == M_IOCNAK &&
+	  ((struct iocblk *)mp->b_rptr)->ioc_error == EINVAL);
+    freemsg(mp);
+    s_put(&S[1], ioctl_msg(XSURF_NUMBER_OF_BOARDS, 0, 0));
+    mp = s_up(&S[1]);
+    CHECK(mp && mp->b_datap->db_type == M_IOCACK && *(int *)mp->b_cont->b_rptr == 1);
+    freemsg(mp);
+    s_put(&S[1], ioctl_msg(XSURF_GET_STATUS, 0, 0));	/* a board's own ioctl */
+    mp = s_up(&S[1]);
+    CHECK(mp && mp->b_datap->db_type == M_IOCNAK);
+    freemsg(mp);
+    s_put(&S[1], proto(sizeof(dl_info_req_t), DL_INFO_REQ));	/* no DLPI */
+    s_put(&S[1], bind_req(0x800));
+    CHECK(s_upcount(&S[1]) == 0);
+    CHECK(xsurf_unload() == EBUSY);			/* still open */
+    s_close(&S[1]);
+    shutdown();
+
+    cur = "ctl-every-board-refused";
+    host_refuse = XSURF_REFUSED_NOWRITES;
+    host_console[0] = 0;
+    chip_power_on(MAC);
+    CHECK(xsurf_load("") == 0);			/* stays, to say why */
+    CHECK(strstr(host_console, "xsurf: no board usable; xsf(1M) says why\n") != NULL);
+    CHECK(!host_attached() && !host_tick_armed() && host_ifs_count == 0);
+    CHECK(s_open(&S[0], 0) == ENXIO);		/* ifup stops at once */
+    CHECK(s_open(&S[1], XSURF_CTL_MINOR) == 0);
+    st = found(&S[1], 0, &mp);
+    CHECK(st && st->refused == XSURF_REFUSED_NOWRITES && st->unit == 0xffffffff);
+    freemsg(mp);
+    s_close(&S[1]);
+    host_refuse = 0;
+    CHECK(xsurf_unload() == 0);
+    CHECK(host_live == 0);
+
+    cur = "ctl-registers-dead";
+    host_console[0] = 0;
+    chip_power_on(MAC);
+    chip.writes_lost = 1;			/* reads as reset after power-on */
+    CHECK(xsurf_load("") == 0);
+    CHECK(xs_nboards == 0 && xs_nfound == 1 && xs_found[0].board == -1);
+    CHECK(s_open(&S[0], 0) == ENXIO);
+    CHECK(xsurf_unload() == 0);
+}
+
+/* the probe's write check on the model chip */
+static void
+t_regs_check()
+{
+    xs_board_t b;
+
+    memset(&b, 0, sizeof b);
+    b.ops = &host_ops;
+    cur = "regs-check-good";
+    chip_power_on(MAC);
+    chip.rbcr = 0x123;
+    CHECK(xs_regs_check(&b) == -1);
+    CHECK(chip.mar[2] == 0 && chip.mar[3] == 0 && chip.rbcr == 0);
+    CHECK((chip.cr & 0xc0) == 0 && (chip.cr & XS_CR_STP) && !chip.started);
+    cur = "regs-check-writes-lost";
+    chip_power_on(MAC);
+    chip.writes_lost = 1;
+    CHECK(xs_chip_reset(&b) == 1);		/* the trap: it still looks reset */
+    CHECK(xs_regs_check(&b) == 0x99);		/* still page 0: register 0x0a */
+    cur = "regs-check-page-lost";
+    chip_power_on(MAC);
+    chip.page_lost = 1;
+    CHECK(xs_regs_check(&b) == 0x99);		/* page 0's register 0x0a */
+    cur = "regs-check-lands-one-up";
+    chip_power_on(MAC);
+    chip.clobber = 1;
+    CHECK(xs_regs_check(&b) >= 0);
+    cur = "regs-check-lands-one-down";
+    chip_power_on(MAC);
+    chip.clobber = -1;
+    CHECK(xs_regs_check(&b) >= 0);
+    cur = "regs-check-stuck-high";
+    chip_power_on(MAC);
+    chip.cr = 0x61;				/* page 1, and stuck there */
+    chip.mar[2] = 0x55;
+    chip.mar[3] = 0xaa;
+    chip.writes_lost = 1;
+    CHECK(xs_regs_check(&b) == 0x55);		/* right once by chance, not twice */
+}
+
+/* the probe's raw values, the DMA self-test and the timeout snapshots */
+static void
+t_diagnostics()
+{
+    int calls;
+
+    cur = "diag-ready-after-every-reset";
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(chip.ready_calls == 1 && B->st.reset_wait == 0);
+    CHECK(memcmp(B->st.prom, chip.mem, 32) == 0);		/* the PROM image as read */
+    CHECK(B->st.dma_test == XSURF_DMATEST_PASSED && B->st.tx_dma_timeouts == 0);
+    CHECK(B->st.reg_access == XSURF_ACCESS_BYTE && B->st.data_path == XSURF_DATA_PORT);
+    CHECK(strstr(host_console, "link up 100 full\n") != NULL);	/* no access notes: byte, one path */
+
+    shutdown();
+
+    cur = "diag-prom-through-the-data-path";
+    host_console[0] = 0;
+    chip_power_on(MAC);
+    chip.rd_data_bad = 1;		/* a register form that misreads the data port */
+    CHECK(xsurf_load("intr=0") == 0);
+    CHECK(xs_nboards == 1 && memcmp(B->mac, MAC, 6) == 0);
+    shutdown();
+    chip_power_on(MAC);
+    boot("intr=0");
+
+    cur = "diag-txto-snapshot";
+    s_open(&S[0], 0);
+    bind(&S[0], 0x800);
+    chip.tx_mode = TX_HANG;
+    s_put(&S[0], send_ok(PEER, 20, 1));
+    calls = chip.ready_calls;
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(B->st.tx_timeouts == 1 && (B->st.txto_cr & XS_CR_TXP) && (B->st.txto_cr & XS_CR_STA));
+    CHECK(B->st.txto_isr == 0 && B->st.txto_tsr == 0);
+    CHECK(chip.ready_calls == calls + 1);			/* the restart's reset waited too */
+    chip.isr = 0;
+    chip.tx_mode = TX_HANG;
+    B->st.txto_cr = 0x77;
+    s_put(&S[0], send_ok(PEER, 20, 2));
+    ticks(XS_TX_TIMEOUT + 2);
+    CHECK(B->st.tx_timeouts == 2 && B->st.txto_cr == 0x77);	/* the first one kept */
+    chip.tx_mode = TX_OK;
+
+    cur = "diag-dmato-snapshot";
+    chip.rdc_never = 1;
+    s_put(&S[0], send_ok(PEER, 100, 3));
+    chip.rdc_never = 0;
+    CHECK(B->st.tx_dma_timeouts == 1 && B->st.dmato_len == 114);
+    CHECK(B->st.dmato_crda == 0);				/* the model's CRDA reads 0 */
+    host_tick();
+    shutdown();
+
+    cur = "diag-dma-test-nowrite";
+    host_console[0] = 0;
+    chip_power_on(MAC);
+    chip.rdc_never = 1;
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0 && xs_nfound == 1);
+    CHECK(xs_found[0].rec.refused == XSURF_REFUSED_DMA && xs_found[0].rec.dma_test == XSURF_DMATEST_NOWRITE);
+    CHECK(xs_found[0].rec.tx_dma_timeouts == 0);		/* the test's timeout is not a transmit's */
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-dma-test-mismatch";
+    chip_power_on(MAC);
+    chip.data_flip = 1;
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0);
+    CHECK(xs_found[0].rec.dma_test == XSURF_DMATEST_MISMATCH && xs_found[0].rec.dma_test_at == 0);
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-dma-test-late-round";
+    chip_power_on(MAC);
+    chip.data_flip = 1;
+    chip.flip_from = 2 * XSURF_DMATEST_LEN + 5;		/* round 3 goes wrong at byte 5 */
+    CHECK(xsurf_load("") == 0 && xs_nboards == 0);
+    CHECK(xs_found[0].rec.dma_test == XSURF_DMATEST_MISMATCH);
+    CHECK(xs_found[0].rec.dma_test_at == 2 * XSURF_DMATEST_LEN + 5);
+    CHECK(xsurf_unload() == 0);
+
+    cur = "diag-access-notes";
+    host_ops.access = XSURF_ACCESS_WORD;
+    host_ops.paths = 2;
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(strstr(host_console, "link up 100 full, registers by word cycles, data through the data port\n") != NULL);
+    shutdown();
+    host_ops.access = XSURF_ACCESS_WORD_LO;
+    host_ops.paths = 1;
+    chip_power_on(MAC);
+    boot("intr=0");
+    CHECK(strstr(host_console, "link up 100 full, registers by word cycles (low byte)\n") != NULL);
+    shutdown();
+    host_ops.access = XSURF_ACCESS_BYTE;
+
+    cur = "diag-params";
+    boot("intr=0 regs=2 data=1");
+    CHECK(xs_regs_param == 2 && xs_data_param == 1);
+    shutdown();
+    boot("regs=3 data=9");
+    CHECK(xs_regs_param == 0 && xs_data_param == 0);
+    CHECK(strstr(host_console, "regs=3 is not 0, 1 or 2; using 0") != NULL);
+    CHECK(strstr(host_console, "data=9 is not 0, 1 or 2; using 0") != NULL);
+    shutdown();
+}
+
 int
 main()
 {
@@ -936,6 +1510,7 @@ main()
     t_rx_hostile();
     t_rx_nomem();
     t_ioctl();
+    t_ifioctl();
     t_prom();
     t_ring();
     t_overrun();
@@ -950,6 +1525,12 @@ main()
     t_interrupts();
     t_intr_stops();
     t_load_unload();
+    t_link();
+    t_link_words();
+    t_notes();
+    t_ctl();
+    t_regs_check();
+    t_diagnostics();
     printf("t_core: %d checks, %d failed\n", n_checks, n_fail);
     return n_fail != 0;
 }

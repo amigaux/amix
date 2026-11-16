@@ -334,15 +334,25 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
             else
                 e->offset = atol(val);
         } else if (strcmp(key, "kbootset") == 0) {
-            /* C2-2 v6 §1.1: the lowest kbootset package version that
-             * composes a generation with this kernel */
+            /* C2-2 v6 §1.1, v7: the lowest kbootset package version
+             * that composes a generation with this kernel or module */
             if (kdup(&seen_kbootset, e, key))
                 continue;
             if (!safe_word(val))
                 krefuse(e, "bad kbootset", val);
             e->kbootmin = xstrdup(val);
+        } else if (strcmp(key, "!apkg") == 0) {
+            /* the lowest apkg that may install the entry */
+            if (!safe_word(val)) {
+                krefuse(e, "bad !apkg", val);
+            } else if (apkg_vercmp(APKG_VERSION, val) < 0) {
+                krefuse(e, "it needs apkg", val);
+                if (e->refused != NULL)
+                    e->toonew = 1;
+            }
         } else if (key[0] == '!') {
             krefuse(e, "unknown mandatory key", key);
+            e->toonew = 1;
         }
         /* any other key: ignored (C2-2 §1) */
     }
@@ -372,8 +382,11 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         if (!seen_pin)
             krefuse(e, "missing key", "pin=");
     }
-    if (seen_kbootset && (e->role == NULL || strcmp(e->role, "kernel") != 0))
-        krefuse(e, "only a kernel entry may carry", "kbootset=");
+    /* C2-2 v7: a module row may carry it too; a loader row may not */
+    if (seen_kbootset && (e->role == NULL ||
+                          (strcmp(e->role, "kernel") != 0 &&
+                           strcmp(e->role, "module") != 0)))
+        krefuse(e, "only a kernel or module entry may carry", "kbootset=");
     if (!seen_size)
         krefuse(e, "missing key", "size=");
     if (!seen_sha)
@@ -579,6 +592,8 @@ static int parse_entry(char *line, struct pkgent *e, const char *path,
     return 0;
 }
 
+static void catalog_note_apkg(const struct pkgent *e);
+
 int catalog_load(const char *path, struct catalog *cat)
 {
     FILE *fp;
@@ -723,6 +738,7 @@ int catalog_load(const char *path, struct catalog *cat)
         }
         cat->ents[cat->n] = e;
         cat->n++;
+        catalog_note_apkg(&e);
     }
     fclose(fp);
     if (block != 0) {
@@ -766,4 +782,32 @@ void catalog_free(struct catalog *cat)
         free(cat->ksig_file);
     cat->ksig_key = NULL;
     cat->ksig_file = NULL;
+}
+
+/* ---------------- an entry this apkg is too old for ---------------- */
+
+/* the newest version of the catalog's apkg entry seen by catalog_load */
+static char apkg_newest[64];
+
+static void catalog_note_apkg(const struct pkgent *e)
+{
+    if (e->kspace || strcmp(e->name, APKG_PKG) != 0)
+        return;
+    if (apkg_newest[0] == '\0' || apkg_vercmp(e->version, apkg_newest) > 0) {
+        strncpy(apkg_newest, e->version, sizeof(apkg_newest) - 1);
+        apkg_newest[sizeof(apkg_newest) - 1] = '\0';
+    }
+}
+
+void catalog_hint(const struct pkgent *e)
+{
+    if (e == NULL || e->refused == NULL || !e->toonew)
+        return;
+    if (apkg_newest[0] != '\0' && apkg_vercmp(apkg_newest, APKG_VERSION) > 0)
+        warnx2("this apkg (%s) is too old for %s; the catalog has apkg %s: "
+               "run 'apkg upgrade apkg', then try again", APKG_VERSION,
+               e->name, apkg_newest);
+    else
+        warnx2("this apkg (%s) is too old for %s, and the catalog has no "
+               "newer apkg", APKG_VERSION, e->name);
 }

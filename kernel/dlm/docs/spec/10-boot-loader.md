@@ -544,7 +544,7 @@ end crc32=5e6f7a8b
 | `ident` | image offset of the kernel's identity record `AXK1` (loader version 2, C3-3); a manifest has both `arena` and `ident` or neither, else L9 |
 | `ramdisk` | a RAM-disk image to place (§5.4) |
 | `rootfs`, `root` | copied into the loader record's root selector (§6); for an sd root boot2 also builds the RTO1-format root record (unit, base, id, flags) into RTH1's `root[]` field from this line, as the 1.0 installer wrote RTO1 into the kernel info block; `root ramdisk` names the RAM-disk root (§5.4) |
-| `swap` | `swap sd … slice=2` or `swap none` (RAM-disk media); copied into the loader record |
+| `swap` | `swap sd … slice=2` or `swap none` (RAM-disk media); copied into the loader record. The kernel reads it only for a RAM-disk root (`swap none`: `/dev/fakeswap`, C4-3 §3); a disk root's swap is slice 2 of its root disk, whatever the record says (C2-4 §6), so a disk generation needs none |
 | `boards` | the board set the generation was composed for; a difference is printed, not fatal |
 | `end` | CRC-32 of every byte before this line |
 

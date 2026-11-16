@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.11"
+#define APKG_VERSION "0.3.13"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -246,6 +246,8 @@ struct conf {
     char *cfdir;       /* <root><target>/var/sadm/conffiles (conffile(5)) */
     char *bootsetconf; /* <root><target>/etc/default/bootset           */
     char *kbootset;    /* kbootset binary (engine-like: NOT -R prefixed) */
+    char *self;        /* the installed apkg an upgrade re-execs       */
+    int self_set;      /* apkg= was given in the config file           */
     char *kbootset_journal; /* --journal handed to kbootset; "" = the
                                contract default <target>/var/kbootset/journal */
     int pkgadd_is_default; /* pkgadd came from built-in default        */
@@ -302,6 +304,8 @@ struct pkgent {
     char *kbootmin;   /* a kernel's kbootset= (C2-2 v6): the lowest kbootset
                        * version; NULL = no requirement                   */
     char *refused;    /* NULL, or why the entry may not be installed   */
+    int toonew;       /* refused because this apkg is too old for it
+                       * (an unknown mandatory key, or !apkg=)          */
 };
 
 struct catalog {
@@ -320,6 +324,9 @@ struct catalog {
 #define CAT_EFORMAT -3   /* malformed entry line             */
 
 extern int catalog_load(const char *path, struct catalog *cat);
+/* after "the catalog entry is refused": when this apkg is too old for the
+ * entry, say so and name the remedy (the catalog's apkg, if newer) */
+extern void catalog_hint(const struct pkgent *e);
 extern struct pkgent *catalog_find(struct catalog *cat, const char *name);
 extern void catalog_free(struct catalog *cat);
 
@@ -394,6 +401,17 @@ extern void apkg_ipv4_str(unsigned long addr, char *buf);  /* buf >= 16 */
  * (empty string when the pkginfo has no VERSION= line) */
 extern int installed_version(const struct conf *cf, const char *pkginst,
                              char *ver, unsigned verlen);
+/* 1 when the engine's record of pkginst is an install cut short: its
+ * !I-Lock! (pkginstall removes it only at a clean end), or the record an
+ * update moved aside to <PKGLOC>/.save.<pkginst>.  2 when only a removal
+ * was cut short (!R-Lock!).  0 otherwise. */
+extern int pkg_partial(const struct conf *cf, const char *pkginst);
+/* `apkg recover` with no journal: install again, from the catalog, every
+ * package an install left partial */
+extern int cmd_repair(const struct conf *cf, struct catalog *cat);
+/* before `apkg upgrade`: finish a journaled transaction, or drop a journal
+ * of ordinary packages whose datastream is gone (see install.c) */
+extern int recover_before_upgrade(const struct conf *cf);
 
 /* The pkginfo parameter APKG_ESSENTIAL=yes (docs/design.md section 2c):
  * the system may not boot without the package, so remove and purge
@@ -429,6 +447,22 @@ extern int cmd_conffiles(const struct conf *cf, int resolve,
 extern int conffile_state(const struct conf *cf, const char *pkginst);
 /* delete a package's kept config files, .new/.old and baselines */
 extern int conffile_purge(const struct conf *cf, const char *pkginst);
+/* rm -r of dir: 0, or -1 when something stayed */
+extern int rm_tree(const char *dir);
+/* after pkgrm: drop the baselines whose file is gone (stored by an
+ * upgrade that did not finish, for a file pkgrm removed as class none) */
+extern void conffile_prune(const struct conf *cf, const char *pkginst);
+/* before the pkgadd of staged as pkginst: store the baseline of each
+ * untouched file that becomes a conffile; the number stored */
+extern int conffile_prepare(const struct conf *cf, const char *staged,
+                            const char *pkginst);
+/* `apkg conffiles prepare`: the same for the journaled transaction's
+ * packages not installed yet (APKG's postinstall); always 0 */
+extern int cmd_conffiles_prepare(const struct conf *cf);
+/* before the pkgadd of staged as pkginst: an edited config file the new
+ * version ships as a plain file is saved as <path>.old, and said */
+extern int conffile_unconf(const struct conf *cf, const char *staged,
+                           const char *pkginst);
 
 /* -------- the filesystem a package needs (fsreq.c) --------
  *
@@ -439,6 +473,8 @@ extern int conffile_purge(const struct conf *cf, const char *pkginst);
  * EX_OK, EX_DEPS (refused: the target filesystem is not one of them) or
  * EX_VERIFY (the parameter is malformed); message printed. */
 #define APKG_FSTYPE_PARAM "APKG_FSTYPE"
+/* KEY's value in pkginfo(4) text, xmalloc'd, or NULL */
+extern char *pkginfo_get(const char *text, const char *key);
 extern int fs_check(const struct conf *cf, const char *name,
                     const char *staged);
 
@@ -503,12 +539,26 @@ extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
 /* the catalog name and pkginst of the kbootset package (an ordinary entry,
  * C2-2 §1.1) */
 #define KBOOTSET_PKG "kbootset"
+/* the package tools: an upgrade takes them first, in a transaction of
+ * their own, and when apkg itself was among them the new apkg does the
+ * rest (install.c); APKG_REEXEC in the environment marks that run */
+#define APKG_PKG     "apkg"
+#define APKGENG_PKG  "apkgeng"
+#define APKG_REEXEC_ENV "APKG_REEXEC"
+/* main()'s argv, for that re-exec */
+extern char **apkg_argv;
 /* A kernel in the transaction brings its set (apkg 0.3.5): every installed
  * module of its line the transaction does not move whose catalog version
  * is newer and fits the new kernel, then the loader and kbootset when the
  * catalog has newer ones; each addition is printed.  *todo and *ow grow
  * (xrealloc), *nt counts them.  A module left behind that does not fit is
  * the pre-flight's to refuse. */
+/* C2-2 v7: the catalog's kbootset first in the transaction when a kernel
+ * or module row's kbootset= needs it (printed) */
+extern void kspace_floor(const struct conf *cf, struct catalog *cat,
+                         struct pkgent ***todo, int **ow, int *nt);
+/* 1 when the target has a kernel-space record */
+extern int kspace_has_records(const struct conf *cf);
 extern void kspace_expand(const struct conf *cf, struct catalog *cat,
                           struct pkgent ***todo, int **ow, int *nt);
 /* after kbootset refused at a gate: name every installed module that does

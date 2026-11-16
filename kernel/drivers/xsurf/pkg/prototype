@@ -13,7 +13,10 @@
 # are device entries in the module's class, xsurf, which pkginfo's CLASSES
 # lists (C3-5 sec 1.2); the class has no action script, so stock pkgadd lays
 # them and pkgrm removes them as none objects.  Mode 0600, as ifup makes a
-# missing node.
+# missing node.  /dev/xsfctl (minor 15) is the driver's status node for
+# xsf; its name is outside ifup's xsf<n> walk.  /usr/sbin/xsf: /usr and
+# /usr/sbin are the stock core's and not declared.  The pages and the
+# whatis fragment (@PKG@: xsurf30 or xsurf46) as man-pages.md lays them.
 i pkginfo
 i copyright
 d none /etc 0755 root root
@@ -27,3 +30,14 @@ f none /etc/inet/link.d/xsurf 0444 root sys
 d none /dev 0755 bin bin
 c xsurf /dev/xsf0 56 0 0600 root root
 c xsurf /dev/xsf1 56 1 0600 root root
+c xsurf /dev/xsfctl 56 15 0600 root root
+f none /usr/sbin/xsf 0755 root bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+d none /opt/amix/man/7 0755 root sys
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/7/xsurf 0644 root sys
+f none /opt/amix/man/1m/xsf 0644 root sys
+f none /opt/amix/man/whatis.d/@PKG@ 0644 root sys

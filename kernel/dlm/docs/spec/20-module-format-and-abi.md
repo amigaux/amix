@@ -218,7 +218,11 @@ checked against the built kernels before they are frozen (M-REG1).
 The major registry is boot data since core patch 0051: `kbootset` writes
 its rows into each module kernel's manifest as `major` records (C3-5 §3,
 version 22), and the core reads a module's majors' owners there. A new
-major is a registry line, a `kbootset` and a kit, never a new kernel. The
+major is a registry line, a `kbootset` and a kit, never a new kernel.
+`abi/registry/kbootset` gives each row the oldest `kbootset` that has it
+(`-` until one is published); a module package that owns the major
+carries at least that version as its kbootset floor (C2-2 §1.2, version
+7), and `tests/host/kbmin.sh` keeps the two files row for row. The
 numbers stay fixed (a package ships its device nodes with them), so the
 text registry remains the one shared list; the kernels' switches have 70
 character and 32 block rows, of which the rows below are free.
@@ -226,7 +230,7 @@ character and 32 block rows, of which the rows below are free.
 | Registry | Entries |
 |---|---|
 | System calls | 64 `modload`, 65 `moduload`, 66 `modpath`, 67 `modstat`, 68 `modadm`, 69 `getksym` (the core's numbers; `sysentsize` 142 and slots 64–77 hold `nosys` in the 030 and 060 images examined) |
-| Character majors | 48 `random` (the random module, kernel/modules' random: `/dev/random` minor 0, `/dev/urandom` minor 1; free in the stock tables and in 68030-261031-63 and 68060-261031-52, M-REG1 re-run 2026-10-31; isoriano's static random driver used it too), 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1), 54 `paula` (the Paula module, amix-paula, kabi 1.3; free in the stock tables and in the port's static kernels, whose static `/dev/paula` takes 53), 55 `zz9ksvc` (the ZZ9000/Z3660 service channel, kernel/modules' zz9ksvc: `/dev/zz9ksvc`N is minor N; free in the stock tables and in 68030-261101-67 and 68060-261031-55, M-REG1 re-run 2026-11-01), 56 `xsurf` (the X-Surf and X-Surf-100 ethernet module, kernel/drivers/xsurf: STREAMS, DLPI, interface `xsf0`; an empty row with no boot-time store in the 1.1 kernels 68030-261106-77 and 68060-261106-66, cdevsw 70 rows, M-REG1 re-run 2026-11-14); stock rows free in the images examined: 7, 38, 39, 42–45, 47, 57–69 |
+| Character majors | 48 `random` (the random module, kernel/modules' random: `/dev/random` minor 0, `/dev/urandom` minor 1; free in the stock tables and in 68030-261031-63 and 68060-261031-52, M-REG1 re-run 2026-10-31; isoriano's static random driver used it too), 49 z3660rtg (the ZZ9000-compatible device; the adopted core's own zz9000 module also uses 49), 50 SAD (stock), 51 z3660eth, 52 monitor switch, 53 `kinfo` (free in every kernel of record, M-REG1), 54 `paula` (the Paula module, amix-paula, kabi 1.3; free in the stock tables and in the port's static kernels, whose static `/dev/paula` takes 53), 55 `zz9ksvc` (the ZZ9000/Z3660 service channel, kernel/modules' zz9ksvc: `/dev/zz9ksvc`N is minor N; free in the stock tables and in 68030-261101-67 and 68060-261031-55, M-REG1 re-run 2026-11-01), 56 `xsurf` (the X-Surf and X-Surf-100 ethernet module, kernel/drivers/xsurf: STREAMS, DLPI, interface `xsf0`; an empty row with no boot-time store in the 1.1 kernels 68030-261106-77 and 68060-261106-66, cdevsw 70 rows, M-REG1 re-run 2026-11-14), 68 `va2000` (the MNT VA2000 graphics card module, `/dev/va2000` minor 0, the major its static driver has used; an empty row with no boot-time store in the same two kernels, M-REG1 re-run 2026-11-15); stock rows free in the images examined: 7, 38, 39, 42–45, 47, 57–67, 69 |
 | Block majors | 18 `dd` (stock); 20 `ram` — the stock kmem-backed RAM disk (stock `master.d/kernel.c:307`, driver `amiga/driver/ram.c`), replaced in 1.1 by our `ramdisk` module on the same major (`30-module-core.md` §7); free: 0–15, 21–31 |
 | Filesystem names | `ufs`, `s5`, `cdfs` (root class); stock rows otherwise unchanged; table grown by the core (`30-module-core.md` §6) |
 | Interrupt chains | INT2 (Zorro/CIA-A level 2), INT6 (Zorro/CIA-B level 6); attachment only through `intr_attach` |

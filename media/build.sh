@@ -47,6 +47,17 @@ case ${#rels[@]} in
 	*) fail "more than one release tree under out/release: ${rels[*]}" ;;
 esac
 RT="$out/release/$REL"
+# the media's own version (VERSION beside this script): the release, or a point release that goes into
+# that release's repository (1.1.1 into pkg.amigaux.org/1.1). It names the files and the volume id;
+# the repository the installed system names stays $REL.
+VER=$REL
+if [ -f "$repo/VERSION" ]; then
+	VER=$(sed -n '1p' "$repo/VERSION")
+	case "$VER" in
+		"$REL"|"$REL".[0-9]|"$REL".[0-9][0-9]) ;;
+		*) [ -z "$REL" ] || fail "media/VERSION says $VER, which is neither the release tree's $REL nor a point release of it" ;;
+	esac
+fi
 for f in kspace/catalog kspace/catalog.md5 kspace/beside/amix-cdboot; do
 	[ -f "$out/$f" ] || gap "no out/$f (make dist's kspace step)"
 done
@@ -94,10 +105,13 @@ step "inputs: kernel/dlm and userland/pkgtools at ${HEAD:0:12}${DIRTY}, out/ at 
 src="$MEDIA_SCRATCH/src"
 mkdir -p "$src"
 git -C "$top" archive HEAD kernel/dlm userland/pkgtools | tar -x -C "$src"
-make -C "$src/kernel/dlm" tools > "$log/dlm-tools.log" 2>&1 || { tail -20 "$log/dlm-tools.log" >&2; fail "kernel/dlm make tools (log out/build/media/log/dlm-tools.log)"; }
+make -C "$src/kernel/dlm" tools build/nlmake > "$log/dlm-tools.log" 2>&1 || { tail -20 "$log/dlm-tools.log" >&2; fail "kernel/dlm make tools (log out/build/media/log/dlm-tools.log)"; }
 B="$L11_IN/dlm/build"
 mkdir -p "$B/box"
 for t in kbootset mkstore lsstore; do cp "$src/kernel/dlm/build/$t" "$B/$t"; done
+# nlmake is no input of the media: the install harness's host-side check of an installed disk
+# (its first boot's namelist) reads it from here, beside the store tools it checks the disk with
+cp "$src/kernel/dlm/build/nlmake" "$B/nlmake"
 cp "$out/kspace/beside/amix-cdboot" "$B/amix-cdboot"
 mkdir -p "$L11_IN/kspace-beside"
 cp "$out/kspace/beside/amix-cdboot" "$L11_IN/kspace-beside/amix-cdboot"
@@ -156,9 +170,10 @@ if [ -n "${MEDIA_PAYLOAD:-}" ]; then
 fi
 # INPUTS: what the media are made of, by sha256; it goes on the install disc (/install/l11/INPUTS)
 {
-	echo "# the inputs of the amix $REL installer media (media/build.sh), paths under out/build/media/in"
+	echo "# the inputs of the amix $VER installer media (media/build.sh), paths under out/build/media/in"
 	echo "amix $HEAD$DIRTY"
 	echo "release $REL"
+	[ "$VER" = "$REL" ] || echo "media $VER"
 	echo "epoch $SOURCE_DATE_EPOCH"
 	echo "tool kernel/dlm $(git -C "$top" rev-parse HEAD:kernel/dlm) (make tools: kbootset mkstore lsstore)"
 	echo "tool userland/pkgtools $(git -C "$top" rev-parse HEAD:userland/pkgtools) (heirloom, apkg)"
@@ -193,13 +208,13 @@ if [ -n "${RELEASE_PUBLIC:-}" ]; then
 	ROM_MANIFEST=${ROM_MANIFEST:-$MEDIA_SCRATCH/public-empty} PRIVACY_PATTERNS=${PRIVACY_PATTERNS:-$MEDIA_SCRATCH/public-empty}
 	export ROM_MANIFEST PRIVACY_PATTERNS RELEASE_PUBLIC
 fi
-MEDIA_SYSTEM="$AMIX_SYSTEM" bash "$tools/build-release-media.sh" --release "$REL" --cd-tree "$MEDIA_SCRATCH/cd-tree" \
+MEDIA_SYSTEM="$AMIX_SYSTEM" bash "$tools/build-release-media.sh" --release "$VER" --cd-tree "$MEDIA_SCRATCH/cd-tree" \
 	--rdm-k46 "${IMG[rdm-k46]}" --rdm-k30 "${IMG[rdm-k30]}" --ni-k46 "${IMG[ni-k46]}" --ni-k30 "${IMG[ni-k30]}" \
 	--out "$W" > "$log/release-media.log" 2>&1 || { tail -15 "$log/release-media.log" >&2; fail "build-release-media.sh (log out/build/media/log/release-media.log)"; }
 
 # --- out/media: the shipped files, their sums and the record -------------------------------------
-names="amix-$REL-install.iso amix-$REL-netinstall.iso amix-$REL-boot-k30-1.adf amix-$REL-boot-k30-2.adf
-amix-$REL-boot-k46-1.adf amix-$REL-boot-k46-2.adf amix-$REL-boot-z3660.hdf"
+names="amix-$VER-install.iso amix-$VER-netinstall.iso amix-$VER-boot-k30-1.adf amix-$VER-boot-k30-2.adf
+amix-$VER-boot-k46-1.adf amix-$VER-boot-k46-2.adf amix-$VER-boot-z3660.hdf"
 for n in $names; do
 	[ -f "$W/$n" ] || fail "build-release-media.sh wrote no $n"
 	cp "$W/$n" "$out/media/$n"
@@ -213,4 +228,4 @@ done
 } > "$out/media/MEDIA.txt"
 bash "$tools/sidecar-path-check.sh" "$out/media/MEDIA.txt" "$out/media/SHA256SUMS" || fail "a machine path in out/media's records"
 cat "$out/media/SHA256SUMS"
-echo "media: out/media/ ($REL, amix ${HEAD:0:12}${DIRTY}, epoch $SOURCE_DATE_EPOCH)"
+echo "media: out/media/ ($VER, repository $REL, amix ${HEAD:0:12}${DIRTY}, epoch $SOURCE_DATE_EPOCH)"

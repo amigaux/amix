@@ -14,6 +14,9 @@ Each fact names where it was checked. The sources:
   model of the boards, not a reference for them. Where it differs from the
   maker, the maker wins, and the difference is listed so the driver works
   on both.
+- **Datasheets:** ASIX AX88796B datasheet V1.6 and Realtek RTL8019AS
+  specification LS003.8, read 2026-11-15, for the registers Linux does not
+  use.
 - **Earlier port:** the X-Surf-100 driver for Amix by ales9030, based on
   isoriano1968's Hydra AMIX driver, read as a reference for the X-Surf-100's
   access. It agrees with Linux on every register value used here.
@@ -39,9 +42,11 @@ listed in the README; they need a real board.
 | Linux uses the windows at 0x8880 (read) and 0x8C80 (write) in blocks of 0x80 bytes | Linux `xsurf100.c:18-23` | confirmed |
 | Amiberry decodes FIFO data only at offsets 0x80–0xFF of each 256-byte page of 0x8800–0x8FFF; the low 0x80 of each page decode as registers. The driver therefore uses 0x8880/0x8C80 and 0x80-byte blocks, which works on the board and the model | Amiberry `ne2000.cpp:1810-1825` | model |
 | Reset: read register 0x1F and write the value back, then wait for ISR bit 7 (RST); Linux allows 20 ms | Linux `ax88796.c:146-167` | confirmed (Linux); Amiberry resets on the read |
-| GPOC (register 0x17) bit 6 PPDSET: 1 powers the PHY down. Linux writes 0 on this board | Linux `ax88796.c:75, 670`; `xsurf100.c` leaves `gpoc_val` 0 | confirmed (Linux); Amiberry ignores it |
+| Register 0x17 on the AX88796B: a write sets the back-pressure jam limit (BJLC, default 0x19), a read is the Device Status Register (DSR). Linux's `ax88796.c` writes it as the AX88796's GPOC (bit 6 PPDSET), 0 on this board; on the AX88796B that write only matters with back pressure on, which is off by default (FCR). The driver never writes 0x17 | Datasheet sec. 5.1.67-68, 5.1.71; Linux `ax88796.c:75, 670` | confirmed (datasheet) |
+| DSR (0x17, read): bit 0 link up, bit 1 full duplex, bit 2 100 Mb/s, bit 4 D_RDY (clear in reset, power saving or while the EEPROM loads). The driver reads the link here | Datasheet sec. 5.1.68 | datasheet only; Amiberry decodes 0x10-0x17 as the data port, so a read there moves packet memory and the link it gives is meaningless |
+| The PHY is powered and autonegotiating from reset (MII register 0 defaults to 0x3100); the MAC takes the duplex from the internal PHY, ignoring TCR bit 7 | Datasheet sec. 5.2, 5.1.20 | datasheet only |
 | DCR 0x48 (byte transfers) while the PROM is read, 0x49 (word transfers, WTS) in operation | Linux `xsurf100.c:282`, `ax88796.c:669, 741`, `lib8390.c:1020-1022` | confirmed |
-| RCR base 0x40, with AB (0x04) added in operation | Linux `xsurf100.c:283`, `8390.h:125` | confirmed (Linux). What bit 6 does on the AX88796B is **unconfirmed** (datasheet not read) |
+| RCR base 0x40, with AB (0x04) added in operation | Linux `xsurf100.c:283`, `8390.h:125` | confirmed (Linux). Bit 6 is reserved on the AX88796B (datasheet sec. 5.1.18): setting it does nothing |
 | Station address: the AX88796B loads its EEPROM image into the PROM area; read 32 bytes by remote DMA in byte mode and take every second byte | Linux `ax88796.c:701-719` (programs a count of 6 and reads 32); this driver programs 32 and reads 32 | confirmed |
 | Packet memory: 16 KB at 0x4000; TX from page 0x40, ring up to page 0x80; 12 TX pages hold two full frames | Linux `ax88796.c:72-73`, `8390.h:19` | confirmed |
 | In word mode an odd TX count is rounded up to even | Linux `xsurf100.c:195` | confirmed |
@@ -66,6 +71,7 @@ listed in the README; they need a real board.
 | Data: 16-bit data port at ISA 0x310 (board+0x8620). The ring header's byte count arrives byte-swapped in a word read | Linux `zorro8390.c:48, 138` | confirmed |
 | PROM read: byte mode, count 32, 16 byte pairs, every second byte kept; then DCR 0x49 | Linux `zorro8390.c:322-347` | confirmed |
 | Packet memory as on the X-Surf-100: TX from page 0x40, ring to page 0x80 | Linux `zorro8390.c:64-65` | confirmed |
+| The RTL8019AS has no link bit. Page 3's CONFIG2 bits 7-6 (PL) set the medium: 00 auto-detect, 01 10BASE-T with the link test off, 10 10BASE5, 11 10BASE2. In auto-detect, when the 10BASE-T link test fails, the chip sends on coax and sets CONFIG0 bit 2 (BNC), or on AUI with CONFIG0 bit 5 when the AUI input is high. CONFIG3 bit 6 is full duplex. Page 0's registers 0x0A and 0x0B read 0x50 0x70 | Datasheet sec. 5.1 (CONFIG0, CONFIG2, CONFIG3, the ID bytes) | datasheet only; which PL setting a real X-Surf's EEPROM holds is **unconfirmed**. Amiberry returns CONFIG0 and CONFIG2 from its model |
 
 ## The 8390 behaviour both cards share
 
@@ -85,7 +91,8 @@ These are DP8390 rules; Linux's `lib8390.c` implements them, and so does this dr
 The model never raises a receive overrun, a counter interrupt or a transmit
 error, and a transmit completes at the moment it is started
 (`ne2000.cpp:356-361, 432-560`). It honours data-port reads past the
-programmed count. It ignores GPOC, the AX88796B's own register bits and
+programmed count. It decodes 0x10-0x17 as the data port, so it has no
+AX88796B Device Status Register. It ignores the AX88796B's own register bits and
 the plug-and-play IRQ setting, and its plug-and-play resource-data reads
 return 0 (`ne2000.cpp:1606-1640`). It keeps one network board per machine:
 with an A2065 configured, an X-Surf is dropped (`cfgfile.cpp:7232-7260`).

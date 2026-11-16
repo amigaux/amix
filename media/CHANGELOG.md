@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-11-15 — no device node wider than its package (203d3df1)
+
+install.sh loses the 1.0 RTG kit branch and its 0644 /dev/zz9000. No medium reached it; the 1.1 and 1.1.1 images carry the z3660rtg package's 0660 root sys. X11KIT=rtg on a 1.0 install is refused. First boot's probe nodes and S99zen's zen0 get 0600, as their packages ship them. Selftest DN checks every mknod and every chmod of a /dev path against the package's mode.
+
+## 2026-11-15 — the 1.1.1 notes: the CD's installer still says "1.1 install disc"; installer.md on a disk at id 5 (2426515a, 21ec1f22)
+
+The notes say the install CD, the boot floppies and the Z3660 boot disk start 1.1's installer RAM disk unchanged, so three of its messages still say "amigaux 1.1 install disc", and that a 1.1.1 or a 1.1 disc is taken. docs/installer.md says a disk at id 5 is offered as a target unless the CD is there. The entry below for the -2 netinstall images now says its release-neutral messages are in the netinstall images only. Docs only.
+
+## 2026-11-15 — the 1.1.1 notes: when an X-Surf comes up (a9efb2c3)
+
+The notes now say the first-boot dialog offers xsf0 with DHCP (every interface, `* dhcp`) or a static address, and that a card fitted later comes up by DHCP only on a system set up with DHCP, else by a line in /etc/inet/interfaces. Notes only.
+
+## 2026-11-14 — the netinstall images with xsurf 1.0.0-3; the netinstall miniroot names no release (9098a36b..d77a9310)
+
+The netinstall RAM-disk pins move to ni-k30-1.1.1-2 and ni-k46-1.1.1-2 (xsurf 1.0.0-3). In the netinstall images the miniroot's install-disc messages no longer name a release ("an amigaux install disc"), so they stay right at a point release; the CD, floppies and Z3660 disk keep 1.1's RAM disks, whose messages still say "amigaux 1.1 install disc", until new RAM-disk images are built. A selftest keeps them so. The 1.1.1 notes name xsurf 1.0.0-3.
+
+## 2026-11-14 — the version shown comes from media/VERSION (c1dc2497)
+
+The install CD's profiles carry @VERSION@ in the text the installer shows, which tools/build-install-iso.sh fills in from media/VERSION when it stages them, so the 1.1.1 CD says "amigaux 1.1.1 install"; the netinstall disc's LICENSING names the same version. A selftest fails when the profiles, that text, the Buddha images' README or the release notes disagree with media/VERSION.
+
+## 2026-11-14 — the 1.1.1 netinstall: xsurf, buddha, xsf0 (09ea7db9)
+
+The netinstall RAM-disk images are 1.1.1's (ni-k30-1.1.1 be1440fa, ni-k46-1.1.1 2bb885ae, pinned under the amix-distfiles release media-ramdisk-1.1.1), made from the master-line tree with the 1.1.1 installer and DMA table. The netinstall generations carry buddha (root class) and xsurf (boot class, beside z3660eth); the image check also wants /dev/xsf0. The miniroot's network source offers the X-Surf as xsf0, with a static address as for zen0 and aen0.
+
+## 2026-11-14 — 1.1.1: install onto a Buddha or Catweasel Z-II, the X-Surf at first boot, the release set (67e7405a..f39567a2)
+
+The CD, floppy and Z3660-disk boot generations carry the buddha root module, and every installed system gets buddha and xsurf with kbootset -45. The interview names the Buddha and the Catweasel Z-II; the root record names the board by id, and by base when two boards carry the root's key. The first-boot dialog offers an X-Surf (xsf0, xsf1) among the interfaces it finds. media/VERSION is 1.1.1 and names the files (amix-1.1.1-*); the image profiles carry both drivers, with new ones for the Buddha disk images; release notes in docs/releases/1.1.1.md. Known limit noted: a drive alone as slave on the motherboard IDE port is not found. Rows so far, on development-line inputs: installs onto a Buddha on both lines, a lone slave, booting from the floppy pair, and regression installs passing; the rest are still running. The netinstall waits for new RAM-disk images.
+
 ## 2026-11-13 — the 2.1 install-media loader, said no wider than known (a4738d45)
 
 The installer, updbootpart and docs/installer.md no longer call the Amix 2.1 install-media boot2 (5ab360b1…) name-based or say it cannot relocate ET_REL kernels. Under Amiberry it boots the stock 2.1 and 2.1c kernels; on metal, with this project's combined kernels, it fired Alert('RELA') (the D245 Guru) before the kernel ran, for a reason not established. Every place that replaces or refuses it still does; comments and docs only.

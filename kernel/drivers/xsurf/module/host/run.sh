@@ -1,7 +1,8 @@
 #!/bin/sh
 # module/host/run.sh -- the host tests: the driver's own sources compiled
-# for the host against a model kernel and a model DP8390 (mock.c), plus a
-# source check that no CPU-timed delay loop is left.  Usage: run.sh
+# for the host against a model kernel and a model DP8390 (mock.c), xsf
+# against a model of its devices (t_xsf.c), plus a source check that no
+# CPU-timed delay loop is left.  Usage: run.sh
 set -e
 top=$(cd "$(dirname "$0")/../.." && pwd)
 h=$top/module/host
@@ -11,8 +12,13 @@ cc="${HOSTCC:-cc} -std=gnu89 -w -g -DXS_HOSTTEST -I$h -I$top/src"
 
 $cc -o "$tmp/t_core" "$h/t_core.c" "$h/mock.c" "$top/src/xsurf.c" "$top/src/xs_core.c"
 $cc -o "$tmp/t_boards" "$h/t_boards.c" "$top/src/xs_boards.c"
+${HOSTCC:-cc} -std=gnu99 -Wall -Werror -g -I"$h/fakeinc" -I"$top/src" \
+	-Dmain=xsf_main -Dopen=f_open -Dioctl=f_ioctl -Dclose=f_close \
+	-c -o "$tmp/xsf.o" "$top/userland/xsf.c"
+${HOSTCC:-cc} -std=gnu99 -w -g -I"$h/fakeinc" -I"$top/src" -o "$tmp/t_xsf" "$h/t_xsf.c" "$tmp/xsf.o"
 "$tmp/t_core"
 "$tmp/t_boards"
+"$tmp/t_xsf"
 
 # delays: only xs_udelay (the CIA, xs_core.c) may wait
 if grep -n -E 'DELAY *\(|while *\([^)]*--[^)]*\) *;' "$top"/src/*.c; then

@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+# test-together: host test for build/release-together.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# Runs the tool on throwaway rule files and catalogs: a rule that holds, one
+# broken by an old version, one broken by a missing package, a first package
+# below its version (no constraint), #old rows ignored, apkg's version order,
+# a malformed rule and the shipped release/together-1.1.  Prints "N/N passed".
+
+import os
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+TOOL = os.path.join(os.path.dirname(HERE), "release-together")
+TOP = os.path.dirname(os.path.dirname(HERE))
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace("\n", "\n    ")) if detail else ""))
+
+
+def run(rules, catalog, tmp):
+    r = os.path.join(tmp, "rules")
+    c = os.path.join(tmp, "catalog")
+    with open(r, "w") as fp:
+        fp.write(rules)
+    with open(c, "w") as fp:
+        fp.write(catalog)
+    p = subprocess.run([sys.executable, "-I", TOOL, r, c], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    return p.returncode, p.stdout.decode()
+
+
+def cat(base, zrtg, old=""):
+    lines = ["#apkg-catalog 1"]
+    if base:
+        lines.append("amix-base|%s|amxbase|amxbase-%s.pkg|x|1|none|system|base" % (base, base))
+    if zrtg:
+        lines.append("#kpkg z3660rtg-k46 %s role=module line=k46 kabi=k46.1.2 file=zrtg46-%s.pkg pkginst=zrtg46" % (zrtg, zrtg))
+    if old:
+        lines.append(old)
+    return "\n".join(lines) + "\n"
+
+
+RULE = "# a comment\nz3660rtg-k46 1.1.2-1: needs amix-base 1.0-35\n"
+
+
+def main():
+    with tempfile.TemporaryDirectory(prefix="test-together.") as tmp:
+        rc, out = run(RULE, cat("1.0-35", "1.1.2-1"), tmp)
+        check("holds: z3660rtg 1.1.2-1 beside amix-base 1.0-35", rc == 0 and "every one holds" in out, out)
+        rc, out = run(RULE, cat("1.0-36", "1.1.2-3"), tmp)
+        check("holds: newer versions on both sides", rc == 0, out)
+        rc, out = run(RULE, cat("1.0-34", "1.1.2-1"), tmp)
+        check("refused: amix-base 1.0-34 beside z3660rtg 1.1.2-1, named",
+              rc == 1 and "z3660rtg-k46 1.1.2-1 needs amix-base 1.0-35 or later; the catalog has amix-base 1.0-34" in out, out)
+        rc, out = run(RULE, cat(None, "1.1.2-1"), tmp)
+        check("refused: no amix-base at all", rc == 1 and "the catalog has no amix-base" in out, out)
+        rc, out = run(RULE, cat("1.0-34", "1.1.1-4"), tmp)
+        check("no constraint: z3660rtg below 1.1.2-1", rc == 0, out)
+        rc, out = run(RULE, cat("1.0-34", None, "#old #kpkg z3660rtg-k46 1.1.2-1 role=module line=k46"), tmp)
+        check("an #old row does not count", rc == 0, out)
+        rc, out = run(RULE, cat("1.0-100", "1.1.2-1"), tmp)
+        check("apkg's order: 1.0-100 is after 1.0-35 (numeric segments)", rc == 0, out)
+        rc, out = run(RULE, cat("1.0", "1.1.2-1"), tmp)
+        check("apkg's order: 1.0 is before 1.0-35", rc == 1, out)
+        rc, out = run("z3660rtg-k46 1.1.2-1 needs amix-base\n", cat("1.0-35", "1.1.2-1"), tmp)
+        check("refused: a malformed rule (exit 2)", rc == 2 and "not `<name> <version>: needs" in out, out)
+        p = subprocess.run([sys.executable, "-I", TOOL, os.path.join(TOP, "release", "together-1.1"),
+                            os.path.join(tmp, "catalog")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        check("release/together-1.1 parses", p.returncode in (0, 1), p.stdout.decode())
+    print("%d/%d passed" % (passed, passed + failed))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

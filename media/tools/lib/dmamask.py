@@ -45,6 +45,8 @@ TABLE = (
     ("a2090",     0x00FFFFFE, "zorro2-dma", "24-bit Zorro II DMA"),
     ("a4000t",    0xFFFFFFFC, "a4kt710",    "A4000T onboard 53C710: reaches the Z3660 DDR, hangs in chip"),
     ("gayle",     0xFFFFFFFC, "pio",        "Gayle IDE, PIO"),
+    ("buddha",    0xFFFFFFFC, "pio",        "Buddha IDE, PIO"),
+    ("catweasel", 0xFFFFFFFC, "pio",        "Catweasel Z-II IDE, PIO"),
     ("z3660scsi", 0xFFFFFFFC, "emulated",   "Z3660 piscsi mailbox, no bus DMA"),
 )
 ALIASES = {"a4kt710": "a4000t"}
