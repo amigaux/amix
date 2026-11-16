@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-16 — amix-base 1.0-35: initwait, the display.d probe key (33c5a387, 87cdcafc, 1382cf23, ac57a106, 1e043385)
+
+shutdown sees its request to init through: after heavy file writing on a small machine, stock init may act on a run-level request only much later, with shutdown already back at the prompt. The new /usr/sbin/initwait <level> sends the request and waits up to 30 s for the run level `who -r` shows to change; if it has not, it asks once more and prints one line, and after another 30 s says the system has not changed state and exits 1. It never halts the machine itself. /usr/sbin/shutdown (and its stock link /sbin/shutdown) is the stock script, sha256-checked, with its last line made the initwait request. Known: init can also stall after taking the new level, before rc0 starts; initwait does not cover that yet. Page initwait(1M).
+
+display.d: a card file may name a probe (`probe <path> [args]`) that tells whether its board is there and may give node, modes and depths; xstart's auto choice runs it before the node test; %p in args and env is the node in use. Unknown keys are only warned about, and `xstart -n` exits 1 only for a mistake in /etc/display or the card in use. display.d(4) documents the contract for driver authors; its example no longer passes -ac.
+
+interfaces(4) names the interfaces the system has (zen0, aen0, xsf0/xsf1, lo0) and points to link.d(4).
+
 ## 2026-11-06 — amix-base 1.0-34: /dev/audio (9681e6f, 711166f)
 
 The package ships the sound device's node as `c audio /dev/audio 46 0 0660 root audio`; 46 is the stock audio driver's major on both lines, and mode and group are as for /dev/paula. The node is in its driver's class, audio, which pkgadd lays after the conffile class, so on a fresh system the audio group exists when the node is made (in class none it was made 0:0 and pkgadd exited 2). S20devnodes makes the node again when it is missing, at the record's major. devnodes(1M) and group(4) name it. test-devnodes 33/0.
