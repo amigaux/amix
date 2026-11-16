@@ -585,11 +585,20 @@ l11_admin()
 	"$_cr" "$TARGET" /usr/sbin/ifup -n > /tmp/.l11if 2>&1 \
 		|| { cat /tmp/.l11if; die "/etc/inet/interfaces does not pass ifup -n"; }
 	# xstart -n also checks the card's X server, so only a set with X can pass it; without X
-	# the file is checked by xstart when X is added (the minimal set has no X)
+	# the file is checked by xstart when X is added (the minimal set has no X). A refusal is
+	# warned, with xstart's lines, and the install goes on: the file is the fixed text above,
+	# so what xstart refuses is the packages' (card files newer than the base's xstart, say),
+	# and the system boots and runs without X; xstart says the same at the first X start.
 	if [ -d "$TARGET/usr/X/bin" ]; then
-		"$_cr" "$TARGET" /usr/amix/bin/xstart -n > /tmp/.l11dp 2>&1 \
-			|| { cat /tmp/.l11dp; die "/etc/display does not pass xstart -n"; }
-		_xs="xstart -n passes"
+		"$_cr" "$TARGET" /usr/amix/bin/xstart -n > /tmp/.l11dp 2>&1
+		_rc=$?
+		if [ "$_rc" = 0 ]; then
+			_xs="xstart -n passes"
+		else
+			( while read _l; do warn "xstart -n: $_l"; done ) < /tmp/.l11dp
+			warn "/etc/display does not pass xstart -n (exit $_rc): X will not start until the packages agree; the install goes on"
+			_xs="xstart -n REFUSED it (exit $_rc, warned above)"
+		fi
 	else
 		_xs="no X in this set: xstart checks it when X is added"
 	fi
