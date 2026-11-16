@@ -1,0 +1,35 @@
+Ours.  xinit catches SIGTERM as it catches SIGHUP, SIGINT, SIGQUIT and SIGPIPE.
+
+R6.3's xinit set its handler for those four only, so a SIGTERM killed xinit
+outright: xinit_shutdown never ran, and the server and the session, each in a
+process group of its own, kept running with the display.  SIGTERM now runs the
+same shutdown: the session's process group gets SIGHUP, the server's SIGTERM
+(SIGKILL after 10 s), and xinit exits 1 after "unexpected signal 15".  It is
+ignored where the other four are, in the handler and once the wait has ended.
+
+--- a/programs/xinit/xinit.c
++++ b/programs/xinit/xinit.c
+@@ -164,6 +164,7 @@
+ 	signal(SIGINT, SIG_IGN);
+ 	signal(SIGHUP, SIG_IGN);
+ 	signal(SIGPIPE, SIG_IGN);
++	signal(SIGTERM, SIG_IGN);
+ 	Error("unexpected signal %d\r\n", sig);
+ 	xinit_shutdown();
+ 	exit(1);
+@@ -334,6 +335,7 @@
+ 	signal(SIGINT, sigCatch);
+ 	signal(SIGHUP, sigCatch);
+ 	signal(SIGPIPE, sigCatch);
++	signal(SIGTERM, sigCatch);
+ 	signal(SIGALRM, sigAlarm);
+ 	signal(SIGUSR1, sigUsr1);
+ 	if (startServer(server) > 0
+@@ -346,6 +348,7 @@
+ 	signal(SIGINT, SIG_IGN);
+ 	signal(SIGHUP, SIG_IGN);
+ 	signal(SIGPIPE, SIG_IGN);
++	signal(SIGTERM, SIG_IGN);
+ 
+ 	xinit_shutdown();
+ 
