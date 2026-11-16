@@ -41,7 +41,7 @@ MIT for the Amiga DDX (patch 00, `LICENSE.ddx`) and for our patches. Built with 
   (amix-userland, patch 00);
 - **the Z3660 work in patch 00** (the Z3660 modes, the raster-op and window copy fixes, fills
   and copies on the card's blitter, the monitor switch, the keyboard hand-back), from
-  amix-z3660rtg, and **patches 01–31**, among them the cfb16 screen (`rtgscreen.c`, once
+  amix-z3660rtg, and **patches 01–30 and 32–34**, among them the cfb16 screen (`rtgscreen.c`, once
   `zz9000screen.c`), the card record and the card-neutral layer: ours, MIT.
 
 ## Configuration files
@@ -55,9 +55,9 @@ and puts the new default beside it as `<name>.new`; an untouched one is replaced
 extension's `xserver/SecurityPolicy`. Binaries (xdm's `chooser` too), fonts and `fonts.dir`, the
 xkb data and its listings, `rgb.txt` and rstart's command scripts are not configuration.
 
-6.3-10 is the first revision with conffiles, and their defaults are byte-identical to 6.3-8's, so
-the upgrade from 6.3-8 keeps every edit (with `.new` beside it) and leaves the untouched files as
-they are, under every apkg. Upgrade with `apkg upgrade x11r63`; do not remove 6.3-8 and install
+6.3-10 is the first revision with conffiles, and their defaults (6.3-11's too) are byte-identical
+to 6.3-8's, so the upgrade from 6.3-8 keeps every edit (with `.new` beside it) and leaves the
+untouched files as they are, under every apkg. Upgrade with `apkg upgrade x11r63`; do not remove 6.3-8 and install
 the new revision, since removing 6.3-8, which shipped these files as ordinary ones, deletes edits.
 
 ## Source
@@ -103,6 +103,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `31-rtg-copyrun-longword.patch` | Antti Sokero's misaligned-source longword copy (`va2000CopyRun`, MIT) in the layer's `copyRun`: the destination aligned, and when the source's phase differs each long built from two word reads, so every store to the framebuffer is one aligned long and no access is misaligned. It serves the CPU copies within the screen and the direct PutImage (an odd window x). |
 | `32-rtg-va2000.patch` | Ours: the MNT VA2000 card under the RTG layer. `FORKDIRS` copies the card directory from the xrtg-amix fork at the pin (`xrtg-amix.pin`: `x11r6.3/hw/amix/rtg/va2000`, Antti Sokero's VA2000 driver, MIT, ported to the card record, MIT) into `programs/Xserver/hw/amix/rtg/va2000` before the patches; this patch puts it in `rtg/Imakefile`'s SUBDIRS and RTGCARDS (after the ZZ9000, so `-card auto` probes it second), links its library after the rtg library and names it in the `-card` usage line. |
 | `33-rtg-dev.patch` | Ours: `-dev PATH`, the card's device node, for a machine with two graphics cards (a ZZ9000 beside a Z3660 is `/dev/zz9001`): the layer's `rtgDevice` and `rtgCardDevice(card)`, which a card's probe and initHW open instead of a fixed path; unset, each card opens its own node as before; with `-card auto` each card is tried on the node; a node no card answers on stops the server with a message. |
+| `34-xinit-catch-sigterm.patch` | Ours: xinit catches SIGTERM as it catches SIGHUP, SIGINT, SIGQUIT and SIGPIPE, so `kill` (TERM) of xinit runs the same shutdown as a hangup: the session's process group gets SIGHUP, the server's SIGTERM (SIGKILL after 10 s), and xinit exits 1 after "unexpected signal 15". Before, TERM killed xinit alone and the server and the session, each in a process group of its own, kept the display. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
