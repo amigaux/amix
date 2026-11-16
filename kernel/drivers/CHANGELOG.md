@@ -3,6 +3,10 @@
 Changes to the shared kernel/drivers README and the fork pins. Each source driver keeps its own CHANGELOG in its
 directory.
 
+## 2026-11-16 — va2000 1.1.0-2: the card file /etc/display.d/va2000 (eca4df61)
+
+The package installs /etc/display.d/va2000 (display.d(4)), so xstart starts Xrtg -card va2000 on the card. It has no probe line (the node opens only when a board answers), no monitor switch and no limits. The module is unchanged (1.1.0). Packages va200030 a2363193, va200046 a662f898, two rolls identical, the same bytes on master.
+
 ## 2026-11-15 — va2000-k30/-k46 1.1.0-1: the kbootset floor (9f03dcd1)
 
 APKG_KBOOTSET=1.1.0.261115-46, so the catalog row carries kbootset= and apkg 0.3.12 installs kbootset -46 first; the descriptions drop the manual step.
