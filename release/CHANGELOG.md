@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — together-1.1: x11r63 6.3-11 needs amix-base 1.0-36 (253e6f46)
+
+With an older amix-base, ending xinit by a signal makes xstart print a wrong message; a release rule, not a package dependency. test-together 13/13.
+
 ## 2026-11-16 — carried-1.1: the 1.1.1 versions 1.1.2 replaces (1f1b175b)
 
 Eleven older versions with their published bytes, rebuilt at 7d9e944f.
