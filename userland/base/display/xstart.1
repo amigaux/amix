@@ -75,10 +75,18 @@ The server is given the card's
 .B once
 option, so it ends with the session instead of resetting for another
 .RB ( display.d (4)).
-When the session ends, the monitor is switched back; when the server ended
-on its own instead (it crashed or was killed), the card's
+When the session ends, the monitor is switched back.
+When it did not end that way, the card's
 .B restore
-command runs too.
+command runs too, and
+.B xstart
+says why in one line: the server ended on its own (it crashed or was
+killed, and
+.B xinit
+ended with status 0), or
+.B xinit
+ended the session itself (it caught a signal and stopped the server, and
+ended with status 1, or it failed), with its status.
 .PP
 When
 .B xinit

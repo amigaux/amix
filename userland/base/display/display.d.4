@@ -96,11 +96,12 @@ or
 .BR off .
 .TP
 .BI restore " command"
-run, by its full path, after a session whose server ended on its own
-(it crashed or was killed) rather than being stopped at the session's end,
-or that
+run, by its full path, after a session that did not end with the session
+itself: its server ended on its own (it crashed or was killed),
+.B xinit
+ended it (on a signal it caught), or
 .B xstart
-had to end because
+had to end the server because
 .B xinit
 was killed while the server ran (xstart(1)); never while the server still
 holds the display.
