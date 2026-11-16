@@ -56,10 +56,10 @@ echo "=== z3660rtg tools (fork $ZR_COMMIT, GCC 14) ==="
 git -C "$FORK" cat-file -e "$ZR_COMMIT^{commit}" 2>/dev/null || {
 	echo "[FAIL] $FORK has no commit $ZR_COMMIT (make drivers fetches it)" >&2; exit 1; }
 rm -rf "${SRC:?}" "${OUT:?}"
-mkdir -p "$SRC" "$OUT/bin" "$OUT/man/1" "$OUT/display.d"
+mkdir -p "$SRC" "$OUT/bin" "$OUT/man/1" "$OUT/man/7" "$OUT/display.d"
 Z=overlay/usr/sys/amiga/driver/zz9000
 git -C "$FORK" archive "$ZR_COMMIT" \
-	x11/rtg-kbdback.c x11/1.1/startx-rtg \
+	x11/rtg-kbdback.c x11/1.1/startx-rtg module/zz9000.7 \
 	$Z/tools/zz9k_monsw.c $Z/tools/ztop.c $Z/tools/ztop.1 $Z/zz9000.h | tar -x -C "$SRC"
 amix_verify "$SYS/usr/amiga/lib/libscreen.so" "$ZR_LIBSCREEN_SHA"
 amix_verify "$SYS/usr/amiga/include/amiga/screen.h" "$ZR_SCREEN_H_SHA"
@@ -96,9 +96,12 @@ cp "$SRC/x11/1.1/startx-rtg" "$OUT/bin/startx-rtg"
 cp "$T/ztop.1" "$OUT/man/1/ztop"
 # whatis.d/<PKG> (userland/packages/docs/man-pages.md): one line per page,
 # `name(sect)` padded to column 18, then the NAME section's `names - text`
+cp "$SRC/module/zz9000.7" "$OUT/man/7/zz9000"
 _n=$(awk '/^\.SH NAME/ { getline; print; exit }' "$OUT/man/1/ztop" | sed 's/ \\- / - /')
 case "$_n" in "ztop - "*) ;; *) echo "[FAIL] ztop's NAME line is '$_n'" >&2; exit 1 ;; esac
-printf '%-17s%s\n' "ztop(1)" "$_n" > "$OUT/man/whatis"
+_z=$(awk '/^\.SH NAME/ { getline; print; exit }' "$OUT/man/7/zz9000" | sed 's/ \\- / - /')
+case "$_z" in "zz9000 - "*) ;; *) echo "[FAIL] zz9000's NAME line is '$_z'" >&2; exit 1 ;; esac
+{ printf '%-17s%s\n' "ztop(1)" "$_n"; printf '%-17s%s\n' "zz9000(7)" "$_z"; } | LC_ALL=C sort > "$OUT/man/whatis"
 sed 's/^/  /' "$OUT/man/whatis"
 
 echo "--- /etc/display.d/z3660 from userland/base/display/display.d.4 ---"
@@ -111,4 +114,7 @@ awk '/^\.SH EXAMPLE/ { ex = 1 } ex && /^\.ft CW/ && !done { on = 1; next }
 head -1 "$OUT/display.d/z3660" | grep -q '^# /etc/display.d/z3660 ' || {
 	echo "[FAIL] the example block does not start with the z3660 file's comment" >&2; exit 1; }
 echo "  $(wc -l < "$OUT/display.d/z3660") lines"
+echo "--- /etc/display.d/zz9000, the recipe's own (pkg/zz9000.display) ---"
+cp "$HERE/zz9000.display" "$OUT/display.d/zz9000"
+cp "$HERE/zz9001.display" "$OUT/display.d/zz9001"
 (cd "$OUT" && find . -type f | LC_ALL=C sort | xargs sha256sum) | sed 's|  \./|  |; s/^/  /'
