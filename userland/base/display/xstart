@@ -14,8 +14,10 @@
 # it, and back at the end. The server runs through xinit (X11R6's, else the
 # stock one) with ~/.xsession, then ~/.xinitrc, then /etc/display's session,
 # then /usr/lib/amix/xsession; the card's environment reaches the server
-# alone, and the card's restore command runs when the server ended on its
-# own. A session's server is given the
+# alone. When xinit returns and the session's server still runs (xinit was
+# killed), xstart ends it: TERM, then KILL after XSTART_KILLWAIT seconds
+# (default 10). The card's restore command runs when the server ended on its
+# own or had to be ended that way. A session's server is given the
 # card's "once" option (display.d(4)), so it exits when the session ends
 # instead of resetting for another; xdm and dtlogin manage their server
 # themselves and do not get it. When an X server for the display still runs
@@ -45,6 +47,7 @@ R6DIR=${R6DIR:-/opt/amix/X11R6}
 STOCKXDIR=${STOCKXDIR:-/usr/X}
 XSTART_PS=${XSTART_PS:-ps}
 XSTART_WAIT=${XSTART_WAIT:-60}
+XSTART_KILLWAIT=${XSTART_KILLWAIT:-10}
 
 say() {
 	echo "xstart: $*" >&2
@@ -347,7 +350,7 @@ then
 	else
 		echo "xinit    ${xinit:-none} $s -- $sline${env:+ (env for the server only)}"
 		r=`disp_val $C restore`
-		[ -n "$r" ] && echo "restore  $r, when the server ends on its own"
+		[ -n "$r" ] && echo "restore  $r, when the server ends on its own or xstart ends it"
 	fi
 	[ -z "`disp_fatal "$errs" $card`" ]
 	exit
@@ -385,45 +388,92 @@ fi
 [ -n "$xinit" ] || { say "no xinit installed ($XINITS)"; exit 1; }
 [ -n "$s" ] || { say "no session: no ~/.xsession, ~/.xinitrc or $XSESSION"; exit 1; }
 
-# The server runs through a wrapper when the card needs one: it exports the
-# card's environment to the server alone (the stock xinit takes no env
-# prefix) and records the server's process id. With a restore command, the
-# session runs through a second wrapper that marks a normal end: the session
-# ended while the server still ran, so xinit stops the server and its own
-# hand-back runs. No mark when xinit returns means the server died on its
-# own, and the card's restore command runs.
+# The server runs through a wrapper: it exports the card's environment to
+# the server alone (the stock xinit takes no env prefix), records its own
+# process id and execs the server, so the id recorded is the server's. With
+# a restore command, the session runs through a second wrapper that marks a
+# normal end: the session ended while the server still ran, so xinit stops
+# the server and its own hand-back runs.
 restore=`disp_val $C restore`
 W=${XSTART_TMP:-/tmp}/xstart.$$
 cleanup() {
 	rm -f ${W:?}.server ${W:?}.client ${W:?}.pid ${W:?}.clean
 }
-# finish <status>: hand the display back, then exit. Not an EXIT trap: this
-# sh exits with the trap's last status, not the one exit was given.
+# ours <pid>: the pid when it is this session's server: in "ps -ef" that
+# process runs this card's server on this display (a pid recorded once can
+# belong to another process by now, which is never signalled)
+ours() {
+	$XSTART_PS -ef 2>/dev/null | awk '
+	$2 != p { next }
+	{
+		c = 0
+		for (i = 5; i < NF; i++)
+			if ($i ~ /^[0-9]+:[0-9][0-9]$/) { c = i + 1; break }
+		if (!c) next
+		b = $c; sub(/.*\//, "", b)
+		if (b == s && $(c + 1) == d) { print $2; exit }
+	}' p="$1" d="$disp" s=`echo $server | sed 's|.*/||'`
+}
+# gone <pid> <seconds>: wait up to that long, looking every second, for the
+# pid to stop being this session's server; status 0 when it has
+gone() {
+	_gt=0
+	while [ -n "`ours $1`" ]
+	do
+		[ $_gt -ge $2 ] && return 1
+		sleep 1
+		_gt=`expr $_gt + 1`
+	done
+	return 0
+}
+# finish <status>: when xinit has returned but the server still runs (xinit
+# was killed: it did not stop the server), end the server, TERM first, then
+# KILL; then hand the display back, then exit. The restore command runs when
+# the server ended on its own (no mark of a normal end) or had to be ended
+# here; it never runs while the server holds the display. Signals are
+# ignored meanwhile. Not an EXIT trap: this sh exits with the trap's last
+# status, not the one exit was given.
 finish() {
-	if [ -n "$restore" ] && [ ! -f $W.clean ]
+	trap '' 1 2 3 15
+	_fs=$1
+	_fp=`cat $W.pid 2>/dev/null`
+	_ff=
+	if [ -n "$_fp" ] && [ -n "`ours $_fp`" ]
 	then
-		say "the server ended on its own; running $restore"
+		_ff=1
+		say "xinit ended while the server (pid $_fp) still ran; ending it${restore:+, then running $restore}"
+		kill -15 $_fp 2>/dev/null
+		gone $_fp $XSTART_KILLWAIT || {
+			say "the server (pid $_fp) did not end in $XSTART_KILLWAIT s; killing it"
+			[ -n "`ours $_fp`" ] && kill -9 $_fp 2>/dev/null
+			gone $_fp 5 || {
+				say "the server (pid $_fp) still runs; the display is not handed back"
+				cleanup
+				exit 1
+			}
+		}
+	fi
+	if [ -n "$restore" ] && { [ -n "$_ff" ] || [ ! -f $W.clean ]; }
+	then
+		[ -n "$_ff" ] || say "the server ended on its own; running $restore"
 		$restore
 	fi
 	[ -n "$tool" ] && "$tool" $monsw off > /dev/null
 	cleanup
-	exit $1
+	exit $_fs
 }
+cleanup
 trap 'finish 1' 1 2 3 15
-srv=$sline
-if [ -n "$env" ] || [ -n "$restore" ]
-then
-	{
-		echo '#!/bin/sh'
-		for e in $env
-		do
-			echo "$e" | sed 's/^\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)$/\1="\2"; export \1/'
-		done
-		echo "echo \$\$ > $W.pid"
-		echo "exec $server \"\$@\""
-	} > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; finish 1; }
-	srv=`echo $W.server $disp $args $once`
-fi
+{
+	echo '#!/bin/sh'
+	for e in $env
+	do
+		echo "$e" | sed 's/^\([A-Za-z_][A-Za-z_0-9]*\)=\(.*\)$/\1="\2"; export \1/'
+	done
+	echo "echo \$\$ > $W.pid"
+	echo "exec $server \"\$@\""
+} > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; finish 1; }
+srv=`echo $W.server $disp $args $once`
 cli=$s
 if [ -n "$restore" ]
 then
