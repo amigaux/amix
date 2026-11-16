@@ -119,8 +119,19 @@ stage() {
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart
 	put 0644 man/amxbase.whatis /opt/amix/man/whatis.d/amxbase
-	# where a package that replaces a stock binary names it (man.sh)
+	# where a package that replaces a stock binary names it (man.sh): this
+	# one's lines, from MAN_REPLACES
 	mkdir -p "$DEST/opt/amix/man/replaces.d"
+	{
+		echo "# binary section page: the page man(1) shows for the binary"
+		set -- $MAN_REPLACES
+		while [ $# -ge 3 ]; do
+			[ -f "$DEST/opt/amix/man/$2/$3" ] || { echo "MAN_REPLACES $1: no page $2/$3 staged" >&2; return 1; }
+			echo "$1 $2 $3"
+			shift 3
+		done
+	} > "$DEST/opt/amix/man/replaces.d/$PKG" || return 1
+	chmod 0644 "$DEST/opt/amix/man/replaces.d/$PKG"
 	put 0644 LICENSE /opt/amix/doc/amix-base/LICENSE
 	for s in 1 1m 3 4 5 8; do
 		mkdir -p "$DEST/var/opt/amix/catman/$s"

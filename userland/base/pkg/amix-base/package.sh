@@ -22,4 +22,8 @@ SYSTEM_PATHS="/usr/amix/bin /usr/lib/amix /usr/lib/inet /usr/sbin/ifup /usr/sbin
 # with its last line made the initwait request (rc/mkshutdown.sh): not a
 # conffile, so an update replaces it
 STOCK_ETC="/etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/inet/strcf"
+# the patched shutdown keeps the stock options, which the stock page
+# describes; man(1) shows initwait(1M), which says what changed and where
+# the stock page is
+MAN_REPLACES="/usr/sbin/shutdown 1m initwait /sbin/shutdown 1m initwait"
 CONFFILES="/etc/inittab /etc/TIMEZONE /etc/nodename /etc/inet/hosts /etc/default/login /etc/profile /etc/inet/strcf /etc/inet/network-config /etc/inet/rc.inet /etc/group"
