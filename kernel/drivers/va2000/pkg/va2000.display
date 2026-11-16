@@ -1,0 +1,16 @@
+# /etc/display.d/va2000 -- the MNT VA2000 RTG card (display.d(4))
+# The node opens only when a board answers (the demand-class module is
+# kept only then), so the file needs no probe.  The card passes the Amiga
+# picture through its own output and the driver puts it back at the last
+# close, so it needs no monitor switch.  The server maps only the register
+# page and the mode's framebuffer, so it needs no limits.  1920x1080 needs
+# a Zorro III board.  The server is X11R6.3's Xrtg, 6.3-10 or later;
+# -card va2000 makes it drive this card only.
+name      MNT VA2000
+node      /dev/va2000
+module    va2000
+server    /opt/amix/X11R6/bin/Xrtg
+modes     1024x768 640x480 800x600 1280x720 1280x1024 1920x1080
+depths    16
+args      -card va2000 -mode %m -kb
+monsw     no

@@ -20,16 +20,22 @@
 # card's registers and framebuffer) ships as
 # a device entry in class va2000.  No parameters (modreg: comments only).
 # Beside the module the package ships the driver's interface header for
-# programs, /usr/include/va2000.h, the page va2000(7) and its whatis line.
+# programs, /usr/include/va2000.h, the page va2000(7) and its whatis line,
+# and the card file /etc/display.d/va2000 for xstart (pkg/va2000.display).
 # 1.1.0-1 (2026-11-15): the first package.  Module 1.1.0-1 (fork dbb5b4f),
 # built in amix-toolchain:dist against the kit of amix 09b89ffb (kabi
 # k30.1.5 / k46.1.6, gcc-cross-amix 33ebadc).  Before its first publish:
 # /dev/va2000 0660 root sys, and APKG_KBOOTSET=1.1.0.261115-46.
+# 1.1.0-2 (2026-11-16): the same module; the card file /etc/display.d/va2000
+# (pkg/va2000.display, display.d(4)), so that xstart can start X on the card:
+# node /dev/va2000 (no probe: the node opens only with a board), the server
+# Xrtg with -card va2000 (x11r63 6.3-10 or later), no monitor switch.
 
 KM_NAME=va2000
 KM_SHORT=va2000
 KM_REPO=kernel/drivers/va2000
 KM_VERSION=1.1.0-1
+KM_PKG_VERSION=1.1.0-2
 KM_VERSION_FILE=out/cache/forks/va2000/module/VERSION
 
 KM_K30_SHA=2307fed3e4890e03345ce8fc7c16f25c4dd6ab4c6ce2ea1ef6266c76d2e042ff
@@ -41,7 +47,8 @@ _va=out/cache/forks/va2000
 KM_FILES_COMMON="\
 /usr/include/va2000.h $_va/src/va2000.h 65fb8d77fe3ab6a4dd4968767f4276080419a0d5c740e1fda29ebe73f4955e79 0644
 /opt/amix/man/7/va2000 $_va/module/man/va2000.7 78c614ea0b8346b79662f89cf39d165377e2881cd2f4dbe74f5bce4ae461aee0 0644
-/opt/amix/man/whatis.d/@PKG@ kernel/drivers/va2000/pkg/va2000.whatis 997b62278929d9be63788ba6725be0ee92515f7856476cd044f279148662773f 0644"
+/opt/amix/man/whatis.d/@PKG@ kernel/drivers/va2000/pkg/va2000.whatis 997b62278929d9be63788ba6725be0ee92515f7856476cd044f279148662773f 0644
+/etc/display.d/va2000 kernel/drivers/va2000/pkg/va2000.display a064225c4eea08054ccabb347795455a11426a22a9b54897848bb5356d905a8b 0444"
 
 KM_LICENCES="\
 $_va/LICENSE 1126322e2cc8d165adc4c792eeb195717de2bcc7b39be1ce77959d78e87ef685"
