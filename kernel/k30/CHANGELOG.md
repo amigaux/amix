@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — KNOWN-ISSUES: the shutdown stall after the level change (440df39a)
+
+The shutdown stall can also come after init changes run level, before rc0; both cases fit a lost wakeup in stock init's flag-test-then-pause().
+
 ## 2026-11-15 — cut 68030-261115-78: the evidence in emulation (0d9b38a3)
 
 cuts/68030-261115-78/README.md records the cut's evidence in emulation: the 32-bit draw on a Zorro III board at 0x40000000 completes four times of four where -77 is killed three times of four; a root that cannot be mounted panics once; the backtrace and dead-page behaviour shown with a page made to give a bus error. KNOWN-ISSUES says the same in two sentences.
