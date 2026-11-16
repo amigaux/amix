@@ -62,6 +62,8 @@ sh userland/base/man/test-man.sh            # host tests of the man front-end
 sh userland/base/rc/test-rc.sh              # host tests of rc.subr
 sh userland/base/rc/test-devnodes.sh        # the device-node boot step
 sh userland/base/rc/test-swap.sh            # the swap boot step
+sh userland/base/rc/test-initwait.sh        # initwait against a model init
+sh userland/base/rc/test-shutdown.sh        # shutdown = stock, its last line initwait
 sh userland/base/display/test-display.sh    # xstart, display(4), the xdm step
 sh userland/base/syslog/test-syslogd.sh     # the syslogd boot step
 sh userland/base/net/test-ifparse.sh sh nawk    # the parser, under each awk
