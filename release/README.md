@@ -113,6 +113,15 @@ commits, so across commits the kit's `norev` digest is the one compared) and the
 disk and SD images (bench-built, proven by their contents). A release is built from a clean commit: a lock with a `dirty`
 line is not one of record.
 
+## Packages that ship together
+
+`together-<release>` lists pairs a release tree must carry together, one rule a
+line: `<name> <version>: needs <name> <version>`. When the release catalog's live
+row for the first name is at least its version, the second's must be at least
+its version, or the release step refuses the tree (`build/release-together`,
+versions in apkg's order). A module's own kbootset floor is not listed here: its
+catalog row carries it (`kbootset=`).
+
 ## What a release's packages are
 
 Every live package rebuilds at the release's commit. Every published version

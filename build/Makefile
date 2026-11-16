@@ -35,6 +35,7 @@ test:
 	python3 -I pkg/tests/test-manpages
 	python3 -I tests/test-dist
 	python3 -I tests/test-lock
+	python3 -I tests/test-together
 
 selftests:
 	sh pkg/tests/run-selftests

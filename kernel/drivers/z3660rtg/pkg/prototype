@@ -25,9 +25,13 @@ f none /etc/conf/mod.d/z3660rtg 0644 root sys
 f none /etc/conf/modreg.d/z3660rtg 0644 root sys
 d none /etc/display.d 0755 root sys
 f none /etc/display.d/z3660 0444 root sys
+f none /etc/display.d/zz9000 0444 root sys
+f none /etc/display.d/zz9001 0444 root sys
 d none /dev 0755 bin bin
 c z3660rtg /dev/zz9000 49 0 0660 root sys
 c z3660rtg /dev/zz9000i 49 128 0444 root sys
+c z3660rtg /dev/zz9001 49 1 0660 root sys
+c z3660rtg /dev/zz9001i 49 129 0444 root sys
 d none /opt 0755 root sys
 d none /opt/amix 0755 root sys
 d none /opt/amix/bin 0755 root sys
@@ -35,8 +39,13 @@ f none /opt/amix/bin/zz9k_monsw 0755 root bin
 f none /opt/amix/bin/rtg-kbdback 0755 root bin
 f none /opt/amix/bin/ztop 0755 root bin
 f none /opt/amix/bin/startx-rtg 0755 root bin
+f none /opt/amix/bin/zz9k_probe 0755 root bin
 d none /opt/amix/man 0755 root sys
 d none /opt/amix/man/1 0755 root sys
 f none /opt/amix/man/1/ztop 0644 root bin
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/zz9k_probe 0644 root bin
+d none /opt/amix/man/7 0755 root sys
+f none /opt/amix/man/7/zz9000 0644 root bin
 d none /opt/amix/man/whatis.d 0755 root sys
 f none /opt/amix/man/whatis.d/@PKG@ 0644 root bin
