@@ -18,8 +18,9 @@ KERNEL_KPKG=kernel-k30-m
 # the installed generation carries every hardware driver of the line; each loads only when its
 # match rule finds the card, so the cards a box lacks cost nothing and change no card order
 # (buddha's stand-in key mobo:buddha links it on every box: without a board its _load finds none
-# and returns ENXIO silently, amix-dlm C4-2 8.2 item 7); xsurf drives an X-Surf or X-Surf-100 as xsf0
-KERNEL_MODPKGS="z3660scsi-k30 a4091-k30 a4kt710-k30 gayle-k30 z3660eth-k30 paula-k30 z3660rtg-k30 zz9kbus-k30 zz9ksvc-k30 monsw-k30 cdfs-k30 random-k30 buddha-k30 xsurf-k30"
+# and returns ENXIO silently, amix-dlm C4-2 8.2 item 7); xsurf drives an X-Surf or X-Surf-100 as xsf0;
+# va2000 drives a VA2000 as /dev/va2000 (demand class: it loads at the first open, kept with a board)
+KERNEL_MODPKGS="z3660scsi-k30 a4091-k30 a4kt710-k30 gayle-k30 z3660eth-k30 paula-k30 z3660rtg-k30 zz9kbus-k30 zz9ksvc-k30 monsw-k30 cdfs-k30 random-k30 buddha-k30 xsurf-k30 va2000-k30"
 # the box's fast memory for bootset's mem= (a nominal figure: kbootset's gate reads kinfo's on the box)
 TARGET_FASTMEM_MB=64
 TARGET_DISK_MB=
