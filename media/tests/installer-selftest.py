@@ -6402,6 +6402,61 @@ def audit_dev_node_modes():
                                       "(gone=%s refuse=%s)" % (gone, bool(refuse)))
 
 
+def audit_medium_together():
+    head("MT. the medium's packages hold its release's together rules (release/together-<release>): "
+         "an amix-base older than its card files need is refused at the build, not warned on every disk")
+    lib = os.path.join(REPO, "tools", "lib", "medium-together.sh")
+    top = os.path.normpath(os.path.join(REPO, os.pardir))
+    rules = os.path.join(top, "release", "together-1.1")
+    if not os.path.exists(lib) or not os.path.exists(rules):
+        fail("no tools/lib/medium-together.sh or release/together-1.1 (%s %s)"
+             % (os.path.exists(lib), os.path.exists(rules)))
+        return
+    import tempfile
+    d = tempfile.mkdtemp(prefix="mt-")
+    def run(rtg, base, release="1.1"):
+        inp = os.path.join(d, "in")
+        shutil.rmtree(inp, ignore_errors=True)
+        os.makedirs(os.path.join(inp, "kpkg"))
+        os.makedirs(os.path.join(inp, "base"))
+        open(os.path.join(inp, "INPUTS"), "w").write(
+            "# fixture\namix 0000000\n" + ("release %s\n" % release if release else "") + "media 1.1.2\n")
+        open(os.path.join(inp, "kpkg", "catalog"), "w").write(
+            "kbootset|1.1.0.261115-46|kbootset|kbootset-1.1.0.261115-46.pkg|0|0|x\n"
+            "#kpkg kernel-k46-m k46.1.6.261115-67 role=kernel line=k46\n"
+            "#kpkg z3660rtg-k46 %s role=module line=k46\n"
+            "#kpkg z3660rtg-k30 %s role=module line=k30\n" % (rtg, rtg))
+        open(os.path.join(inp, "base", "catalog.lines"), "w").write(
+            "libcfix|2.1c-2|libcfix|libcfix-2.1c-2.pkg|0|0|x\n"
+            "amix-base|%s|amxbase|amix-base-%s.pkg|0|0|x\n" % (base, base))
+        r = subprocess.run(["bash", "-c", '. "$1"; medium_together "$2" "$3" "$4"', "mt", lib, inp, top, d],
+                           capture_output=True, text=True, timeout=60)
+        return r.returncode, r.stdout + r.stderr
+    try:
+        rc_old, out_old = run("1.1.2-1", "1.0-34")
+        rc_new, out_new = run("1.1.2-1", "1.0-35")
+        rc_111, _ = run("1.1.1-4", "1.0-34")
+        rc_none, out_none = run("1.1.2-1", "1.0-34", release="")
+        rc_norule, out_norule = run("1.1.2-1", "1.0-34", release="9.9")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    (ok if rc_old == 1 and "z3660rtg-k46 1.1.2-1 needs amix-base 1.0-35" in out_old
+          and "amix-base 1.0-34" in out_old else fail)(
+        "z3660rtg 1.1.2-1's card files with amix-base 1.0-34 are refused, the rule named (rc %d: %r)"
+        % (rc_old, out_old.strip()))
+    (ok if rc_new == 0 and rc_111 == 0 else fail)(
+        "amix-base 1.0-35 with z3660rtg 1.1.2-1, and 1.0-34 with z3660rtg 1.1.1-4, pass (rc %d %d: %r)"
+        % (rc_new, rc_111, out_new.strip()))
+    (ok if rc_none == 1 and "names no release" in out_none and rc_norule == 0 and "no rules" in out_norule
+     else fail)("inputs naming no release are refused; a release without a together file has no rules, "
+                "and says so (rc %d %d)" % (rc_none, rc_norule))
+    iso = open(ISO_BUILDER, encoding="utf-8").read()
+    at = iso.find('medium_together "$L11_IN" "$MEDIA_TOP" "$_bw"')
+    (ok if '. "$here/lib/medium-together.sh"' in iso and at > iso.find('"$STAGE/l11/base/amxbase.cf"') > 0
+          and iso.find("|| { echo \"STOP: the medium's packages break release/together", at) > at else fail)(
+        "build-install-iso.sh holds the medium to the rules once its base packages are staged, and stops on a break")
+
+
 def audit_net_space():
     head("NS. on the netinstall medium the free-space check sizes the set from the catalog (#isize, else the "
          "datastream sizes), with the base packages, the kernel set and twice the largest datastream (apkg's cache "
@@ -6761,21 +6816,28 @@ def audit_l11():
         fail("l11.sh has no l11_admin or l11_bits")
     else:
         at = os.path.join(d, "admin")
-        def admin(x11=False, **kv):
+        def admin(x11=False, refuse="", **kv):
+            # refuse: the program (ifup or xstart) the chroot stub fails, as a base older
+            # than its card files does: two lines on stderr, exit 1
             shutil.rmtree(at, ignore_errors=True)
             os.makedirs(os.path.join(at, "etc", "inet"))
             os.makedirs(os.path.join(at, "usr", "sbin"))
             if x11:
                 os.makedirs(os.path.join(at, "usr", "X", "bin"))
             cr = os.path.join(at, "usr", "sbin", "chroot")
-            open(cr, "w").write("#!/bin/sh\necho \"CHROOT $*\" >> %s/chroot.log\nexit 0\n" % at)
+            open(cr, "w").write("#!/bin/sh\necho \"CHROOT $*\" >> %s/chroot.log\n"
+                                "case \"$2\" in */%s) [ -n \"%s\" ] || exit 0\n"
+                                "  echo 'xstart: /etc/display.d/zz9000: line 4: unknown key \"probe\"' >&2\n"
+                                "  echo 'xstart: no card answers' >&2; exit 1 ;; esac\nexit 0\n"
+                                % (at, refuse or "none", refuse))
             os.chmod(cr, 0o755)
             env = dict(PROFILE_NAME="t", FB_ETHER_IF="aen0", FB_IP="", FB_NETMASK="", FB_GATEWAY="",
                        FB_NODENAME="", FB_ZEN_IP="", FB_ZEN_NETMASK="", FB_ZEN_GATEWAY="", FB_ZEN_CARDS="",
                        FB_DNS1="", FB_DNS2="", FB_DOMAIN="", FB_SYSLOG="y", MONSW="")
             env.update(kv)
             sets = "".join("%s='%s'\n" % (k, v) for k, v in env.items())
-            body = ('msg() { :; }\ndie() { echo "DIE $*"; exit 3; }\nrun() { "$@"; }\nTARGET=%s\n%s%s\n%s\nl11_admin\n'
+            body = ('msg() { echo "MSG $*"; }\nwarn() { echo "WARN $*"; }\ndie() { echo "DIE $*"; exit 3; }\n'
+                    'run() { "$@"; }\nTARGET=%s\n%s%s\n%s\nl11_admin\necho "RC $?"\n'
                     % (at, sets, lbits, la))
             r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=30)
             rd = lambda *p: open(os.path.join(at, *p)).read() if os.path.exists(os.path.join(at, *p)) else ""
@@ -6806,6 +6868,22 @@ def audit_l11():
             "l11_admin: /etc/rc.conf shows the network time sync's switch, ntp=yes under its comment: %r" % rc)
         (ok if "/usr/sbin/ifup -n" in crl and "xstart" not in crl and "card auto" in disp else fail)(
             "l11_admin, a set without X: /etc/display written, ifup -n run, xstart -n not (it checks the X server)")
+        # an X set whose card files are newer than the base's xstart (z3660rtg 1.1.2-1's probe
+        # lines on amix-base 1.0-34): xstart -n's lines and the refusal are warned, the step goes on
+        out, ifs, rc, disp, crl = admin(x11=True, refuse="xstart")
+        wl = [l for l in out.splitlines() if l.startswith("WARN ")]
+        (ok if "DIE" not in out and "RC 0" in out and "card auto" in disp and "dropbear=yes" in rc
+              and 'WARN xstart -n: xstart: /etc/display.d/zz9000: line 4: unknown key "probe"' in wl
+              and "WARN xstart -n: xstart: no card answers" in wl
+              and any("does not pass xstart -n (exit 1)" in l and "the install goes on" in l for l in wl)
+              and re.search(r"MSG admin files .*xstart -n REFUSED it \(exit 1, warned above\)", out) else fail)(
+            "l11_admin: xstart -n refusing /etc/display warns its lines and the exit, and goes on: %r" % out)
+        out, *_ = admin(x11=True)
+        (ok if "WARN" not in out and re.search(r"MSG admin files .*; xstart -n passes$", out, re.M) else fail)(
+            "l11_admin: xstart -n passing warns nothing and says it passes: %r" % out)
+        out, *_ = admin(x11=True, refuse="ifup")
+        (ok if "DIE /etc/inet/interfaces does not pass ifup -n" in out and "RC 0" not in out else fail)(
+            "l11_admin: ifup -n refusing /etc/inet/interfaces still stops the install: %r" % out)
         out, *_ = admin(FB_IP="192.0.2.38", FB_NETMASK="255.255.255.7")
         (ok if "DIE netmask '255.255.255.7'" in out else fail)("l11_admin refuses a netmask that is no prefix: %r" % out.strip())
 
@@ -7642,6 +7720,7 @@ def main():
     audit_guarded_mkdir()
     audit_net_space()
     audit_dev_node_modes()
+    audit_medium_together()
     audit_l11()
 
     print()
