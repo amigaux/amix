@@ -37,6 +37,7 @@ The VA2000 and ZZ9000 support is tested in emulation only, not on real cards.
 - `kbootset` 1.1.0.261115-46, which knows the VA2000 module.
 - `apkg` 0.3.13: a plain `apkg upgrade` repairs an install that was cut short, a module package brings the `kbootset` it needs first, and a file that becomes a configuration file takes the new version when nobody edited it.
 - `prngd` 0.9.29-4: `prngd.conf` is kept across upgrades.
+- Memory limits are as in 1.1 and 1.1.1, on both kernel lines: a program's data and address space are unlimited, soft and hard, and only its stack is limited, to 16 MiB; `ulimit -d` and `ulimit -v` set a limit. A later kernel brings back the stock 16 MiB soft limits for data and address space as the default.
 
 ## 1.1.1
 
@@ -77,7 +78,6 @@ Both new drivers are tested in emulation only, not on real cards.
 - Shared libraries with GCC 14 (`gcc -shared`).
 - Package repositories per release (`http://pkg.amigaux.org/1.1`).
 - `make dist` builds the release reproducibly from this repository.
-- Memory limits are the stock ones: one program gets 16 MiB of data and 16 MiB of address space by default.
-  The hard limits are unlimited, so a user, or `/etc/profile` for everyone, can raise them with `ulimit -d`
-  and `ulimit -v`.
+- Memory limits: a program's data and address space are unlimited, soft and hard, and only its stack is
+  limited, to 16 MiB. A user, or `/etc/profile` for everyone, can set a limit with `ulimit -d` and `ulimit -v`.
 - Network and print services that few machines need start only when `/etc/rc.conf` turns them on.
