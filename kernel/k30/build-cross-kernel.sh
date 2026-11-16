@@ -266,11 +266,14 @@
 #   --ip-lrhiwat-fix <patch_ip_lrhiwat.py>  (opt-in) IP's lower read queue mi_hiwat raised from 0x2000 (ipm_info's
 #                MUXRQ entry, one .data longword, located through iplrinit): an 8 KiB NFS reply's fragments no longer
 #                fill it, so the A2065 driver's canput stops refusing frames.
-#   --stock-proc-limits  build with the stock soft data and vmem limits (16 MB; PROC_LIMITS=0 does the same).  By
-#                default master.d/kernel.h's SDATLIM and SVMMLIM are 0x7fffffff (unlimited) like their hard limits,
-#                so a process may grow to what memory and swap allow; SSTKLIM stays 0x1000000 (a 16 MB soft stack
+#   --proc-limits  (opt-in; PROC_LIMITS=1 does the same) master.d/kernel.h's SDATLIM and SVMMLIM become 0x7fffffff
+#                (unlimited) like their hard limits, so a process may grow to what memory and swap allow.  By default
+#                (--stock-proc-limits, PROC_LIMITS=0) they are the stock 0x1000000 (16 MB), the hard limits unlimited,
+#                so `ulimit -d` and `ulimit -v` raise them.  SSTKLIM stays 0x1000000 either way (a 16 MB soft stack
 #                catches runaway recursion; the hard stack limit is unlimited).  The linked rlimits table is checked.
-#                --stock-proc-limits is the kernel without it, byte for byte.
+#                Cuts -68 to -78 were built with --proc-limits (their cut.sh exports PROC_LIMITS=1).
+#   --rlimits-text <file>  (repeatable) after the rlimits check, tools/rlimits-check.py: the file must say the soft
+#                data and vmem limits the built kernel has ("soft data and vmem limits 16 MiB" or "... unlimited").
 #   --object-baseline <file> --object-allow "<obj>..."  after the final link, every built
 #                object must have the baseline's sha256 (`sha256  path` lines, paths under usr/sys)
 #                EXCEPT exactly the allowed ones, which must differ; an object the baseline does not
@@ -324,7 +327,8 @@ RMW_FAULT="${RMW_FAULT:-1}"       # --no-rmw-fault (RMW_FAULT=0): a tas or cas f
 KMEM_WAKE="${KMEM_WAKE:-1}"       # --no-kmem-wake (KMEM_WAKE=0): oversize sleepers woken as stock
 IPLR_FIX="${IPLR_FIX:-}"          # --ip-lrhiwat-fix <patch_ip_lrhiwat.py>: the opt-in IP lower read queue fix
 SWAP_GUARD="${SWAP_GUARD:-1}"     # --no-swap-guard (SWAP_GUARD=0): swapadd's anon array KM_SLEEP, as stock
-PROC_LIMITS="${PROC_LIMITS:-1}"   # --stock-proc-limits (PROC_LIMITS=0): soft data and vmem limits 16 MB, as stock
+PROC_LIMITS="${PROC_LIMITS:-0}"   # --proc-limits (PROC_LIMITS=1): soft data and vmem limits unlimited (stock: 16 MB)
+RL_TEXTS=()                       # --rlimits-text <file>: texts that must say the built soft data and vmem limits
 UFS_TAILZERO="${UFS_TAILZERO:-1}"  # --no-ufs-tailzero (UFS_TAILZERO=0): the stock ufs object, no quirk-91 tail zeroing
 UFS_RWIP="${UFS_RWIP:-1}"        # --no-ufs-rwip-fix (UFS_RWIP=0): the stock rwip, segmap_pagecreate given the window base
 KZERO="${KZERO:-1}"             # --no-kzero (KZERO=0): no kzero fault catch (src/kzero_nofault.s), the stock kzero = bzero
@@ -385,6 +389,8 @@ while [ "$#" -gt 0 ]; do
     --no-segvn-prot) SEGVN_PROT=0; shift ;;
     --ip-lrhiwat-fix) IPLR_FIX="${2:?--ip-lrhiwat-fix needs the path of patch_ip_lrhiwat.py}"; shift 2 ;;
     --stock-proc-limits) PROC_LIMITS=0; shift ;;
+    --proc-limits) PROC_LIMITS=1; shift ;;
+    --rlimits-text) RL_TEXTS+=("${2:?--rlimits-text needs a file}"); shift 2 ;;
     --carve-fs) CARVE_FS="${2:?--carve-fs needs ufs,s5 or one of them}"; shift 2 ;;
     --)         shift; while [ "$#" -gt 0 ]; do DIRS+=("$1"); shift; done ;;
     -*)         echo "unknown option: $1" >&2; exit 2 ;;
@@ -417,6 +423,10 @@ case "$SEGVN_PROT" in 0|1) ;; *) echo "SEGVN_PROT='$SEGVN_PROT' (want 0 or 1)" >
 case "$KMEM_WAKE" in 0|1) ;; *) echo "KMEM_WAKE='$KMEM_WAKE' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$RMW_FAULT" in 0|1) ;; *) echo "RMW_FAULT='$RMW_FAULT' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$PROC_LIMITS" in 0|1) ;; *) echo "PROC_LIMITS='$PROC_LIMITS' (want 0 or 1)" >&2; exit 2 ;; esac
+for i in "${!RL_TEXTS[@]}"; do   # absolute now: the build changes directory before the check
+  [ -f "${RL_TEXTS[$i]}" ] || { echo "--rlimits-text: no file ${RL_TEXTS[$i]}" >&2; exit 2; }
+  RL_TEXTS[$i]="$(cd "$(dirname "${RL_TEXTS[$i]}")" && pwd)/$(basename "${RL_TEXTS[$i]}")"
+done
 case "$UFS_TAILZERO" in 0|1) ;; *) echo "UFS_TAILZERO='$UFS_TAILZERO' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$UFS_RWIP" in 0|1) ;; *) echo "UFS_RWIP='$UFS_RWIP' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$KZERO" in 0|1) ;; *) echo "KZERO='$KZERO' (want 0 or 1)" >&2; exit 2 ;; esac
@@ -1946,6 +1956,10 @@ if len(hit) != 1 or hit[0] != sys.argv[2].split():
     sys.exit('process limits: rlimits %s, want %s' % (hit, sys.argv[2]))
 print('--- process limits: rlimits ' + ' '.join(hit[0]) + ' ---')
 PYRL
+if [ "${#RL_TEXTS[@]}" -gt 0 ]; then
+  echo "--- process limits as the texts say them: ${RL_TEXTS[*]} ---"
+  python3 -I "$KT/tools/rlimits-check.py" "$BUILD/unix" "${RL_TEXTS[@]}" || exit 1
+fi
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
   python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ" <<'PYG' || exit 1

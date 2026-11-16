@@ -17,6 +17,7 @@ test:
 	python3 tools/kabi-sidecar030.py --selftest
 	python3 tools/rwippc030.py --selftest
 	python3 tools/growsdt030.py --selftest
+	python3 tools/rlimits-check.py --selftest
 	python3 tools/bmaphf030.py --selftest
 	python3 tools/hardbus-retarget.py --selftest
 	python3 tools/btwalk030.py --selftest
