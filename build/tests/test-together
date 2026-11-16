@@ -5,7 +5,8 @@
 # Runs the tool on throwaway rule files and catalogs: a rule that holds, one
 # broken by an old version, one broken by a missing package, a first package
 # below its version (no constraint), #old rows ignored, apkg's version order,
-# a malformed rule and the shipped release/together-1.1.  Prints "N/N passed".
+# a malformed rule, and the shipped release/together-1.1: it parses, and its
+# x11r63 6.3-11 rule refuses amix-base 1.0-35.  Prints "N/N passed".
 
 import os
 import subprocess
@@ -74,6 +75,17 @@ def main():
         check("apkg's order: 1.0 is before 1.0-35", rc == 1, out)
         rc, out = run("z3660rtg-k46 1.1.2-1 needs amix-base\n", cat("1.0-35", "1.1.2-1"), tmp)
         check("refused: a malformed rule (exit 2)", rc == 2 and "not `<name> <version>: needs" in out, out)
+        # the shipped rules: x11r63 6.3-11 needs amix-base 1.0-36 (the catalog name is x11r6.3)
+        with open(os.path.join(TOP, "release", "together-1.1")) as fp:
+            shipped = fp.read()
+        x11 = "x11r6.3|%s|x11r63|x11r63-%s.pkg|x|1|none|x11|x11"
+        rc, out = run(shipped, cat("1.0-35", "1.1.2-1", x11 % ("6.3-11", "6.3-11")), tmp)
+        check("together-1.1: x11r63 6.3-11 beside amix-base 1.0-35 refused, named",
+              rc == 1 and "x11r6.3 6.3-11 needs amix-base 1.0-36 or later; the catalog has amix-base 1.0-35" in out, out)
+        rc, out = run(shipped, cat("1.0-36", "1.1.2-1", x11 % ("6.3-11", "6.3-11")), tmp)
+        check("together-1.1: x11r63 6.3-11 beside amix-base 1.0-36 holds", rc == 0 and "every one holds" in out, out)
+        rc, out = run(shipped, cat("1.0-35", "1.1.2-1", x11 % ("6.3-10", "6.3-10")), tmp)
+        check("together-1.1: x11r63 6.3-10 beside amix-base 1.0-35 holds", rc == 0 and "every one holds" in out, out)
         p = subprocess.run([sys.executable, "-I", TOOL, os.path.join(TOP, "release", "together-1.1"),
                             os.path.join(tmp, "catalog")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         check("release/together-1.1 parses", p.returncode in (0, 1), p.stdout.decode())
