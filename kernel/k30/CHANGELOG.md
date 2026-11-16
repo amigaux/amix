@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — stock soft data/vmem limits by default again (b4779452)
+
+build-cross-kernel.sh builds the stock soft data and vmem limits (16 MiB; hard limits unlimited) by default again; --proc-limits is the opt-in raise cuts -68 to -78 carry. --rlimits-text runs tools/rlimits-check.py, which reads the built kernel's rlimits table and fails unless each named text says the same.
+
 ## 2026-11-16 — KNOWN-ISSUES: the late shutdown stall is a child wait (40eb1f2c)
 
 The stall after the run-level change is init waiting on the child that prints the new level; neither a second `init 0` nor `kill -ALRM 1` ends it (each measured once), no user-space way out is known; wait, else sync and switch off. 4 stalls in 32 heavy-write shutdowns at 16 MB.
