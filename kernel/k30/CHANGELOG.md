@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — KNOWN-ISSUES: a resend does not end the late stall (1bd6291e)
+
+The stall after the level change is init's alarm being undone by its own clear; a second init 0 does not end it, kill -ALRM 1 should (not yet measured).
+
 ## 2026-11-16 — KNOWN-ISSUES: the shutdown stall after the level change (440df39a)
 
 The shutdown stall can also come after init changes run level, before rc0; both cases fit a lost wakeup in stock init's flag-test-then-pause().
