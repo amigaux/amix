@@ -13,9 +13,9 @@ The interface is `xsf0` (then `xsf1`, … in board order) and the device node is
 `/dev/xsf0`. `ifup` brings it up from `/etc/inet/interfaces`, as it does every
 interface.
 
-**Status: tested in emulation; users report one real set-up working and one
-failing** (see Tested). The board
-facts the driver is built on, and where each was checked, are in
+**Status: tested in emulation; users report two real set-ups working** (one
+earlier failing set-up was traced to a fault on the card; see Tested). The
+board facts the driver is built on, and where each was checked, are in
 [docs/facts.md](docs/facts.md).
 
 ## Support
@@ -162,8 +162,18 @@ users' reports, passed on as they came:
 - **Working:** an A4000D with a CyberStorm MkII 68060 and an X-Surf-100. The
   interface took a DHCP lease, and traffic went both ways (a ping by name
   answered). The card's Zorro mode was not reported.
-- **Failing:** one user's set-up reported failing, where the card
-  afterwards did not work under AmigaOS either.
+- **Working:** an A4000D with a CyberStorm 68060, 128 MB, root on a Buddha
+  IDE controller, and an X-Surf-100 in Zorro III. The load line was
+  `xsf0: X-Surf-100, Zorro 3 at 0x40000000, <address>, interrupt I/O`. The
+  interface took a DHCP lease, and ping, telnet and ftp worked. A first try
+  with a fixed address showed 42 packets sent and none received before the
+  DHCP set-up worked; the cause of that is not known.
+
+  This set-up was first reported failing. The cause was a hardware fault on
+  the card, a bad solder joint, not the driver: under AmigaOS the maker's
+  test program found the board by AutoConfig, but its remote-DMA memory
+  test timed out. After the chip was pressed down, the test passed and the
+  driver attached.
 
 **In emulation.** The
 rows below ran in the Amiberry emulator (amigaux fork, with its NE2000 receive
