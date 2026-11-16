@@ -67,7 +67,7 @@ EOF
 conf() { cat > "$T/display"; }
 run() { # run <args...>: xstart, its output and status
 	: > "$T/calls"
-	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="$T/d" HOME="$T/home" \
+	env DISP_SUBR="$here/display.subr" DISP_CONF="$T/display" DISP_D="${D_:-$T/d}" HOME="$T/home" \
 	    XINITS="${XI:-$B/xinit}" XDMS="$B/xdm" DTLOGINS="${DTL:-$B/dtlogin}" XSESSION="${XS:-$T/xsession}" \
 	    MONSWCTL="${MCTL:-$B/monswctl-no}" XSTART_TMP="$T/tmp" \
 	    R6DIR="$T/r6" STOCKXDIR="$T/stockx" XSTART_PS="${PS_:-$B/ps}" XSTART_WAIT="${WAIT_:-60}" \
@@ -323,6 +323,152 @@ o=$(run -n card=z3660 mode=640x480)
 expect "a card file's mistake said" "$T/d/native:7: unknown key \"colour\"" "$o"
 expect "mistakes: -n status 1" "rc=1" "$o"
 sed -i '$d' "$T/d/native"
+
+# --- the probe: exit 0 = the card is here; its node, modes and depths
+# lines replace the file's; %p is the node in use
+cat > "$B/pr" <<EOF
+#!/bin/sh
+echo "pr \$*" >> $T/calls
+[ -f $T/st/pr-out ] && cat $T/st/pr-out
+exit \`cat $T/st/pr-rc 2>/dev/null || echo 0\`
+EOF
+chmod +x "$B/pr"
+cat > "$T/d/aprobe" <<EOF
+node     $T/dev/zz9000
+server   $B/Xzz
+modes    1024x768
+depths   16
+probe    $B/pr one two
+args     -mode %m -dev %p
+env      CARD=%p
+EOF
+printf 'card auto\n' | conf
+echo 1 > "$T/st/pr-rc"
+o=$(run -n)
+expect "probe fails: auto takes the next" "card     z3660" "$o"
+expect "probe: given its args" "pr one two" "$(cat "$T/calls")"
+refuse "probe fails: not a fault" "aprobe:" "$o"
+o=$(run -n card=aprobe)
+expect "probe fails, named card: said" "aprobe: its probe $B/pr one two finds no card" "$o"
+expect "probe fails, named card: status 1" "rc=1" "$o"
+echo 0 > "$T/st/pr-rc"
+o=$(run -n)
+expect "probe answers: auto takes it" "card     aprobe" "$o"
+expect "-n shows the probe" "probe    $B/pr one two" "$o"
+expect "no lines: the file's node" "node     $T/dev/zz9000" "$o"
+expect "%p in args" "server   $B/Xzz :0 -mode 1024x768 -dev $T/dev/zz9000" "$o"
+expect "%p in env" "env      CARD=$T/dev/zz9000" "$o"
+same "probe run once" 1 "$(grep -c '^pr ' "$T/calls")"
+: > "$T/dev/zz9001"
+printf 'node %s/dev/zz9001\nmodes 800x600 1920x1080\ndepths 8 16\n' "$T" > "$T/st/pr-out"
+o=$(run -n depth=8)
+expect "probe's node" "node     $T/dev/zz9001" "$o"
+expect "probe's modes, the first the default" "-mode 800x600 -dev $T/dev/zz9001" "$o"
+expect "probe's depths" "depth 8" "$o"
+o=$(run -n 1024x768)
+expect "probe's modes replace the file's" "aprobe has no mode 1024x768 (it has: 800x600 1920x1080)" "$o"
+o=$(run)
+expect "run: the probe ran first" "pr one two
+xinit $T/xsession -- " "$(cat "$T/calls")"
+expect "run: the server's line has the probe's node" "-mode 800x600 -dev $T/dev/zz9001" "$(cat "$T/calls")"
+printf 'node %s/dev/zz9001\nflavour mild\n' "$T" > "$T/st/pr-out"
+o=$(run -n)
+expect "probe's unknown line: warned" "aprobe: its probe printed \"flavour\", ignored" "$o"
+expect "probe's unknown line: card still used" "card     aprobe" "$o"
+printf 'node dev/zz9001\n' > "$T/st/pr-out"
+o=$(run -n)
+expect "probe's bad line: said in auto" "aprobe: its probe printed a bad line: node dev/zz9001" "$o"
+expect "probe's bad line: auto takes the next" "card     z3660" "$o"
+printf 'modes big\n' > "$T/st/pr-out"
+o=$(run -n card=aprobe)
+expect "probe's bad modes, named card" "aprobe: its probe printed a bad line: modes big" "$o"
+expect "probe's bad line, named card: status 1" "rc=1" "$o"
+printf 'node %s/dev/zz9009\n' "$T" > "$T/st/pr-out"
+o=$(run -n card=aprobe)
+expect "probe's node does not open" "aprobe: its node $T/dev/zz9009 does not open" "$o"
+rm -f "${T:?}/st/pr-out" "${T:?}/dev/zz9001"
+sed -i "s|^probe .*|probe    $T/none|" "$T/d/aprobe"
+o=$(run -n)
+expect "no probe: said" "aprobe: no probe $T/none" "$o"
+expect "no probe: auto takes the next" "card     z3660" "$o"
+sed -i "s|^probe .*|probe    pr|" "$T/d/aprobe"
+o=$(run -n card=z3660)
+expect "probe not a full path: said" "$T/d/aprobe:5: probe is a command by its full path" "$o"
+expect "a mistake in a card not used: status 0" "rc=0" "$o"
+o=$(run -n card=aprobe)
+expect "a mistake in the card used: status 1" "rc=1" "$o"
+rm -f "${T:?}/d/aprobe" "${T:?}/st/pr-rc"
+
+# --- keys this base does not know: warned, never fatal
+printf 'card z3660\ncolour blue\n' | conf
+echo "sparkle yes" >> "$T/d/z3660"
+o=$(run -n)
+expect "unknown key in /etc/display: warned" "$T/display:2: unknown key \"colour\", ignored" "$o"
+expect "unknown key in the card used: warned" "$T/d/z3660:11: unknown key \"sparkle\", ignored" "$o"
+expect "unknown keys: -n status 0" "rc=0" "$o"
+o=$(run)
+expect "unknown keys: the session runs" "xinit $T/xsession -- $B/Xzz :0" "$(cat "$T/calls")"
+sed -i '$d' "$T/d/z3660"
+printf 'server %s/Xnat\nmodes big\n' "$B" > "$T/d/zother"
+o=$(run -n)
+expect "bad value in another card: said" "$T/d/zother:2: mode \"big\" is not W x H" "$o"
+expect "bad value in another card: status 0" "rc=0" "$o"
+o=$(run -n card=zother)
+expect "bad value in the card used: status 1" "rc=1" "$o"
+rm -f "${T:?}/d/zother"
+
+# --- three cards as their packages would ship them: the Z3660 RTG and a
+# ZZ9000 both behind zz9000 (unit 0, or 1 beside a Z3660; told apart by
+# zorro/product on the info node), the VA2000 by its node alone
+D3=$T/d3
+mkdir -p "$D3"
+cat > "$B/zz9k_probe" <<EOF
+#!/bin/sh
+# a model: the info node's text stands for GETINFO's zorro/product
+info() { cat $T/dev/zz900\${1}i 2>/dev/null; }
+case \$1 in
+z3660) [ "\`info 0\`" = 3/1 ] ;;
+zz9000)
+	for u in 0 1; do
+		case \`info \$u\` in
+		2/3) echo "node $T/dev/zz900\$u"; exit 0 ;;
+		3/4) echo "node $T/dev/zz900\$u"; echo "modes 1024x768 1920x1080"; exit 0 ;;
+		esac
+	done
+	exit 1 ;;
+*) exit 2 ;;
+esac
+EOF
+chmod +x "$B/zz9k_probe"
+printf 'node %s/dev/zz9000\nserver %s/Xzz\nmodes 1024x768\nprobe %s/zz9k_probe z3660\nargs -dev %%p\n' "$T" "$B" "$B" > "$D3/z3660"
+printf 'node %s/dev/zz9000\nserver %s/Xzz\nmodes 1024x768\nprobe %s/zz9k_probe zz9000\nargs -dev %%p\n' "$T" "$B" "$B" > "$D3/zz9000"
+printf 'node %s/dev/va2000\nserver %s/Xzz\nmodes 640x480\n' "$T" "$B" > "$D3/va2000"
+cp "$T/d/native" "$D3/native"
+rm -f "${T:?}/dev/zz9000"*
+printf 'card auto\n' | conf
+o=$(D_=$D3 run -n)
+expect "three cards, none there: native" "card     native" "$o"
+: > "$T/dev/zz9000"; echo 2/3 > "$T/dev/zz9000i"
+o=$(D_=$D3 run -n)
+expect "ZZ9000 alone (Zorro II): zz9000" "card     zz9000" "$o"
+expect "ZZ9000 alone: unit 0, no 1920x1080" "server   $B/Xzz :0 -dev $T/dev/zz9000" "$o"
+o=$(D_=$D3 run -n 1920x1080)
+expect "ZZ9000 Zorro II: no 1920x1080" "zz9000 has no mode 1920x1080" "$o"
+echo 3/4 > "$T/dev/zz9000i"
+o=$(D_=$D3 run -n 1920x1080)
+expect "ZZ9000 Zorro III: 1920x1080" "server   $B/Xzz :0 -dev $T/dev/zz9000" "$o"
+o=$(D_=$D3 run -n card=z3660)
+expect "ZZ9000 alone: the z3660 card refuses" "z3660: its probe $B/zz9k_probe z3660 finds no card" "$o"
+echo 3/1 > "$T/dev/zz9000i"; : > "$T/dev/zz9001"; echo 3/4 > "$T/dev/zz9001i"
+o=$(D_=$D3 run -n)
+expect "both boards: auto takes the Z3660" "card     z3660" "$o"
+o=$(D_=$D3 run -n card=zz9000)
+expect "both boards: the ZZ9000 on unit 1" "server   $B/Xzz :0 -dev $T/dev/zz9001" "$o"
+: > "$T/dev/va2000"
+o=$(D_=$D3 run -n)
+expect "a VA2000 too: first by name" "card     va2000" "$o"
+rm -f "${T:?}/dev/zz900"* "${T:?}/dev/va2000"
+: > "$T/dev/zz9000"
 
 # --- no card answers at all
 rm -f "${T:?}/dev/console" "${T:?}/dev/zz9000"

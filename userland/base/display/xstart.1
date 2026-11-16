@@ -1,4 +1,4 @@
-.TH XSTART 1 "31 October 2026" "amix-base"
+.TH XSTART 1 "15 November 2026" "amix-base"
 .SH NAME
 xstart \- start X on this machine's display
 .SH SYNOPSIS
@@ -46,7 +46,10 @@ In order,
 .B xstart
 finds the card (with
 .BR "card auto" ,
-the first whose device answers, the chipset display last), checks the mode
+the first that is there, the chipset display last: its probe command, when
+its file has one, and then its device node, say so; see
+.BR display.d (4)),
+checks the mode
 and depth against the card's, raises the limits the card asks for, switches
 the monitor to the card when the card shares it, and runs the server through
 .B xinit
@@ -99,6 +102,10 @@ say what would be run, and every mistake in
 .B /etc/display
 and the card files, and run nothing; an X server still running on the
 display is reported.
+A card's probe command runs, as it would for a session.
+A key
+.B xstart
+does not know (one from a newer base package) is reported as ignored.
 .TP
 .B \-xdm \fR|\fP \-dtlogin
 instead of a session, start X11R6's
@@ -116,7 +123,10 @@ or
 .SH EXIT STATUS
 0 when the session ran (with
 .BR \-n :
-when the files hold no mistake); 1 when the display cannot be set up (no
+when neither
+.B /etc/display
+nor the card used holds a mistake; a key it does not know and a mistake in
+another card's file do not count); 1 when the display cannot be set up (no
 card answers, a mode or depth the card does not have, no server, no
 .BR xinit ,
 an X server for the display that did not end in time);

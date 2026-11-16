@@ -5,7 +5,11 @@
 #   disp_val <file> <key>        the value of <key> (the rest of its last
 #                                line, comment stripped), or nothing
 #   disp_errors                  every mistake in /etc/display and the card
-#                                files, one "<file>:<line>: <what>" a line
+#                                files, one "<file>:<line>: <what>" a line;
+#                                a key it does not know ends ", ignored"
+#   disp_fatal <errors> <card>   of those, the ones that matter for <card>:
+#                                /etc/display's and the card file's own,
+#                                not an ignored key
 #   disp_cards                   the card names, in the order "auto" tries
 #                                them: by name, "native" last
 #   disp_has <list> <word>       status 0 when <word> is one of <list>
@@ -56,7 +60,7 @@ disp_errors() {
 	k == "start" { if (NF != 2 || (v != "manual" && v != "xdm" && v != "dtlogin")) print at "start is manual, xdm or dtlogin"; next }
 	k == "session" { if (NF != 2 || v !~ /^\//) print at "session is a full path"; next }
 	k == "monsw" { if (NF != 2 || v !~ /^[0-9]+$/) print at "monsw is a bit sum, as 34"; next }
-	{ print at "unknown key \"" k "\"" }
+	{ print at "unknown key \"" k "\", ignored" }
 	' f="$DISP_CONF"
 	for _de in `disp_cards`
 	do
@@ -71,11 +75,19 @@ disp_errors() {
 		k == "monsw" { if (NF != 2 || ($2 != "yes" && $2 != "no")) print at "monsw is yes or no"; next }
 		k == "monswtool" { if (NF != 2 || $2 !~ /^\//) print at "monswtool is a full path"; next }
 		k == "restore" { if ($2 !~ /^\//) print at "restore is a command by its full path"; next }
+		k == "probe" { if ($2 !~ /^\//) print at "probe is a command by its full path"; next }
 		k == "once" { if (NF != 2 || ($2 != "none" && $2 !~ /^-/)) print at "once is the server\047s option, as -terminate, or none"; next }
 		k == "args" || k == "env" || k == "console" || k == "name" { next }
-		{ print at "unknown key \"" k "\"" }
-		END { if (!seen) {} }
+		{ print at "unknown key \"" k "\", ignored" }
 		' f="$DISP_D/$_de"
 		[ -n "`disp_val "$DISP_D/$_de" server`" ] || echo "$DISP_D/$_de: no server line"
 	done
+}
+
+# A key this base does not know comes from a newer one and is only warned
+# about; so is a mistake in a card file not in use.
+disp_fatal() {
+	echo "$1" | awk '
+	index($0, c ":") == 1 || index($0, f ":") == 1 { if ($0 !~ /, ignored$/) print }
+	' c="$DISP_CONF" f="$DISP_D/$2"
 }

@@ -1,4 +1,4 @@
-.TH DISPLAY.D 4 "31 October 2026" "amix-base"
+.TH DISPLAY.D 4 "15 November 2026" "amix-base"
 .SH NAME
 display.d \- the display cards X can use, one file each
 .SH SYNOPSIS
@@ -19,9 +19,21 @@ not here (see
 Each line is a key and its value, separated by blanks or tabs; a
 .B #
 starts a comment.
+A key
+.B xstart
+does not know is reported by
+.B "xstart \-n"
+as ignored, and the rest of the file is used: a card file may carry a key
+that only a newer base package reads.
 .TP
 .BI node " path"
 the card's device node, opened to see whether the card is there.
+.TP
+.BI probe " path \fR[\fPargument ...\fR]\fP"
+a command, by its full path, that says whether the card is there, for a
+card whose node alone cannot tell (see
+.BR PROBES ).
+Its arguments are given as written.
 .TP
 .BI module " name"
 the kernel module that drives it, when there is one.
@@ -47,9 +59,13 @@ and
 .B %h
 its width and height,
 .B %d
-the depth and
+the depth,
 .B %n
-the display number.
+the display number and
+.B %p
+the node in use (the
+.B node
+line's, or the one the probe names).
 .TP
 .BI env " name" = "value ..."
 the server's environment, with the same
@@ -113,6 +129,73 @@ reserved for the card's console takeover; no tool reads it yet.
 .TP
 .BI name " text"
 the card's name in words.
+.SH PROBES
+With
+.BR "card auto" ,
+.B xstart
+takes the card files in name order,
+.B native
+last, and uses the first card that is there; a card named in
+.B /etc/display
+must be there too.
+A card without a
+.B probe
+line is there when its node opens.
+A card with one is there when its probe exits 0 and then the node opens;
+on any other status
+.B xstart
+goes on to the next card (or, for a named card, says that the probe finds
+none).
+.PP
+The probe may print lines on its standard output, in this file's form,
+which replace the file's for that run:
+.TP
+.BI node " path"
+the node to use, for a driver whose boards share one node name with
+different units;
+.TP
+.BI modes " W" x "H ... \fR|\fP auto"
+the modes this board takes;
+.TP
+.BI depths " bits ..."
+its depths.
+.PP
+Other lines are reported and ignored.
+A line with a bad value makes the card unusable, and
+.B xstart
+says so.
+.PP
+For a driver package that ships a probe:
+.IP \(bu 3
+The probe belongs to the driver's package, not to the base package; the
+base package runs it.
+.IP \(bu 3
+It must return at once: no waiting, no retries, no output on its standard
+error when the board is merely absent.
+.IP \(bu 3
+It must change nothing and be safe to run at any time, as any user, with
+no board fitted, and inside the installer's
+.BR chroot (1M):
+.B "xstart \-n"
+runs it there.
+.IP \(bu 3
+It reads its board's identity from the driver (an information node or an
+.BR ioctl (2)),
+never from the node's mere opening when two boards share the node name.
+.IP \(bu 3
+Its standard input is
+.BR /dev/null .
+Only its exit status and the three lines above count.
+.IP \(bu 3
+The server should take the node from the line, through
+.BR %p ,
+so that it opens the board the probe chose.
+.PP
+The base package before 1.0-35, as on the 1.1 and 1.1.1 install media,
+takes the
+.B probe
+line for a mistake, and those media's installers stop at it: a driver
+package ships the line only with base package 1.0-35 or later.
 .SH CARDS
 .TP
 .B native
@@ -138,19 +221,19 @@ file of
 .BR xdm .
 .SH EXAMPLE
 The Z3660's file,
-.BR /etc/display.d/z3660 ,
-as its driver package ships it:
+.BR /etc/display.d/z3660 :
 .PP
 .nf
 .ft CW
 # /etc/display.d/z3660 -- the Z3660 RTG card (display.d(4))
 name      Z3660 RTG
 node      /dev/zz9000
+probe     /opt/amix/bin/zz9k_probe z3660
 module    z3660rtg
 server    /opt/amix/X11R6/bin/Xzz9000
 modes     1024x768 640x480 800x600 1280x720 1280x800 1280x1024 1920x1080
 depths    16
-args      -mode %m -ac -kb
+args      -mode %m -dev %p -kb
 limits    vmem=131072 data=65536
 monsw     yes
 monswtool /opt/amix/bin/zz9k_monsw
@@ -159,6 +242,17 @@ restore   /opt/amix/bin/rtg-kbdback
 .fi
 .PP
 The first mode, 1024x768, is the default.
+The Z3660's RTG and an MNT ZZ9000 share the node name
+.BR /dev/zz9000 :
+the Z3660's is always unit 0, and a ZZ9000 beside it is unit 1,
+.BR /dev/zz9001 .
+The probe tells the boards apart by the board identity the driver gives,
+so this file is used only for a Z3660; the ZZ9000's file has
+.B "probe /opt/amix/bin/zz9k_probe zz9000"
+instead, which prints the node of the unit the ZZ9000 is on and, in a
+Zorro III slot, a mode list with 1920x1080.
+A VA2000's node opens only when the board is there, so its file needs no
+probe.
 The server finds its fonts and its colour database by itself (the X11R6.3
 package from 6.3-2 on), and links its X libraries in, so the file gives no
 .BR \-fp ,
