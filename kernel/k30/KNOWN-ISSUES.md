@@ -226,29 +226,31 @@ known about it, and what to do. Measurements are from emulation unless the entry
     pending or held on process 1) and slept in its idle wait until its own five-minute timer woke it.
   - *After the change:* `INIT: New run level: 0` is shown, `who -r` says run level 0 and the old level's processes are
     gone, but the shutdown scripts (`/sbin/rc0`) do not start. Init sleeps in `pause()` with no timer set.
-  Both are lost wake-ups in the stock `/sbin/init`, read from its code. Init waits by calling `pause()` until a flag
-  that a signal handler sets is set; a signal that comes between its test of the flag and `pause()` is handled but
-  does not wake it. Before the change the lost signal is the request, and the idle timer ends the wait. After the
-  change, init ends the old level's processes with waits of 3 to 5 seconds, each timed by an alarm whose handler sets
-  the flag. If that alarm is lost between the test and `pause()`, the next signal of any kind ends the wait. But init
-  starts the alarm first and clears the flag after: if it does not run again for those seconds in between (a busy
-  machine), the handler runs before the clear, the clear undoes it, and only another alarm signal ends the wait. A
-  run-level request does not set that flag. It follows heavy file writing just before the shutdown, on a machine
-  short of memory (idle daemons swapped out), more often while the machine is busy. Measured with about 150 MB
-  written before each shutdown on 16 MB:
+  Before the change it is a lost wake-up in the stock `/sbin/init`, read from its code: init tests whether it has
+  work and then calls `pause()`; a request that comes between the two is handled but does not wake it, and its
+  five-minute idle timer ends the wait. After the change, the registers of process 1 in two stalls place it in one
+  wait, read from the same code: init prints the new run level through a child process and calls `pause()` until its
+  table shows that child has ended. The child had printed and was gone (no such process, not even a zombie), yet
+  init went back to `pause()` after every signal, which in its code means its table still showed the child running.
+  Init records an ended child only in its SIGCLD handler, by process id; why that did not happen here is not known.
+  Both follow heavy file writing just before the shutdown, on a machine short of memory (idle daemons swapped out),
+  more often while the machine is busy. Measured with about 150 MB written before each shutdown on 16 MB:
   - cut -77: late before the change in 2 of 4 shutdowns, after 172 and 164 s;
   - the stock 2.1c kernel: late before the change in 1 of 4, after 189 s;
   - cut -77 again, with `init 0` sent again after 30 s while the level had not changed: 2 of 4 halted after 80 s;
     2 stalled after the change, one going on about 150 s after the request, the other still stalled at 400 s;
   - cut -77, the emulator's host busy with two other machines: 1 of 10 stalled after the change; `/sbin/init 0` sent
     again 30 s later did not wake it, and it had not halted 380 s after that;
+  - cut -77, the host busy, a further 6 and 12 shutdowns: 1 stalled after the change; `kill -ALRM 1` 35 s after the
+    request woke init, which went back to `pause()`; no halt 381 s after that;
   - the shutdowns after only reading back halted at once.
-  Not seen on 32 MB machines so far. The 040/060 line runs the same `/sbin/init` and can do the same. What to do: do
-  not switch off on the prompt; wait for `The system is halted`. If `who -r` still shows the old run level half a
-  minute after `shutdown`, run `/sbin/init 0` once more: a second request is acted on at once (27 s to the halt,
-  measured). If it shows run level 0 but the shutdown scripts have not started after half a minute, a second
-  `/sbin/init 0` may not help (measured once); `kill -ALRM 1` as root sets the flag init waits on and should end
-  either kind of wait, but that has not been measured yet.
+  After the change that is 4 stalls in 32 such shutdowns. Not seen on 32 MB machines so far. The 040/060 line runs
+  the same `/sbin/init` and can do the same. What to do: do not switch off on the prompt; wait for `The system is
+  halted`. If `who -r` still shows the old run level half a minute after `shutdown`, run `/sbin/init 0` once more: a
+  second request is acted on at once (27 s to the halt, measured). If it shows run level 0 but the shutdown scripts
+  have not started after half a minute, neither a second `/sbin/init 0` nor `kill -ALRM 1` ends the stall (each
+  measured once), and no way out from user space is known: wait, and if it does not halt, run `sync`, wait for the
+  disk to go quiet, and switch off.
 
 ## Not explained
 
