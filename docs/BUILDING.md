@@ -148,7 +148,7 @@ own (`make kit`, `make recipes/zlib`), at the top of the checkout or in
 | `userland`, `recipes/<name>` | every package of `userland/packages` and `userland/base/pkg`, each after the packages its `BUILD_DEPENDS` names | `out/userland/pkgs/` |
 | `apkg` | APKG and APKGENG, by pkgtools' `make dist` | `out/apkg/` |
 | `catalogs` | the kernel-space and userland catalogs, by pkgtools' `gen-catalog.py`; no time stamp, so a rebuild gives the same catalog | `out/{kspace,userland}/{catalog,catalog.md5}` |
-| `release` | the 1.1 package repository, by pkgtools' `assemble-release.py`: both spaces' packages, APKG, the stock packages `stock-1.1.lock` names, and the published tree (`RELEASE_PREVIOUS=<dir>`, if any), then the content check | `out/release/1.1/{catalog,catalog.md5,pkgs/}` |
+| `release` | the 1.1 package repository, by pkgtools' `assemble-release.py`: both spaces' packages, APKG, the stock packages `stock-1.1.lock` names, and the published tree (`RELEASE_PREVIOUS=<dir>`, if any), then the content check, the packages that ship together (`release/together-1.1`), and pkgtools' `older-apkg-check.sh`: the apkg of every earlier 1.1 release (built from its tag) must read the tree | `out/release/1.1/{catalog,catalog.md5,pkgs/}` |
 | `media` | the install CD, the netinstall CD, the boot floppies and the Z3660 boot disk, by `media/build.sh` in the media image, from the kernel-space packages and the 1.1 repository, then the content check; dated by `SOURCE_DATE_EPOCH`, else the commit's time | `out/media/` |
 | `lock` | every input and output of the build (`release/README.md`); with `LOCK=<file>`, refuses a build that is not that lock | `out/lock` |
 

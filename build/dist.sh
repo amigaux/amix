@@ -45,8 +45,11 @@
 #                into out/cache from the release assets system/stock-1.1.assets
 #                names (STOCK_URL=<base> names others); the sha256 decides.
 #                RELEASE_PUBLIC=1 runs without the two files, on the content
-#                check's public tests. A stock package not to be had, or
-#                neither file without RELEASE_PUBLIC, exits 3
+#                check's public tests. Then pkgtools' older-apkg-check.sh: the
+#                apkg of every earlier release of the series (its tags) must
+#                read the tree, a refused row fails the step. A stock package
+#                not to be had, neither file without RELEASE_PUBLIC, or no git,
+#                tag or cc for the check, exits 3
 #   media        CD, netinstall, floppies: media/build.sh in the media image
 #                (toolchain/Containerfile.media), into out/media/; it exits 3
 #                while there is no media/build.sh or no media image
@@ -702,6 +705,15 @@ step_release() {
 		--release "$release" --out "$out/release/$release" \
 		--release-check "$top/tools/release-check" \
 		--apkg-bin "$top/userland/pkgtools/src/apkg/apkg" || rc=$?
+	# the apkg of every earlier release of the series (its tags) must read the
+	# written tree: a row the installed base refuses is found here, not on a box.
+	# Exit 3 (no git, tag or cc to check with) stays a missing input
+	if [ $rc = 0 ]; then
+		sh "$top/userland/pkgtools/tools/repo/older-apkg-check.sh" "$out/release/$release" || {
+			rc=$?; [ $rc = 3 ] || rc=1
+			echo "[FAIL] release: an earlier release's apkg does not read out/release/$release (older-apkg-check, above)" >&2
+		}
+	fi
 	# packages that must ship together (release/together-<release>)
 	if [ $rc = 0 ] && [ -f "$top/release/together-$release" ]; then
 		python3 -I "$here/release-together" "$top/release/together-$release" \
