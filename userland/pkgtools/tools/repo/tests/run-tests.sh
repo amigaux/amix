@@ -2779,11 +2779,17 @@ check "an empty sidecar kbootset-min= refuses the package" \
 check "the shipped kernel/conf/kbootset.conf is gen-catalog's format" \
     python3 -c "
 import sys, re
+base = 0
 for n, l in enumerate(open(sys.argv[1]), 1):
     l = l.strip()
     if not l or l.startswith('#'): continue
     k, v = l.split(':', 1)
+    if k.strip() == 'module-floor-base':
+        base += 1
+        assert re.match(r'^\d+\.\d+\.\d+\.\d{6}-\d+$', v.strip()), (n, l)
+        continue
     assert len(k.split()) == 2 and len(v.split()) == 1, (n, l)
+assert base <= 1, 'more than one module-floor-base line'
 " "$HERE/../../../../../kernel/conf/kbootset.conf"
 
 # ---------------------------------------------------------------- T34 ----
