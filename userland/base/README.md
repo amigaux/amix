@@ -28,6 +28,12 @@ outside the package database.
 - **Stock behaviour where it works.** Nothing here patches a stock binary.
 - **Clean installs only.** Release 1.1 does not upgrade a 1.0 system, so there
   is no migration code here.
+- **Every release and point release carries a new amix-base revision.** The
+  package ships `/etc/amigaux-release`, written at package time from
+  `media/VERSION`, the one place a release's version is kept. When that file
+  moves (1.1.2 to 1.1.3), amix-base's `PKGREV` moves with it: a rebuild under
+  the old version would differ from the published package of that version,
+  and the release step refuses it. Page `amigaux-release(4)`.
 
 ## What is here
 

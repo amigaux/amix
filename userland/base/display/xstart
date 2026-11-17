@@ -9,20 +9,24 @@
 # or with "card auto" the first that is there, the native one last: its
 # probe command says so when it has one (and may name the node, modes and
 # depths), then its node must open. The mode and depth must be among the
-# card's; the card's limits are raised; when the card shares the monitor and
-# the kernel's monsw does not own the switch, the card's switch tool flips
-# it, and back at the end. The server runs through xinit (X11R6's, else the
-# stock one) with ~/.xsession, then ~/.xinitrc, then /etc/display's session,
-# then /usr/lib/amix/xsession; the card's environment reaches the server
-# alone. When xinit returns and the session's server still runs (xinit was
-# killed), xstart ends it: TERM, then KILL after XSTART_KILLWAIT seconds
-# (default 10). The card's restore command runs when the server ended on its
-# own or had to be ended that way. A session's server is given the
-# card's "once" option (display.d(4)), so it exits when the session ends
-# instead of resetting for another; xdm and dtlogin manage their server
-# themselves and do not get it. When an X server for the display still runs
-# (one that is ending, or another session's), xstart waits up to
-# XSTART_WAIT seconds (default 60) for it to go, then refuses.
+# card's; the card's limits are raised, never lowered; when the card shares
+# the monitor and the kernel's monsw does not own the switch, the card's
+# switch tool flips it, and back at the end. The server runs through xinit
+# (X11R6's, else the stock one) with ~/.xsession, then ~/.xinitrc, then
+# /etc/display's session, then /usr/lib/amix/xsession; the card's
+# environment reaches the server alone. When the session ends normally,
+# xstart sends the server TERM while xinit still holds its connection, so the
+# server ends at once with its own hand-back instead of resetting first.
+# When xinit returns and the session's server still runs (xinit was killed),
+# xstart ends it: TERM, then KILL after XSTART_KILLWAIT seconds (default
+# 10). The card's restore command runs when the server ended on its own or
+# had to be ended that way. With "once yes" (display(4)) the server is also
+# given the card's "once" option (display.d(4)), so that it ends when its
+# last client leaves; that is off by default, since a client that comes and
+# goes before the session's first one then ends the server. xdm and dtlogin
+# manage their server themselves and never get it. When an X server for
+# the display still runs (one that is ending, or another session's), xstart
+# waits up to XSTART_WAIT seconds (default 60) for it to go, then refuses.
 # -n says what would run, and every mistake in the files, and exits 1 only
 # for one in /etc/display or the card used: a key it does not know (from a
 # newer base) and a mistake in another card's file are warned about. -xdm
@@ -62,6 +66,36 @@ first() {
 	return 1
 }
 
+# The card's limits only ever raise: the 1991 sh's ulimit sets the soft and
+# the hard limit together, so a value below the one in force would lower
+# both. limflag <name>: ulimit's letter for a limit name
+limflag() {
+	case $1 in
+	vmem) echo v ;;
+	data) echo d ;;
+	esac
+}
+# limneed <flag> <KB>: status 0 when the limit in force is below KB (and so
+# is raised), 1 when it is unlimited or already as high; limnow is the value
+limneed() {
+	limnow=`ulimit -$1 2>/dev/null`
+	case $limnow in
+	unlimited) return 1 ;;
+	[0-9]*) [ "$limnow" -lt "$2" ] || return 1 ;;
+	esac
+	return 0
+}
+
+# restore_ok: status 0 when the card has no restore command or its command
+# can be run; else says so
+restore_ok() {
+	[ -z "$restore" ] && return 0
+	_rx=`echo $restore | awk '{ print $1 }'`
+	[ -x "$_rx" ] && return 0
+	say "$card: its restore command $_rx is not there; it is not run"
+	return 1
+}
+
 dry=
 xdm=
 dtlogin=
@@ -75,7 +109,11 @@ do
 	-dtlogin) dtlogin=1 ;;
 	:[0-9]*) disp=$a ;;
 	[0-9]*x[0-9]*) over="$over mode=$a" ;;
-	card=*|mode=*|depth=*|session=*|monsw=*) over="$over $a" ;;
+	card=*|mode=*|depth=*|session=*|monsw=*|once=yes|once=no) over="$over $a" ;;
+	once=*)
+		echo "usage: once=yes or once=no" >&2
+		exit 2
+		;;
 	*)
 		echo "usage: xstart [-n] [:N] [WxH] [key=value ...] | xstart -xdm | xstart -dtlogin" >&2
 		exit 2
@@ -89,6 +127,7 @@ mode=`disp_val "$DISP_CONF" mode`
 depth=`disp_val "$DISP_CONF" depth`
 session=`disp_val "$DISP_CONF" session`
 monsw=`disp_val "$DISP_CONF" monsw`
+once=`disp_val "$DISP_CONF" once`
 for o in $over
 do
 	eval `echo "$o" | sed 's/^\([a-z]*\)=\(.*\)$/\1="\2"/'`
@@ -205,18 +244,24 @@ then
 	say "$card: no server $server"
 	exit 1
 fi
-# the server's option to end with its first session: the card's, else
-# X11R6's -terminate or the stock server's -once (it has no -terminate and
-# refuses an option it does not know); "once none": no option
-once=`disp_val $C once`
-if [ -z "$once" ]
+# the server's option to end when its last client leaves, given only with
+# "once yes": the card's, else X11R6's -terminate or the stock server's -once
+# (it has no -terminate and refuses an option it does not know); "once none":
+# the server has none
+oncearg=
+if [ "$once" = yes ]
 then
-	case $server in
-	$R6DIR/*) once=-terminate ;;
-	$STOCKXDIR/*) once=-once ;;
-	esac
+	oncearg=`disp_val $C once`
+	if [ -z "$oncearg" ]
+	then
+		case $server in
+		$R6DIR/*) oncearg=-terminate ;;
+		$STOCKXDIR/*) oncearg=-once ;;
+		esac
+	fi
+	[ "$oncearg" = none ] && oncearg=
+	[ -n "$oncearg" ] || say "$card: its server has no option to end with its last client; once yes ignored"
 fi
-[ "$once" = none ] && once=
 
 # the mode and depth: the card's first when not set; "modes auto": the server's
 if [ "$modes" = auto ]
@@ -254,7 +299,7 @@ args=`disp_val $C args | sed -e "s/%m/$mode/g" -e "s/%w/$w/g" -e "s/%h/$h/g" \
 	-e "s/%d/$depth/g" -e "s/%n/$n/g" -e "s|%p|$node|g"`
 env=`disp_val $C env | sed -e "s/%n/$n/g" -e "s|%p|$node|g"`
 line=`echo $server $disp $args`
-sline=`echo $line $once`
+sline=`echo $line $oncearg`
 # xdm takes the card's environment in the server's line, as the stock
 # Xservers writes it; the stock xinit takes no such line ("No such file or
 # directory: :0"), so a session gets it in xstart's own environment
@@ -336,7 +381,25 @@ then
 	echo "mode     ${mode:-chosen by the server}, depth ${depth:-as the server sets it}"
 	echo "server   $line"
 	[ -n "$env" ] && echo "env      $env"
-	echo "limits   `disp_val $C limits`"
+	_lw=
+	for l in `disp_val $C limits`
+	do
+		v=`echo $l | sed 's/^[a-z]*=//'`
+		n=`echo $l | sed 's/=.*//'`
+		if limneed `limflag $n` $v
+		then
+			_lw="$_lw $l (raised from ${limnow:-unknown})"
+		else
+			_lw="$_lw $l (kept: $limnow)"
+		fi
+	done
+	echo "limits  ${_lw:- none}"
+	if [ "$once" = yes ]
+	then
+		echo "once     yes: the server ends when its last client leaves${oncearg:+ ($oncearg)}"
+	else
+		echo "once     no: the server ends with the session, not with a client"
+	fi
 	echo "monsw    ${tool:+$tool $monsw}${tool:-not switched here}"
 	echo "session  ${s:-none}"
 	p=`running`
@@ -349,8 +412,13 @@ then
 		echo "dtlogin  `first "$DTLOGINS"` -server \"$disp local $xline\""
 	else
 		echo "xinit    ${xinit:-none} $s -- $sline${env:+ (env for the server only)}"
-		r=`disp_val $C restore`
-		[ -n "$r" ] && echo "restore  $r, when the server ends on its own or xstart ends it"
+		restore=`disp_val $C restore`
+		[ -n "$restore" ] && echo "restore  $restore, when the server ends on its own or xstart ends it"
+		restore_ok
+		case $server in
+		$STOCKXDIR/*) ;;
+		*) [ -n "$restore" ] || say "$card: no restore line: after its server is killed or crashes, the console may take no typing (display.d(4))" ;;
+		esac
 	fi
 	[ -z "`disp_fatal "$errs" $card`" ]
 	exit
@@ -360,10 +428,10 @@ for l in `disp_val $C limits`
 do
 	v=`echo $l | sed 's/^[a-z]*=//'`
 	case $l in
-	vmem=*) ulimit -v $v 2>/dev/null || ulimit -m $v 2>/dev/null ||
-		say "cannot raise the memory limit to $v KB; the server may fail to map the card" ;;
-	data=*) ulimit -d $v 2>/dev/null ||
-		say "cannot raise the data limit to $v KB; the server may run out of memory" ;;
+	vmem=*) limneed v $v && { ulimit -v $v 2>/dev/null ||
+		say "cannot raise the memory limit to $v KB; the server may fail to map the card"; } ;;
+	data=*) limneed d $v && { ulimit -d $v 2>/dev/null ||
+		say "cannot raise the data limit to $v KB; the server may run out of memory"; } ;;
 	esac
 done
 
@@ -390,11 +458,15 @@ fi
 
 # The server runs through a wrapper: it exports the card's environment to
 # the server alone (the stock xinit takes no env prefix), records its own
-# process id and execs the server, so the id recorded is the server's. With
-# a restore command, the session runs through a second wrapper that marks a
-# normal end: the session ended while the server still ran, so xinit stops
-# the server and its own hand-back runs.
+# process id and execs the server, so the id recorded is the server's. The
+# session runs through a second wrapper. When the session ends while the
+# server still runs (a normal end), it marks that and sends the server TERM
+# while xinit still holds its connection: the server ends at once and its
+# own hand-back runs. Were xinit to close its connection first, the server
+# would reset for another session (up to half a minute on a 68LC060) and
+# xinit would kill it after 10 s, with no hand-back.
 restore=`disp_val $C restore`
+restore_ok || restore=
 W=${XSTART_TMP:-/tmp}/xstart.$$
 cleanup() {
 	rm -f ${W:?}.server ${W:?}.client ${W:?}.pid ${W:?}.clean
@@ -483,17 +555,15 @@ trap 'finish 1' 1 2 3 15
 	echo "echo \$\$ > $W.pid"
 	echo "exec $server \"\$@\""
 } > $W.server && chmod 700 $W.server || { say "cannot write $W.server"; finish 1; }
-srv=`echo $W.server $disp $args $once`
-cli=$s
-if [ -n "$restore" ]
-then
-	{
-		echo '#!/bin/sh'
-		echo "/bin/sh $s"
-		echo "kill -0 \`cat $W.pid 2>/dev/null\` 2>/dev/null && echo > $W.clean"
-	} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; finish 1; }
-	cli=$W.client
-fi
+srv=`echo $W.server $disp $args $oncearg`
+{
+	echo '#!/bin/sh'
+	echo "/bin/sh $s"
+	echo "p=\`cat $W.pid 2>/dev/null\`"
+	echo "[ -n \"\$p\" ] && kill -0 \$p 2>/dev/null && { echo > $W.clean; kill -15 \$p; }"
+	echo "exit 0"
+} > $W.client && chmod 700 $W.client || { say "cannot write $W.client"; finish 1; }
+cli=$W.client
 [ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
 xs=
 $xinit $cli -- $srv

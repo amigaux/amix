@@ -1,4 +1,4 @@
-.TH DISPLAY 4 "15 November 2026" "amix-base"
+.TH DISPLAY 4 "17 November 2026" "amix-base"
 .SH NAME
 display \- which screen X uses on this machine, and how it starts
 .SH SYNOPSIS
@@ -94,6 +94,26 @@ switch: the sum of the bits that say which lines switch it and at which
 level (1 CTS, 2 SEL, 16 and 32 their levels; 34 is SEL, the card's picture
 when low), the value of the Z3660's own setting.
 Absent: the value the card itself offers.
+.TP
+.B once yes \fR|\fP no
+.BR yes :
+a session's server is given the card's
+.B once
+option (see
+.BR display.d (4)),
+so that it ends whenever its last client leaves.
+.B no
+(the default): it is not; the server ends when the session ends, because
+.B xstart
+ends it then, and a client that comes and goes does not end it.
+With
+.BR yes ,
+a client that connects and leaves before the session's first one (a probe,
+an
+.BR xdpyinfo )
+ends the server, and the session never starts.
+A display manager's server never gets it.
+A base package before 1.0-37 warns about this key and ignores it.
 .PP
 Every mistake in the file is reported, with its line number, by
 .BR "xstart \-n" ;

@@ -39,11 +39,15 @@ mkdir -p "$T/st"
 	echo "cat $T/st/ps"
 	echo "echo \`expr \$n - 1\` > $T/st/ps-left"
 } > "$B/ps"
-# xinit: the session, then the server's line as the pid wrapper runs it (the
-# wrapper's exec line), the wrapper itself kept as st/lastwrap
+# xinit: the session as its wrapper runs it, then the server's line as the
+# pid wrapper runs it (the wrapper's exec line); the wrappers kept as
+# st/lastcli and st/lastwrap
 cat > "$B/xinit" <<EOF
 #!/bin/sh
 c=\$1; shift; [ "\$1" = -- ] && shift
+case \$c in
+*/xstart.*.client) cp "\$c" $T/st/lastcli; c=\`sed -n 's|^/bin/sh ||p' "\$c"\` ;;
+esac
 w=\$1; shift
 case \$w in
 */xstart.*.server) cp "\$w" $T/st/lastwrap; w=\`sed -n 's/^exec \\([^ ]*\\) .*/\\1/p' "\$w"\` ;;
@@ -336,6 +340,55 @@ refuse "no restore: no restore named" "then running" "$o"
 same "no restore: no server left" "" "$(ls "$T/st/run")"
 o=$(run -n card=keep)
 expect "-n: when the restore runs" "restore  $B/kbdback, when the server ends on its own or xstart ends it" "$o"
+# a normal end: the session's wrapper sends the server TERM while xinit
+# still holds it (this xinit, like the real one, closes and stops the server
+# only after the session; here it says so if it had to)
+cat > "$B/xhold" <<EOF
+#!/bin/sh
+c=\$1; shift; [ "\$1" = -- ] && shift
+echo "xinit \$c -- \$*" >> $T/calls
+"\$@" &
+i=0
+while [ -z "\`ls $T/st/run\`" ] && [ \$i -lt 50 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+"\$c"
+echo "xinit: session over" >> $T/calls
+i=0
+while [ -n "\`ls $T/st/run\`" ] && [ \$i -lt 30 ]; do sleep 0.1; i=\`expr \$i + 1\`; done
+[ -n "\`ls $T/st/run\`" ] && { echo "xinit stops the server" >> $T/calls; kill \`ls $T/st/run\`; rm -f $T/st/run/*; }
+exit 0
+EOF
+chmod +x "$B/xhold"
+printf 'card keep\n' | conf
+o=$(XI=$B/xhold PS_=$B/ps2 run :10)
+expect "normal end: the server got TERM" "server TERM" "$(cat "$T/calls")"
+refuse "normal end: xinit did not have to stop it" "xinit stops the server" "$(cat "$T/calls")"
+refuse "normal end: no restore" "restore" "$(cat "$T/calls")"
+same "normal end: nothing said" "rc=0" "$o"
+same "normal end: no server left" "" "$(ls "$T/st/run")"
+same "normal end: wrappers removed" "" "$(ls "$T/tmp")"
+expect "normal end: the wrapper runs the session" "/bin/sh $T/xsession" "$(cat "$T/st/lastcli" 2>/dev/null)"
+# the session's wrapper exists without a restore command too
+printf 'card keepnr\n' | conf
+o=$(XI=$B/xhold PS_=$B/ps2 run :10)
+expect "normal end, no restore: the server got TERM" "server TERM" "$(cat "$T/calls")"
+refuse "normal end, no restore: xinit did not have to stop it" "xinit stops the server" "$(cat "$T/calls")"
+# a restore command that is not there: said, never run
+printf 'node %s/dev/console\nserver %s/Xkeep\nmodes auto\nrestore %s/nokbdback\n' "$T" "$B" "$B" > "$T/d/keepgone"
+printf 'card keepgone\n' | conf
+o=$(run -n)
+expect "-n: a missing restore command said" "keepgone: its restore command $B/nokbdback is not there; it is not run" "$o"
+expect "-n: a missing restore command is no mistake" "rc=0" "$o"
+o=$(XI=$B/xkill PS_=$B/ps2 KW_=3 run :10)
+expect "missing restore: said at the start" "its restore command $B/nokbdback is not there" "$o"
+refuse "missing restore: not run" "not found" "$o"
+refuse "missing restore: not named as run" "then running" "$o"
+rm -f "${T:?}/d/keepgone"
+# -n: a card with no restore line is warned about, unless its server is the
+# system's own; a card with one is not
+o=$(run -n card=keepnr)
+expect "-n: no restore line warned" "keepnr: no restore line: after its server is killed or crashes, the console may take no typing" "$o"
+o=$(run -n card=keep)
+refuse "-n: a restore line, no warning" "no restore line" "$o"
 rm -f "${T:?}/d/keep" "${T:?}/d/keepnr"
 # xdm keeps the env in its line
 printf 'card native\n' | conf
@@ -348,8 +401,37 @@ o=$(run -n card=native)
 expect "restore not a full path: said" "$T/d/zbad:2: restore is a command by its full path" "$o"
 rm -f "${T:?}/d/zbad"
 
-# --- once: the card's, else -terminate for an X11R6 server, -once for the
-# stock one, nothing for another; never on xdm's line
+# --- limits: raised, never lowered (sh's ulimit sets the soft and the hard
+# limit together): a limit already unlimited or higher stays
+cat > "$B/Xlim" <<EOF
+#!/bin/sh
+echo "server v=\`ulimit -v\` d=\`ulimit -d\`" >> $T/calls
+exit 0
+EOF
+printf '#!/bin/sh\nulimit -v $LV; ulimit -d $LD; exec %s "$@"\n' "$SH" > "$B/limsh"
+chmod +x "$B/Xlim" "$B/limsh"
+printf 'node %s/dev/console\nserver %s/Xlim\nmodes auto\nlimits vmem=131072 data=65536\n' "$T" "$B" > "$T/d/lim"
+printf 'card lim\n' | conf
+o=$(LV=200000 LD=unlimited SH=$B/limsh run -n)
+expect "limits: higher kept" "vmem=131072 (kept: 200000)" "$o"
+expect "limits: unlimited kept" "data=65536 (kept: unlimited)" "$o"
+o=$(LV=200000 LD=unlimited SH=$B/limsh XI=$B/xlive XS=$T/livesession run)
+expect "limits: the server keeps the higher ones" "server v=200000 d=unlimited" "$(cat "$T/calls")"
+refuse "limits: nothing said" "cannot raise" "$o"
+o=$(LV=100000 LD=50000 SH=$B/limsh run -n)
+expect "limits: lower raised" "vmem=131072 (raised from 100000) data=65536 (raised from 50000)" "$o"
+o=$(LV=100000 LD=50000 SH=$B/limsh XI=$B/xlive XS=$T/livesession run)
+if [ "$(id -u)" = 0 ]; then
+	expect "limits: raised for the server" "server v=131072 d=65536" "$(cat "$T/calls")"
+else
+	expect "limits: a raise refused is said" "cannot raise the memory limit to 131072 KB" "$o"
+	expect "limits: the server keeps what it had" "server v=100000 d=50000" "$(cat "$T/calls")"
+fi
+rm -f "${T:?}/d/lim"
+
+# --- once: off by default, so no option; with "once yes" the card's, else
+# -terminate for an X11R6 server, -once for the stock one, nothing for
+# another; never on xdm's line
 mkdir -p "$T/r6/bin" "$T/stockx/bin"
 for x in "$T/r6/bin/Xr6" "$T/stockx/bin/X"; do
 	printf '#!/bin/sh\necho "server $*" >> %s/calls\n' "$T" > "$x"
@@ -359,27 +441,52 @@ printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\n' "$T" "$T" > "$T
 printf 'node %s/dev/console\nserver %s/stockx/bin/X\nmodes auto\n' "$T" "$T" > "$T/d/stock"
 printf 'card r6\n' | conf
 o=$(run)
-same "once: X11R6 server, -terminate" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+same "once: off by default, X11R6 server" "xinit $T/xsession -- $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
 o=$(run -n)
-expect "once: -n shows it" "-- $T/r6/bin/Xr6 :0 -terminate" "$o"
-o=$(run -xdm)
-same "once: never on xdm's line" "xdm -server :0 local $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
+expect "once: -n says it is off" "once     no: the server ends with the session, not with a client" "$o"
 o=$(run card=stock)
-same "once: stock server, -once" "xinit $T/xsession -- $T/stockx/bin/X :0 -once" "$(cat "$T/calls")"
+same "once: off by default, stock server" "xinit $T/xsession -- $T/stockx/bin/X :0" "$(cat "$T/calls")"
+o=$(run -n card=stock)
+refuse "-n: the system's server, no restore warning" "no restore line" "$o"
+printf 'card r6\nonce yes\n' | conf
+o=$(run)
+same "once yes: X11R6 server, -terminate" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+o=$(run -n)
+expect "once yes: -n shows it" "-- $T/r6/bin/Xr6 :0 -terminate" "$o"
+expect "once yes: -n says so" "once     yes: the server ends when its last client leaves (-terminate)" "$o"
+expect "once yes: no mistake" "rc=0" "$o"
+o=$(run -xdm)
+same "once yes: never on xdm's line" "xdm -server :0 local $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
+o=$(run card=stock)
+same "once yes: stock server, -once" "xinit $T/xsession -- $T/stockx/bin/X :0 -once" "$(cat "$T/calls")"
+o=$(run once=no)
+same "once=no outranks the file" "xinit $T/xsession -- $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
 echo "once none" >> "$T/d/r6"
 o=$(run)
 same "once none: no option" "xinit $T/xsession -- $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
+expect "once none: said" "r6: its server has no option to end with its last client; once yes ignored" "$o"
 sed -i '$d' "$T/d/r6"; echo "once -kill-at-end" >> "$T/d/r6"
 o=$(run)
-same "once: the card's own" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -kill-at-end" "$(cat "$T/calls")"
+same "once yes: the card's own" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -kill-at-end" "$(cat "$T/calls")"
 sed -i '$d' "$T/d/r6"; echo "once sometimes" >> "$T/d/r6"
 o=$(run -n)
-expect "once: a bad value said" "$T/d/r6:4: once is the server's option, as -terminate, or none" "$o"
+expect "once: a bad card value said" "$T/d/r6:4: once is the server's option, as -terminate, or none" "$o"
 sed -i '$d' "$T/d/r6"
 o=$(run card=z3660 mode=640x480)
-same "once: another server, nothing" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+same "once yes: another server, nothing" "xinit $T/xsession -- $B/Xzz :0 -mode 640x480 -w 640 -h 480 -bpp 16 -n 0" "$(cat "$T/calls")"
+printf 'card r6\n' | conf
+o=$(run once=yes)
+same "once=yes asks for it" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+o=$(run once=maybe)
+expect "once=maybe: usage" "usage: once=yes or once=no" "$o"
+expect "once=maybe: status 2" "rc=2" "$o"
+printf 'card r6\nonce often\n' | conf
+o=$(run -n)
+expect "once: a bad /etc/display value said" "once is yes or no" "$o"
+expect "once: a bad /etc/display value is a mistake" "rc=1" "$o"
+printf 'card r6\n' | conf
 printf 'node %s/dev/console\nserver %s/r6/bin/Xr6\nmodes auto\nenv SCREEN_GROUP=%%n\n' "$T" "$T" > "$T/d/r6env"
-o=$(run card=r6env)
+o=$(run card=r6env once=yes)
 expect "once: the env wrapper exports" 'SCREEN_GROUP="0"; export SCREEN_GROUP' "$(cat "$T/st/lastwrap")"
 same "once: the wrapper's line ends with it" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
 # the wrapper cannot be written (XSTART_TMP a file): said, status 1, no
@@ -403,7 +510,7 @@ echo 2 > "$T/st/ps-left"
 o=$(run)
 expect "ending server: waited, said" "an X server on :0 (pid 612) is still running; waiting up to 60 s for it to end" "$o"
 same "ending server: said once" 1 "$(echo "$o" | grep -c 'waiting up to')"
-same "ending server: then started" "xinit $T/xsession -- $T/r6/bin/Xr6 :0 -terminate" "$(cat "$T/calls")"
+same "ending server: then started" "xinit $T/xsession -- $T/r6/bin/Xr6 :0" "$(cat "$T/calls")"
 echo 99 > "$T/st/ps-left"
 o=$(WAIT_=2 run)
 expect "a server that stays: refused" "an X server on :0 is still running (pid 612); not starting another" "$o"
