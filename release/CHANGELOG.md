@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-17 — README: the catalog-only update of 1.1 (b3f4026f)
+
+The 1.1 catalog changed from md5 5c958843… to 6c837186…; no package file changed. The two xsurf 1.0.0-4
+lines lose their `kbootset=` floor, so a 1.1 or 1.1.1 system takes xsurf in its first upgrade.
+
 ## 2026-11-17 — the 1.1.2 lock (1ad37a4b)
 
 amix-1.1.2-published.lock (sha256 fc73999a), the 1.1.2 build of record at amix ec9dfd6e on the published 1.1.1 tree (catalog 5c958843), and README's 1.1.2 section.
