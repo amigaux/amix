@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17 — the 1.1.2 lock (1ad37a4b)
+
+amix-1.1.2-published.lock (sha256 fc73999a), the 1.1.2 build of record at amix ec9dfd6e on the published 1.1.1 tree (catalog 5c958843), and README's 1.1.2 section.
+
 ## 2026-11-16 — together-1.1: x11r63 6.3-11 needs amix-base 1.0-36 (253e6f46)
 
 With an older amix-base, ending xinit by a signal makes xstart print a wrong message; a release rule, not a package dependency. test-together 13/13.

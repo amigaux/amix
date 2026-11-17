@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17 — the release step runs older-apkg-check (7496d031)
+
+After assemble-release.py, make dist's release step runs pkgtools' older-apkg-check.sh on out/release/1.1: the apkg of every earlier release of the series, built from its tag, must read every live row. A refused row fails the step; exit 3 (no git, tag or cc to check with) is a gap. The published 1.1.2 tree fails it (xsurf 1.0.0-4's kbootset= under apkg 0.3.11); the be3d20f1 tree passes, va2000 the only WAIT rows. test-dist 115/115.
+
 ## 2026-11-16 — release-together: the release step checks together-<release> (8ed5810c)
 
 build/release-together reads release/together-<release> and the release catalog's live rows; the release step refuses a tree that breaks a rule (apkg's version order). test-together 10/10.
