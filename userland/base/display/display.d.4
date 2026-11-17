@@ -1,4 +1,4 @@
-.TH DISPLAY.D 4 "16 November 2026" "amix-base"
+.TH DISPLAY.D 4 "17 November 2026" "amix-base"
 .SH NAME
 display.d \- the display cards X can use, one file each
 .SH SYNOPSIS
@@ -73,21 +73,31 @@ the server's environment, with the same
 it reaches the server alone, never the session's programs.
 .TP
 .BI limits " name" = "KB ..."
-the limits raised before the server starts:
+the limits the server needs, raised to these values before it starts:
 .B vmem
 (the address space, for a card whose memory the server maps whole) and
 .B data
 (the server's own memory).
+They are only ever raised: a limit that is already as high, or unlimited,
+is left as it is.
+(The system's shell sets the soft and the hard limit together, so a lower
+value would lower both.)
+A limit
+.B xstart
+cannot raise, not being run by root, is said and the server starts anyway.
 .TP
 .B monsw yes \fR|\fP no
-whether the card shares the monitor with the chipset display, so that the
-monitor switch of
+whether the monitor switch of
 .BR display (4)
-applies.
-When the kernel's
+applies: the card and the chipset display share one monitor through
+switch lines outside the card, which the kernel's
 .B monsw
-module answers, it switches the monitor itself; otherwise the tool below
-does, before the server starts and back when the session ends.
+module or the tool below sets.
+When the module answers, it switches the monitor itself; otherwise the
+tool does, before the server starts and back when the session ends.
+A card that passes the Amiga's own picture through its output and switches
+it itself, through its driver, says
+.BR no .
 .TP
 .BI monswtool " path"
 that tool, given the switch value and
@@ -105,19 +115,30 @@ had to end the server because
 .B xinit
 was killed while the server ran (xstart(1)); never while the server still
 holds the display.
-For a card whose server must give the keyboard back to the console itself.
+For a card whose server must give the keyboard back to the console itself:
+an X11R6 server that is killed or crashes leaves the console taking no
+typing until a screen is chosen again.
+.B "xstart \-n"
+warns about a card with no
+.B restore
+line whose server is not the system's own, and about a command that is not
+there; such a command is never run.
 .TP
 .BI once " option"
-the server's option to end with its first session instead of resetting
-for another, given to the server of a session
+the server's option to end when its last client leaves instead of resetting
+for another session, given to the server of a session
 .B xstart
-runs (never to
+runs only when
+.BR display (4)
+says
+.B once yes
+(never to
 .BR xdm 's
 or
 .BR dtlogin 's,
 which keep their server for the next login);
 .B none
-gives no option.
+says the server has no such option.
 Without the line: X11R6's
 .B \-terminate
 for a server under
@@ -130,6 +151,7 @@ nothing for another.
 The system's server has no
 .B \-terminate
 and stops at an option it does not know.
+Before base package 1.0-37 this option was given to every session's server.
 .TP
 .BI console " command"
 reserved for the card's console takeover; no tool reads it yet.
@@ -311,5 +333,12 @@ kernel's floating-point emulation, up to half a minute.
 .B xinit
 waits ten seconds and then kills it, and a killed server does not give the
 display back to the Amiga video.
+So
+.B xstart
+ends a session's server itself when the session ends, while
+.B xinit
+still holds its connection and no reset has begun
+.RB ( xstart (1)).
 .B once
-lets the server end with the session instead.
+is not needed for that, and with it a client that comes and goes before the
+session starts ends the server.

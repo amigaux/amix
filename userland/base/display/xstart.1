@@ -1,4 +1,4 @@
-.TH XSTART 1 "16 November 2026" "amix-base"
+.TH XSTART 1 "17 November 2026" "amix-base"
 .SH NAME
 xstart \- start X on this machine's display
 .SH SYNOPSIS
@@ -34,9 +34,10 @@ is the mode, and
 .BR card= ,
 .BR mode= ,
 .BR depth= ,
-.B session=
-and
+.BR session= ,
 .B monsw=
+and
+.B once=
 the others.
 .BI : N
 is the display number (default
@@ -50,7 +51,8 @@ the first that is there, the chipset display last: its probe command, when
 its file has one, and then its device node, say so; see
 .BR display.d (4)),
 checks the mode
-and depth against the card's, raises the limits the card asks for, switches
+and depth against the card's, raises the limits the card asks for (a limit
+already as high, or unlimited, is left as it is, never lowered), switches
 the monitor to the card when the card shares it, and runs the server through
 .B xinit
 (X11R6's, else the system's) with the session:
@@ -71,10 +73,17 @@ and removes afterwards: it gives the card's environment
 .RB ( env )
 to the server alone, notes the server's process id and starts the server
 in its own place, so that id is the server's.
-The server is given the card's
-.B once
-option, so it ends with the session instead of resetting for another
-.RB ( display.d (4)).
+The session runs through a second such script.
+When the session ends while the server still runs (a normal end), it sends
+the server TERM while
+.B xinit
+still holds its connection, so the server ends at once and gives the
+display back itself, instead of resetting for another session first (a
+reset can take half a minute on a 68LC060, and
+.B xinit
+kills a server that is still resetting after 10 seconds, with no hand-back).
+A client that comes and goes, before the session or during it, does not end
+the server.
 When the session ends, the monitor is switched back.
 When it did not end that way, the card's
 .B restore
@@ -87,6 +96,25 @@ ended with status 0), or
 .B xinit
 ended the session itself (it caught a signal and stopped the server, and
 ended with status 1, or it failed), with its status.
+A
+.B restore
+command that is not there is said once, at the start, and never run.
+.PP
+With
+.B once yes
+in
+.B /etc/display
+or
+.B once=yes
+on the command line, the server is also given the card's
+.B once
+option
+.RB ( display.d (4)),
+so that it ends whenever its last client leaves.
+That is off by default: a client that connects and leaves before the
+session's first one (a probe, an
+.BR xdpyinfo )
+then ends the server, and the session never starts.
 .PP
 When
 .B xinit
@@ -135,6 +163,17 @@ A card's probe command runs, as it would for a session.
 A key
 .B xstart
 does not know (one from a newer base package) is reported as ignored.
+The card's limits are shown with what each would do (kept, or raised
+from the value in force), and whether
+.B once
+is asked for.
+A card whose
+.B restore
+command is not there is warned about, and so is a card with no
+.B restore
+line whose server is not the system's own: after such a server is killed
+or crashes, the console may take no typing until a screen is chosen again.
+Neither is a mistake.
 .TP
 .B \-xdm \fR|\fP \-dtlogin
 instead of a session, start X11R6's
@@ -170,7 +209,17 @@ the machine's choice.
 the cards.
 .TP
 .B /usr/lib/amix/xsession
-the default session.
+the default session: the user's
+.BR ~/.Xresources ,
+an
+.B xterm
+at the top left (with a place of its own, so that
+.B twm
+does not hold the server waiting for one), and the first window manager
+found.
+It belongs to the package, which replaces it at each update; a user's own
+session is
+.BR ~/.xsession .
 .SH SEE ALSO
 .BR display (4),
 .BR display.d (4)

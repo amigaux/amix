@@ -60,6 +60,7 @@ disp_errors() {
 	k == "start" { if (NF != 2 || (v != "manual" && v != "xdm" && v != "dtlogin")) print at "start is manual, xdm or dtlogin"; next }
 	k == "session" { if (NF != 2 || v !~ /^\//) print at "session is a full path"; next }
 	k == "monsw" { if (NF != 2 || v !~ /^[0-9]+$/) print at "monsw is a bit sum, as 34"; next }
+	k == "once" { if (NF != 2 || (v != "yes" && v != "no")) print at "once is yes or no"; next }
 	{ print at "unknown key \"" k "\", ignored" }
 	' f="$DISP_CONF"
 	for _de in `disp_cards`

@@ -2,6 +2,9 @@
 # xsession -- the X session of a user with no ~/.xsession or ~/.xinitrc,
 # run by xstart (/usr/lib/amix/xsession): the user's resources, an xterm,
 # and the first window manager found. The session ends with the manager.
+# The xterm has a place of its own (top left): without one, twm asks where
+# to put it and holds the whole server until a click. A user's own session
+# is ~/.xsession; this file is the package's and an update replaces it.
 #
 # MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
 # repository).
@@ -9,7 +12,7 @@
 PATH=$PATH:/opt/amix/X11R6/bin:/usr/X/bin
 export PATH
 [ -r "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
-xterm &
+xterm -geometry +0+0 &
 for wm in twm tvtwm olwm
 do
 	for d in /opt/amix/X11R6/bin /usr/X/bin
