@@ -77,6 +77,17 @@ stage() {
 	put 0555 display/xstart /usr/amix/bin/xstart
 	put 0444 display/display.subr /usr/lib/amix/display.subr
 	put 0555 display/xsession /usr/lib/amix/xsession
+	# the release this system is, from media/VERSION: the one place a
+	# release's version is written (the media take their names from it);
+	# not a conffile, so each release's base package replaces it
+	_rv=`sed -n 1p "$REPO/media/VERSION" 2>/dev/null`
+	echo "$_rv" | grep -Eq '^[0-9]+(\.[0-9]+)+$' || {
+		echo "media/VERSION: no release version (\"$_rv\")" >&2
+		return 1
+	}
+	mkdir -p "$DEST/etc"
+	echo "amigaux $_rv" > "$DEST/etc/amigaux-release"
+	chmod 0444 "$DEST/etc/amigaux-release"
 	put 0444 net/network-config /etc/inet/network-config
 	put 0444 net/rc.inet /etc/inet/rc.inet
 	put 0444 net/link.d/aen /etc/inet/link.d/aen
@@ -115,6 +126,7 @@ stage() {
 	put 0644 etc/inittab.4 /opt/amix/man/4/inittab
 	put 0644 etc/default.4 /opt/amix/man/4/default
 	put 0644 etc/group.4 /opt/amix/man/4/group
+	put 0644 etc/amigaux-release.4 /opt/amix/man/4/amigaux-release
 	put 0644 display/display.4 /opt/amix/man/4/display
 	put 0644 display/display.d.4 /opt/amix/man/4/display.d
 	put 0644 display/xstart.1 /opt/amix/man/1/xstart

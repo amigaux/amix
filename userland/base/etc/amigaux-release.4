@@ -1,0 +1,44 @@
+.TH AMIGAUX-RELEASE 4 "17 November 2026" "amix-base"
+.SH NAME
+amigaux-release \- which Amigaux release this system is
+.SH SYNOPSIS
+.B /etc/amigaux-release
+.SH DESCRIPTION
+.B /etc/amigaux-release
+names the Amigaux release the system was installed or last updated to, on
+its one line:
+.PP
+.nf
+.ft CW
+amigaux 1.1.2
+.ft R
+.fi
+.PP
+The first word is always
+.BR amigaux ;
+the second is the release, numbers separated by dots: the release (1.1),
+or a point release of it (1.1.1, 1.1.2).
+A program that wants the release reads the second word of the first line.
+.PP
+The base package ships the file, and each release comes with a base package
+that names it.
+The file is not a configuration file: an update
+.RB ( "apkg upgrade" )
+replaces it with the new release's, so it is not to be edited.
+.PP
+.B "uname \-v"
+and
+.B "uname \-r"
+still give the system's own version and release, 2.1c and 4.0; the kernel
+in use is in the first line the system prints at boot and in
+.BR "uname \-a" .
+.SH FILES
+.TP
+.B /etc/amigaux-release
+this file.
+.SH SEE ALSO
+.BR apkg (1),
+.BR uname (1)
+.SH NOTES
+A system installed from the 1.1 or 1.1.1 media, with a base package before
+1.0-37, has no such file until its base package is updated.
