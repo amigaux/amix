@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17 — module-floor-base in kbootset.conf (7159af4e)
+
+kbootset.conf: module-floor-base 1.1.0.261114-45, the kbootset 1.1.1 ships (C2-2 v8). The xsurf rows lose kbootset= once gen-catalog reads the line; no package changes.
+
 ## 2026-11-15 — kbootset.conf: the floor of the published xsurf 1.0.0-3 (f48e48fd, 6f04c3b3)
 
 kbootset.conf names the kbootset floor of the published xsurf-k30/-k46 1.0.0-3 (1.1.0.261114-45), which predate APKG_KBOOTSET; the header and the README name module packages.

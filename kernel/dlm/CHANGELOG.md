@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17 — C2-2 version 8: the module-floor base (186fc776)
+
+C2-2 version 8: kbootset.conf's module-floor base. A module row whose kbootset floor is at or below it is written without kbootset=, so apkg 0.3.11 on 1.1.1 takes it in its first upgrade; kbmin.sh checks the line.
+
 ## 2026-11-15 — the compiler fork at its new address (e088aec1)
 
 toolchain.pin and the README name the compiler fork at its new address, amigaux/gcc-cross-amix (commit 33ebadc unchanged; no kit or module byte changes).
