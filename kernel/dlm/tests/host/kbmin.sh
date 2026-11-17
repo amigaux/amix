@@ -3,7 +3,9 @@
 # newer than the kbootset recipe in pkg/kbootset (a floor names a version
 # that is published).  abi/registry/kbootset (C2-2 version 7): one line per
 # row of abi/registry/majors, in its order, each a version in that form no
-# newer than the recipe, or `-`.
+# newer than the recipe, or `-`.  kernel/conf/kbootset.conf (C2-2 version
+# 8): at most one module-floor-base line, a version in that form between
+# the table's lowest version and the recipe.
 set -u
 cd "$(dirname "$0")/../.." || exit 1
 f=core/kbootset-min
@@ -33,4 +35,30 @@ for v in $(sed 's/#.*//' "$r" | awk 'NF { if (NF != 3) print "bad-field-count"; 
 	[ "$lo" = "$v" ] || bad "$r: $v is newer than the kbootset recipe $kb"
 done
 [ $fail -eq 0 ] && ok "$r: $n versions, each published or -"
+
+# kernel/conf/kbootset.conf's module-floor base (C2-2 version 8): at most
+# one line, a version in the form, not below the table's lowest version
+# and no newer than the recipe; the floor lines keep their form
+c=../conf/kbootset.conf
+if [ ! -f "$c" ]; then
+	echo "SKIP kbmin: no $c (kernel/dlm outside amix)"
+else
+	lowest=$(sed 's/#.*//' "$r" | awk 'NF == 3 && $3 != "-" { print $3 }' | sort -V | head -1)
+	nb=$(grep -c '^module-floor-base:' "$c")
+	[ "$nb" -le 1 ] && ok "$c: $nb module-floor-base line(s)" || bad "$c: $nb module-floor-base lines"
+	base=$(sed -n 's/^module-floor-base:[ \t]*//p' "$c" | head -1)
+	if [ -n "$base" ]; then
+		echo "$base" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]{6}-[0-9]+$' || bad "$c: base form '$base'"
+		lo=$(printf '%s\n%s\n' "$base" "$lowest" | sort -V | head -1)
+		[ "$lo" = "$lowest" ] && ok "$c: base $base >= table lowest $lowest" ||
+			bad "$c: base $base is below the table's lowest version $lowest"
+		lo=$(printf '%s\n%s\n' "$base" "$kb" | sort -V | head -1)
+		[ "$lo" = "$base" ] && ok "$c: base $base <= recipe $kb" ||
+			bad "$c: base $base is newer than the kbootset recipe $kb"
+	fi
+	odd=$(sed 's/#.*//' "$c" | grep -v '^module-floor-base:' |
+		awk 'NF && !(NF == 3 && $2 ~ /:$/ && $3 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9]+$/)')
+	[ -z "$odd" ] && ok "$c: every other line is <name> <version>: <kbootset version>" ||
+		bad "$c: lines not in the form: $odd"
+fi
 exit $fail
