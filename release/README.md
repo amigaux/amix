@@ -70,6 +70,15 @@ at amix ec9dfd6e twice with the same result:
   Its `previous` line is the digest of 1.1.1's catalog. The media were not
   part of this release: the step stops at the 1.1 RAM-disk images, which do
   not hold the new kernels' modules, so the lock has no lines for them.
+- 2026-11-17, a catalog-only update: the repository's catalog went from md5
+  `5c958843dc71e9fda47246eba056610d` to md5 `6c837186584ce26f812b1aa41c7d9e0f`
+  (sha256 `4fb4ebff63a1364c9410282bd709c94ef894c37f6e23416f129ac9980cef06ea`).
+  No package file changed. The only difference is in the two xsurf-k30 and
+  xsurf-k46 1.0.0-4 lines, which lose `kbootset=1.1.0.261114-45`. That floor
+  is at `module-floor-base`, and apkg 0.3.11 refused the line, so a 1.1 or
+  1.1.1 box left xsurf out of its first upgrade. It was built at amix
+  be3d20f1 on the published 1.1.2 tree, twice with the same result; the lock
+  above stays the record of 1.1.2 as published.
 
 A box upgrades with the apkg it has. On a 1.1 or 1.1.1 box (apkg 0.3.11),
 the first `apkg upgrade` brings APKG 0.3.13. A module row that names a
