@@ -1,3 +1,7 @@
+## 2026-11-17 — gen-catalog: no module floor at or below the base; the older-apkg gate (89fb4308, 6c60eedc)
+
+gen-catalog writes no module floor at or below kbootset.conf's module-floor-base (C2-2 v8), so 1.1 and 1.1.1 (apkg 0.3.11) take xsurf 1.0.0-4 in one plain upgrade; assemble-release takes such a line over the published one; new older-apkg-check.sh runs every earlier release's apkg against a new tree. T33 accepts the base line.
+
 ## 2026-11-15 — APKG 0.3.13: a plain upgrade repairs an install cut short (e4599623, b1dad185, ff7f0538)
 
 In place of 0.3.12, which was never published. A package the engine left partial (its !I-Lock!, or the record an update moved to /var/sadm/pkg/.save.<pkginst>) is installed again whatever the versions say; `apkg upgrade` runs recover first and drops a journal of ordinary packages whose datastream is gone; recover with no journal repairs from the catalog; list and info show [partial]. A downgrade saves an edited config file the new version ships as a plain file as <file>.old, and the report no longer claims it is kept. An entry this apkg is too old for names the remedy; `!apkg=<version>` on kernel-space rows. Host tests partial.sh (150) and conffile-gain (71); emulator row on the released 1.1.1 k46: an x11r6.3 upgrade cut both ways, each repaired by one `apkg upgrade`. APKG 0.3.13 md5 e14a4d9f, not published.
