@@ -20,8 +20,12 @@ the second is the release, numbers separated by dots: the release (1.1),
 or a point release of it (1.1.1, 1.1.2).
 A program that wants the release reads the second word of the first line.
 .PP
-The base package ships the file, and each release comes with a base package
-that names it.
+The base package ships the file, written when the package is built from
+the release's version (the file
+.B media/VERSION
+of the source tree, from which the release media take their names too).
+So every release and point release carries a new revision of the base
+package, and updating to a point release brings this file with it.
 The file is not a configuration file: an update
 .RB ( "apkg upgrade" )
 replaces it with the new release's, so it is not to be edited.
