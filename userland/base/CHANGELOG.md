@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-17 — amix-base 1.0-37: /etc/amigaux-release, xstart ends its own server (3330bf7b, d88e5d16, fa0e7031, 2152a5df)
+
+xstart no longer gives the X server -terminate by default, so a client that comes and goes during start-up no longer ends the server; at a normal end the session wrapper sends the server TERM while xinit holds its connection, so it ends at once and hands the display back. "once yes" in /etc/display or once=yes still asks for the card's once option. Card limits are only raised. A missing restore command is said once, and xstart -n warns about a card with no restore line. The default session starts its xterm at +0+0, so twm holds no placement grab. New: /etc/amigaux-release ("amigaux 1.1.2"), written at package time from media/VERSION, not a conffile; each release brings a new amix-base revision; amigaux-release(4). display(4), display.d(4) and xstart(1) updated. Package of record from 2152a5df: sha256 c869d52a…, 220672 bytes. Emulator rows on both lines: upgrade from 1.0-34 keeps five edited conffiles, pkgchk clean; normal end with the server gone in 0 s, the LC060 included.
+
 ## 2026-11-16 — amix-base 1.0-36: xstart ends a server xinit left (01cbd0d1, fa48c0ae, f7f32676, c363c481)
 
 - xstart ends a server xinit left running: when xinit is killed it does not stop the server, and xstart used to say the server had ended on its own and run the card's restore command with X still on the display. The server now always runs through a wrapper that records its pid. When xinit returns with that pid still running the card's server on this display (checked in ps -ef before each signal), xstart says so in one line, sends TERM, then KILL after XSTART_KILLWAIT seconds (10), and only then runs restore and switches the monitor back.
