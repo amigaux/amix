@@ -47,7 +47,9 @@
 #           kbootset.conf  "<catalog name> <version>: <kbootset version>"
 #                       lines -- a kernel row's kbootset= (C2-2 v6) for a
 #                       published kernel whose sidecar predates
-#                       kbootset-min= (C2-3 v10); see the kernel-space block.
+#                       kbootset-min= (C2-3 v10) -- and at most one
+#                       "module-floor-base: <kbootset version>" line (C2-2
+#                       v8); see the kernel-space block.
 #         The same files are also read from --packages-conf DIR (default:
 #         amix's userland/packages/conf, generated from the recipes by
 #         build/pkg/pkgmeta; 'none' skips it, and a missing one warns).
@@ -131,6 +133,12 @@
 # so does a floor below what a major needs.  A need no higher than the
 # table's lowest version (the rows every release's kbootset has) asks for
 # no floor, so a module of 1.1 keeps its row as it was.
+# kbootset.conf's "module-floor-base: <kbootset version>" (C2-2 v8, at most
+# one, never below the table's lowest version): a module floor at or below
+# it is not written (apkg 0.3.5-0.3.11 refuse kbootset= on a module row, so
+# a floor every box the catalog serves already meets would only keep the
+# driver from those boxes' first upgrade), and a need no higher than the
+# base asks for no floor.  Kernel rows keep theirs.
 # Refused per package (SKIP, like any malformed package): a sidecar
 # missing, unreadable, without kabi/pin/line, or whose line differs from
 # its path, or whose sha256=/size= disagree with the packaged unix; an
@@ -916,14 +924,39 @@ def read_kbootset_table(path):
     return table
 
 
-def module_floor_check(name, version, kbmin, majors, table):
-    """C2-2 v7: refuse a module whose kbootset floor is below what one of
-    its majors needs (see the KERNEL-SPACE BLOCK at the top)."""
-    known = [v for v in table.values() if v != "-"]
-    base = None
-    for v in known:
-        if base is None or vercmp(v, base) < 0:
-            base = v
+def table_lowest(table):
+    """The lowest published version of the registry table, or None."""
+    low = None
+    for v in table.values():
+        if v != "-" and (low is None or vercmp(v, low) < 0):
+            low = v
+    return low
+
+
+# a published kbootset package version (module-floor-base)
+KBOOTSET_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+\.\d{6}-\d+$")
+FLOOR_BASE_KEY = "module-floor-base"
+
+
+def floor_base_lines(path):
+    """The number of module-floor-base lines in one kbootset.conf."""
+    n = 0
+    with open(path, encoding="utf-8") as fp:
+        for line in fp:
+            if line.split(":", 1)[0].strip() == FLOOR_BASE_KEY:
+                n += 1
+    return n
+
+
+def module_floor_check(name, version, kbmin, majors, table, floor_base=None):
+    """C2-2 v7/v8: refuse a module whose kbootset floor is below what one of
+    its majors needs (see the KERNEL-SPACE BLOCK at the top).  A need no
+    higher than the table's lowest version, or than floor_base, asks for
+    no floor."""
+    base = table_lowest(table)
+    if floor_base is not None and (base is None or
+                                   vercmp(floor_base, base) > 0):
+        base = floor_base
     for typ, num in majors:
         need = table.get((typ, num))
         if need is None:
@@ -1179,7 +1212,7 @@ def essential_check(params):
 
 def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
                 descs_conf, verbose, kbootset_conf=None,
-                kbootset_table=None):
+                kbootset_table=None, floor_base=None):
     """relname: path relative to the staging root (forward slashes);
     it is emitted verbatim as the catalog filename field."""
     fname = relname
@@ -1291,7 +1324,14 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
             kbmin = kbpar if kbpar is not None else kbconf
             if kbootset_table is not None:
                 module_floor_check(name, version, kbmin, majors,
-                                   kbootset_table)
+                                   kbootset_table, floor_base)
+            if (kbmin is not None and floor_base is not None and
+                    vercmp(kbmin, floor_base) <= 0):
+                if verbose:
+                    print("%s %s: floor %s is at or below %s %s: no "
+                          "kbootset=" % (name, version, kbmin,
+                                         FLOOR_BASE_KEY, floor_base))
+                kbmin = None
         entry = {
             "kspace": True, "name": name, "version": version,
             "pkginst": pkginst, "filename": fname, "role": role,
@@ -1623,7 +1663,11 @@ def main(argv):
         descs_path = os.path.join(confdir, "descs.conf")
         kbootset_path = os.path.join(confdir, "kbootset.conf")
         if os.path.isfile(kbootset_path):
-            # the key is "<catalog name> <version>", spacing normalised
+            # the key is "<catalog name> <version>", spacing normalised;
+            # "module-floor-base" is the one key of a single word
+            if floor_base_lines(kbootset_path) > 1:
+                raise SystemExit("%s: more than one %s line"
+                                 % (kbootset_path, FLOOR_BASE_KEY))
             kbootset_conf.add(label, dict(
                 (" ".join(k.split()), v)
                 for k, v in read_conf(kbootset_path).items()))
@@ -1644,7 +1688,23 @@ def main(argv):
             descs_conf.add(label, read_conf(descs_path))
         if args.verbose:
             print("loaded %s confs from %s" % (label, confdir))
+    try:
+        floor_base = kbootset_conf.get(FLOOR_BASE_KEY)
+    except ConfConflict as exc:
+        raise SystemExit("gen-catalog: %s" % exc)
+    if floor_base is not None:
+        if not KBOOTSET_VERSION_RE.match(floor_base):
+            raise SystemExit("gen-catalog: kbootset.conf: %s: %r is not a "
+                             "kbootset package version" % (FLOOR_BASE_KEY,
+                                                           floor_base))
+        low = table_lowest(kbootset_table) if kbootset_table else None
+        if low is not None and vercmp(floor_base, low) < 0:
+            raise SystemExit("gen-catalog: kbootset.conf: %s %s is below the "
+                             "registry table's lowest version %s"
+                             % (FLOOR_BASE_KEY, floor_base, low))
     if args.verbose:
+        if floor_base is not None:
+            print("%s: %s" % (FLOOR_BASE_KEY, floor_base))
         print("loaded deps.conf: %d override(s)" % len(deps_conf))
         print("loaded names.conf: %d mapping(s)" % len(names_conf))
         print("loaded cats.conf: %d override(s), %d declared group(s)%s"
@@ -1714,7 +1774,7 @@ def main(argv):
             entry = build_entry(path, fname, deps_conf, names_conf,
                                 cats_conf, cat_groups, descs_conf,
                                 args.verbose, kbootset_conf,
-                                kbootset_table)
+                                kbootset_table, floor_base)
             if entry["name"] in seen:
                 raise Malformed("duplicate catalog name %r (already "
                                 "provided by %s)" %

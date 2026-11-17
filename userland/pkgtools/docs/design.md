@@ -387,8 +387,23 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   - amix's `tools/release-check` refuses the tree;
   - apkg does not read the tree as one repository.
 
+  A published name and version keeps its published row whatever the build says of it, with one
+  exception: a live module `#kpkg` line the build writes without its `kbootset=` and otherwise
+  the same (gen-catalog leaves out a floor at or below `module-floor-base`, C2-2 v8) takes the
+  build's line, so the apkg of an older release reads it.
+
   The same inputs give the same bytes. Exit: 0 written, 1 refused, 2 error, 3 an input or check
   tool missing. make dist's `release` step runs it.
+
+- **The earlier releases' apkg reads the new tree.** `older-apkg-check.sh [--ref TAG]...
+  [--apkg-bin PATH]... [--floor-base V | --kbootset-conf FILE] TREE` builds, for the host, the
+  apkg of every release tag of TREE's series (`1.1`, `1.1.1`, ...; one build per distinct
+  `src/apkg` tree, by `git archive`) and runs `update` and `list` against `file://TREE`. Every
+  live line must be read (the counts of `catalog updated:`) and none refused, except a module
+  line whose `kbootset=` is above `module-floor-base` (apkg 0.3.5 to 0.3.11 refuse the key on a
+  module line; such a module installs once the first upgrade has brought the newer apkg): that
+  one is named on a WAIT line. Exit: 0 read, 1 a line refused or not read, 2 usage or a build
+  error, 3 nothing to check with. It runs after `assemble-release.py`, on the written tree.
 
 - **Kernel space** (apkg 0.3, kernel/dlm C2-2 v2 / C2-3): `gen-catalog.py` puts a kernel package —
   one whose pkgmap carries `/stand/k30/kabi` or `/stand/k46/kabi` — in a `#ext kpkg 1` … `#end kpkg`
@@ -409,7 +424,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   package's pkginfo `APKG_KBOOTSET=`, else a `kbootset.conf` line; the two different refuse the
   package, and so does a floor below what one of its `.moddata` `majors=` needs by kernel/dlm's
   `abi/registry/kbootset` (`--kbootset-table`; a need no higher than the table's lowest version
-  asks for no floor). apkg (0.3.12) brings the catalog's kbootset first into an install or upgrade
+  asks for no floor). kbootset.conf's one `module-floor-base: <kbootset version>` line (C2-2
+  v8; never below the table's lowest version) is the floor every box the catalog serves meets:
+  a module floor at or below it is not written, so the apkg 0.3.5 to 0.3.11 of 1.1 and 1.1.1,
+  which refuse the key on a module row, take the module in their first upgrade, and a need no
+  higher than the base asks for no floor; kernel rows keep theirs. apkg (0.3.12) brings the catalog's kbootset first into an install or upgrade
   whose highest floor the installed one does not meet, and builds the generation again after a
   transaction that changed kbootset. NOTES.md 2026-10-25 (late) and the sections after it
   are the record.

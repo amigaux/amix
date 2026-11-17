@@ -2791,6 +2791,11 @@ for n, l in enumerate(open(sys.argv[1]), 1):
     assert len(k.split()) == 2 and len(v.split()) == 1, (n, l)
 assert base <= 1, 'more than one module-floor-base line'
 " "$HERE/../../../../../kernel/conf/kbootset.conf"
+kpkg33 "$S33/h" "kbootset-min=$KBV"
+printf 'module-floor-base: 1.1.0.261114-45\n' > "$S33/h/stg/kbootset.conf"
+python3 "$GEN" --kbootset-table none "$S33/h/stg" >/dev/null 2>&1
+check "module-floor-base: a kernel row keeps its kbootset= even at or below it" \
+    bash -c "grep '^#kpkg kernel-kd060a ' '$S33/h/stg/catalog' | grep -q ' kbootset=$KBV '"
 
 # ---------------------------------------------------------------- T34 ----
 # assemble-release.py: one release tree from make dist's userland and kspace
@@ -3073,6 +3078,29 @@ raise SystemExit(0 if v(b + '62.1', b + '62') == 1 and v(b + '62', b + '62.1') =
     ar34 "$S34/out8/1.1" --previous "$S34/difs/1.1" >"$WORK/t34.8" 2>&1
     check "a published #fstype that disagrees: kept, and noted as a difference" \
         bash -c "test $? -eq 0 && grep -qx '#fstype ufst s5' '$S34/out8/1.1/catalog' && grep -q 'differs from the published row in: the #fstype line' '$WORK/t34.8'"
+    # a published module line with kbootset= that this build writes without
+    # it (module-floor-base, C2-2 v8): the build's line is taken
+    flr34() {   # flr34 <dir> <sed expression on the kmod-k46 line>: out3's tree, edited
+        rm -rf "${S34:?}/$1"; mkdir -p "$S34/$1"; cp -r "$S34/out3/1.1" "$S34/$1/1.1"
+        sed -i "/^#kpkg kmod-k46 /$2" "$S34/$1/1.1/catalog"
+        printf '%s  catalog\n' "$(md5sum < "$S34/$1/1.1/catalog" | cut -c1-32)" > "$S34/$1/1.1/catalog.md5"
+    }
+    flr34 flra 's/ pin=gcc-x / pin=gcc-x kbootset=1.1.0.261114-45 /'
+    ar34 "$S34/out9/1.1" --previous "$S34/flra/1.1" >"$WORK/t34.9" 2>&1
+    check "a published module line with kbootset= the build leaves out: the build's line" \
+        bash -c "test $? -eq 0 && grep '^#kpkg kmod-k46 1.0 ' '$S34/out9/1.1/catalog' | grep -vq kbootset= && grep -q 'kmod-k46 1.0 (kspace): the published line loses its kbootset=' '$WORK/t34.9'"
+    check "  ... every other line as published" \
+        bash -c "diff <(grep -v '^#kpkg kmod-k46 ' '$S34/flra/1.1/catalog') <(grep -v '^#kpkg kmod-k46 ' '$S34/out9/1.1/catalog') >/dev/null"
+    flr34 flrb 's/ pin=gcc-x / pin=gcc-x kbootset=1.1.0.261114-45 /; s/ kabi=k46.1.0 / kabi=k46.1.1 /'
+    ar34 "$S34/outa/1.1" --previous "$S34/flrb/1.1" >"$WORK/t34.a2" 2>&1
+    check "a published module line that differs in more than its kbootset=: kept" \
+        bash -c "test $? -eq 0 && grep '^#kpkg kmod-k46 1.0 ' '$S34/outa/1.1/catalog' | grep -q ' kabi=k46.1.1 .*kbootset=1.1.0.261114-45 ' && grep -q 'differs from the published row in: the #kpkg line; the published row is kept' '$WORK/t34.a2'"
+    flr34 flrc 's/ role=module / role=kernel /; s/ pin=gcc-x / pin=gcc-x kbootset=1.1.0.261114-45 /'
+    sed -i 's/^#kpkg kmod-k46 1.0 role=module /#kpkg kmod-k46 1.0 role=kernel /' "$S34/ks/catalog"; kmd5
+    ar34 "$S34/outb/1.1" --previous "$S34/flrc/1.1" >"$WORK/t34.b" 2>&1
+    check "a published kernel line with kbootset= the build leaves out: kept" \
+        bash -c "test $? -eq 0 && grep '^#kpkg kmod-k46 1.0 ' '$S34/outb/1.1/catalog' | grep -q ' kbootset=1.1.0.261114-45 '"
+    cp "$S34/ks.cat" "$S34/ks/catalog"; cp "$S34/ks.md5" "$S34/ks/catalog.md5"
     toy34 zlibt 1.0 "$S34/ul2/pkgs/zlibt-1.0.pkg" "other bytes"; rm -f "${S34:?}/ul2/pkgs/deps.conf"; cp "$HERE/../deps.conf" "$S34/ul2/pkgs/"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a published version with other bytes: refused" "is published with other bytes" \
@@ -3451,6 +3479,123 @@ mod38 "$S38/k" c:56 ""
 python3 "$GEN" --packages-conf none --kbootset-table none "$S38/k/stg" >/dev/null 2>"$S38/k/err"
 check "--kbootset-table none: no table check (the row, no kbootset=)" \
     bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/k/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/k/stg/catalog' | grep -q kbootset="
+
+# kbootset.conf's module-floor-base (C2-2 v8): a module floor at or below it
+# is not written, and a need no higher than it asks for no floor
+BASE38=1.1.0.261114-45
+base38() { printf 'module-floor-base: %s\n' "${2:-$BASE38}" >> "$1/stg/kbootset.conf"; }
+mod38 "$S38/l" c:56 "APKG_KBOOTSET=1.1.0.261114-45"; base38 "$S38/l"
+gen38 "$S38/l"
+check "base: a floor equal to the base (xsurf, -45): the row without kbootset=" \
+    bash -c "grep -q '^#kpkg xsurf-k46 1.0.0-3 role=module line=k46 kabi=k46.1.0 pin=$MPIN size=' '$S38/l/stg/catalog'"
+mod38 "$S38/m" c:68 "APKG_KBOOTSET=1.1.0.261115-46"; base38 "$S38/m"
+gen38 "$S38/m"
+check "base: a floor above the base (va2000, -46): kept" \
+    bash -c "grep '^#kpkg xsurf-k46 ' '$S38/m/stg/catalog' | grep -q ' kbootset=1.1.0.261115-46 '"
+mod38 "$S38/n" c:56 ""; base38 "$S38/n"
+gen38 "$S38/n"
+check "base: a major whose need is the base, no floor: accepted, no kbootset=" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/n/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/n/stg/catalog' | grep -q kbootset="
+mod38 "$S38/o" c:68 ""; base38 "$S38/o"
+gen38 "$S38/o"
+check "base: a major whose need is above the base, no floor: still refused" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/o/stg/catalog' && grep -q 'owns c 68, which needs kbootset 1.1.0.261115-46' '$S38/o/err'"
+mod38 "$S38/p" c:56 "APKG_KBOOTSET=1.1.0.261101-34"; base38 "$S38/p"
+gen38 "$S38/p"
+check "base: a floor below a major's need is refused before the base drops it" \
+    bash -c "! grep -q '^#kpkg xsurf-k46 ' '$S38/p/stg/catalog' && grep -q 'owns c 56, which needs kbootset 1.1.0.261114-45' '$S38/p/err'"
+mod38 "$S38/q" "" "APKG_KBOOTSET=1.1.0.261113-44"; base38 "$S38/q"
+gen38 "$S38/q"
+check "base: no majors, a floor below the base (buddha's -44): no kbootset=" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/q/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/q/stg/catalog' | grep -q kbootset="
+mkdir -p "$S38/r/conf"
+mod38 "$S38/r" c:56 "APKG_KBOOTSET=1.1.0.261114-45"
+printf 'module-floor-base: %s\n' "$BASE38" > "$S38/r/conf/kbootset.conf"
+python3 "$GEN" --packages-conf "$S38/r/conf" --kbootset-table "$S38/table" "$S38/r/stg" >/dev/null 2>"$S38/r/err"
+check "base: from the packages-conf layer (kernel/conf) the same" \
+    bash -c "grep -q '^#kpkg xsurf-k46 ' '$S38/r/stg/catalog' && ! grep '^#kpkg xsurf-k46 ' '$S38/r/stg/catalog' | grep -q kbootset="
+# no38 <dir> <desc> <stderr text>: rc 1 and no catalog written
+no38() {
+    rm -f "$1/stg/catalog"
+    python3 "$GEN" --packages-conf "${4:-none}" --kbootset-table "$S38/table" "$1/stg" >/dev/null 2>"$1/err"
+    local rc=$?
+    if [ "$rc" -eq 1 ] && grep -q -- "$3" "$1/err" && [ ! -e "$1/stg/catalog" ]; then ok "$2"
+    else bad "$2 (rc $rc)"; sed 's/^/        /' "$1/err" | tail -3; fi
+}
+mod38 "$S38/s" c:56 ""; base38 "$S38/s"; base38 "$S38/s" 1.1.0.261115-46
+no38 "$S38/s" "base: two lines in one file: refused, rc 1" "more than one module-floor-base line"
+mod38 "$S38/t" c:56 ""; base38 "$S38/t" 1.1.0-45
+no38 "$S38/t" "base: not a kbootset version: refused, rc 1" "module-floor-base: '1.1.0-45' is not a kbootset package version"
+mod38 "$S38/u" c:56 ""; base38 "$S38/u" 1.1.0.261031-33
+no38 "$S38/u" "base: below the table's lowest version: refused, rc 1" "module-floor-base 1.1.0.261031-33 is below the registry table's lowest version 1.1.0.261101-34"
+mkdir -p "$S38/v/conf"; mod38 "$S38/v" c:56 ""; base38 "$S38/v"
+printf 'module-floor-base: 1.1.0.261115-46\n' > "$S38/v/conf/kbootset.conf"
+no38 "$S38/v" "base: two layers that disagree: refused, rc 1, both named" "staging/kbootset.conf says module-floor-base: $BASE38; packages/kbootset.conf says module-floor-base: 1.1.0.261115-46" "$S38/v/conf"
+
+# ---------------------------------------------------------------- T39 ----
+# older-apkg-check.sh: the apkg of every earlier release reads a new tree;
+# a module line refused for a kbootset= above module-floor-base waits.
+echo "T39: older-apkg-check.sh, the earlier releases' apkg against a new tree"
+OAC="$HERE/../older-apkg-check.sh"
+S39="$WORK/t39"; mkdir -p "$S39/tree/1.1" "$S39/bin"
+SHA39=$(printf '%064d' 0)
+{   echo "#apkg-catalog 1"
+    echo "toy|1.0|toy|toy-1.0.pkg|00000000000000000000000000000000|512|none|system|toy"
+    echo "#ext kpkg 1"
+    echo "#kpkg kern-k46 k46.1 role=kernel line=k46 kabi=k46.1.0 pin=gcc-x kbootset=1.1.0.261101-34 size=512 sha256=$SHA39 file=kern.pkg"
+    echo "#kpkg low-k46 1.0 role=module line=k46 kabi=k46.1.0 pin=gcc-x kbootset=1.1.0.261114-45 size=512 sha256=$SHA39 file=low.pkg"
+    echo "#kpkg high-k46 1.0 role=module line=k46 kabi=k46.1.0 pin=gcc-x kbootset=1.1.0.261115-46 size=512 sha256=$SHA39 file=high.pkg"
+    echo "#end kpkg"; } > "$S39/tree/1.1/catalog"
+printf '%s  catalog\n' "$(md5sum < "$S39/tree/1.1/catalog" | cut -c1-32)" > "$S39/tree/1.1/catalog.md5"
+# a stand-in apkg: what it reads ($F39_ROWS, $F39_K) and refuses ($F39_REF)
+cat > "$S39/bin/apkg" <<'EOS'
+#!/bin/sh
+[ "$1" = version ] && { echo "apkg 0.3.9"; exit 0; }
+case $3 in
+update) echo "catalog updated: ${F39_ROWS:-1} package, ${F39_K:-3} kernel-space" ;;
+list) for n in ${F39_REF:-}; do echo "$n 1.0 [refused] module x"; done; echo "toy 1.0 - system toy" ;;
+info) echo "Refused:     only a kernel entry may carry kbootset=" ;;
+esac
+EOS
+chmod +x "$S39/bin/apkg"
+oac39() { TMPDIR="$S39" sh "$OAC" --apkg-bin "$S39/bin/apkg" "$@" "$S39/tree/1.1" > "$S39/out" 2>&1; }
+oac39 --floor-base 1.1.0.261114-45
+check "every line read, none refused: rc 0, ok" \
+    bash -c "test $? -eq 0 && grep -q '^ok   apkg 0.3.9 .*: reads 1 rows and 3 kernel-space lines$' '$S39/out'"
+F39_K=2 oac39 --floor-base 1.1.0.261114-45
+check "a line apkg does not read (the counts differ): rc 1, FAIL" \
+    bash -c "test $? -eq 1 && grep -q '^FAIL apkg 0.3.9 .*does not read every line' '$S39/out'"
+F39_REF=high-k46 oac39 --floor-base 1.1.0.261114-45
+check "a module refused for a floor above the base: WAIT, rc 0" \
+    bash -c "test $? -eq 0 && grep -q '^WAIT apkg 0.3.9 .*: high-k46: only a kernel entry may carry kbootset= (kbootset=1.1.0.261115-46 is above module-floor-base 1.1.0.261114-45' '$S39/out' && grep -q ', 1 waiting$' '$S39/out'"
+F39_REF=low-k46 oac39 --floor-base 1.1.0.261114-45
+check "a module refused for a floor at the base: FAIL, rc 1" \
+    bash -c "test $? -eq 1 && grep -q '^FAIL apkg 0.3.9 .*: low-k46 is refused' '$S39/out'"
+F39_REF=kern-k46 oac39 --floor-base 1.1.0.261114-45
+check "a kernel line refused: FAIL, rc 1" \
+    bash -c "test $? -eq 1 && grep -q '^FAIL apkg 0.3.9 .*: kern-k46 is refused' '$S39/out'"
+printf 'x 1.0: 1.1.0.261114-45\nmodule-floor-base: 1.1.0.261114-45\n' > "$S39/kbconf"
+F39_REF=high-k46 oac39 --kbootset-conf "$S39/kbconf"
+check "the base from a kbootset.conf: the same WAIT" \
+    bash -c "test $? -eq 0 && grep -q '^WAIT .*high-k46' '$S39/out'"
+F39_REF=high-k46 oac39 --kbootset-conf "$S39/nosuch"
+check "no base at all: a refused module fails" \
+    bash -c "test $? -eq 1 && grep -q '^FAIL .*high-k46 is refused' '$S39/out'"
+TMPDIR="$S39" sh "$OAC" --apkg-bin "$S39/bin/apkg" "$S39/nosuch" > "$S39/out" 2>&1
+check "no tree: rc 2" test $? -eq 2
+# the real thing: apkg 0.3.11 from the release tag 1.1.1, when the clone has it
+if git -C "$HERE" rev-parse -q --verify "refs/tags/1.1.1^{}" >/dev/null 2>&1; then
+    TMPDIR="$S39" sh "$OAC" --ref 1.1.1 --floor-base 1.1.0.261114-45 "$S39/tree/1.1" > "$S39/real" 2>&1
+    check "apkg 0.3.11 (tag 1.1.1): the -45 module line fails, the -46 one waits, rc 1" \
+        bash -c "test $? -eq 1 && grep -q '^FAIL apkg 0.3.11 (1.1.1): low-k46 is refused: only a kernel entry may carry kbootset=' '$S39/real' && grep -q '^WAIT apkg 0.3.11 (1.1.1): high-k46' '$S39/real'"
+    sed -i '/^#kpkg low-k46 /s/ kbootset=1.1.0.261114-45//' "$S39/tree/1.1/catalog"
+    printf '%s  catalog\n' "$(md5sum < "$S39/tree/1.1/catalog" | cut -c1-32)" > "$S39/tree/1.1/catalog.md5"
+    TMPDIR="$S39" sh "$OAC" --ref 1.1.1 --floor-base 1.1.0.261114-45 "$S39/tree/1.1" > "$S39/real" 2>&1
+    check "  ... without that key: apkg 0.3.11 reads it, rc 0" \
+        bash -c "test $? -eq 0 && grep -q '^ok   apkg 0.3.11 (1.1.1): reads 1 rows and 3 kernel-space lines, 1 waiting$' '$S39/real'"
+else
+    echo "  skip- older-apkg-check against apkg 0.3.11 (no tag 1.1.1 in this clone)"
+fi
 
 # -------------------------------------------------------------- done ----
 echo

@@ -47,6 +47,12 @@
 #   #old #kpkg <name> ...        a kernel-space line
 #   #end older
 #
+# A published name and version keeps its published row whatever this build
+# says of it, with one exception: a live module #kpkg line that this build
+# writes without its kbootset= and otherwise the same (gen-catalog leaves out
+# a floor at or below kbootset.conf's module-floor-base, C2-2 v8) takes the
+# build's line, so the apkg of an older release reads it.
+#
 # Refused (exit 1, nothing written):
 #   - an input catalog whose catalog.md5 differs, a row whose file is missing
 #     or whose size or md5 (#kpkg: sha256) differs, a malformed line, an #ext
@@ -422,6 +428,20 @@ def row_differences(p, e):
     return out
 
 
+def floor_dropped(p, e):
+    """True when the #kpkg line e is the published module line p without
+    its kbootset= key and otherwise the same: gen-catalog leaves out a
+    module floor at or below kbootset.conf's module-floor-base (C2-2 v8),
+    which apkg 0.3.5-0.3.11 refuse on a module line."""
+    if p.kind != "kpkg" or e.kind != "kpkg":
+        return False
+    pt, et = p.line.split(), e.line.split()
+    if "role=module" not in pt:
+        return False
+    kept = [t for t in pt if not t.startswith("kbootset=")]
+    return len(kept) == len(pt) - 1 and kept == et
+
+
 def merge(inputs, prev_live, prev_older):
     """-> (live, older, notes).  inputs: [Entry] from this build."""
     notes = []
@@ -460,6 +480,15 @@ def merge(inputs, prev_live, prev_older):
                 notes.append("%s: the published row has no #fstype line; this "
                              "build's is carried" % e.who())
             what = row_differences(p, e)
+            if live.get(e.name) is p and floor_dropped(p, e):
+                # the same bytes, readable by every apkg: this build's line
+                for kind in p.ann:
+                    e.ann.setdefault(kind, p.ann[kind])
+                live[e.name] = e
+                notes.append("%s: the published line loses its kbootset= "
+                             "(at or below module-floor-base); this build's "
+                             "line is taken" % e.who())
+                continue
             if what:
                 notes.append("%s differs from the published row in: %s; the "
                              "published row is kept" % (e.who(), ", ".join(what)))
