@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-16 — the 1.1.2 netinstall images (75a0cef2)
+
+The netinstall RAM-disk pins move to ni-k30-1.1.2-2 and ni-k46-1.1.2-2: the 1.1.2 installer (shown version 1.1.2, va2000 in every generation, xstart -n warned), the -78/-67 kernels' xsurf 1.0.0-4 and z3660eth boot modules, k30's ufs; room 25.8 % (k30) and 21.7 % (k46) of blocks free. Fresh netinstalls of the full set pass on both lines, x11r63 6.3-11's conffiles seeded at the second stage.
+
 ## 2026-11-16 — the 1.1.2 media set: VA2000 in every generation, RAM-disk pins, release/together on the medium, the 1.1.2 notes (b04428b5..76bdf6a5)
 
 media/VERSION is 1.1.2. All eight profiles gain va2000-k30/-k46 in KERNEL_MODPKGS (demand class, loaded at the first open of /dev/va2000). The installer warns `xstart -n`'s lines and exit status and goes on instead of stopping; `ifup -n` still stops. build-install-iso refuses a medium whose kernel-space and base rows break release/together-<release> (build/release-together), so a card file newer than the base's xstart is caught at build time. The RAM-disk pins move to rdm-k30/-k46-1.1.2 (kern30m -78's ufs; disc messages name no release), from release media-ramdisk-1.1.2. docs/releases/1.1.2.md covers the final set: VA2000 1.1.0-2 with its card file, z3660rtg 1.1.2-3 with an int fixed=, xsurf 1.0.0-4, kbootset -46, amix-base 1.0-36, X11R6.3 6.3-11, apkg 0.3.13. Its upgrade notes: X-Surf comes with a second `apkg upgrade`, VA2000 after the reboot, fixed=yes becomes fixed=1; a 1.1.2 medium needs none of these. Known issues: the two shutdown stalls, and data and address space unlimited with the stack at 16 MiB. The 1.1 notes' 16 MiB limits line is corrected in place, dated. The Buddha README names 1.1.2; /LICENSING names amigaux/gcc-cross-amix. Selftest: MT (release/together on the medium) and three l11_admin cases.
