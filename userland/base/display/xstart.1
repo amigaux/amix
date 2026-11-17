@@ -84,6 +84,11 @@ reset can take half a minute on a 68LC060, and
 kills a server that is still resetting after 10 seconds, with no hand-back).
 A client that comes and goes, before the session or during it, does not end
 the server.
+.B xinit
+then says
+.RB \(lq "connection to X server lost" \(rq:
+the server it was about to stop has already ended, and that line belongs
+to a normal end.
 When the session ends, the monitor is switched back.
 When it did not end that way, the card's
 .B restore
