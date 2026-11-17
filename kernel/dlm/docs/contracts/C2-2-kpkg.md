@@ -1,6 +1,6 @@
-# C2-2 — kernel-space catalog entries and apkg's install record, version 7
+# C2-2 — kernel-space catalog entries and apkg's install record, version 8
 
-- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1); version 6 (2026-11-01): `kbootset=`, the oldest kbootset a kernel can be composed with (§1.2); version 7 (2026-11-15): `kbootset=` on a module row too, and apkg acts on it at install as at upgrade (§1.1, §1.2); corrected the same day to what gen-catalog implements: a major of 1.1 asks for no floor. Other repositories build against this text; a change from here is a contract change with a version bump.
+- **Status:** agreed 2026-10-25; version 2 (2026-10-26): the optional `pkginst=` and `offset=` keys (§1); version 3 (2026-10-26): the keys required per role, and the loader's (§1.1); version 4 (2026-10-26): the record is named by the pkginst (§2); version 5 (2026-10-26): one kernel package per line, and how an install replaces the other (§2.1); version 6 (2026-11-01): `kbootset=`, the oldest kbootset a kernel can be composed with (§1.2); version 7 (2026-11-15): `kbootset=` on a module row too, and apkg acts on it at install as at upgrade (§1.1, §1.2); corrected the same day to what gen-catalog implements: a major of 1.1 asks for no floor; version 8 (2026-11-17): the module-floor base, at or below which a module row carries no `kbootset=` (§1.2). Other repositories build against this text; a change from here is a contract change with a version bump.
 - **Implements:** `docs/spec/60-signing-and-publishing.md` §3–§4 (as changed for 1.1: SHA-256, no signature, the hook), `40-generations-and-composer.md` §3.1 gate 1 and §6
 - **Written by:** amix-packagemanager (`gen-catalog.py` writes the block; apkg 0.3 writes the records)
 - **Read by:** apkg 0.3, `kbootset` gate 1, the installer
@@ -115,6 +115,8 @@ refused (§1.1). Without the key the package sets no floor.
   listed as refused, `apkg install` of it exits 3, and a no-name
   `apkg upgrade` leaves it out and names it. Such a box upgrades apkg
   first (a no-name upgrade takes it) and sees the row on the next call.
+  1.1 and 1.1.1 ship apkg 0.3.11 and read one catalog for the series, so
+  the module-floor base below decides which floors such a box is shown.
 - **kbootset** does not read the floor. The binary does not carry its
   own package version, and a check in it could only cover floors above
   the kbootset that reads it.
@@ -145,7 +147,8 @@ refused (§1.1). Without the key the package sets no floor.
   3. otherwise no key.
 
   When the parameter and a conf line differ, `gen-catalog.py` refuses the
-  row. It also refuses a module package whose floor is below the
+  row. A module row whose floor is at or below the module-floor base
+  (below) is written without the key. It also refuses a module package whose floor is below the
   version `kernel/dlm/abi/registry/kbootset` gives any major the module
   owns (its `.moddata` `majors=`), or whose major has `-` there: one line
   per row of the major registry, `<c|b> <major> <version>`, the oldest
@@ -160,6 +163,41 @@ refused (§1.1). Without the key the package sets no floor.
 
   ```
   #kpkg xsurf-k46 1.0.0-4 role=module line=k46 ... kbootset=1.1.0.261114-45 file=...
+  ```
+
+- **The module-floor base** (version 8): one optional line of
+  `kbootset.conf`, `module-floor-base: <kbootset version>`, the key in
+  column 0 and the version in the form of §1.2's value. It is the
+  kbootset at or below which the release takes gate 3's fallback for a
+  box that installs a module before it has that kbootset (the default
+  generation stays and boots, and builds are refused until the
+  kbootset comes) rather than a key that apkg 0.3.5 to 0.3.11 refuse:
+  - a module row whose floor, from either source above, is at or below
+    the base is written without `kbootset=`;
+  - the version at which a major asks for no floor is the higher of the
+    table's lowest version and the base, so a module owning a major
+    whose table version is at or below the base needs no floor either;
+  - a major above the base still needs its floor, and its row keeps the
+    key;
+  - kernel rows keep their key whatever the base (apkg 0.3.5 on honours
+    it);
+  - without the line the base is the table's lowest version, which is
+    version 7's rule;
+  - `gen-catalog.py` refuses a second line, a version not in the form,
+    and a base below the table's lowest version.
+
+  The base of the 1.1 series is 1.1.0.261114-45, the kbootset 1.1.1
+  ships: a 1.1.1 box takes the xsurf row in its first no-name upgrade
+  under 0.3.11, and the same run lays the newer kbootset first and
+  builds once at the end. A 1.1 box (kbootset 1.1.0.261101-34 to -44)
+  that installs xsurf before its first upgrade gets gate 3's refusal of
+  every build, its default generation still booting, until an upgrade
+  brings the kbootset; 0.3.11 then runs no trigger, so it is
+  `kbootset build` and `kbootset commit` by hand. The base is a
+  catalog choice: the package bytes do not change with it.
+
+  ```
+  #kpkg xsurf-k46 1.0.0-4 role=module line=k46 ... file=...
   ```
 
 ## 2. The install record `/var/apkg/kpkg/<pkginst>`
@@ -266,3 +304,7 @@ A package of the same pkginst is an upgrade, as before. apkg 0.3.1
   cuts and `kbootset.conf` for the cuts before the key (§1.2).
   `gen-catalog.py` reads only staging roots and conf layers, never a
   package recipe.
+- Version 8 (2026-11-17): a published module row may lose its key over
+  the same bytes, as the `kbootset.conf` lines of version 7 add one: apkg
+  acts on the row's version and verifies the same `sha256=` and `size=`,
+  and nothing on the box reads `APKG_KBOOTSET`.
