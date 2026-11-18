@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-18 — GCC 14 at gcc14-cross-amix 13ed718 on the development line (be9881ed)
+
+The fix for GCC PR target/126121 (a wrong bit when a memory byte's bit is set or cleared with a bit number of 8 or more) and a guard against the bfclr-at-(7 - n) form that fix leaves. Only cc1 changes; the runtime libraries are byte-identical. gcc14-cross-amix.tree is 166b04f8. The image carries the check-bset-mem.py gate. image.ref still names the dcfd12d images until the new pair is published.
+
 ## 2026-11-16 — images built on amix-system 988b0f8; gcc-cross-amix's address (ba14fb76, 0ff268f8)
 
 gcc-cross-amix.pin names github.com/amigaux/gcc-cross-amix (commit 33ebadcf unchanged). The GCC 14 sysroot holds the stock usr/sbin/shutdown, so gcc14-cross-amix.tree is 174b16e0. image.ref names the published images built from this: dist @sha256:2df4aad2…, media @sha256:bee8f2d0….
