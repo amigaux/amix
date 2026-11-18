@@ -25,8 +25,16 @@ program's start-up, a binutils patch so gas keeps a PIC relocation
 against an exported symbol (a library's pointer to its own exported data can
 then be bound to the program's copy), and libamixrt.so.1, the runtime a
 shared library needs, which the image also copies to the sysroot's
-`usr/lib`, where the box has it. Once upstream has them, the
-pin moves back to upstream. Kernel-space code is never built with GCC 14: it
+`usr/lib`, where the box has it. Release 1.1 pins that
+branch; the development line pins the fork's `next`, which adds two GCC
+patches that `build-cross.sh` applies to the release: upstream's fix for GCC
+PR target/126121 (`bset`/`bclr` on a byte in memory with a bit number of 8 or
+more changed bit `n & 7`, where C changes nothing) and a guard against the
+bit-field clear at offset `7 - n` that the fix alone leaves, which writes the
+byte before. The runtime libraries come out instruction for instruction the
+same. The fork's `tools/check-bset-mem.py` finds both forms in objects,
+archives and programs, and is in the image with the toolchain. Once upstream
+has them, the pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
 Both toolchains need an AMIX sysroot (the system headers, libraries and

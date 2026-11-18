@@ -52,9 +52,14 @@ esac
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=dcfd12d79fb970f607a69d72b79e9f7470d1043f
+# 13ed718 (2026-11-18; the fork's next, the development line): GCC carries
+# two patches, upstream's fix for PR target/126121 (bset/bclr on a memory
+# byte with a bit number of 8 or more) and a guard against the bfclr at
+# offset 7 - n that fix leaves: only cc1 changes; libgcc.a, libamixc99.a,
+# the specs, both init objects and libamixrt.so.1 are byte-identical.
+AMIX_GCC14_COMMIT=13ed718ed0124da9635b99f1c2ccb3463b73bbd4
 AMIX_GCC14_PINS="\
-libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
+libexec/gcc/m68k-elf/14.2.0/cc1 cd9909a665bd5cb7721fe3e5196bb563f9179632ad9137fc72e8d1234e253b64
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
 m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9d67b9496de
 lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
