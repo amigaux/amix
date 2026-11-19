@@ -1,0 +1,85 @@
+Man pages: a plain \- between the name and the description in NAME.
+
+The NAME lines of mwm(1), uil(1), xmbind(1), mwmrc(4), Traits(5), UIL(5)
+and WML(5) separate the name and the description with \(em. The whatis
+line that man -k and the man front-end read is taken from "name \- text",
+the -man convention, so these pages had none. Only the NAME line changes;
+the rest of each page, and the section-3 pages, are as upstream wrote them.
+
+--- a/doc/man/man1/mwm.1	2026-11-19 13:42:24.264247049 +0200
++++ b/doc/man/man1/mwm.1	2026-11-19 13:42:24.350598576 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "mwm" "user cmd"
+ .SH "NAME"
+-\fBmwm\fP \(em The Motif
++\fBmwm\fP \- The Motif
+ Window Manager
+ .SH "SYNOPSIS"
+ .PP
+--- a/doc/man/man1/uil.1	2026-11-19 13:42:24.274955318 +0200
++++ b/doc/man/man1/uil.1	2026-11-19 13:42:24.350855752 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "uil" "user cmd"
+ .SH "NAME"
+-\fBuil\fP \(em The user interface language compiler
++\fBuil\fP \- The user interface language compiler
+ .iX "user interface language"
+ .iX "user interface language" "compiler"
+ .iX "uil"
+--- a/doc/man/man1/xmbind.1	2026-11-19 13:42:24.285750258 +0200
++++ b/doc/man/man1/xmbind.1	2026-11-19 13:42:24.350981705 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "xmbind" "user cmd"
+ .SH "NAME"
+-\fBxmbind\fP \(em Configures virtual key bindings
++\fBxmbind\fP \- Configures virtual key bindings
+ .iX "xmbind"
+ .SH "SYNOPSIS"
+ .PP
+--- a/doc/man/man4/mwmrc.4	2026-11-19 13:42:24.296777967 +0200
++++ b/doc/man/man4/mwmrc.4	2026-11-19 13:42:24.351207963 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "mwmrc" "special file"
+ .SH "NAME"
+-\fBmwmrc\fP \(em the
++\fBmwmrc\fP \- the
+ Motif Window Manager Resource Description File
+ .SH "DESCRIPTION"
+ .PP
+--- a/doc/man/man5/Traits.5	2026-11-19 13:42:24.307052869 +0200
++++ b/doc/man/man5/Traits.5	2026-11-19 13:42:24.351399608 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "Traits" "file formats"
+ .SH "NAME"
+-\fBTraits\fP \(em Lists the traits used by the Motif Toolkit\&.
++\fBTraits\fP \- Lists the traits used by the Motif Toolkit\&.
+ .iX "Traits"
+ .SH "DESCRIPTION"
+ .PP
+--- a/doc/man/man5/UIL.5	2026-11-19 13:42:24.316292236 +0200
++++ b/doc/man/man5/UIL.5	2026-11-19 13:42:24.351968855 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "UIL" "file formats"
+ .SH "NAME"
+-\fBUIL\fP \(em The user interface language file format
++\fBUIL\fP \- The user interface language file format
+ .iX "user interface language"
+ .iX "UIL"
+ .SH "SYNOPSIS"
+--- a/doc/man/man5/WML.5	2026-11-19 13:42:24.327354800 +0200
++++ b/doc/man/man5/WML.5	2026-11-19 13:42:24.352252015 +0200
+@@ -48,7 +48,7 @@
+ .ta 8n 16n 24n 32n 40n 48n 56n 64n 72n 
+ .TH "WML" "file formats"
+ .SH "NAME"
+-\fBWML\fP \(em The widget meta-language file format for creating uil compilers
++\fBWML\fP \- The widget meta-language file format for creating uil compilers
+ .iX "widget meta-language"
+ .iX "WML"
+ .SH "DESCRIPTION"

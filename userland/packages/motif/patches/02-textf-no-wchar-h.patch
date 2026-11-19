@@ -1,0 +1,29 @@
+TextF.c: use Motif's own wide-character string functions without <wchar.h>.
+
+TextF.c includes <wchar.h> for wcslen, wcscpy, wcsncpy, wcschr, wcscat and
+wcsncat, except on the old BSDs, where it uses Xlib's _Xwcslen, _Xwcscpy and
+_Xwcsncpy and defines the other three itself. Amix (SVR4) has neither the
+header nor the functions; configure finds none of them (HAVE_WCHAR_H and
+HAVE_WCS* unset). Take the BSD path whenever HAVE_WCHAR_H is unset, and
+declare the three Xlib functions there, as X11R6.3 declares them only in its
+internal XlcPublic.h (its libX11 defines all three). No other Motif file uses
+wcs* functions beyond wcstombs, which SVR4's <stdlib.h> declares.
+
+--- a/lib/Xm/TextF.c	2026-11-19 13:33:08.082226906 +0200
++++ b/lib/Xm/TextF.c	2026-11-19 13:33:08.093505895 +0200
+@@ -82,7 +82,14 @@
+ #define FIX_1409
+ 
+ #if (defined(__FreeBSD__) && (__FreeBSD__ < 4)) || \
+-    (defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__))
++    (defined(__APPLE__) || defined(__NetBSD__) || defined(__OpenBSD__)) || \
++    !defined(HAVE_WCHAR_H)
++#ifndef HAVE_WCHAR_H
++/* Xlib's own, declared in its internal XlcPublic.h (lcWrap.c, lcStd.c) */
++extern int _Xwcslen(wchar_t *);
++extern wchar_t *_Xwcscpy(wchar_t *, wchar_t *);
++extern wchar_t *_Xwcsncpy(wchar_t *, wchar_t *, int);
++#endif
+ /*
+  * Modification by Integrated Computer Solutions, Inc.  May 2000
+  *

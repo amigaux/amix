@@ -1,0 +1,27 @@
+Do not build motif.wmd in a normal build.
+
+motif.wmd is a sample UIL widget database that wmldbcreate writes. It is
+not installed and nothing in the build reads it, and wmldbcreate is a
+program for the target, so a cross build cannot run it. The rule stays,
+so "make motif.wmd" on a native build still writes it.
+
+--- a/tools/wml/Makefile.am	2026-11-19 13:25:29.622347390 +0200
++++ b/tools/wml/Makefile.am	2026-11-19 13:25:29.635940363 +0200
+@@ -60,7 +60,6 @@
+ 	./wml $(srcdir)/$(TABLE)
+ 	$(RM) tokens.dat
+ 
+-all: motif.wmd
+ 
+ motif.wmd: wmldbcreate
+ 	./wmldbcreate -o motif.wmd
+--- a/tools/wml/Makefile.in	2026-11-19 13:25:29.624966528 +0200
++++ b/tools/wml/Makefile.in	2026-11-19 13:25:29.636100817 +0200
+@@ -817,7 +817,6 @@
+ 	./wml $(srcdir)/$(TABLE)
+ 	$(RM) tokens.dat
+ 
+-all: motif.wmd
+ 
+ motif.wmd: wmldbcreate
+ 	./wmldbcreate -o motif.wmd
