@@ -145,7 +145,7 @@ needs a login to the registry with a token that may write packages.
 `GCA` and `G14` are set in the image's environment, and both toolchains are
 on `PATH`, with `/opt/amix/host/bin`.
 
-### Tcl, OpenSP, TI-RPC and the autotools
+### Tcl, OpenSP, TI-RPC, the autotools and ksh
 
 CDE builds its man pages and help volumes through its DocBook chain, which
 needs a host Tcl (`/usr/lib/tcl8.6/tclConfig.sh`, the headers and the
@@ -168,6 +168,10 @@ stage, for a recipe that regenerates its build files: a source that ships no
 `Makefile.am`. Their output is shell and makefiles, but it changes with their
 versions, so the snapshot is what keeps a regenerated `configure` the same;
 docs/build-tools.md lists the exact package versions.
+
+ksh (ksh93u+m 1.0.8) comes from the same stage, for CDE's build scripts
+written for ksh93 (`dtdocbook2sdl`, `dtdocbook2man`, `sym2num`), which a
+recipe runs with `KSH_FOR_BUILD=ksh`.
 
 ### rpcgen
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — ksh in the build container (622777ba)
+
+The build container installs ksh (ksh93u+m 1.0.8) from the pinned snapshot, for CDE's ksh build scripts; TOOLCHAIN.sha256 unchanged.
+
 ## 2026-11-19 — autoconf, automake and libtool in the build container (30b47129)
 
 The build container installs autoconf 2.71, automake 1.16.5 and libtool 2.4.7 from the pinned snapshot, for recipes that regenerate their build files (CDE's autogen.sh); exact package versions in docs/build-tools.md, since generated files depend on them. TOOLCHAIN.sha256 unchanged.

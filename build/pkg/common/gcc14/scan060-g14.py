@@ -62,12 +62,15 @@ a stripped program can be the rest of .text, and the dump's lines would be
 read as instructions.
 
 --explain HITFILE: read scan060.py's output and say, for every hit address it
-lists, whether it lies inside a table sized here (data, not code).  Exit 1 if
+lists, whether it lies inside a table sized here (data, not code), at an odd
+address, or inside an instruction of the re-synced listing (a decode out of
+sync, either way).  Exit 1 if
 any hit is unexplained.  This is how the gcc14 gate keeps scan060.py as an
 independent decoder instead of dropping it.
 
 MIT, amix-packages.
 """
+import bisect
 import hashlib
 import os
 import re
@@ -86,6 +89,7 @@ BOUND_CMP = re.compile(r"^#(-?\d+),(\S+)$")                # cmp[i]{b,w,l} #N,<e
 MOVEQ = re.compile(r"^#(-?\d+),%(d[0-7])$")
 CMPL_REG = re.compile(r"^%(d[0-7]),%(d[0-7])$")            # cmpl %dX,%dY
 MNEM_OTHER = re.compile(r"^(movep|cmp2|chk2|cas2)")
+COND_BRANCH = re.compile(r"^b(hi|ls|cc|cs|ne|eq|vc|vs|pl|mi|ge|lt|gt|le)[bswl]?$")
 LOOKBACK = 16
 
 # Stock archive members (relative to the sysroot) whose named local symbols in
@@ -361,6 +365,31 @@ def moveq_value(insns, j, reg):
     return None
 
 
+def bound_of(insns, j, br):
+    """(N+1, <ea>) when the compare at insns[j], read with the branch br,
+    bounds <ea> by one of bound_for's three unbiased forms; else None."""
+    mn, ops = insns[j][2], insns[j][3]
+    m = BOUND_CMP.match(ops)
+    if m and br.startswith("bhi"):
+        n = int(m.group(1))
+        if mn.endswith("b"):
+            n &= 0xff
+        elif mn.endswith("w"):
+            n &= 0xffff
+        return n + 1, m.group(2)
+    m = re.match(r"^(.+),%(d[0-7])$", ops)
+    if m and br.startswith("bcs"):
+        n = moveq_value(insns, j, "%" + m.group(2))
+        if n is not None:
+            return n + 1, m.group(1)
+    m = re.match(r"^%(d[0-7]),(\S+)$", ops)
+    if m and br.startswith("bhi"):
+        n = moveq_value(insns, j, "%" + m.group(1))
+        if n is not None and n >= 0:
+            return n + 1, m.group(2)
+    return None
+
+
 def bound_for(insns, idx):
     """Entry count (N+1) from the unsigned bound check before the dispatch at
     insns[idx].  The forms met in GCC 14 output and in the stock archive
@@ -378,6 +407,16 @@ def bound_for(insns, idx):
         movel %dS,%dI ; addql #K,%dI ; moveq #-K,%dY ; cmpl %dS,%dY ; bhi default
     lets through only dS in [-K, -1], so dI = dS + K indexes K entries;
     accepted only when the dispatch's index register is that dI.
+    The bound branch may follow other conditional branches after the compare
+    (they leave the block and change no flag; std::ctype<char>::is in
+    libstdc++.a, CDE 2.5.3, 2026-11-19):
+        moveq #64,%d0 ; cmpl %d1,%d0 ; bltw out ; bcsw out ; addl %d1,%d1 ;
+        movew %a2@(0,%d1:l),%d0 ; jmp %pc@(T,%d0:w)
+    accepted only when the compared operand is the dispatch's index register
+    and the table load's base is T (interleaved_ok).  And a mask bounding the
+    index gives way to a smaller bound on the ways into the dispatch block
+    (masked_entry_bound: d_special_name, libiberty's demangler in
+    libstdc++.a, `cmpib #53,%d0 ; bls block', block `andil #255,%d0').
     """
     lo = max(0, idx - LOOKBACK)
     block = None
@@ -389,24 +428,15 @@ def bound_for(insns, idx):
         if not re.match(r"^cmp[ai]?[bwl]$", mn) or j + 1 >= idx:
             continue
         br = insns[j + 1][2]
-        m = BOUND_CMP.match(ops)
-        if m and br.startswith("bhi"):
-            n = int(m.group(1))
-            if mn.endswith("b"):
-                n &= 0xff
-            elif mn.endswith("w"):
-                n &= 0xffff
-            return n + 1
-        m = re.match(r"^(.+),%(d[0-7])$", ops)
-        if m and br.startswith("bcs"):
-            n = moveq_value(insns, j, "%" + m.group(2))
-            if n is not None:
-                return n + 1
-        m = re.match(r"^%(d[0-7]),(\S+)$", ops)
-        if m and br.startswith("bhi"):
-            n = moveq_value(insns, j, "%" + m.group(1))
-            if n is not None and n >= 0:
-                return n + 1
+        r = bound_of(insns, j, br)
+        if r is not None:
+            return r[0]
+        k = j + 1
+        while COND_BRANCH.match(insns[k][2]) and k + 1 < idx and COND_BRANCH.match(insns[k + 1][2]):
+            k += 1
+            r = bound_of(insns, j, insns[k][2])
+            if r is not None and interleaved_ok(insns, k, idx, r[1], r[0]):
+                return r[0]
         m = re.match(r"^%(d[0-7]),%(d[0-7])$", ops)
         if m and br.startswith("bhi"):
             n = moveq_value(insns, j, "%" + m.group(2))
@@ -420,7 +450,8 @@ def bound_for(insns, idx):
     for j in range(idx - 1, (block if block is not None else lo) - 1, -1):
         n = mask_bound(insns, j)
         if n is not None:
-            return n
+            e = masked_entry_bound(insns, block, idx, n) if block is not None else None
+            return e if e is not None and e < n else n
     if block is not None:
         return entry_bound(insns, block, idx)
     return None
@@ -433,6 +464,153 @@ def index_register(insns, idx):
         return None
     m = re.match(r"^%pc@\([0-9a-f]+\b[^,)]*,%(d[0-7]):l\)", insns[idx - 1][3])
     return m.group(1) if m else None
+
+
+def load_index(insns, idx):
+    """(index register, base) of the table load just before the dispatch at
+    insns[idx]: `movew %pc@(T,%dI:l),...' (base None) or `movew
+    %aN@(0,%dI:l),...' (base aN); else None."""
+    if idx < 1 or insns[idx - 1][2] not in ("movew", "moveaw"):
+        return None
+    m = re.match(r"^(?:%pc@\([0-9a-f]+\b[^,)]*|%(a[0-7]|fp)@\(0),%(d[0-7]):l\),", insns[idx - 1][3])
+    return (m.group(2), m.group(1)) if m else None
+
+
+def writes_reg(mn, ops, reg):
+    """Whether an instruction writes %reg: its destination, an exg, a
+    moveml into a list naming it, or a post-increment or pre-decrement
+    through it."""
+    r = "%" + reg
+    if mn.startswith(("cmp", "tst", "btst", "pea", "jsr", "bsr", "jmp")) or COND_BRANCH.match(mn) \
+            or mn.startswith("bra"):
+        return False
+    if r + "@+" in ops or r + "@-" in ops:
+        return True
+    if mn == "exg":
+        return r in ops.split(",")
+    if mn.startswith("moveml"):
+        dst = ops.rsplit(",", 1)[-1]
+        return "@" not in dst and reg in reglist(dst)
+    return ops.endswith("," + r) or ops == r
+
+
+def reglist(text):
+    """The registers of a moveml list such as %d2-%d6/%a2-%a4."""
+    out = set()
+    for part in text.split("/"):
+        m = re.match(r"^%([da])([0-7])(?:-%([da])([0-7]))?$", part)
+        if not m:
+            continue
+        if m.group(3) is None:
+            out.add(m.group(1) + m.group(2))
+            continue
+        lo, hi = int(m.group(2)) + (8 if m.group(1) == "a" else 0), int(m.group(4)) + (8 if m.group(3) == "a" else 0)
+        out.update(("d" if v < 8 else "a") + str(v % 8) for v in range(lo, hi + 1))
+    return out
+
+
+def interleaved_ok(insns, k, idx, ea, n):
+    """For a bound branch at insns[k] that follows other conditional
+    branches: the compared operand is the dispatch's index register %dI,
+    nothing writes it between the branch and the dispatch but its doubling,
+    and a table loaded through %aN reads T itself: `moveal #T,%aN' within
+    LOOKBACK, no branch from before it into the code that reaches the
+    dispatch from it, and nothing in that code writing %aN (the restore
+    before an rts aside, and the table's own words)."""
+    li = load_index(insns, idx)
+    if li is None or ea != "%" + li[0]:
+        return False
+    reg, base = li
+    for p in range(k + 1, idx - 1):
+        mn, ops = insns[p][2], insns[p][3]
+        if writes_reg(mn, ops, reg) and not (p == idx - 2 and mn == "addl" and ops == "%%%s,%%%s" % (reg, reg)):
+            return False
+    if base is None:
+        return True
+    base = "a6" if base == "fp" else base
+    t = int(DISPATCH.match(insns[idx][3]).group(1), 16)
+    mv = None
+    for p in range(idx - 2, max(0, idx - LOOKBACK) - 1, -1):
+        mn, ops = insns[p][2], insns[p][3]
+        if mn == "moveal" and re.match(r"^#(-?\d+),%" + base + "$", ops):
+            if int(ops[1:ops.index(",")]) & 0xffffffff != t:
+                return False
+            mv = p
+            break
+        if writes_reg(mn, ops, base):
+            return False
+    if mv is None:
+        return False
+    # the region that can reach the dispatch without passing the moveal: from
+    # the moveal on, grown to every branch back into it until none is left
+    # (a stripped program has no function ends to stop at); no branch from
+    # before the moveal may enter it, and nothing in it may write %aN
+    brs = []
+    for p, (a, _w, mn, ops) in enumerate(insns):
+        if COND_BRANCH.match(mn) or mn.startswith(("bra", "jmp")):
+            m = re.match(r"^([0-9a-f]+)\b", ops)
+            if m:
+                brs.append((p, int(m.group(1), 16)))
+    lo_a, hi_p = insns[mv][0], idx
+    while True:
+        far = hi_p
+        for p, tgt in brs:
+            if lo_a < tgt <= insns[hi_p][0]:
+                if p < mv:
+                    return False
+                far = max(far, p)
+        if far == hi_p:
+            break
+        hi_p = far
+    for p in range(mv + 1, hi_p + 1):
+        a, _w, mn, ops = insns[p]
+        if t <= a < t + 2 * n:
+            continue
+        if writes_reg(mn, ops, base) and not (mn.startswith("moveml") and p + 1 < len(insns)
+                                              and insns[p + 1][2] == "rts"):
+            return False
+    return True
+
+
+def masked_entry_bound(insns, block, idx, mask):
+    """Entry count when a dispatch block at insns[block], its index masked
+    to `mask' entries, is entered only by branches each bounded on that
+    index: `cmp[i]{b,w,l} #N,%dI ; bls block', the compare at least as wide
+    as the mask (a byte compare bounds only an index masked to a byte), %dI
+    the index register at the block's start (through the block's doubling,
+    masks and copies).  The largest N+1, else None."""
+    reg = index_register(insns, idx)
+    if reg is None:
+        return None
+    for p in range(idx - 2, block - 1, -1):
+        mn, ops = insns[p][2], insns[p][3]
+        if not writes_reg(mn, ops, reg):
+            continue
+        if (mn == "addl" and ops == "%%%s,%%%s" % (reg, reg)) or mask_bound(insns, p) is not None:
+            continue
+        m = re.match(r"^%(d[0-7]),%" + reg + "$", ops)
+        if mn == "movel" and m:
+            reg = m.group(1)
+            continue
+        return None
+    target = "%x" % insns[block][0]
+    found = []
+    for k, (_a, _w, mn, ops) in enumerate(insns):
+        if not (COND_BRANCH.match(mn) or mn.startswith(("bra", "bsr", "jmp"))):
+            continue
+        if ops.split(" ")[0] != target:
+            continue
+        if k == 0 or not mn.startswith("bls"):
+            return None
+        pmn, pops = insns[k - 1][2], insns[k - 1][3]
+        m = BOUND_CMP.match(pops)
+        if not re.match(r"^cmpi?[bwl]$", pmn) or not m or m.group(2) != "%" + reg:
+            return None
+        width = {"b": 0xff, "w": 0xffff, "l": 0xffffffff}[pmn[-1]]
+        if mask > width + 1:
+            return None
+        found.append((int(m.group(1)) & width) + 1)
+    return max(found) if found else None
 
 
 def index_def(insns, idx, stop):
@@ -795,16 +973,24 @@ def scan(tool, path):
             hits.append("0x%08x %s %s -- not implemented on the 68060" % (a, mn, ops))
     sized = {s for s, _e in skip}
     notes = [n for n in notes if int(re.match(r"^dispatch at 0x([0-9a-f]+)", n).group(1), 16) + 4 in sized]
-    return dict(insns=len(insns), tables=sorted(skip), problems=problems,
+    return dict(insns=len(insns), tables=sorted(skip), starts=sorted(starts), problems=problems,
                 desync=desync, hits=hits, total_long=total_long, notes=notes + knotes,
                 known=len(known))
 
 
-def explain(tables, hitfile):
-    """-> (all hit addresses, in-table, odd, unexplained).  A hit is data if
-    it lies inside a sized table; it is a decode artifact if its address is
-    odd (every 680x0 instruction starts on an even address, so a decode
-    starting at an odd one is out of sync by construction)."""
+def explain(tables, hitfile, starts):
+    """-> (all hit addresses, in-table, odd, mid, unexplained).  A hit is
+    data if it lies inside a sized table; it is a decode artifact if its
+    address is odd (every 680x0 instruction starts on an even address, so a
+    decode starting at an odd one is out of sync by construction), or if it
+    lies inside an instruction of this tool's re-synced listing, not at its
+    start: between two instruction starts at most 22 bytes apart (the
+    longest 680x0 instruction) with no table between them.  scan060.py
+    sizes a table up to its smallest positive offset, or not at all when
+    every offset is negative; it then decodes the last entries and the code
+    after them as one instruction and lands inside the next (CDE 2.5.3's
+    dtwm: `0068 01d8 23ef' read as an oriw, then the 0588 inside `movel
+    %sp@(36),0x803b0588' as a movepw)."""
     addrs = []
     for raw in open(hitfile, errors="replace"):
         m = re.match(r"^\s+([0-9a-f]{8})\s+<", raw)
@@ -812,8 +998,18 @@ def explain(tables, hitfile):
             addrs.append(int(m.group(1), 16))
     intab = [a for a in addrs if any(s <= a < e for s, e in tables)]
     odd = [a for a in addrs if a & 1 and a not in intab]
-    unexplained = [a for a in addrs if a not in intab and a not in odd]
-    return addrs, intab, odd, unexplained
+    mid = []
+    for a in addrs:
+        if a in intab or a in odd:
+            continue
+        i = bisect.bisect_left(starts, a)
+        if i == 0 or i == len(starts) or starts[i] == a:
+            continue
+        s, n = starts[i - 1], starts[i]
+        if n - s <= 22 and not any(t < n and s < e for t, e in tables):
+            mid.append(a)
+    unexplained = [a for a in addrs if a not in intab and a not in odd and a not in mid]
+    return addrs, intab, odd, mid, unexplained
 
 
 def main(argv):
@@ -848,7 +1044,7 @@ def main(argv):
                       % (name, "; ".join(r["problems"] + r["desync"])[:300]))
                 rc = max(rc, 3)
                 continue
-            addrs, intab, odd, unexplained = explain(r["tables"], hitfile)
+            addrs, intab, odd, mid, unexplained = explain(r["tables"], hitfile, r["starts"])
             if not addrs:
                 print("  UNTRUSTWORTHY %s: %s names no hit to explain" % (name, hitfile))
                 rc = max(rc, 3)
@@ -858,8 +1054,10 @@ def main(argv):
                 rc = max(rc, 1)
             else:
                 print("  explained %s: %d scan060.py hit(s) -- %d inside the %d sized switch tables and known "
-                      "stock data ranges (data), %d at odd addresses (decode out of sync)"
-                      % (name, len(addrs), len(intab), len(r["tables"]), len(odd)))
+                      "stock data ranges (data), %d at odd addresses (decode out of sync)%s"
+                      % (name, len(addrs), len(intab), len(r["tables"]), len(odd),
+                         ", %d inside an instruction of the re-synced listing (decode out of sync)" % len(mid)
+                         if mid else ""))
             continue
         if r["problems"] or r["desync"]:
             print("  UNTRUSTWORTHY %s:" % name)
