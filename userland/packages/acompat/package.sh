@@ -3,7 +3,7 @@
 NAME=acompat
 PKG=acompat
 VERSION=0.1
-PKGREV=9   # -9: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=10   # -10: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="libacompat - missing-libc shim for Amix ports"
 DESC="libamixcompat, the static library and headers for the libc surface Amix lacks: long-long snprintf/vsnprintf, setenv/unsetenv, strcasecmp/strncasecmp, mkstemp, usleep, gettimeofday. Link -lacompat."
 CATEGORY=library

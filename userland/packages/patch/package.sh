@@ -2,7 +2,7 @@
 NAME=patch
 PKG=patch
 VERSION=2.5.9
-PKGREV=8   # -8: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=9   # -9: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="GNU patch 2.5.9 - apply a diff to an original"
 DESC="GNU patch 2.5.9 applies unified, context and ed-format diffs. Supersedes the 1990 Larry Wall patch 12u4 in /usr/public/bin. Installs /usr/local/bin/patch plus a /usr/bin/patch symlink."
 CATEGORY=development

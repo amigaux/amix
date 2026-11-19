@@ -2,7 +2,7 @@
 NAME=bzip2
 PKG=bzip2
 VERSION=1.0.8
-PKGREV=4   # -4: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=5   # -5: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="bzip2 1.0.8"
 DESC="bzip2 1.0.8 block-sorting compressor: bzip2, bunzip2, bzcat, bzip2recover, the bzgrep/bzmore/bzdiff wrappers, and libbz2.a with bzlib.h. Installs under /opt/amix; add /opt/amix/bin to PATH."
 CATEGORY=archive

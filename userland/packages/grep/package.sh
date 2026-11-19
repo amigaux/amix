@@ -2,7 +2,7 @@
 NAME=grep
 PKG=grep
 VERSION=2.5.1a
-PKGREV=9   # -9: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=10   # -10: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="GNU grep 2.5.1a - recursive/color grep"
 DESC="GNU grep 2.5.1a with recursive -r, -o, --color and reliable -E over stock SVR4 grep, which it does NOT replace (stock /usr/bin/grep is untouched; ours wins by PATH). Installs /opt/amix/bin/{grep,egrep,fgrep}. Carries its own GNU regex; strcasecmp comes from the toolchain runtime libamixc99 (GCC 14 build). Add /opt/amix/bin to PATH to use it."
 CATEGORY=utility
