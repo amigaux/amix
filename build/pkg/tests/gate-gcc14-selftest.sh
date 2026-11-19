@@ -28,6 +28,9 @@
 #     (the ways into a masked dispatch block; a bound branch after another
 #     conditional branch, the table read through an address register set to
 #     it) and still refuses each with the bound widened, moved or removed;
+#   - scan060-g14.py sizes a table with one instruction between its load and
+#     the jmp by the trusted-by-shape rule, and refuses one that writes the
+#     index, two, a call, and a branch landing there;
 #   - the D4 gate explains a scan060.py hit inside an instruction of the
 #     re-synced listing as a decode out of sync, not one at an instruction
 #     start;
@@ -610,6 +613,58 @@ for form in dsn cti; do
 	done
 done
 ok "scan060-g14.py sizes libstdc++'s d_special_name table (x54, by its bls ways in) and ctype<char>::is table (x65, the bound past a blt, the base moveal #T), catches a movep after each; widened, unbounded, other-register, narrower-than-mask, missing, wrong-base and base-rewritten bounds stay untrustworthy"
+
+# One instruction between the table load and the jmp (libstdc++'s
+# std::__facet_shims::__time_get<char>, CDE 2.5.3, 2026-11-19: `andil #255,
+# %d0 ; addl ; movew %pc@(T,%d0:l),%d0 ; moveal %a0@,%a1 ; jmp'), no bound
+# check: sized by the trusted-by-shape rule (a NOTE naming the instruction),
+# a movep after the table still caught.  Refused: an instruction there that
+# writes the index, two instructions, a call there, and a branch landing on
+# it (past the load).
+btw_probe() {	# btw_probe <name> <ok|idx|two|flow|land> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l %a2,-(%sp)\n\tmove.l 8(%sp),%d0\n\tmove.l 12(%sp),%a0\n"'
+		[ "$2" != land ] || printf '%s\n' '	"\ttst.l %d0\n\tbeq.s 7f\n"'
+		if [ "$2" = two ]; then	# movew %pc@(T,%d0:l),%d0, T past one or two 2-byte instructions and the jmp
+			printf '%s\n' '	"\tandi.l #255,%d0\n\tadd.l %d0,%d0\n\t.word 0x303b,0x080a\n"'
+		else
+			printf '%s\n' '	"\tandi.l #255,%d0\n\tadd.l %d0,%d0\n\t.word 0x303b,0x0808\n"'
+		fi
+		case "$2" in
+		idx) printf '%s\n' '	"\tmoveq #0,%d0\n"' ;;
+		two) printf '%s\n' '	"\tmovea.l (%a0),%a1\n\tmovea.l (%a0),%a1\n"' ;;
+		flow) printf '%s\n' '	"\tjsr (%a2)\n"' ;;
+		*) printf '%s\n' '	"7:\tmovea.l (%a0),%a1\n"' ;;
+		esac
+		printf '%s\n' '	"\t.word 0x4efb,0x0002\n"'	# jmp %pc@(T,%d0:w)
+		printf '%s\n' '	"\t.word 0x074c,0x0056,0x0056,0x0056\n"'
+		[ -z "$3" ] || printf '\t%s\n' "$3"
+		printf '%s\n' '	"\t.fill 0x400,2,0x4e71\n\tmove.l (%sp)+,%a2\n\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int, void *);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c, v); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the between probe $1 did not build"
+}
+btw_probe sw-btw ok ''
+btw_probe sw-btw-movep ok '"\t.word 0x4e71,0x074c,0x0056\n"'
+out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-btw") || fail "scan060-g14.py on the one-between switch: $out"
+echo "$out" | grep ' 1 switch tables sized' >/dev/null &&
+	echo "$out" | grep "NOTE dispatch at .*sized from its own entries (4, the run ending on an odd word), trusted by shape; \`moveal %a0@,%a1' between the table load and the jmp" >/dev/null ||
+	fail "scan060-g14.py did not size the one-between table by shape with its NOTE: $out"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-btw-movep"); then
+	fail "scan060-g14.py passed a real movep after the one-between table: $out"
+fi
+echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the one-between movep probe: $out"
+for v in idx two flow land; do
+	btw_probe "sw-btw-$v" $v ''
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/sw-btw-$v"); then
+		fail "scan060-g14.py sized the one-between table with $v: $out"
+	fi
+	echo "$out" | grep UNTRUSTWORTHY >/dev/null && echo "$out" | grep 'x256 has 255 entries not landing on code in the function (first: #1)' >/dev/null ||
+		fail "scan060-g14.py on the one-between $v probe: $out"
+done
+ok "scan060-g14.py sizes a table with one instruction between its load and the jmp by shape (a NOTE naming it), catches a movep after it; one writing the index, two, a call and a branch landing on it stay untrustworthy"
 
 # scan060.py's hits inside an instruction (CDE 2.5.3's dtwm, its dispatch,
 # table and the instruction after it copied from the binary): scan060.py
