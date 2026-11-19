@@ -138,6 +138,18 @@ needs a login to the registry with a token that may write packages.
 `GCA` and `G14` are set in the image's environment, and both toolchains are
 on `PATH`, with `/opt/amix/host/bin`.
 
+### Tcl and OpenSP
+
+CDE builds its man pages and help volumes through its DocBook chain, which
+needs a host Tcl (`/usr/lib/tcl8.6/tclConfig.sh`, the headers and the
+library) and OpenSP's `onsgmls`. They are Ubuntu's `tcl8.6`, `tcl8.6-dev` and
+`opensp` from the same archive snapshot as every other host package, so
+`SNAPSHOT` pins their versions. They write nothing Amix reads as a binary
+format (CDE's own `instant` is built by its recipe), so the snapshot's
+packages serve, where rpcgen's output is compiled into Amix programs. They are
+installed in the last stage, after the toolchains are built, so the
+toolchains' builds never see them and keep their layers.
+
 ### rpcgen
 
 rpcgen is built in the image from rpcsvc-proto's release tarball, pinned in

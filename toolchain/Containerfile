@@ -181,6 +181,17 @@ COPY --from=norm /opt /opt
 ENV GCA=/opt/amix/gcc-cross-amix/build \
     G14=/opt/amix/gcc14-cross-amix/build \
     PATH=/opt/amix-cross/bin:/opt/amix/gcc14-cross-amix/build/prefix/bin:/opt/amix/host/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Host tools that write nothing Amix reads, taken from the same snapshot: a
+# host Tcl (tclConfig.sh, headers, library) and OpenSP's onsgmls, for CDE's
+# DocBook chain (its man pages and help volumes). Installed after the
+# toolchains are built, so their builds never see them.
+RUN try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
+ && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
+      cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
+ && try upd -o Acquire::Check-Valid-Until=false \
+ && try apt-get install -y --no-install-recommends opensp tcl8.6 tcl8.6-dev \
+ && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log \
+ && test -f /usr/lib/tcl8.6/tclConfig.sh && test -x /usr/bin/onsgmls
 # last, so a stamp of the same pins reuses every toolchain layer; readable
 # by the calling user make dist runs as
 COPY *.pin /opt/amix/PINS/
