@@ -35,6 +35,9 @@ not all land on code -- GCC knew a narrower range from an outer test -- is
 sized from its own entries too, and only when that run of entries ends on a
 word that cannot be one (odd, outside the function, back into the table, or
 at the first case), never at the cap: a NOTE names it as trusted by shape.
+For that rule alone, one instruction may sit between the table load and the
+jmp (between_insn), when it changes no control flow, writes neither the
+index nor the jmp's register, and no branch lands on it or on the jmp.
 Any other table it cannot size stays untrustworthy.
 
 Then, like scan060.py, it re-disassembles only the code BETWEEN tables, so the
@@ -476,6 +479,33 @@ def load_index(insns, idx):
     return (m.group(2), m.group(1)) if m else None
 
 
+FLOW = re.compile(r"^(b(ra|sr)|jmp|jsr|rt[sedr]|trap|db|illegal|stop|chk)")
+
+
+def between_insn(insns, idx):
+    """The one instruction between the table load and the dispatch at
+    insns[idx], when there is exactly one: `movew %pc@(T,%dI:l),%dJ ; <insn>
+    ; jmp %pc@(T,%dJ:w)' (libstdc++'s std::__facet_shims::__time_get<char>,
+    CDE 2.5.3, 2026-11-19: `moveal %a0@,%a1' in between).  It may change no
+    control flow and write neither %dI nor %dJ, and no branch may land on it
+    or on the jmp (past the load).  -> its index in insns, else None."""
+    if idx < 2 or load_index(insns, idx) is not None or insns[idx - 2][2] != "movew":
+        return None
+    m = re.match(r"^%pc@\(([0-9a-f]+)\b[^,)]*,%(d[0-7]):l\),%(d[0-7])$", insns[idx - 2][3])
+    d = DISPATCH.match(insns[idx][3])
+    if not m or not d or int(m.group(1), 16) != int(d.group(1), 16) or m.group(3) != d.group(2):
+        return None
+    mn, ops = insns[idx - 1][2], insns[idx - 1][3]
+    if FLOW.match(mn) or COND_BRANCH.match(mn) or writes_reg(mn, ops, m.group(2)) \
+            or writes_reg(mn, ops, m.group(3)):
+        return None
+    landing_on = {"%x" % insns[idx - 1][0], "%x" % insns[idx][0]}
+    for _a, _w, bmn, bops in insns:
+        if (COND_BRANCH.match(bmn) or FLOW.match(bmn)) and bops.split(" ")[0] in landing_on:
+            return None
+    return idx - 1
+
+
 def writes_reg(mn, ops, reg):
     """Whether an instruction writes %reg: its destination, an exg, a
     moveml into a list naming it, or a post-increment or pre-decrement
@@ -853,14 +883,21 @@ def find_tables(insns, labels, data, secs, pts):
             # entries, when the run ends on a word that cannot be an entry
             # (never over a compare's bound: there every index can be taken)
             hm = width_bound(insns, idx, max(0, idx - LOOKBACK))
+            via = ""
+            mid = between_insn(insns, idx) if hm is None else None
+            if mid is not None:
+                # the index read as if that instruction were not there
+                view = insns[:mid] + insns[mid + 1:]
+                hm = width_bound(view, idx - 1, max(0, idx - 1 - LOOKBACK))
+                via = "; `%s %s' between the table load and the jmp" % (insns[mid][2], insns[mid][3])
             if hm is not None and n in (None, hm):
                 ne, why = entries_run(data, secs, t, fstart, fend, cap=hm)
                 if why == "cap" and not landing(data, secs, t, ne, fstart, fend):
                     n, bad = ne, []                  # every index the width allows lands
                 elif why != "cap" and ne > 0 and not landing(data, secs, t, ne, fstart, fend):
                     notes.append("dispatch at 0x%08x: no bound check, the index at most %d; table at "
-                                 "0x%08x sized from its own entries (%d, the run ending %s), trusted by shape"
-                                 % (a, hm, t, ne, RUN_END[why]))
+                                 "0x%08x sized from its own entries (%d, the run ending %s), trusted by shape%s"
+                                 % (a, hm, t, ne, RUN_END[why], via))
                     n, bad = ne, []
                 else:
                     problems.append("dispatch at 0x%08x: the index at most %d, but table 0x%08x is no run "

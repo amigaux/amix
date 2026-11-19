@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — scan060-g14: one instruction between a table load and its jmp (f5ce019f)
+
+For the trusted-by-shape rule, scan060-g14.py reads past exactly one instruction between a table load and its jmp (libstdc++'s __facet_shims::__time_get<char>) when it changes no control flow, writes neither the index nor the jmp register and no branch lands on it; the NOTE names it. CDE's dtappgather and dtsearchpath now pass D4; no other verdict changed over the 543 ELFs and CDE.
+
 ## 2026-11-19 — scan060-g14 reads two libstdc++ switch forms (519664b5, 1c860f0e)
 
 scan060-g14.py sizes two switch forms of the toolchain's libstdc++.a by their bound checks: a masked dispatch block entered only through `cmp #N,%dI; bls` (libiberty's d_special_name, 54 entries), and a bound branch after another conditional branch with the table base loaded by `moveal #T` (std::ctype<char>::is); widened, moved or removed bounds stay untrustworthy. --explain takes a scan060.py hit inside an instruction of its re-synced listing as a decode out of sync. No verdict changed over the 543 ELFs of the current payloads and the 1.1.2 catalogue; 38 of CDE 2.5.3's 41 refused programs now pass D4.
