@@ -48,11 +48,16 @@ esac
 # libamixrt.so.1 change, nothing else pinned here.
 # dcfd12d (2026-11-02): libamixrt.so.1 is installed stripped (22728 bytes, no
 # DWARF); its allocated sections and .dynsym are unchanged, nothing else here.
+# c806d49 (2026-11-19; branch release-1.1, the fork's 1.1 plus its 1.1.x
+# fixes): ld puts DT_NEEDED, DT_SONAME and DT_RPATH names first in .dynstr,
+# where AMIX's dl_makelist reads them, and two checks are added. Only
+# libamixrt.so.1 changes here (relinked by the new ld); cc1, libgcc.a,
+# libamixc99.a, the specs and the init objects are the same bytes.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=dcfd12d79fb970f607a69d72b79e9f7470d1043f
+AMIX_GCC14_COMMIT=c806d4962790dac10c72d26a6e3e293d280f6856
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
@@ -60,7 +65,7 @@ m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9
 lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 23c038df7e955c037019f48eeb58160a2b43138ef65b78ea25928efaf73bf4ff"
+m68k-elf/lib/amixrt/libamixrt.so.1 0ae586a7698d2bdae23f01d2bb49fab0c86ec56edf2c4bd7bb5379aa6ec76283"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {

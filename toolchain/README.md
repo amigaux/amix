@@ -15,8 +15,8 @@ repositories; nothing here is vendored.
 Each pin is one line, `<repository URL> <full commit hash>`, the same format
 as `kernel/port/port.pin`.
 
-gcc14-cross-amix is pinned in the organisation's fork, on the branch
-`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus the
+gcc14-cross-amix is pinned in the organisation's fork. Its branch
+`upstream-58130fe-plus` is Antti Sokero's upstream at `58130fe` plus the
 commits on their way to it: the runtime built for the whole 68020–68060 range
 so it also runs on a 68881/68882 (and a check that it does), a refusal of a
 sysroot without `stdint.h`, and shared libraries: `gcc -shared`,
@@ -25,7 +25,11 @@ program's start-up, a binutils patch so gas keeps a PIC relocation
 against an exported symbol (a library's pointer to its own exported data can
 then be bound to the program's copy), and libamixrt.so.1, the runtime a
 shared library needs, which the image also copies to the sysroot's
-`usr/lib`, where the box has it. Once upstream has them, the
+`usr/lib`, where the box has it. The release line pins the branch
+`release-1.1`: the fork's `1.1` tag (the commit amix 1.1 was built with) plus
+its 1.1.x fixes, today ld putting the library names first in `.dynstr`, where
+AMIX's runtime linker reads them, and two checks (`check-dynstr-order.py`,
+`check-got-addend.py`). Once upstream has them, the
 pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
