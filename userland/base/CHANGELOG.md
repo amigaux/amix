@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — amixrt 1.0-3 (65e98c3b)
+
+libamixrt.so.1 from gcc14-cross-amix c806d49 (release-1.1), relinked with library names first in .dynstr; 22728 bytes, sha256 0ae586a7. Only the library, pkginfo and pkgmap differ from 1.0-2.
+
 ## 2026-11-16 — amix-base 1.0-36: xstart ends a server xinit left (18008649, d1956cb8, 42fbdfc3, 51bcd04e)
 
 - xstart ends a server xinit left running: when xinit is killed it does not stop the server, and xstart used to say the server had ended on its own and run the card's restore command with X still on the display. The server now always runs through a wrapper that records its pid. When xinit returns with that pid still running the card's server on this display (checked in ps -ef before each signal), xstart says so in one line, sends TERM, then KILL after XSTART_KILLWAIT seconds (10), and only then runs restore and switches the monitor back.
