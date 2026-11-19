@@ -1,0 +1,76 @@
+#!/bin/sh
+# test-rpcgen: does the build container's rpcgen write code that builds for
+# Amix?
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Usage: toolchain/test-rpcgen IMAGE [OUTDIR]
+#        toolchain/test-rpcgen        (inside the container, from a checkout)
+#   OUTDIR  keep the generated files, objects and programs there
+#
+# rpcgen (rpcsvc-proto, toolchain/rpcgen.distfile) writes for glibc. Its
+# output for tests/rpcgen/amixtest.x (an enum, a typedef, a struct with a
+# string, fixed and variable arrays, a double and a pointer to itself, a
+# union, a program with three procedures) is generated in both forms: the
+# default socket-style one (-b) and the SVR4 TI-RPC one (-5). Each set of
+# client, server and XDR files is compiled by gcc14 against the Amix sysroot
+# with -Wall -Werror -Wno-unused-variable (rpcgen declares the inline buffer
+# `buf' in every XDR routine, used or not) and the two headers build/pkg/common/gcc14 gives rpcgen
+# output (amix-decls.h, amix-rpcgen.h), and linked against libnsl. Exit 0
+# when all of it builds.
+set -eu
+
+here=$(cd "$(dirname "$0")" && pwd)
+top=$(dirname "$here")
+if [ $# -gt 0 ]; then
+	img=$1 out=${2:-}
+	set -- --rm -u "$(id -u):$(id -g)" -v "$top:/src:ro"
+	if [ -n "$out" ]; then
+		mkdir -p "$out"
+		set -- "$@" -v "$(cd "$out" && pwd):/out" -e TEST_RPCGEN_OUT=/out
+	fi
+	exec "${CONTAINER:-docker}" run "$@" "$img" sh /src/toolchain/test-rpcgen
+fi
+
+out=${TEST_RPCGEN_OUT:-}
+if [ -n "$out" ]; then
+	T=$out
+else
+	T=$(mktemp -d "${TMPDIR:-/tmp}/test-rpcgen.XXXXXX") && [ -n "${T:?}" ] || exit 1
+	trap 'rm -rf "${T:?}"' EXIT
+fi
+common=$top/build/pkg/common/gcc14
+cc=${G14:-/opt/amix/gcc14-cross-amix/build}/prefix/bin/m68k-elf-gcc
+command -v rpcgen > /dev/null || { echo "[FAIL] test-rpcgen: no rpcgen on PATH" >&2; exit 1; }
+echo "rpcgen: $(command -v rpcgen), $(rpcgen --version 2>&1 | head -1)"
+echo "gcc14:  $cc"
+
+pass=0 fail=0
+run() {	# run <what> <log> <command...>
+	what=$1 log=$2; shift 2
+	if "$@" > "$log" 2>&1; then pass=$((pass + 1))
+	else fail=$((fail + 1)); echo "FAIL $what"; sed 's/^/    /' "$log"; fi
+}
+for form in b 5; do
+	d=$T/$form
+	rm -rf "${d:?}"; mkdir -p "$d"
+	cp "$here/tests/rpcgen/amixtest.x" "$here/tests/rpcgen/impl.c" "$here/tests/rpcgen/cmain.c" "$d/"
+	# -b: sockets (svcudp_create, clntudp_create); -5: TI-RPC (svc_create)
+	run "-$form: rpcgen" "$d/rpcgen.log" sh -c 'cd "$1" && rpcgen "-$2" amixtest.x' sh "$d" "$form"
+	for c in amixtest_xdr amixtest_clnt amixtest_svc impl cmain; do
+		run "-$form: $c.c compiles" "$d/$c.log" \
+			"$cc" -m68020-60 -mno-strict-align -O2 -Wall -Werror -Wno-unused-variable \
+			-include "$common/amix-decls.h" -include "$common/amix-rpcgen.h" \
+			-I"$d" -c "$d/$c.c" -o "$d/$c.o"
+	done
+	libs=-lnsl
+	[ $form = 5 ] || libs="-lsocket -lnsl"
+	# shellcheck disable=SC2086 (the libraries, one word each)
+	run "-$form: server links against libnsl" "$d/server.log" \
+		"$cc" -o "$d/server" "$d/amixtest_svc.o" "$d/impl.o" "$d/amixtest_xdr.o" $libs
+	# shellcheck disable=SC2086
+	run "-$form: client links against libnsl" "$d/client.log" \
+		"$cc" -o "$d/client" "$d/amixtest_clnt.o" "$d/cmain.o" "$d/amixtest_xdr.o" $libs
+done
+echo "test-rpcgen: $pass/$((pass + fail)) passed"
+[ $fail = 0 ]

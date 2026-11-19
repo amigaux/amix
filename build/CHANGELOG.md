@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — shared host tools and their gate (653c955c, ab3cd1a1, d58094bc, f1b5d5fc, 53f6bf82)
+
+build/hosttools builds imake, makedepend, bdftopcf, mkfontdir, amix-xcpp and gencat from our pinned sources; pkgbuild.sh puts them first on PATH and hosttools.sh refuses a build that runs the build host's copies. bdftopcf and mkfontdir reproduce x11r63 6.3-11's 468 PCFs and 3 fonts.dir. gencat matches the stock AMIX 2.1c gencat byte for byte on tests/test.msg and on CDE 2.5.3's dtcalc.msg, in both formats; it exits 1 when a source error leaves nothing written (stock exits 0). docs/build-tools.md lists the container's tools and those built from source.
+
 ## 2026-11-17 — the release step runs older-apkg-check (7496d031)
 
 After assemble-release.py, make dist's release step runs pkgtools' older-apkg-check.sh on out/release/1.1: the apkg of every earlier release of the series, built from its tag, must read every live row. A refused row fails the step; exit 3 (no git, tag or cc to check with) is a gap. The published 1.1.2 tree fails it (xsurf 1.0.0-4's kbootset= under apkg 0.3.11); the be3d20f1 tree passes, va2000 the only WAIT rows. test-dist 115/115.

@@ -1,0 +1,16 @@
+Ours: a BDF without a DEFAULT_CHAR property gets no default character
+(NO_SUCH_CHAR), not whatever the caller's font record held; bdftopcf's record
+is on its stack, so such fonts differed from build to build.
+
+--- a/lib/font/bitmap/bdfread.c
++++ b/lib/font/bitmap/bdfread.c
+@@ -580,6 +580,9 @@
+     }
+     pFont->info.isStringProp = NULL;
+     pFont->info.props = NULL;
++    /* no DEFAULT_CHAR property: no default character, not what the
++       caller's record held */
++    pFont->info.defaultCh = (unsigned short) NO_SUCH_CHAR;
+ 
+     stringProps = (char *) xalloc((nProps + BDF_GENPROPS) * sizeof(char));
+     pFont->info.isStringProp = stringProps;

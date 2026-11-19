@@ -36,6 +36,7 @@ test:
 	python3 -I tests/test-dist
 	python3 -I tests/test-lock
 	python3 -I tests/test-together
+	sh hosttools/gencat/tests/run.sh
 
 selftests:
 	sh pkg/tests/run-selftests

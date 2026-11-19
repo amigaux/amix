@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — rpcgen, Tcl and OpenSP in the build container; gcc14 pin to release-1.1 c806d49 (5d2eb1c4, 6aa74d06, e692736a)
+
+rpcgen from rpcsvc-proto 1.4.4 (rpcgen.distfile) in /opt/amix/host/bin; test-rpcgen builds its -b and -5 output for Amix (amix-rpcgen.h, -Wno-unused-variable; no hyper, libnsl has no 64-bit XDR). tcl8.6, tcl8.6-dev and opensp come from the snapshot, for CDE's DocBook chain. gcc14-cross-amix.pin is c806d49 (release-1.1: 1.1 plus library names first in .dynstr), gcc14-cross-amix.tree ceb1ce69; among the pinned files only libamixrt.so.1 changes (0ae586a7). Linked programs differ from 1.1 in .dynstr order only; static archives are unchanged.
+
 ## 2026-11-18 — GCC 14 at gcc14-cross-amix 13ed718 on the development line (be9881ed)
 
 The fix for GCC PR target/126121 (a wrong bit when a memory byte's bit is set or cleared with a bit number of 8 or more) and a guard against the bfclr-at-(7 - n) form that fix leaves. Only cc1 changes; the runtime libraries are byte-identical. gcc14-cross-amix.tree is 166b04f8. The image carries the check-bset-mem.py gate. image.ref still names the dcfd12d images until the new pair is published.

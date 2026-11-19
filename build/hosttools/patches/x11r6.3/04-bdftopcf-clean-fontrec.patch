@@ -1,0 +1,16 @@
+Ours: bdftopcf starts from a zeroed font record. The BDF reader does not set
+every field (info.inkMetrics), so a PCF gained or lost its ink bounds from one
+build host to another.
+
+--- a/programs/bdftopcf/bdftopcf.c
++++ b/programs/bdftopcf/bdftopcf.c
+@@ -46,6 +46,9 @@
+     char    *program_name;
+     int	    bit, byte, glyph, scan;
+ 
++    /* the reader leaves fields of the record unset (info.inkMetrics):
++       start from zero, not from what the stack held */
++    memset(&font, 0, sizeof font);
+     FontDefaultFormat (&bit, &byte, &glyph, &scan);
+     program_name = argv[0];
+     argc--, argv++;

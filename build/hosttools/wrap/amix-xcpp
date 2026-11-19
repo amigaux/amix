@@ -1,0 +1,17 @@
+#!/bin/sh
+# amix-xcpp: preprocess a resource or config file as xrdb on Amix does
+# (build/hosttools).
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     amix-xcpp [cpp options] [file]
+#
+# xrdb on the box runs the stock /usr/ccs/lib/cpp, a traditional cpp whose
+# only predefines are m68k and unix. This is the build host's cpp in the same
+# shape: -traditional, -undef (none of the host's defines), -nostdinc (none
+# of its headers, nor glibc's stdc-predef.h), -U__STDC_HOSTED__ (which
+# -undef leaves), -Dm68k -Dunix. As on the box,
+# the words m68k and unix in the text become 1.
+# xrdb's own run-time defines (SERVERHOST, WIDTH, COLOR, ...) are the
+# caller's to give, as -D options.
+exec "${AMIX_HOST_CPP:-cpp}" -traditional -undef -nostdinc -U__STDC_HOSTED__ -Dm68k -Dunix "$@"

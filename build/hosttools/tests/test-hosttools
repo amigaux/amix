@@ -1,0 +1,214 @@
+#!/bin/sh
+# test-hosttools: build the shared host tools and check that what each one
+# writes is Amix's, not the build host's.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     sh build/hosttools/tests/test-hosttools
+#
+# Builds the set into a scratch AMIX_HOSTTOOLS (the X11R6.3 tarball from
+# out/cache, AMIX_DISTFILES or its URL), then:
+#   imake       a config file sees AMIX, SVR4 and m68k, and none of the build
+#               host's defines or its uname
+#   makedepend  includes are found in the target compiler's sysroot (a stand-
+#               in compiler here), never in /usr/include; no compiler: refused
+#   bdftopcf    a PCF in the Amix layout (MSB first, glyphs padded to 4
+#               bytes), the same bytes on every run and every host
+#   mkfontdir   the fonts.dir line of that font
+#   amix-xcpp   the stock Amix cpp's predefines (m68k, unix) and no others
+#   gencat      the byte references of gencat/tests/expect
+# Exit 77 (a skip, for run-selftests) when the tarball cannot be had.
+# Prints "N/N passed".
+
+here=$(cd "$(dirname "$0")" && pwd)
+ht=$(dirname "$here")
+top=$(cd "$ht/../.." && pwd)
+T=$(mktemp -d "${TMPDIR:-/tmp}/test-hosttools.XXXXXX") && [ -n "${T:?}" ] || exit 1
+trap 'rm -rf "${T:?}"' EXIT
+pass=0 fail=0
+check() {	# check <what> <command...>
+	what=$1; shift
+	if "$@" > "$T/out" 2>&1; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL $what"; sed 's/^/    /' "$T/out"; fi
+}
+
+if ! sh "$top/toolchain/fetch-distfile" "$ht/x11r6.3.distfile" > "$T/fetch.log" 2>&1; then
+	echo "SKIP test-hosttools: the X11R6.3 tarball cannot be had (x11r6.3.distfile):"
+	sed 's/^/    /' "$T/fetch.log"
+	exit 77
+fi
+export AMIX_HOSTTOOLS="$T/ht"
+check "build.sh builds the set" sh "$ht/build.sh"
+bin=$T/ht/bin
+for t in imake makedepend bdftopcf mkfontdir amix-xcpp gencat; do
+	check "bin/$t is there" test -x "$bin/$t"
+done
+check "build.sh --check: the set just built is current" sh "$ht/build.sh" --check
+check "TOOLS lists every program with its sha256" \
+	sh -c 'cd "$1" && sha256sum -c --quiet TOOLS && [ "$(wc -l < TOOLS)" -eq "$(find bin libexec -type f | wc -l)" ]' sh "$T/ht"
+
+# --- imake ---------------------------------------------------------------------
+mkdir -p "$T/im"
+cat > "$T/im/Imake.tmpl" <<'EOF'
+#ifdef AMIX
+AMIX_SEEN = yes
+#endif
+#ifdef SVR4
+SVR4_SEEN = yes
+#endif
+#ifdef m68k
+M68K_SEEN = yes
+#endif
+#if defined(linux) || defined(__linux__) || defined(__x86_64__) || defined(__i386__) || defined(__GNUC__)
+HOST_SEEN = yes
+#endif
+#ifdef DefaultOSMajorVersion
+HOST_UNAME = DefaultOSMajorVersion
+#endif
+#include INCLUDE_IMAKEFILE
+EOF
+printf 'all:\n\t@echo built\n' > "$T/im/Imakefile"
+check "imake: writes a Makefile" sh -c 'cd "$1" && "$2/imake" -I. -TImake.tmpl -f Imakefile -s Makefile' sh "$T/im" "$bin"
+check "imake: the config sees AMIX, SVR4 and m68k" \
+	sh -c 'grep -q "^AMIX_SEEN = yes" "$1" && grep -q "^SVR4_SEEN = yes" "$1" && grep -q "^M68K_SEEN = yes" "$1"' sh "$T/im/Makefile"
+check "imake: and none of the build host's defines or its uname" \
+	sh -c '! grep -q "HOST_SEEN\|HOST_UNAME" "$1"' sh "$T/im/Makefile"
+
+# --- makedepend ---------------------------------------------------------------------
+# a stand-in target compiler: its sysroot, include directories and defines
+sr=$T/md/sysroot
+mkdir -p "$sr/usr/include" "$T/md/inc" "$T/md/fixed" "$T/md/src"
+: > "$sr/usr/include/amixonly.h"
+: > "$sr/usr/include/stdio.h"
+: > "$T/md/fixed/limits.h"
+cat > "$T/md/cc" <<EOF
+#!/bin/sh
+case "\$*" in
+*-dM*) printf '#define AMIX 1\n#define m68k 1\n#define __GNUC__ 14\n#define __VERSION__ "14.2.0"\n#define __has_x(x) 1\n' ;;
+*-print-sysroot*) echo "$sr" ;;
+*-print-file-name=include-fixed*) echo "$T/md/fixed" ;;
+*-print-file-name=include*) echo "$T/md/inc" ;;
+esac
+EOF
+chmod 755 "$T/md/cc"
+cat > "$T/md/src/a.c" <<'EOF'
+#include <stdio.h>
+#include <limits.h>
+#ifdef AMIX
+#include <amixonly.h>
+#endif
+#ifdef linux
+#include <linuxonly.h>
+#endif
+#include "local.h"
+EOF
+: > "$T/md/src/local.h"
+: > "$T/md/src/Makefile"
+check "makedepend: runs with the target compiler's view" \
+	sh -c 'cd "$1" && AMIX_MAKEDEPEND_CC="$2" "$3/makedepend" -f Makefile -- -I. -- a.c' sh "$T/md/src" "$T/md/cc" "$bin"
+check "makedepend: the sysroot's and the compiler's headers, the target's defines" \
+	sh -c 'grep -q "$1/usr/include/stdio.h" "$3" && grep -q "$1/usr/include/amixonly.h" "$3" && grep -q "$2/limits.h" "$3" && grep -q "local.h" "$3"' sh "$sr" "$T/md/fixed" "$T/md/src/Makefile"
+check "makedepend: nothing of the build host's /usr/include or its defines" \
+	sh -c '! grep -q " /usr/include\|linuxonly" "$1"' sh "$T/md/src/Makefile"
+check "makedepend: no target compiler is refused" \
+	sh -c 'cd "$1" && ! env -u AMIX_MAKEDEPEND_CC -u AMIX_GCC14_CC "$2/makedepend" -f Makefile a.c' sh "$T/md/src" "$bin"
+
+# --- bdftopcf, mkfontdir -----------------------------------------------------------
+mkdir -p "$T/font"
+cat > "$T/font/t.bdf" <<'EOF'
+STARTFONT 2.1
+FONT -amix-test-medium-r-normal--8-80-75-75-c-80-iso8859-1
+SIZE 8 75 75
+FONTBOUNDINGBOX 8 8 0 -1
+STARTPROPERTIES 2
+FONT_ASCENT 7
+FONT_DESCENT 1
+ENDPROPERTIES
+CHARS 2
+STARTCHAR A
+ENCODING 65
+SWIDTH 1000 0
+DWIDTH 8 0
+BBX 8 8 0 -1
+BITMAP
+18
+24
+42
+42
+7E
+42
+42
+00
+ENDCHAR
+STARTCHAR B
+ENCODING 66
+SWIDTH 1000 0
+DWIDTH 8 0
+BBX 8 8 0 -1
+BITMAP
+7C
+42
+7C
+42
+42
+42
+7C
+00
+ENDCHAR
+ENDFONT
+EOF
+check "bdftopcf: converts a BDF" "$bin/bdftopcf" -o "$T/font/t.pcf" "$T/font/t.bdf"
+check "bdftopcf: the same bytes on a second run" \
+	sh -c '"$1" -o "$2/t2.pcf" "$2/t.bdf" && cmp "$2/t.pcf" "$2/t2.pcf"' sh "$bin/bdftopcf" "$T/font"
+# the first table's format word (PCF: little-endian table of contents, each
+# table's own format word first): byte order MSB (bit 2), bit order MSB
+# (bit 3), glyph pad 4 bytes (bits 0-1 = 2)
+check "bdftopcf: Amix's layout, MSB first and glyphs padded to 4 bytes" \
+	python3 -I -c '
+import struct, sys
+b = open(sys.argv[1], "rb").read()
+assert b[:4] == b"\x01fcp", b[:4]
+n, = struct.unpack_from("<I", b, 4)
+for i in range(n):
+    typ, fmt, size, off = struct.unpack_from("<IIII", b, 8 + 16 * i)
+    if typ == 1 << 3:	# PCF_BITMAPS
+        f, = struct.unpack_from("<I", b, off)
+        assert f & 4 and f & 8 and f & 3 == 2, hex(f)
+        break
+else:
+    raise SystemExit("no bitmaps table")
+' "$T/font/t.pcf"
+check "bdftopcf: the reference bytes of this font" \
+	sh -c '[ "$(sha256sum < "$1" | cut -c1-64)" = "$2" ]' sh "$T/font/t.pcf" \
+	"$(cat "$here/expect/t.pcf.sha256")"
+rm -f "$T/font/t2.pcf" "$T/font/t.bdf"
+check "mkfontdir: the font's fonts.dir line" \
+	sh -c '"$1" "$2" && [ "$(cat "$2/fonts.dir")" = "1
+t.pcf -amix-test-medium-r-normal--8-80-75-75-c-80-iso8859-1" ]' sh "$bin/mkfontdir" "$T/font"
+
+# --- amix-xcpp -------------------------------------------------------------------------
+cat > "$T/res" <<'EOF'
+#ifdef m68k
+M: yes
+#endif
+#ifdef unix
+U: yes
+#endif
+#if defined(_STDC_PREDEF_H) || defined(__STDC_HOSTED__)
+host: yes
+#endif
+#if defined(linux) || defined(__linux__) || defined(__x86_64__) || defined(__GNUC__) || defined(__STDC__)
+host: yes
+#endif
+EOF
+check "amix-xcpp: the stock cpp's m68k and unix, none of the host's" \
+	sh -c '"$1" "$2" > "$2.i" && grep -q "^M: yes" "$2.i" && grep -q "^U: yes" "$2.i" && ! grep -q "^host:" "$2.i"' sh "$bin/amix-xcpp" "$T/res"
+
+# --- gencat -----------------------------------------------------------------------------
+mkdir -p "$T/gc"
+check "gencat: -m writes the reference bytes" \
+	sh -c 'cd "$1" && "$2" -m test.cat.m-mode "$3/tests/test.msg" && cmp test.cat.m-mode "$3/tests/expect/test.cat.m-mode"' sh "$T/gc" "$bin/gencat" "$ht/gencat"
+check "gencat: the default format writes the reference catfile and catfile.m" \
+	sh -c 'cd "$1" && "$2" test.cat "$3/tests/test.msg" && cmp test.cat "$3/tests/expect/test.cat" && cmp test.cat.m "$3/tests/expect/test.cat.m"' sh "$T/gc" "$bin/gencat" "$ht/gencat"
+
+echo "test-hosttools: $pass/$((pass + fail)) passed"
+[ $fail = 0 ]

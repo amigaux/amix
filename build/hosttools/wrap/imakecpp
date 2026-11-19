@@ -1,0 +1,9 @@
+#!/bin/sh
+# imakecpp: the cpp the shared imake runs (build/hosttools).
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# The build host's cpp with -undef, -nostdinc and -U__STDC_HOSTED__: none
+# of its own defines (linux, unix,
+# __x86_64__, ...) reach the config files, only what imake passes.
+exec "${AMIX_HOST_CPP:-cpp}" -undef -nostdinc -U__STDC_HOSTED__ "$@"

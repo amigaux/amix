@@ -15,8 +15,8 @@ repositories; nothing here is vendored.
 Each pin is one line, `<repository URL> <full commit hash>`, the same format
 as `kernel/port/port.pin`.
 
-gcc14-cross-amix is pinned in the organisation's fork, on the branch
-`upstream-58130fe-plus`: Antti Sokero's upstream at `58130fe` plus the
+gcc14-cross-amix is pinned in the organisation's fork. Its branch
+`upstream-58130fe-plus` is Antti Sokero's upstream at `58130fe` plus the
 commits on their way to it: the runtime built for the whole 68020–68060 range
 so it also runs on a 68881/68882 (and a check that it does), a refusal of a
 sysroot without `stdint.h`, and shared libraries: `gcc -shared`,
@@ -25,8 +25,11 @@ program's start-up, a binutils patch so gas keeps a PIC relocation
 against an exported symbol (a library's pointer to its own exported data can
 then be bound to the program's copy), and libamixrt.so.1, the runtime a
 shared library needs, which the image also copies to the sysroot's
-`usr/lib`, where the box has it. Release 1.1 pins that
-branch; the development line pins the fork's `next`, which adds two GCC
+`usr/lib`, where the box has it. The release line pins the branch
+`release-1.1`: the fork's `1.1` tag (the commit amix 1.1 was built with) plus
+its 1.1.x fixes, today ld putting the library names first in `.dynstr`, where
+AMIX's runtime linker reads them, and two checks (`check-dynstr-order.py`,
+`check-got-addend.py`). The development line pins the fork's `next`, which adds two GCC
 patches that `build-cross.sh` applies to the release: upstream's fix for GCC
 PR target/126121 (`bset`/`bclr` on a byte in memory with a bit number of 8 or
 more changed bit `n & 7`, where C changes nothing) and a guard against the
@@ -135,11 +138,40 @@ needs a login to the registry with a token that may write packages.
 | `/opt/amix/gcc14-cross-amix/build/prefix/bin/m68k-elf-*` | GCC 14 |
 | `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`, and amix-system's absolute links into `usr/amiga` and `usr/ucblib` (`usr/lib/libscreen.so`, `usr/include/amiga`, `usr/ccs/lib/libdbm.a`, ...) made relative by `sysroot-links`, so they resolve there; `build/sysroot` links to it |
 | `/opt/amix/amix-system/usr` | the AMIX root both were built from |
+| `/opt/amix/host/bin/rpcgen` | rpcgen, built from the source distfile `rpcgen.distfile` (rpcsvc-proto) |
 | `/opt/amix/TOOLCHAIN.sha256` | the hash list |
 | `/opt/amix/PINS/*.pin` | the pins it was built from |
 
 `GCA` and `G14` are set in the image's environment, and both toolchains are
-on `PATH`.
+on `PATH`, with `/opt/amix/host/bin`.
+
+### Tcl and OpenSP
+
+CDE builds its man pages and help volumes through its DocBook chain, which
+needs a host Tcl (`/usr/lib/tcl8.6/tclConfig.sh`, the headers and the
+library) and OpenSP's `onsgmls`. They are Ubuntu's `tcl8.6`, `tcl8.6-dev` and
+`opensp` from the same archive snapshot as every other host package, so
+`SNAPSHOT` pins their versions. They write nothing Amix reads as a binary
+format (CDE's own `instant` is built by its recipe), so the snapshot's
+packages serve, where rpcgen's output is compiled into Amix programs. They are
+installed in the last stage, after the toolchains are built, so the
+toolchains' builds never see them and keep their layers.
+
+### rpcgen
+
+rpcgen is built in the image from rpcsvc-proto's release tarball, pinned in
+`rpcgen.distfile` and fetched by `container-build.sh` like the base packages,
+not taken from Ubuntu: Amix code is compiled from what it writes, so its
+version is ours to choose. Its output is written for glibc; `test-rpcgen
+IMAGE` checks that it builds for Amix. It runs rpcgen on
+`tests/rpcgen/amixtest.x` in both forms, socket-style (`-b`, the default) and
+SVR4 TI-RPC (`-5`), compiles the client, server and XDR files with gcc14
+against the sysroot and links them against `libnsl`. What the compile needs:
+`-include` of `build/pkg/common/gcc14/amix-decls.h` and `amix-rpcgen.h`
+(`AMIX_GCC14_DECLS`, `AMIX_GCC14_RPCGEN` in a recipe), and
+`-Wno-unused-variable`. Link with `-lnsl`, or with `-lsocket -lnsl` for the
+socket-style form. `hyper` does not work: Amix's libnsl has no 64-bit XDR
+routine.
 
 `toolchain/check-image` compares `/opt/amix/PINS` with the checkout's
 `toolchain/*.pin` (`toolchain/check-image IMAGE` runs it in that image).

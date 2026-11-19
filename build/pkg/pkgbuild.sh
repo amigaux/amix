@@ -54,6 +54,11 @@
 # sha256 after it; nothing may be compiled, every ELF of the payload must be
 # listed, and the listed ones are gated but never stripped.
 #
+# The shared host tools (build/hosttools: gencat, bdftopcf, mkfontdir, imake,
+# makedepend) go first on PATH, and hosttools.sh refuses a build that ran the
+# build host's own copies (PATH before the build and after the stage, the
+# absolute paths in the build's logs).
+#
 # Outputs: $AMIX_BUILD_ROOT/<NAME>/{src,work,dest,pkgwork,*.log,BUILD.txt}
 # and $AMIX_BUILD_ROOT/pkg/<PKG>-<VERSION>-<PKGREV>.pkg.
 
@@ -81,6 +86,7 @@ else
 	LAYOUT=amix
 	AMIX_TOP=$TOP AMIX_PKG_COMMON=$COMMON
 	. "$PKGDIR/layout.sh"
+	. "$PKGDIR/hosttools.sh"
 fi
 
 # --- package.sh -----------------------------------------------------------------
@@ -173,6 +179,8 @@ export HERE BUILD TREE DEST
 
 echo "=== $NAME $PKGVERSION ($PKG, $CATEGORY, set $SET, style $STYLE) ==="
 amix_env_banner
+# the shared host tools (build/hosttools) first on PATH
+[ "$LAYOUT" != amix ] || amix_hosttools_setup || exit 1
 echo
 mkdir -p "$SRC" "$WORKDIR" "$PKGOUT"
 
@@ -281,6 +289,7 @@ fi
 echo
 
 cd "$TREE"
+[ "$LAYOUT" != amix ] || amix_gate_hosttools_path "before the build" || exit 1
 # --- 3. configure (the style's) ------------------------------------------------------
 style_configure
 
@@ -365,6 +374,11 @@ for e in $STOCK_PATCHED; do
 done
 rm -rf "${DEST:?}"; mkdir -p "${DEST:?}"
 stage
+# the hooks ran in this shell: PATH is still theirs; the logs show the rest
+if [ "$LAYOUT" = amix ]; then
+	amix_gate_hosttools_path "after the stage" || exit 1
+	amix_gate_hosttools_logs "$BUILD" || exit 1
+fi
 # and the payload's, the listed sha256 of an ELF object
 for e in $STOCK_PATCHED; do
 	p=${e%=*}
