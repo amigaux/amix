@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — host TI-RPC in the build container (97e5d71f)
+
+The build container installs host TI-RPC (libtirpc-dev, libtirpc3t64 1.3.4) from the pinned snapshot, for the host ToolTalk CDE builds to run tt_type_comp; types.xdr is XDR, so its bytes do not depend on the host. No toolchain bytes change (TOOLCHAIN.sha256 unchanged).
+
 ## 2026-11-19 — rpcgen, Tcl and OpenSP in the build container; gcc14 pin to release-1.1 c806d49 (5d2eb1c4, 6aa74d06, e692736a)
 
 rpcgen from rpcsvc-proto 1.4.4 (rpcgen.distfile) in /opt/amix/host/bin; test-rpcgen builds its -b and -5 output for Amix (amix-rpcgen.h, -Wno-unused-variable; no hyper, libnsl has no 64-bit XDR). tcl8.6, tcl8.6-dev and opensp come from the snapshot, for CDE's DocBook chain. gcc14-cross-amix.pin is c806d49 (release-1.1: 1.1 plus library names first in .dynstr), gcc14-cross-amix.tree ceb1ce69; among the pinned files only libamixrt.so.1 changes (0ae586a7). Linked programs differ from 1.1 in .dynstr order only; static archives are unchanged.
