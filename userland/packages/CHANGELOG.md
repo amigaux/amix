@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — regex 3.8-1, new (d1b71c2a)
+
+Henry Spencer's POSIX regular expression library (alpha3.8, unaltered) under /opt/amix: libregex.a and regex.h provide regcomp, regexec, regerror and regfree, which Amix's libc lacks, with regex(3) and regex(7). Upstream's regression tests pass on both kernel lines. CDE links it.
+
 ## 2026-11-19 — motif 2.3.8-1, new (21df6e81)
 
 The Open Group's Motif 2.3.8 under /opt/amix/X11R6, built against x11r6.3: static libXm, libMrm and libUil with headers, mwm with system.mwmrc, uil, xmbind and the manual pages. Printing (XmPrintShell through X11R6.3's libXp) is on; Xft, UTF-8, PNG and JPEG are off, as X11R6.3 has none of them. Three patches: wml without the .wmd target in all, TextF without wchar.h, the manual pages' NAME lines.

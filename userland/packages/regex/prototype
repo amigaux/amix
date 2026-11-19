@@ -1,0 +1,37 @@
+#
+# prototype -- Henry Spencer's regex library (alpha3.8) under /opt/amix.
+# Authored, not generated; build.sh's stage puts these paths in the staged
+# tree and pkgmk -r resolves each one there.  No install scripts; every
+# basename is at most 14 bytes.
+#
+i pkginfo
+#
+# --- the shared add-on prefix ----------------------------------------------
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+#
+# --- the static library and its header -------------------------------------
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libregex.a 0644 root bin
+d none /opt/amix/include 0755 root sys
+f none /opt/amix/include/regex.h 0644 root bin
+#
+# --- manual pages: regex(3) with one alias per call, and regex(7) ----------
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/3 0755 root sys
+f none /opt/amix/man/3/regex 0644 root bin
+f none /opt/amix/man/3/regcomp 0644 root bin
+f none /opt/amix/man/3/regexec 0644 root bin
+f none /opt/amix/man/3/regerror 0644 root bin
+f none /opt/amix/man/3/regfree 0644 root bin
+d none /opt/amix/man/7 0755 root sys
+f none /opt/amix/man/7/regex 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/regex 0644 root bin
+#
+# --- the licence (its conditions travel with the package) and upstream notes
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/regex 0755 root sys
+f none /opt/amix/doc/regex/COPYRIGHT 0644 root bin
+f none /opt/amix/doc/regex/README 0644 root bin
+f none /opt/amix/doc/regex/WHATSNEW 0644 root bin
