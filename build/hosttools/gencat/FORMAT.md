@@ -3,7 +3,9 @@
 What the AMIX 2.1c `gencat` writes, and what this host `gencat` writes
 byte for byte. The files in `tests/expect/` are the stock `gencat`'s output
 for `tests/test.msg`, run on AMIX 2.1c on an emulated machine (2026-11-19);
-this tool writes the same bytes. Every integer is 32 bits, big-endian. There is no padding
+this tool writes the same bytes. It does for CDE 2.5.3's `dtcalc.msg` too
+(578 messages, both formats), and refuses CDE's `dtpad.msg` as the stock
+tool does (one message over 1024 bytes). Every integer is 32 bits, big-endian. There is no padding
 and every byte is defined: the same input always gives the same output.
 
 ## Command line
@@ -27,9 +29,15 @@ and every byte is defined: the same input always gives the same output.
 - `gencat --dump catfile` is an extension of this host tool. It prints
   every message the way `catgets(3C)` returns it.
 
-Unlike the target tool, the host tool exits with status 1 when nothing was
-written because the source had errors, or on a usage error. The target
-tool exits 0 in both cases.
+**The one deliberate difference from the target tool: the exit status.**
+When the source has an error (an unmatched or unexpected quote, extra
+characters after the closing quote, a message longer than 1024 bytes),
+both tools print the same messages (`set 7 msg 9: Invalid message length`,
+`Unexpected line -- Skipped`, `<catfile> not updated`), write nothing and
+leave an existing catfile as it was. The target tool then exits 0, this
+one exits 1, so a build stops there instead of shipping without the
+catalogue. A usage error is exit 1 here too, 0 there. The bytes written are
+never affected.
 
 ## The "malloc" catalogue (`-m`)
 

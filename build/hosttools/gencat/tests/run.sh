@@ -116,6 +116,38 @@ EOF
 check "merge -m" merged.m-mode want.merge "format malloc sets 4"
 check "merge default" merged want.merge "format mkmsgs sets 12 strings 15"
 
+# a source error: the same messages as the target tool, nothing written, an
+# existing catfile left as it was; exit 1 here (0 on AMIX: FORMAT.md). The
+# message is 11 continued lines of 100 bytes, 1100 bytes, as CDE's dtpad.msg
+# has one, which the target tool refuses the same way
+awk 'BEGIN { print "1 short"; printf "2 "
+	for (l = 0; l < 11; l++) { for (n = 0; n < 100; n++) printf "x"; print (l < 10 ? "\\" : "") }
+	print "3 after" }' >toolong.msg
+for mode in -m ""; do
+	rm -f toolong.cat toolong.cat.m
+	rc=0
+	"$tmp/gencat" $mode toolong.cat toolong.msg 2>toolong.err || rc=$?
+	if [ $rc -eq 1 ] && grep -q "set 1 msg 2: Invalid message length" toolong.err &&
+	   grep -q "toolong.cat not updated" toolong.err &&
+	   [ ! -e toolong.cat ] && [ ! -e toolong.cat.m ]; then
+		echo "ok   too long${mode:+ $mode}: exit 1, nothing written"
+	else
+		echo "FAIL too long${mode:+ $mode}: exit $rc"; cat toolong.err; fail=1
+	fi
+	if [ -n "$mode" ]; then
+		cp test.cat.m-mode toolong.cat; ref=test.cat.m-mode
+	else
+		cp test.cat toolong.cat; cp test.cat.m toolong.cat.m; ref=test.cat
+	fi
+	"$tmp/gencat" $mode toolong.cat toolong.msg 2>/dev/null && rc=0 || rc=$?
+	if [ $rc -eq 1 ] && cmp -s "$ref" toolong.cat &&
+	   { [ -n "$mode" ] || cmp -s test.cat.m toolong.cat.m; }; then
+		echo "ok   too long${mode:+ $mode}: an existing catfile is left as it was"
+	else
+		echo "FAIL too long${mode:+ $mode}: the existing catfile changed (exit $rc)"; fail=1
+	fi
+done
+
 if command -v sha256sum >/dev/null 2>&1; then
 	sha256sum test.cat.m-mode test.cat test.cat.m
 fi
