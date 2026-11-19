@@ -1,7 +1,9 @@
 # gencat catalogue formats
 
 What the AMIX 2.1c `gencat` writes, and what this host `gencat` writes
-byte for byte. Every integer is 32 bits, big-endian. There is no padding
+byte for byte. The files in `tests/expect/` are the stock `gencat`'s output
+for `tests/test.msg`, run on AMIX 2.1c on an emulated machine (2026-11-19);
+this tool writes the same bytes. Every integer is 32 bits, big-endian. There is no padding
 and every byte is defined: the same input always gives the same output.
 
 ## Command line
@@ -103,12 +105,14 @@ form feed and carriage return.
 - Message line: a decimal number (1..32767), then:
   - a newline right after the number deletes the message;
   - spaces only, then the end of the line, stores an empty message;
-  - otherwise all spaces after the number are skipped. With quoting off,
-    one more white-space character (for example a tab) is skipped as well.
-    The rest of the line is the text.
+  - otherwise, with quoting off, the one white-space character after the
+    number (the separator: a space or a tab) is skipped, and the rest of
+    the line is the text, further spaces included (`2  text` stores
+    ` text`).
 - With quoting on, white space before the opening quote is skipped. After
   the closing quote only white space may follow. Text that does not start
-  with the quote character is taken as it is, but a bare quote character
+  with the quote character is taken as it is from the separator on, so it
+  keeps the separator (`6 text` stores ` text`), and a bare quote character
   inside it is an error. `\` followed by the quote character gives that
   character.
 - Escapes: `\n \t \v \b \r \f \\ \" \'`. `\` followed by digits is octal,

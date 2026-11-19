@@ -10,6 +10,8 @@ host `mkmsgs` is needed. Formats and source syntax: [FORMAT.md](FORMAT.md).
     ./gencat out.cat in.msg           # out.cat + out.cat.m
     ./gencat --dump out.cat           # print every message
 
-Test: `sh tests/run.sh`. The files in `tests/expect/` were written by this
-tool. They are the byte reference until they are confirmed against
-`gencat` running on AMIX.
+Test: `sh tests/run.sh`. The files in `tests/expect/` were written by the
+stock `gencat` on AMIX 2.1c (on an emulated machine) from `tests/test.msg`,
+and this tool writes the same bytes. Before that run they were this tool's
+own output, which differed in one rule: the white space after a message
+number (see FORMAT.md, "Message line").

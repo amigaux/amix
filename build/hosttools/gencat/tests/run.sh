@@ -61,11 +61,11 @@ cat >want <<'EOF'
 2 9 ""
 2 12 "Gap before me"
 5 1 "Tab separator"
-5 2 "Two spaces after the number"
+5 2 " Two spaces after the number"
 5 3 "Quoted with trailing spaces   "
 5 4 ""
 5 5 "Quoted "inner" quotes"
-5 6 "Unquoted after quote is set"
+5 6 " Unquoted after quote is set"
 5 7 "Quote char "off" again"
 12 1 "Last set"
 EOF

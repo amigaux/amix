@@ -646,13 +646,16 @@ static void cat_msg_build(const char *fname, FILE *fp)
 			del_msg(curset, (int32_t)nr);
 			continue;
 		}
-		if ((j = skip_blanks(i)) < 0) {
+		if (skip_blanks(i) < 0) {
 			/* number and separator only: empty message */
 			add_msg(curset, (int32_t)nr, 1,
 			    (const unsigned char *)"");
 			continue;
 		}
-		n = msg_conv(fname, curset, (int32_t)nr, fp, j, quote);
+		/* the text starts at the separator, not after the blanks:
+		   msg_conv eats the one separator (no quote) or skips to the
+		   quote, and unquoted text keeps the rest of the white space */
+		n = msg_conv(fname, curset, (int32_t)nr, fp, i, quote);
 		if (n < 0) {
 			no_output = 1;
 			continue;
