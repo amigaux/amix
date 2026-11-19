@@ -14,4 +14,11 @@
 # the words m68k and unix in the text become 1.
 # xrdb's own run-time defines (SERVERHOST, WIDTH, COLOR, ...) are the
 # caller's to give, as -D options.
-exec "${AMIX_HOST_CPP:-cpp}" -traditional -undef -nostdinc -U__STDC_HOSTED__ -Dm68k -Dunix "$@"
+
+# cpp warns on -U__STDC_HOSTED__ at every run, unconditionally (no -W option
+# turns that one off, and -w would hide every other warning): that one line is
+# dropped from stderr, the rest passes, and cpp's exit status is kept.
+pat='^<command-line>: warning: undefining .*__STDC_HOSTED__'
+{ st=$( { { "${AMIX_HOST_CPP:-cpp}" -traditional -undef -nostdinc -U__STDC_HOSTED__ -Dm68k -Dunix "$@" 3>&- 4>&-; echo $? >&4; } 2>&1 1>&3 |
+	{ grep -v "$pat" || :; } >&2 3>&- 4>&-; } 4>&1 ); } 3>&1
+exit "${st:-1}"

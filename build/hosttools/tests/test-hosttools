@@ -15,7 +15,8 @@
 #   bdftopcf    a PCF in the Amix layout (MSB first, glyphs padded to 4
 #               bytes), the same bytes on every run and every host
 #   mkfontdir   the fonts.dir line of that font
-#   amix-xcpp   the stock Amix cpp's predefines (m68k, unix) and no others
+#   amix-xcpp   the stock Amix cpp's predefines (m68k, unix) and no others,
+#               with a quiet stderr (imakecpp too)
 #   gencat      the byte references of gencat/tests/expect
 # Exit 77 (a skip, for run-selftests) when the tarball cannot be had.
 # Prints "N/N passed".
@@ -202,6 +203,10 @@ host: yes
 EOF
 check "amix-xcpp: the stock cpp's m68k and unix, none of the host's" \
 	sh -c '"$1" "$2" > "$2.i" && grep -q "^M: yes" "$2.i" && grep -q "^U: yes" "$2.i" && ! grep -q "^host:" "$2.i"' sh "$bin/amix-xcpp" "$T/res"
+check "amix-xcpp, imakecpp: nothing on stderr (no warning about -U__STDC_HOSTED__)" \
+	sh -c '"$1" "$3" > /dev/null 2> "$3.err" && [ ! -s "$3.err" ] && "$2" "$3" > /dev/null 2> "$3.err" && [ ! -s "$3.err" ]' sh "$bin/amix-xcpp" "$T/ht/libexec/imakecpp" "$T/res"
+check "amix-xcpp: cpp's errors and exit status come through" \
+	sh -c '! "$1" "$2.none" > /dev/null 2> "$2.err" && grep -q "No such file" "$2.err"' sh "$bin/amix-xcpp" "$T/res"
 
 # --- gencat -----------------------------------------------------------------------------
 mkdir -p "$T/gc"
