@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — motif 2.3.8-1, new (21df6e81)
+
+The Open Group's Motif 2.3.8 under /opt/amix/X11R6, built against x11r6.3: static libXm, libMrm and libUil with headers, mwm with system.mwmrc, uil, xmbind and the manual pages. Printing (XmPrintShell through X11R6.3's libXp) is on; Xft, UTF-8, PNG and JPEG are off, as X11R6.3 has none of them. Three patches: wml without the .wmd target in all, TextF without wchar.h, the manual pages' NAME lines.
+
 ## 2026-11-19 — rebuilt with gcc14-cross-amix c806d49 (71a0ee56)
 
 gcc14-cross-amix release-1.1 (c806d49) lists library names first in .dynstr. New revisions of the 23 packages that link programs or shared objects: acompat 0.1-10, amix-benchmark-gcc14 1.3-10, bzip2 1.0.8-5, cdfs 1.1.0-2, coreutils 5.2.1-6, diffutils 2.8.1-5, dropbear 2026.94-5, grep 2.5.1a-10, gzip 1.3.12-10, heirloom-tar 070715-2, less 704-10, libzz9k 2.9.1-3, make 3.81-10, patch 2.5.9-9, prngd 0.9.29-5, python3 3.11.18-5, rdate 1.11-3, rsync 3.1.3-4, tar 1.14-11, vim 9.1.0000-5, x11r6.3 6.3-12, xztop 1.1.1-2, zlib 1.2.13-10. ncurses and pth (static archives only) are unchanged.
