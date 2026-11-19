@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — rpcgen, Tcl and OpenSP in the build container; gcc14 pin to release-1.1 c806d49 (5d2eb1c4, 6aa74d06, e692736a)
+
+rpcgen from rpcsvc-proto 1.4.4 (rpcgen.distfile) in /opt/amix/host/bin; test-rpcgen builds its -b and -5 output for Amix (amix-rpcgen.h, -Wno-unused-variable; no hyper, libnsl has no 64-bit XDR). tcl8.6, tcl8.6-dev and opensp come from the snapshot, for CDE's DocBook chain. gcc14-cross-amix.pin is c806d49 (release-1.1: 1.1 plus library names first in .dynstr), gcc14-cross-amix.tree ceb1ce69; among the pinned files only libamixrt.so.1 changes (0ae586a7). Linked programs differ from 1.1 in .dynstr order only; static archives are unchanged.
+
 ## 2026-11-16 — images built on amix-system 988b0f8; gcc-cross-amix's address (6a5874b9, 87a674fe)
 
 gcc-cross-amix.pin names github.com/amigaux/gcc-cross-amix (commit 33ebadcf unchanged). The GCC 14 sysroot holds the stock usr/sbin/shutdown, so gcc14-cross-amix.tree is 174b16e0. image.ref names the published images built from this: dist @sha256:2df4aad2…, media @sha256:bee8f2d0….
