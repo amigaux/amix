@@ -6,4 +6,11 @@
 # The build host's cpp with -undef, -nostdinc and -U__STDC_HOSTED__: none
 # of its own defines (linux, unix,
 # __x86_64__, ...) reach the config files, only what imake passes.
-exec "${AMIX_HOST_CPP:-cpp}" -undef -nostdinc -U__STDC_HOSTED__ "$@"
+
+# cpp warns on -U__STDC_HOSTED__ at every run, unconditionally (no -W option
+# turns that one off, and -w would hide every other warning): that one line is
+# dropped from stderr, the rest passes, and cpp's exit status is kept.
+pat='^<command-line>: warning: undefining .*__STDC_HOSTED__'
+{ st=$( { { "${AMIX_HOST_CPP:-cpp}" -undef -nostdinc -U__STDC_HOSTED__ "$@" 3>&- 4>&-; echo $? >&4; } 2>&1 1>&3 |
+	{ grep -v "$pat" || :; } >&2 3>&- 4>&-; } 4>&1 ); } 3>&1
+exit "${st:-1}"
