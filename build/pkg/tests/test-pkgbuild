@@ -141,7 +141,7 @@ def main():
         amix = os.path.join(tmp, "amix")
         dst = os.path.join(amix, "build", "pkg")
         os.makedirs(dst)
-        for f in ("pkgbuild.sh", "pkgmeta", "layout.sh"):
+        for f in ("pkgbuild.sh", "pkgmeta", "layout.sh", "hosttools.sh"):
             shutil.copy2(os.path.join(PKG, f), dst)
         shutil.copytree(os.path.join(PKG, "styles"), os.path.join(dst, "styles"))
         os.makedirs(os.path.join(amix, "toolchain"))
@@ -250,6 +250,26 @@ build() {
 	echo "foo.c:1: warning: implicit declaration of function 'bar'" >> "$BUILD/make.log"
 }
 """)
+        # the shared host tools: a stand-in set, and a stand-in build host's
+        # own copies outside the build
+        htbin = os.path.join(tmp, "hosttools", "bin")
+        hostbin = os.path.join(tmp, "hostbin")
+        for t in ("gencat", "bdftopcf", "mkfontdir", "imake", "makedepend"):
+            write(os.path.join(htbin, t),
+                  "#!/bin/sh\necho shared-%s >> \"$BUILD/tools.used\"\n" % t, 0o755)
+            write(os.path.join(hostbin, t),
+                  "#!/bin/sh\necho host-%s >> \"$BUILD/tools.used\"\n" % t, 0o755)
+        package(pkgs, "htok", "hooks", src={"greet.txt": "x\n"},
+                build="build() {\n\tcp greet.txt out.txt\n"
+                      "\techo \"gencat x.cat x.msg\" >> \"$BUILD/make.log\"\n"
+                      "\tgencat x.cat x.msg\n\tmkfontdir .\n}\n")
+        package(pkgs, "hthost", "hooks", src={"greet.txt": "x\n"},
+                build="build() {\n\tcp greet.txt out.txt\n"
+                      "\techo \"%s/gencat x.cat x.msg\" >> \"$BUILD/make.log\"\n"
+                      "\t%s/gencat x.cat x.msg\n}\n" % (hostbin, hostbin))
+        package(pkgs, "htpath", "hooks", src={"greet.txt": "x\n"},
+                build="build() {\n\tcp greet.txt out.txt\n"
+                      "\tPATH=%s:$PATH\n\tbdftopcf -o x.pcf x.bdf\n}\n" % hostbin)
         # TOOLCHAIN=none: a script-only recipe; refused when its build compiles
         # (a compile line in make.log) or its payload holds an object
         package(pkgs, "script", "hooks", "TOOLCHAIN=none\n", src={"greet.txt": "x\n"},
@@ -463,6 +483,7 @@ stage() {
         base = {k: v for k, v in os.environ.items()
                 if not k.startswith(("AMIX_", "GIT_")) and k not in
                 ("GCA", "G14", "TOOLCHAIN", "REPO")}
+        base.update(AMIX_HOSTTOOLS_BIN=htbin)
         base.update(STUB_LOG=log, STUB_G14_COMMIT=g14_pin, LC_ALL="C",
                     SOURCE_DATE_EPOCH="1111111111")
 
@@ -642,6 +663,23 @@ stage() {
         rc, out = build("implicit")
         check("refused: the strict gate reads the hook's make.log",
               rc != 0 and "implicit declaration" in out, out)
+
+        rc, out = build("htok")
+        used = os.path.join(out_pkg, "htok", "tools.used")
+        check("host tools: a recipe that runs gencat and mkfontdir by name gets the shared set's",
+              rc == 0 and os.path.isfile(used) and read(used) == "shared-gencat\nshared-mkfontdir\n"
+              and "host tools gate (logs)" in out, out)
+        rc, out = build("hthost")
+        check("host tools: refused when the build runs the build host's gencat by its path",
+              rc != 0 and "the build ran the build host's own tools" in out
+              and "make.log:" in out and hostbin + "/gencat" in out, out)
+        rc, out = build("htpath")
+        check("host tools: refused when a hook puts the build host's tools first on PATH",
+              rc != 0 and "after the stage: the build host's tools come before the shared set" in out
+              and "bdftopcf is " + hostbin + "/bdftopcf" in out, out)
+        rc, out = build("htok", AMIX_HOSTTOOLS_BIN=os.path.join(tmp, "nohosttools"))
+        check("host tools: refused when the shared set is not there",
+              rc != 0 and "AMIX_HOSTTOOLS_BIN is not a directory" in out, out)
 
         rc, out = build("script")
         check("TOOLCHAIN=none: a script-only recipe builds",

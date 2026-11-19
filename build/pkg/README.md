@@ -9,6 +9,7 @@ so each fact about a package is written in one place.
 | `pkgbuild.sh` | the driver: fetch (or copy the source in the tree), patch, configure and make (by style), the gates, stage, check the prototype, roll |
 | `styles/<STYLE>.sh` | the build styles: `configure` (`./configure --host`, then make), `make` (a plain Makefile, tools given on make's command line) and `hooks` (the recipe's own `build` hook) |
 | `layout.sh` | where the harness finds the toolchains, pkgtools and the build output in this checkout |
+| `hosttools.sh` | the shared host tools (`build/hosttools`) first on a recipe's `PATH`, and the gate that the recipe used them |
 | `common/` | the harness: environment, fetcher, gates and roll |
 | `pkgmeta` | checks `package.sh` and writes pkginfo, the catalog line, our catalog configuration lines and the index; also the one-version guard |
 | `stock-pages` | the page names of the stock man index (names only), for the man-page warning; `pkgmeta stock-pages <whatis>` writes it |
@@ -184,6 +185,19 @@ are in this checkout:
   makes one at the pin);
 - the output: `out/pkg` (ignored), or `AMIX_BUILD_ROOT` or
   `AMIX_GCC14_BUILD_ROOT` when set.
+
+- the host tools whose output Amix reads: `gencat`, `bdftopcf`, `mkfontdir`,
+  `imake` and `makedepend` come from `build/hosttools`, built from our
+  pinned sources (`AMIX_HOSTTOOLS_BIN` names a built set's `bin/`; unset,
+  `build/hosttools/build.sh` builds or reuses `out/hosttools`). Its `bin/`
+  goes first on `PATH`, so a recipe calls them by name. `hosttools.sh`
+  refuses a build in which one of them on `PATH` is not the shared set's,
+  before the build or after the stage (a hook that put another directory
+  first), or whose logs run the build host's copy by its absolute path (a
+  path outside the shared set and the build directory, to an executable on
+  this host). A tool the recipe builds in its own tree is not the host's.
+  [docs/build-tools.md](../../docs/build-tools.md) says which tools come from
+  the build container instead.
 
 `AMIX_PKG_COMMON` names another harness. An amix-packages `recipes/common`
 finds its repository and siblings itself, and the driver leaves it to do so.
