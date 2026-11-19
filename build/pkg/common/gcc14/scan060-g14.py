@@ -62,12 +62,15 @@ a stripped program can be the rest of .text, and the dump's lines would be
 read as instructions.
 
 --explain HITFILE: read scan060.py's output and say, for every hit address it
-lists, whether it lies inside a table sized here (data, not code).  Exit 1 if
+lists, whether it lies inside a table sized here (data, not code), at an odd
+address, or inside an instruction of the re-synced listing (a decode out of
+sync, either way).  Exit 1 if
 any hit is unexplained.  This is how the gcc14 gate keeps scan060.py as an
 independent decoder instead of dropping it.
 
 MIT, amix-packages.
 """
+import bisect
 import hashlib
 import os
 import re
@@ -970,16 +973,24 @@ def scan(tool, path):
             hits.append("0x%08x %s %s -- not implemented on the 68060" % (a, mn, ops))
     sized = {s for s, _e in skip}
     notes = [n for n in notes if int(re.match(r"^dispatch at 0x([0-9a-f]+)", n).group(1), 16) + 4 in sized]
-    return dict(insns=len(insns), tables=sorted(skip), problems=problems,
+    return dict(insns=len(insns), tables=sorted(skip), starts=sorted(starts), problems=problems,
                 desync=desync, hits=hits, total_long=total_long, notes=notes + knotes,
                 known=len(known))
 
 
-def explain(tables, hitfile):
-    """-> (all hit addresses, in-table, odd, unexplained).  A hit is data if
-    it lies inside a sized table; it is a decode artifact if its address is
-    odd (every 680x0 instruction starts on an even address, so a decode
-    starting at an odd one is out of sync by construction)."""
+def explain(tables, hitfile, starts):
+    """-> (all hit addresses, in-table, odd, mid, unexplained).  A hit is
+    data if it lies inside a sized table; it is a decode artifact if its
+    address is odd (every 680x0 instruction starts on an even address, so a
+    decode starting at an odd one is out of sync by construction), or if it
+    lies inside an instruction of this tool's re-synced listing, not at its
+    start: between two instruction starts at most 22 bytes apart (the
+    longest 680x0 instruction) with no table between them.  scan060.py
+    sizes a table up to its smallest positive offset, or not at all when
+    every offset is negative; it then decodes the last entries and the code
+    after them as one instruction and lands inside the next (CDE 2.5.3's
+    dtwm: `0068 01d8 23ef' read as an oriw, then the 0588 inside `movel
+    %sp@(36),0x803b0588' as a movepw)."""
     addrs = []
     for raw in open(hitfile, errors="replace"):
         m = re.match(r"^\s+([0-9a-f]{8})\s+<", raw)
@@ -987,8 +998,18 @@ def explain(tables, hitfile):
             addrs.append(int(m.group(1), 16))
     intab = [a for a in addrs if any(s <= a < e for s, e in tables)]
     odd = [a for a in addrs if a & 1 and a not in intab]
-    unexplained = [a for a in addrs if a not in intab and a not in odd]
-    return addrs, intab, odd, unexplained
+    mid = []
+    for a in addrs:
+        if a in intab or a in odd:
+            continue
+        i = bisect.bisect_left(starts, a)
+        if i == 0 or i == len(starts) or starts[i] == a:
+            continue
+        s, n = starts[i - 1], starts[i]
+        if n - s <= 22 and not any(t < n and s < e for t, e in tables):
+            mid.append(a)
+    unexplained = [a for a in addrs if a not in intab and a not in odd and a not in mid]
+    return addrs, intab, odd, mid, unexplained
 
 
 def main(argv):
@@ -1023,7 +1044,7 @@ def main(argv):
                       % (name, "; ".join(r["problems"] + r["desync"])[:300]))
                 rc = max(rc, 3)
                 continue
-            addrs, intab, odd, unexplained = explain(r["tables"], hitfile)
+            addrs, intab, odd, mid, unexplained = explain(r["tables"], hitfile, r["starts"])
             if not addrs:
                 print("  UNTRUSTWORTHY %s: %s names no hit to explain" % (name, hitfile))
                 rc = max(rc, 3)
@@ -1033,8 +1054,10 @@ def main(argv):
                 rc = max(rc, 1)
             else:
                 print("  explained %s: %d scan060.py hit(s) -- %d inside the %d sized switch tables and known "
-                      "stock data ranges (data), %d at odd addresses (decode out of sync)"
-                      % (name, len(addrs), len(intab), len(r["tables"]), len(odd)))
+                      "stock data ranges (data), %d at odd addresses (decode out of sync)%s"
+                      % (name, len(addrs), len(intab), len(r["tables"]), len(odd),
+                         ", %d inside an instruction of the re-synced listing (decode out of sync)" % len(mid)
+                         if mid else ""))
             continue
         if r["problems"] or r["desync"]:
             print("  UNTRUSTWORTHY %s:" % name)

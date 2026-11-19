@@ -28,6 +28,9 @@
 #     (the ways into a masked dispatch block; a bound branch after another
 #     conditional branch, the table read through an address register set to
 #     it) and still refuses each with the bound widened, moved or removed;
+#   - the D4 gate explains a scan060.py hit inside an instruction of the
+#     re-synced listing as a decode out of sync, not one at an instruction
+#     start;
 #   - scan060-g14.py takes a data object in .text as data and catches a real
 #     64-bit mulsl after it, where objdump -d's hex dump would hide it, and
 #     decodes only the executable sections of an unstripped shared library
@@ -607,6 +610,44 @@ for form in dsn cti; do
 	done
 done
 ok "scan060-g14.py sizes libstdc++'s d_special_name table (x54, by its bls ways in) and ctype<char>::is table (x65, the bound past a blt, the base moveal #T), catches a movep after each; widened, unbounded, other-register, narrower-than-mask, missing, wrong-base and base-rewritten bounds stay untrustworthy"
+
+# scan060.py's hits inside an instruction (CDE 2.5.3's dtwm, its dispatch,
+# table and the instruction after it copied from the binary): scan060.py
+# ends a table at the smallest positive word it meets before that end, and
+# the 0x0024 at T+0x24 is the displacement of `movel %sp@(36),0x803b0588'
+# (23ef 0024 803b 0588) at T+0x22, just after the 17-entry table.  It
+# resumes there, reads `0024 803b' as an orib and the 0588 inside the movel
+# as a movepw.  The gate explains that hit as a decode out of sync; a hit
+# named at an instruction start of the same program stays unexplained.
+mid_probe() {	# mid_probe <name>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l 4(%sp),%d2\n\tcmp.b #16,%d2\n\tbhi.w 9f\n\tand.l #255,%d2\n\tadd.l %d2,%d2\n"'
+		printf '%s\n' '	"\t.word 0x303b,0x2806\n\t.word 0x4efb,0x0002\n"'	# movew %pc@(T,%d2:l),%d0; jmp
+		printf '%s\n' '	"\t.word 0x0068,0x0068,0x01c8,0x0068,0x01b8,0x0068,0x0068,0x0068,0x01a8\n"'
+		printf '%s\n' '	"\t.word 0x0068,0x0068,0x0068,0x0068,0x0068,0x0068,0x0068,0x01d8\n"'
+		printf '%s\n' '	"\t.word 0x23ef,0x0024,0x803b,0x0588\n"'	# movel %sp@(36),0x803b0588
+		printf '%s\n' '	"\t.fill 0x200,2,0x4e71\n9:\trts\n.size swp,.-swp\n");'
+		printf '%s\n' 'int swp(int);'
+		printf '%s\n' 'int main(int c, char **v) { return swp(c); }'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -o "$T/$1" "$T/$1.c" || fail "the mid-instruction probe $1 did not build"
+}
+mid_probe sw-mid
+amix_pm_scan060 "$T/sw-mid" > "$T/sw-mid.hits" 2>&1 && fail "scan060.py found no hit in the mid-instruction probe: it tests nothing"
+grep 'movepw' "$T/sw-mid.hits" >/dev/null || fail "scan060.py's hit in the mid-instruction probe is no movepw: $(cat "$T/sw-mid.hits")"
+out=$(amix_g14_scan3 "$T/sw-mid" 2>&1) || fail "the D4 gate did not explain scan060.py's hit inside an instruction: $out"
+echo "$out" | grep '1 inside an instruction of the re-synced listing' >/dev/null ||
+	fail "the D4 gate explained the mid-instruction probe, but not as inside an instruction: $out"
+jt=$("$OBJDUMP" -d "$T/sw-mid" | awk '$2 == "4efb" && $3 == "0002" { sub(":", "", $1); print $1; exit }')
+[ -n "$jt" ] || fail "no dispatch in the mid-instruction probe"
+mv=$(printf '%08x' $((0x$jt + 4 + 0x22)))	# the movel just after the 17-entry table
+printf '    %s <swp+0x0>\tmovepw %%d2,%%a0@(12079)  -- movepw (not implemented on the 060)\n' "$mv" > "$T/sw-mid.start"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" --explain "$T/sw-mid.start" "$T/sw-mid"); then
+	fail "scan060-g14.py explained a hit at an instruction start: $out"
+fi
+echo "$out" | grep "UNEXPLAINED sw-mid: 1 of 1 .*$mv" >/dev/null || fail "scan060-g14.py on a hit at an instruction start: $out"
+ok "the D4 gate explains a scan060.py hit inside an instruction of the re-synced listing as a decode out of sync; a hit at an instruction start stays unexplained"
 
 # A sized data object in .text (values-Xa.o's _lib_version, which the period
 # toolchain links): objdump -d dumps it as hex up to the next symbol, and the
