@@ -65,7 +65,9 @@ build() {
 		printf 'int yylex(void);\nint main(void) { return yylex(); }\n' > "$BUILD/flmain.c"
 		$HOSTCC -c -o "$BUILD/flmain.o" "$BUILD/flmain.c" || exit 1
 		hostmake() { make "CC=$HOSTCC" AR=ar RANLIB=ranlib CFLAGS= X_CFLAGS= LIBS= LDFLAGS= "$@"; }
-		hostmake -C config/util makestrs || exit 1
+		# makestrs includes <X11/Xos.h>: X11R6.3's, as the build host
+		# need have no X headers (the build container has none)
+		hostmake -C config/util CPPFLAGS="-I$XROOT/include" makestrs || exit 1
 		hostmake -C tools/wml wmluiltok_LDADD="$BUILD/flmain.o" wml wmluiltok || exit 1
 		! file config/util/makestrs tools/wml/wml tools/wml/wmluiltok | grep m68k || exit 1
 		# the payload's directories, in the top Makefile's order (a SUBDIRS

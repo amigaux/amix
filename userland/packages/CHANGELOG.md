@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — motif: makestrs with X11R6.3's headers (e07ca8d6)
+
+The build's makestrs tool takes X11R6.3's <X11/Xos.h> instead of the build host's; make dist's container has no X headers. The package is unchanged (2.3.8-1, the same bytes from the container).
+
 ## 2026-11-19 — regex 3.8-1, new (d1b71c2a)
 
 Henry Spencer's POSIX regular expression library (alpha3.8, unaltered) under /opt/amix: libregex.a and regex.h provide regcomp, regexec, regerror and regfree, which Amix's libc lacks, with regex(3) and regex(7). Upstream's regression tests pass on both kernel lines. CDE links it.
