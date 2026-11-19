@@ -1,0 +1,12 @@
+#!/bin/sh
+# imake: X11R6.3's imake for Amix targets (build/hosttools).
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# Runs libexec/imake with IMAKECPP set to libexec/imakecpp, unless the
+# caller set IMAKECPP: the host cpp with -undef, so the only defines the
+# config files see are the ones imake hands on (-DAMIX -DSVR4 -Dm68k).
+here=$(cd "$(dirname "$0")/.." && pwd)
+IMAKECPP=${IMAKECPP:-$here/libexec/imakecpp}
+export IMAKECPP
+exec "$here/libexec/imake" "$@"

@@ -1,0 +1,52 @@
+#!/bin/sh
+# makedepend: X11R6.3's makedepend for Amix targets (build/hosttools).
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+# libexec/makedepend has no built-in defines and no default include
+# directory. This passes it the target compiler's: every object-like macro
+# it predefines (with build/pkg's AMIX_PREDEFS when they are on CC), its own
+# include directories and the sysroot's usr/include in place of the
+# standard one (-Y), unless the caller gives -Y. The compiler is
+# AMIX_MAKEDEPEND_CC, else AMIX_GCC14_CC with AMIX_PREDEFS (as build/pkg's
+# gcc14 environment sets them); with neither it refuses, since the build
+# host's headers are not Amix's.
+here=$(cd "$(dirname "$0")/.." && pwd)
+cc=${AMIX_MAKEDEPEND_CC:-}
+if [ -z "$cc" ] && [ -n "${AMIX_GCC14_CC:-}" ]; then
+	cc="$AMIX_GCC14_CC ${AMIX_PREDEFS:-}"
+fi
+[ -n "$cc" ] || {
+	echo "makedepend: no target compiler (AMIX_MAKEDEPEND_CC or AMIX_GCC14_CC);" >&2
+	echo "            the build host's headers and defines are not Amix's" >&2
+	exit 2
+}
+T=$(mktemp "${TMPDIR:-/tmp}/makedepend.XXXXXX") || exit 2
+trap 'rm -f "$T"' EXIT
+# shellcheck disable=SC2086 (cc is a command and its flags)
+$cc -dM -E -x c /dev/null > "$T" || { echo "makedepend: $cc -dM failed" >&2; exit 2; }
+# shellcheck disable=SC2086
+sysroot=$($cc -print-sysroot)
+# shellcheck disable=SC2086
+inc=$($cc -print-file-name=include)
+# shellcheck disable=SC2086
+fixed=$($cc -print-file-name=include-fixed)
+y=
+case " $* " in *" -Y"*) ;; *) y=-Y$sysroot/usr/include ;; esac
+# the compiler's include directories after the caller's -I (makedepend
+# searches -I in order, then -Y), as the compiler does
+set -- "$@" "-I$inc" "-I$fixed" $y
+# the defines as -DNAME=VALUE words, object-like macros only, first
+while IFS= read -r line; do
+	case $line in
+	"#define "*) ;;
+	*) continue ;;
+	esac
+	rest=${line#\#define }
+	name=${rest%% *}
+	case $name in *"("*) continue ;; esac
+	val=${rest#"$name"}
+	val=${val# }
+	set -- "-D$name=$val" "$@"
+done < "$T"
+exec "$here/libexec/makedepend" "$@"

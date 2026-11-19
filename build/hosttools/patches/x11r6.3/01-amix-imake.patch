@@ -1,0 +1,37 @@
+Ours: imake and makedepend for Amix targets. Built with -DAMIX, imake hands its
+cpp -traditional -DAMIX -DSVR4 -Dm68k (the defines that select amix.cf), and
+makedepend has no built-in defines of the build host: its wrapper passes the
+target compiler's.
+
+--- a/config/imake/imakemdep.h
++++ b/config/imake/imakemdep.h
+@@ -280,6 +280,12 @@
+ char *cpp_argv[ARGUMENTS] = {
+ 	"cc",		/* replaced by the actual program to exec */
+ 	"-I.",		/* add current directory to include path */
++#ifdef AMIX
++	"-traditional",	/* Amix: the Imake rules need a traditional cpp, */
++	"-DAMIX",	/* and these select amix.cf */
++	"-DSVR4",
++	"-Dm68k",
++#endif
+ #ifdef unix
+ 	"-Uunix",	/* remove unix symbol so that filename unix.c okay */
+ #endif
+@@ -595,6 +601,8 @@
+  *     in util/makedepend/def.h.
+  */
+ struct symtab	predefs[] = {
++#ifndef AMIX	/* Amix: not the build host's defines; the makedepend
++		   wrapper passes the target compiler's with -D */
+ #ifdef apollo
+ 	{"apollo", "1"},
+ #endif
+@@ -806,6 +814,7 @@
+ #ifdef __EMX__
+ 	{"__EMX__", "1"},
+ #endif
++#endif /* !AMIX */
+ 	/* add any additional symbols before this line */
+ 	{NULL, NULL}
+ };

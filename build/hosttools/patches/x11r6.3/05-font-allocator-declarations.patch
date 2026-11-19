@@ -1,0 +1,17 @@
+Ours: the font library's allocators declared in fontmisc.h. Called undeclared,
+Xalloc and Xrealloc returned a pointer cut to an int, and bdftopcf crashed on
+a 64-bit build host.
+
+--- a/lib/font/include/fontmisc.h
++++ b/lib/font/include/fontmisc.h
+@@ -66,6 +66,10 @@
+ 
+ extern char	    *NameForAtom ();
+ 
++/* declared, so a host where a pointer is wider than an int keeps it whole */
++extern unsigned long *Xalloc();
++extern unsigned long *Xrealloc();
++
+ #define xalloc(n)   Xalloc ((unsigned) n)
+ #define xfree(p)    Xfree ((pointer) p)
+ #define xrealloc(p,n)	Xrealloc ((pointer)p,n)

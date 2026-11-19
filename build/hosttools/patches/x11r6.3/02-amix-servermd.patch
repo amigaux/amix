@@ -1,0 +1,29 @@
+Ours: servermd.h for Amix: MSB-first bytes and bits, glyphs padded to 32 bits,
+so bdftopcf writes the PCF layout of the Amix server by default.
+
+--- a/programs/Xserver/include/servermd.h
++++ b/programs/Xserver/include/servermd.h
+@@ -121,6 +121,14 @@
+  *	Currently defined for SPARC.
+  */
+ 
++#ifdef AMIX
++/* Amix, 68020-68060: big-endian, MSB first, glyphs padded to 32 bits */
++#define IMAGE_BYTE_ORDER	MSBFirst
++#define BITMAP_BIT_ORDER	MSBFirst
++#define	GLYPHPADBYTES		4
++#define GETLEFTBITS_ALIGNMENT	1
++#else /* !AMIX: the other systems */
++
+ #ifdef vax
+ 
+ #define IMAGE_BYTE_ORDER	LSBFirst        /* Values for the VAX only */
+@@ -392,6 +400,8 @@
+ 
+ #endif
+ 
++#endif /* !AMIX */
++
+ /* size of buffer to use with GetImage, measured in bytes. There's obviously
+  * a trade-off between the amount of stack (or whatever ALLOCATE_LOCAL gives
+  * you) used and the number of times the ddx routine has to be called.
