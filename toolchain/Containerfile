@@ -187,18 +187,20 @@ ENV GCA=/opt/amix/gcc-cross-amix/build \
 # headers and library), for the host ToolTalk CDE builds to run tt_type_comp,
 # whose types.xdr is XDR, and autoconf, automake and libtool, for recipes
 # whose source ships no configure (CDE's autogen.sh) or whose configure.ac
-# and Makefile.am are patched. Installed after the toolchains are built, so
-# their builds never see them.
+# and Makefile.am are patched, and ksh (ksh93u+m), for CDE's build scripts
+# written for it (dtdocbook2sdl's arrays, set -A, [[ ]]). Installed after
+# the toolchains are built, so their builds never see them.
 RUN try() { n=1; until "$@"; do [ $n -lt 4 ] || return 1; n=$((n + 1)); sleep 120; done; } \
  && upd() { apt-get "$@" update --error-on=any > /tmp/apt-update.log 2>&1; r=$?; \
       cat /tmp/apt-update.log; [ $r -eq 0 ] && ! grep -q '^W: Failed to fetch' /tmp/apt-update.log; } \
  && try upd -o Acquire::Check-Valid-Until=false \
  && try apt-get install -y --no-install-recommends opensp tcl8.6 tcl8.6-dev \
-      libtirpc-dev libtirpc3t64 autoconf automake libtool \
+      libtirpc-dev libtirpc3t64 autoconf automake libtool ksh \
  && rm -rf /var/lib/apt/lists/* /tmp/apt-update.log \
  && test -f /usr/lib/tcl8.6/tclConfig.sh && test -x /usr/bin/onsgmls \
  && test -f /usr/include/tirpc/rpc/rpc.h && ls /usr/lib/*/libtirpc.so.3 > /dev/null \
- && autoconf --version && automake --version && libtoolize --version
+ && autoconf --version && automake --version && libtoolize --version \
+ && ksh -c 'set -A a x y; [[ ${a[1]} == y ]]'
 # last, so a stamp of the same pins reuses every toolchain layer; readable
 # by the calling user make dist runs as
 COPY *.pin /opt/amix/PINS/

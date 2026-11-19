@@ -35,6 +35,7 @@ snapshot `20261028T000000Z`:
 | autoconf | 2.71 (`2.71-3`) | `configure` from `configure.ac`: a source that ships none (CDE's `autogen.sh`), or a patched `configure.ac` |
 | automake | 1.16.5 (`1:1.16.5-1.3ubuntu1`, with its `aclocal`) | `Makefile.in` from `Makefile.am` |
 | libtool | 2.4.7 (`2.4.7-7build1`: `libtoolize` copies Debian's `ltmain.sh`, `VERSION="2.4.7 Debian-2.4.7-7build1"`) | `LT_INIT`, `ltmain.sh` and `libtool.m4` |
+| ksh | ksh93u+m 1.0.8 (`ksh93u+m 1.0.8-1`, through the `ksh 20240113` package; `/usr/bin/ksh` is `ksh93`, `${.sh.version}` "93u+m/1.0.8 2024-01-01") | CDE's build scripts in ksh: `dtdocbook2sdl`, `dtdocbook2man`, `sym2num` (`KSH_FOR_BUILD=ksh`) |
 | TI-RPC (`libtirpc-dev`, `libtirpc3t64`: headers in `/usr/include/tirpc`, `libtirpc`) | 1.3.4 | CDE's host ToolTalk, which runs `tt_type_comp` |
 | rpcgen | rpcsvc-proto 1.4.4, **built from source** | RPC stubs and XDR routines |
 
@@ -46,7 +47,9 @@ Ubuntu's own revisions included, so a recipe that regenerates its build
 files (`autoreconf`, or an `autogen.sh` running libtoolize, aclocal,
 autoconf, autoheader and automake) gets the same `configure` and
 `Makefile.in` only from the same snapshot; the table gives those versions.
-There is no pkg-config: a recipe brings its own m4 macros. Tcl and OpenSP only process documentation on the build host. CDE's
+There is no pkg-config: a recipe brings its own m4 macros. ksh runs CDE's
+build-time scripts written for ksh93 (arrays, `set -A`, `[[ ]]`), whose
+output is text: help volumes, man pages, generated tables. Tcl and OpenSP only process documentation on the build host. CDE's
 own `instant`, which turns DocBook into the help and man formats, is built
 by the CDE recipe. TI-RPC is a library for a program that runs only on the
 build host: CDE's recipe builds a host ToolTalk against it to run
