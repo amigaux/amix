@@ -3,7 +3,7 @@
 NAME=xztop
 PKG=xztop
 VERSION=1.1.1
-PKGREV=1
+PKGREV=2   # -2: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SOURCE_EPOCH=1793491200   # 2026-11-01 00:00 UTC
 SUMMARY="xztop 1.1.1 - the Z3660/ZZ9000 board's sensors in an X window"
 DESC="xztop shows the Z3660/ZZ9000 board's temperatures, voltages and CPU clock in an X window, read from /dev/zz9000i, the sensors node of the z3660rtg driver package (z3660rtg-k30 or z3660rtg-k46, which must be installed and loaded). Installs /opt/amix/bin/xztop and its manual page; ztop, the same readings on a terminal, comes with the driver package. Built with GCC 14 from amix-z3660rtg and statically linked with X11R6.3's libraries (Xaw, Xmu, Xt, SM, ICE, Xext, X11), so it needs the x11r63 package's server and nothing more of it at run time; it uses floating point, so it needs an FPU."

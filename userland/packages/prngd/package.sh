@@ -2,7 +2,7 @@
 NAME=prngd
 PKG=prngd
 VERSION=0.9.29
-PKGREV=4   # -4: prngd.conf is a conffile: an upgrade keeps an edited one
+PKGREV=5   # -5: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="prngd 0.9.29 entropy daemon"
 DESC="PRNGD 0.9.29, the pseudo-random number gathering daemon: an EGD-protocol socket (/var/run/egd-pool) for ssh/TLS on a box with no /dev/random, fed by sampling system commands. Always give it a socket argument. Not started by the package: see /opt/amix/etc/init.d/prngd. Installs /opt/amix/sbin/prngd and /opt/amix/bin/prngd-ctl."
 CATEGORY=system

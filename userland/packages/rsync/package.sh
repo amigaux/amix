@@ -2,7 +2,7 @@
 NAME=rsync
 PKG=rsync
 VERSION=3.1.3
-PKGREV=3   # -3: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=4   # -4: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="rsync 3.1.3"
 DESC="rsync 3.1.3, the incremental file-transfer tool, speaking protocol 31 to modern peers: client over a remote shell (-e) or to an rsync daemon (rsync://), and the daemon itself (--daemon). Installs /opt/amix/bin/rsync; add /opt/amix/bin to PATH."
 CATEGORY=network

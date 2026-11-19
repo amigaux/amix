@@ -2,7 +2,7 @@
 NAME=less
 PKG=less
 VERSION=704
-PKGREV=9   # -9: gcc14-cross-amix 3446533, every program gains the library-constructor runner
+PKGREV=10   # -10: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
 SUMMARY="less 704 - the backward-scrolling pager"
 DESC="less 704, the pager with backward scroll and incremental search -- stock Amix has only more/pg/page. Installs /opt/amix/bin/{less,lesskey,lessecho}. Uses the SVR4 regcmp regex (libgen) and the termcap API via libcurses; links nothing outside the stock system libraries. Add /opt/amix/bin to PATH to use it."
 CATEGORY=utility
