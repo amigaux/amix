@@ -32,13 +32,17 @@ snapshot `20261028T000000Z`:
 | flex | 2.6.4 | scanners (`lex` sources) |
 | Tcl | 8.6.14 (`tcl8.6`, `tcl8.6-dev`: `tclConfig.sh`, headers, library) | CDE's DocBook chain (man pages, help volumes) |
 | OpenSP `onsgmls` | 1.5.2 | CDE's DocBook chain |
+| TI-RPC (`libtirpc-dev`, `libtirpc3t64`: headers in `/usr/include/tirpc`, `libtirpc`) | 1.3.4 | CDE's host ToolTalk, which runs `tt_type_comp` |
 | rpcgen | rpcsvc-proto 1.4.4, **built from source** | RPC stubs and XDR routines |
 
 bison and flex write C that is then compiled by the cross compiler. Their
 output is plain C for any target, which is why the distro's copies are good
 enough. Tcl and OpenSP only process documentation on the build host. CDE's
 own `instant`, which turns DocBook into the help and man formats, is built
-by the CDE recipe. These tools are installed in the container's last stage,
+by the CDE recipe. TI-RPC is a library for a program that runs only on the
+build host: CDE's recipe builds a host ToolTalk against it to run
+`tt_type_comp`, whose output, `types.xdr`, is XDR and so the same bytes on
+any host's byte order. These tools are installed in the container's last stage,
 after the toolchains are built, so the toolchains never see them.
 
 rpcgen is the exception in this list. Amix programs are compiled from what
