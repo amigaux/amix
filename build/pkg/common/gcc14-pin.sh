@@ -57,7 +57,12 @@ esac
 # byte with a bit number of 8 or more) and a guard against the bfclr at
 # offset 7 - n that fix leaves: only cc1 changes; libgcc.a, libamixc99.a,
 # the specs, both init objects and libamixrt.so.1 are byte-identical.
-AMIX_GCC14_COMMIT=13ed718ed0124da9635b99f1c2ccb3463b73bbd4
+# d0082c9 (2026-11-19; the fork's next with release-1.1 merged in): ld puts
+# DT_NEEDED, DT_SONAME and DT_RPATH names first in .dynstr, where AMIX's
+# dl_makelist reads them, and two checks are added. Only libamixrt.so.1
+# changes here (relinked by the new ld, the bytes release-1.1 pins); cc1 is
+# 13ed718's, and libgcc.a, libamixc99.a, the specs and the init objects stay.
+AMIX_GCC14_COMMIT=d0082c9ecbc2a0c4c77b40688d9694e453eeed6f
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 cd9909a665bd5cb7721fe3e5196bb563f9179632ad9137fc72e8d1234e253b64
 lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
@@ -65,7 +70,7 @@ m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9
 lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 23c038df7e955c037019f48eeb58160a2b43138ef65b78ea25928efaf73bf4ff"
+m68k-elf/lib/amixrt/libamixrt.so.1 0ae586a7698d2bdae23f01d2bb49fab0c86ec56edf2c4bd7bb5379aa6ec76283"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
