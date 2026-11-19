@@ -32,12 +32,21 @@ snapshot `20261028T000000Z`:
 | flex | 2.6.4 | scanners (`lex` sources) |
 | Tcl | 8.6.14 (`tcl8.6`, `tcl8.6-dev`: `tclConfig.sh`, headers, library) | CDE's DocBook chain (man pages, help volumes) |
 | OpenSP `onsgmls` | 1.5.2 | CDE's DocBook chain |
+| autoconf | 2.71 (`2.71-3`) | `configure` from `configure.ac`: a source that ships none (CDE's `autogen.sh`), or a patched `configure.ac` |
+| automake | 1.16.5 (`1:1.16.5-1.3ubuntu1`, with its `aclocal`) | `Makefile.in` from `Makefile.am` |
+| libtool | 2.4.7 (`2.4.7-7build1`: `libtoolize` copies Debian's `ltmain.sh`, `VERSION="2.4.7 Debian-2.4.7-7build1"`) | `LT_INIT`, `ltmain.sh` and `libtool.m4` |
 | TI-RPC (`libtirpc-dev`, `libtirpc3t64`: headers in `/usr/include/tirpc`, `libtirpc`) | 1.3.4 | CDE's host ToolTalk, which runs `tt_type_comp` |
 | rpcgen | rpcsvc-proto 1.4.4, **built from source** | RPC stubs and XDR routines |
 
 bison and flex write C that is then compiled by the cross compiler. Their
 output is plain C for any target, which is why the distro's copies are good
-enough. Tcl and OpenSP only process documentation on the build host. CDE's
+enough. autoconf, automake and libtool write shell scripts and makefiles that
+run on the build host. What they write depends on their exact versions,
+Ubuntu's own revisions included, so a recipe that regenerates its build
+files (`autoreconf`, or an `autogen.sh` running libtoolize, aclocal,
+autoconf, autoheader and automake) gets the same `configure` and
+`Makefile.in` only from the same snapshot; the table gives those versions.
+There is no pkg-config: a recipe brings its own m4 macros. Tcl and OpenSP only process documentation on the build host. CDE's
 own `instant`, which turns DocBook into the help and man formats, is built
 by the CDE recipe. TI-RPC is a library for a program that runs only on the
 build host: CDE's recipe builds a host ToolTalk against it to run

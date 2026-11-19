@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — autoconf, automake and libtool in the build container (30b47129)
+
+The build container installs autoconf 2.71, automake 1.16.5 and libtool 2.4.7 from the pinned snapshot, for recipes that regenerate their build files (CDE's autogen.sh); exact package versions in docs/build-tools.md, since generated files depend on them. TOOLCHAIN.sha256 unchanged.
+
 ## 2026-11-19 — host TI-RPC in the build container (97e5d71f)
 
 The build container installs host TI-RPC (libtirpc-dev, libtirpc3t64 1.3.4) from the pinned snapshot, for the host ToolTalk CDE builds to run tt_type_comp; types.xdr is XDR, so its bytes do not depend on the host. No toolchain bytes change (TOOLCHAIN.sha256 unchanged).

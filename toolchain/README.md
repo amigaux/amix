@@ -145,7 +145,7 @@ needs a login to the registry with a token that may write packages.
 `GCA` and `G14` are set in the image's environment, and both toolchains are
 on `PATH`, with `/opt/amix/host/bin`.
 
-### Tcl, OpenSP and TI-RPC
+### Tcl, OpenSP, TI-RPC and the autotools
 
 CDE builds its man pages and help volumes through its DocBook chain, which
 needs a host Tcl (`/usr/lib/tcl8.6/tclConfig.sh`, the headers and the
@@ -161,6 +161,13 @@ The same stage installs TI-RPC, `libtirpc-dev` and its run-time library
 `libtirpc3t64`, for the host ToolTalk CDE's recipe builds to run
 `tt_type_comp`. Its output, `types.xdr`, is XDR, the same bytes on any host,
 so the snapshot's library serves as well.
+
+autoconf (2.71), automake (1.16.5) and libtool (2.4.7) come from the same
+stage, for a recipe that regenerates its build files: a source that ships no
+`configure` (CDE's `autogen.sh`), or a patched `configure.ac` or
+`Makefile.am`. Their output is shell and makefiles, but it changes with their
+versions, so the snapshot is what keeps a regenerated `configure` the same;
+docs/build-tools.md lists the exact package versions.
 
 ### rpcgen
 
