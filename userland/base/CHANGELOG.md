@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-19 — amixrt 1.0-3 (65e98c3b)
+
+libamixrt.so.1 from gcc14-cross-amix c806d49 (release-1.1), relinked with library names first in .dynstr; 22728 bytes, sha256 0ae586a7. Only the library, pkginfo and pkgmap differ from 1.0-2.
+
 ## 2026-11-17 — amix-base 1.0-37: /etc/amigaux-release, xstart ends its own server (3330bf7b, d88e5d16, fa0e7031, 2152a5df)
 
 xstart no longer gives the X server -terminate by default, so a client that comes and goes during start-up no longer ends the server; at a normal end the session wrapper sends the server TERM while xinit holds its connection, so it ends at once and hands the display back. "once yes" in /etc/display or once=yes still asks for the card's once option. Card limits are only raised. A missing restore command is said once, and xstart -n warns about a card with no restore line. The default session starts its xterm at +0+0, so twm holds no placement grab. New: /etc/amigaux-release ("amigaux 1.1.2"), written at package time from media/VERSION, not a conffile; each release brings a new amix-base revision; amigaux-release(4). display(4), display.d(4) and xstart(1) updated. Package of record from 2152a5df: sha256 c869d52a…, 220672 bytes. Emulator rows on both lines: upgrade from 1.0-34 keeps five edited conffiles, pkgchk clean; normal end with the server gone in 0 s, the LC060 included.
