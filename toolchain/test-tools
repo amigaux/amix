@@ -58,6 +58,9 @@ refused "fetch: the original, then our copy; neither reachable, both named" "   
 check "fetch: netbsd-syssrc.distfile names archive.netbsd.org first, our copy second, under the upstream's name" \
 	grep -Eqx 'https://archive\.netbsd\.org/[^ ]+/syssrc\.tgz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/netbsd-10\.1/syssrc\.tgz' "$here/netbsd-syssrc.distfile"
 
+check "fetch: rpcgen.distfile names an https URL of rpcsvc-proto and its sha256" \
+	grep -Eqx 'https://[^ ]+/rpcsvc-proto-[0-9.]+\.tar\.xz [0-9a-f]{64}( https://[^ ]+)*' "$here/rpcgen.distfile"
+
 # --- the media image ---------------------------------------------------------------
 check "media: amitools.distfile names the original first, our copy second, under its own name" \
 	grep -Eqx 'https://[^ ]+/amitools-[0-9.]+\.tar\.gz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/amitools-[0-9.]+/amitools-[0-9.]+\.tar\.gz' "$here/amitools.distfile"
@@ -183,6 +186,9 @@ for d in ca-certificates openssl; do
 	printf '%s deb\n' "$d" > "$cb/debs/$d.deb"
 	echo "https://example.invalid/$d.deb $(sha256sum "$cb/debs/$d.deb" | cut -c1-64)" > "$cb/toolchain/base-$d.distfile"
 done
+# the host tools' source distfiles, from the same local directory
+printf 'rpcgen source\n' > "$cb/debs/rpcsvc-proto-1.0.tar.xz"
+echo "https://example.invalid/rpcsvc-proto-1.0.tar.xz $(sha256sum "$cb/debs/rpcsvc-proto-1.0.tar.xz" | cut -c1-64)" > "$cb/toolchain/rpcgen.distfile"
 pinned() {	# pinned <name> <pin file>: a repository, its one commit pinned
 	r=$cb/src/$1
 	git init -q "$r"
@@ -214,7 +220,7 @@ cat > "$cb/bin/docker" <<DOCKER
 #!/bin/sh
 for a in "\$@"; do
 	case \$a in
-	gca-src=*|g14-src=*|amix-system=*|base-debs=*)
+	gca-src=*|g14-src=*|amix-system=*|base-debs=*|host-src=*)
 		(cd "\${a#*=}" && find . -printf '%m %p\n') > "$cb/context-\${a%%=*}" ;;
 	esac
 done
@@ -243,6 +249,8 @@ git init -q "$cb/src/other"
 refused "container-build: a checkout without the pinned commit" "is not in" build "$cb/src/other"
 check "container-build: the base image's two packages reach the build" \
 	sh -c "grep -q 'ca-certificates.deb' '$cb/context-base-debs' && grep -q 'openssl.deb' '$cb/context-base-debs'"
+check "container-build: the host tools' source distfiles are the host-src context" \
+	grep -q 'rpcsvc-proto-1.0.tar.xz' "$cb/context-host-src"
 check "container-build: the base packages are kept in out/cache" \
 	sh -c "[ -s '$cb/out/cache/ca-certificates.deb' ] && [ -s '$cb/out/cache/openssl.deb' ]"
 mv "$cb/debs" "$cb/debs.away"

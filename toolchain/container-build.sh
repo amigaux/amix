@@ -62,6 +62,12 @@ for d in base-ca-certificates base-openssl; do
 	f=$(sh "$here/fetch-distfile" "$here/$d.distfile")
 	cp "$f" "$work/debs/"
 done
+# the host tools' source distfiles, the same way
+mkdir "$work/host"
+for d in rpcgen; do
+	f=$(sh "$here/fetch-distfile" "$here/$d.distfile")
+	cp "$f" "$work/host/"
+done
 read -r _ g14 < "$here/gcc14-cross-amix.pin"
 tag=${2:-amix-toolchain:$(printf %.7s "$g14")}
 
@@ -72,5 +78,6 @@ set --
 	--build-context g14-src="$work/g14" \
 	--build-context amix-system="$work/sys" \
 	--build-context base-debs="$work/debs" \
+	--build-context host-src="$work/host" \
 	-t "$tag" "$here"
 echo "built $tag"

@@ -127,11 +127,28 @@ needs a login to the registry with a token that may write packages.
 | `/opt/amix/gcc14-cross-amix/build/prefix/bin/m68k-elf-*` | GCC 14 |
 | `/opt/amix/gcc14-cross-amix/build/prefix/m68k-elf/sysroot` | its sysroot, with the X11 pieces and `stdint.h`, and amix-system's absolute links into `usr/amiga` and `usr/ucblib` (`usr/lib/libscreen.so`, `usr/include/amiga`, `usr/ccs/lib/libdbm.a`, ...) made relative by `sysroot-links`, so they resolve there; `build/sysroot` links to it |
 | `/opt/amix/amix-system/usr` | the AMIX root both were built from |
+| `/opt/amix/host/bin/rpcgen` | rpcgen, built from the source distfile `rpcgen.distfile` (rpcsvc-proto) |
 | `/opt/amix/TOOLCHAIN.sha256` | the hash list |
 | `/opt/amix/PINS/*.pin` | the pins it was built from |
 
 `GCA` and `G14` are set in the image's environment, and both toolchains are
-on `PATH`.
+on `PATH`, with `/opt/amix/host/bin`.
+
+### rpcgen
+
+rpcgen is built in the image from rpcsvc-proto's release tarball, pinned in
+`rpcgen.distfile` and fetched by `container-build.sh` like the base packages,
+not taken from Ubuntu: Amix code is compiled from what it writes, so its
+version is ours to choose. Its output is written for glibc; `test-rpcgen
+IMAGE` checks that it builds for Amix. It runs rpcgen on
+`tests/rpcgen/amixtest.x` in both forms, socket-style (`-b`, the default) and
+SVR4 TI-RPC (`-5`), compiles the client, server and XDR files with gcc14
+against the sysroot and links them against `libnsl`. What the compile needs:
+`-include` of `build/pkg/common/gcc14/amix-decls.h` and `amix-rpcgen.h`
+(`AMIX_GCC14_DECLS`, `AMIX_GCC14_RPCGEN` in a recipe), and
+`-Wno-unused-variable`. Link with `-lnsl`, or with `-lsocket -lnsl` for the
+socket-style form. `hyper` does not work: Amix's libnsl has no 64-bit XDR
+routine.
 
 `toolchain/check-image` compares `/opt/amix/PINS` with the checkout's
 `toolchain/*.pin` (`toolchain/check-image IMAGE` runs it in that image).

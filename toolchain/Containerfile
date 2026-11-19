@@ -6,6 +6,8 @@
 #   g14-src      gcc14-cross-amix at the commit in gcc14-cross-amix.pin
 #   amix-system  a checkout of amigaux/amix-system (the AMIX root under usr/)
 #   base-debs    the base image's CA certificates and openssl (base-*.distfile)
+#   host-src     the source distfiles of the host tools built here (rpcgen,
+#                rpcgen.distfile), fetched and checked by sha256
 #
 # Every path inside the image is fixed, so no build folder, user name or host
 # path of the machine that builds it ends up in the toolchains; dates come from
@@ -141,10 +143,29 @@ RUN --mount=type=bind,source=sysroot-links,target=/tmp/sysroot-links \
 RUN cp build/prefix/m68k-elf/lib/amixrt/libamixrt.so.1 build/sysroot/usr/lib/libamixrt.so.1
 
 # ---------------------------------------------------------------------------
+# Host tools built from pinned source distfiles, not taken from the distro:
+# rpcgen from rpcsvc-proto (rpcgen.distfile), whose output Amix code is
+# compiled from (toolchain/test-rpcgen checks it against the sysroot and
+# libnsl). Installed in /opt/amix/host, so TOOLCHAIN.sha256 lists them.
+FROM base AS host
+ARG SOURCE_DATE_EPOCH=1793303717
+ENV SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH
+RUN --mount=type=bind,from=host-src,target=/tmp/host-src \
+    set -e; mkdir -p /opt/amix/host-work; cd /opt/amix/host-work; \
+    tar -xf /tmp/host-src/rpcsvc-proto-*.tar.xz; cd rpcsvc-proto-*; \
+    ./configure --prefix=/opt/amix/host --disable-nls > configure.log; \
+    make -C rpcgen > make.log; \
+    install -d /opt/amix/host/bin; \
+    install -m 0755 rpcgen/rpcgen /opt/amix/host/bin/rpcgen; \
+    cd /; rm -rf /opt/amix/host-work; \
+    /opt/amix/host/bin/rpcgen --version
+
+# ---------------------------------------------------------------------------
 # The members of the archives built here (not the sysroots' AMIX archives,
 # which stay byte for byte) and every file time to SOURCE_DATE_EPOCH, then the
 # hash list.
 FROM g14 AS norm
+COPY --from=host /opt/amix/host /opt/amix/host
 RUN find /opt/amix-cross /opt/amix/gcc14-cross-amix/build \
       -name sysroot -prune -o -name '*.a' -type f -print0 \
     | xargs -0 -r strip-nondeterminism --normalizers +ar -T "$SOURCE_DATE_EPOCH" \
@@ -159,7 +180,7 @@ FROM base
 COPY --from=norm /opt /opt
 ENV GCA=/opt/amix/gcc-cross-amix/build \
     G14=/opt/amix/gcc14-cross-amix/build \
-    PATH=/opt/amix-cross/bin:/opt/amix/gcc14-cross-amix/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/opt/amix-cross/bin:/opt/amix/gcc14-cross-amix/build/prefix/bin:/opt/amix/host/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # last, so a stamp of the same pins reuses every toolchain layer; readable
 # by the calling user make dist runs as
 COPY *.pin /opt/amix/PINS/

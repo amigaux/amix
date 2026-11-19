@@ -222,6 +222,8 @@ export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-err
 # Declarations the AMIX headers lack (socket/select/syslog/gethostname):
 # opt-in per recipe with -include "$AMIX_GCC14_DECLS".
 export AMIX_GCC14_DECLS="$AMIX_PKG_COMMON/gcc14/amix-decls.h"
+# What rpcgen's output needs beyond it (amix-rpcgen.h): -include both.
+export AMIX_GCC14_RPCGEN="$AMIX_PKG_COMMON/gcc14/amix-rpcgen.h"
 
 export AMIX_BUILD_ROOT="${AMIX_GCC14_BUILD_ROOT:-$AMIX_REPO_ROOT/out/pkg}"
 
