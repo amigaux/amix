@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — the 1.1.x release notes say released (4a679e16)
+
+docs/releases/1.1.md, 1.1.1.md and 1.1.2.md say released, with the dates (2026-11-10, 2026-11-15, 2026-11-17) and a link to each release's files. Docs only.
+
 ## 2026-11-16 — the 1.1.2 netinstall images (1d26feb3)
 
 The netinstall RAM-disk pins move to ni-k30-1.1.2-2 and ni-k46-1.1.2-2: the 1.1.2 installer (shown version 1.1.2, va2000 in every generation, xstart -n warned), the -78/-67 kernels' xsurf 1.0.0-4 and z3660eth boot modules, k30's ufs; room 25.8 % (k30) and 21.7 % (k46) of blocks free. Fresh netinstalls of the full set pass on both lines, x11r63 6.3-11's conffiles seeded at the second stage.
