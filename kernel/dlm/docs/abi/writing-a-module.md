@@ -162,8 +162,14 @@ has it in full):
 - Board windows: `phystokv` below `VSECT1`, `sptalloc` or (k46)
   `dev_kvmap` above. On k46 the window below `VSECT1` is cache-inhibited
   but not serialised (ddi.md, "Memory"): registers that need serialised
-  access go through `dev_kvmap(…, 0x40, …)` there too. Never give a board the address of the module's own
-  memory: there is no DMA interface in DDI v1.0.
+  access go through `dev_kvmap(…, 0x40, …)` there too.
+- DMA (minor 2: k30.1.2, k46.1.2): never give a bus master the address
+  of the module's own memory. Its scripts, tables and status buffers
+  come from `dma_alloc`. A transfer to or from a caller's buffer is
+  bracketed by `dma_prepare` and `dma_complete`, and the device is
+  armed with `dma_addr`'s address, which is 0 on k30 for a segment the
+  board cannot reach (fail the transfer). A module that imports them is
+  tagged minor 2 or later (§3). See ddi.md, "DMA", and contract C4-5.
 - A framebuffer a user maps: on k46 call `DDI_FB_REGISTER(pa, len)` from
   `_load` for its window (not the registers), so its pages are not
   serialised; `ENOSYS` on k30 and on a kernel before k46.1.6 means
