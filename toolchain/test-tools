@@ -58,8 +58,37 @@ refused "fetch: the original, then our copy; neither reachable, both named" "   
 check "fetch: netbsd-syssrc.distfile names archive.netbsd.org first, our copy second, under the upstream's name" \
 	grep -Eqx 'https://archive\.netbsd\.org/[^ ]+/syssrc\.tgz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/netbsd-10\.1/syssrc\.tgz' "$here/netbsd-syssrc.distfile"
 
-check "fetch: rpcgen.distfile names an https URL of rpcsvc-proto and its sha256" \
-	grep -Eqx 'https://[^ ]+/rpcsvc-proto-[0-9.]+\.tar\.xz [0-9a-f]{64}( https://[^ ]+)*' "$here/rpcgen.distfile"
+check "fetch: rpcgen.distfile names rpcsvc-proto's release first, our copy second, under its own name" \
+	grep -Eqx 'https://github\.com/thkukuk/rpcsvc-proto/releases/download/v[0-9.]+/rpcsvc-proto-[0-9.]+\.tar\.xz [0-9a-f]{64} https://github\.com/amigaux/amix-distfiles/releases/download/rpcsvc-proto-[0-9.]+/rpcsvc-proto-[0-9.]+\.tar\.xz' "$here/rpcgen.distfile"
+
+# the fallback when the original fails, with a stand-in curl first on PATH:
+# it fails every URL but our copies (amix-distfiles), which it serves from
+# $T/served, and logs each URL it is given
+mkdir -p "$T/bin"
+{
+	echo '#!/bin/sh'
+	echo 'out= url='
+	echo 'while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift ;; -*) ;; *) url=$1 ;; esac; shift; done'
+	echo "echo \"\$url\" >> \"$T/curl.log\""
+	echo "case \$url in */amix-distfiles/*) cp \"$T/served\" \"\$out\" ;; *) exit 22 ;; esac"
+} > "$T/bin/curl"
+chmod 755 "$T/bin/curl"
+echo "https://example.invalid/up/thing-1.0.tgz $sha https://example.invalid/amix-distfiles/thing-1.0.tgz" > "$T/two.pin"
+printf 'the distfile\n' > "$T/served"
+rm -rf "${T:?}/cache" "${T:?}/curl.log"
+check "fetch: the original fails, our copy gives the pinned bytes and is taken" \
+	sh -c 'p=$(env PATH="$0/bin:$PATH" AMIX_DISTFILES="$0/empty" sh "$1" "$0/two.pin" "$0/cache" 2>/dev/null | tail -1) &&
+		cmp -s "$p" "$0/served" && [ "$(cat "$0/curl.log")" = "https://example.invalid/up/thing-1.0.tgz
+https://example.invalid/amix-distfiles/thing-1.0.tgz" ]' "$T" "$here/fetch-distfile"
+printf 'other bytes\n' > "$T/served"
+rm -rf "${T:?}/cache" "${T:?}/curl.log"
+refused "fetch: our copy with other bytes is refused too" "no source gave the pinned bytes" \
+	env PATH="$T/bin:$PATH" AMIX_DISTFILES="$T/empty" sh "$here/fetch-distfile" "$T/two.pin" "$T/cache"
+rm -rf "${T:?}/cache" "${T:?}/curl.log"
+check "fetch: rpcgen.distfile, its original failing, is fetched from our copy" \
+	sh -c 'env PATH="$0/bin:$PATH" AMIX_DISTFILES="$0/empty" sh "$1" "$2" "$0/cache" > /dev/null 2>&1;
+		[ "$(cat "$0/curl.log")" = "$(cut -d" " -f1 "$2")
+$(cut -d" " -f3 "$2")" ]' "$T" "$here/fetch-distfile" "$here/rpcgen.distfile"
 
 # --- the media image ---------------------------------------------------------------
 check "media: amitools.distfile names the original first, our copy second, under its own name" \
