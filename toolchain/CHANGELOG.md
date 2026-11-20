@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — gcc14 pinned to release-1.1 9d13dcd: fold-mem-offsets off (15a66acd)
+
+gcc14-cross-amix release-1.1 9d13dcd: fold-mem-offsets off in the specs (a GCC 14.2 m68k -O2 miscompile: a store one element too far) and the PR 126121 bset/bclr fixes. Tree 78ce903e; cc1, libgcc.a, libamixc99.a, the specs and libamixrt.so.1 (f18b7635) change; the init objects do not.
+
 ## 2026-11-20 — image.ref names the build images published from 7df961d1 (528b29a6)
 
 dist @sha256:03a597df…, media @sha256:3fc555dd… (gcc-cross-amix 33ebadc, gcc14-cross-amix c806d49, amix-system 988b0f8); make tools takes them by digest, and they compare equal to the images built here.
