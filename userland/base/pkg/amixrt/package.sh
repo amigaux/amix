@@ -3,7 +3,7 @@
 NAME=amixrt
 PKG=amixrt
 VERSION=1.0
-PKGREV=3   # -3: gcc14-cross-amix c806d49 (release-1.1): libamixrt.so.1 relinked, library names first in .dynstr
+PKGREV=4   # -4: gcc14-cross-amix 9d13dcd (release-1.1): __cxa_finalize rebuilt, fold-mem-offsets off
 SUMMARY="libamixrt.so.1: the runtime GCC 14 shared libraries need"
 DESC="/usr/lib/libamixrt.so.1, the runtime a shared library built with gcc -shared NEEDs: libamixc99 built position-independent, and gettimeofday, select, truncate, realpath, interval timers and message tables, which libc.so.1 does not export. One copy serves every program that loads such a library."
 CATEGORY=library
