@@ -1,4 +1,4 @@
-.TH MAN 1 "30 October 2026" "amix-base"
+.TH MAN 1 "20 November 2026" "amix-base"
 .SH NAME
 man \- display a manual page, from the add-on packages or from the stock system
 .SH SYNOPSIS
@@ -145,7 +145,7 @@ the stock index, read to know whether a stock page exists.
 the pager for terminal output.
 .TP
 .B MANPATH
-passed to the stock
+one directory: passed to the stock
 .B man
 as it is, unless it points into
 .BR /opt/amix ;
@@ -155,6 +155,30 @@ so that the stock
 .B man
 never caches a package's page in
 .BR /usr/catman .
+A list of directories separated by colons (a CDE session sets
+.BR /usr/dt/man:/usr/share/man ),
+which the stock
+.B man
+cannot read, is read here: for each page, the stock
+.B man
+is given the first directory in the list whose
+.B whatis
+names the page (in the section asked for, when one is), alone; when none
+does, the first directory with a
+.BR whatis .
+.B \-k
+and
+.B \-f
+ask each directory with a
+.B whatis
+in turn.
+The directories' indexes take the place of the stock index in choosing the
+stock page over ours.
+A directory in
+.B /opt/amix
+is dropped from the list, and
+.B CATPATH
+with it.
 .SH SEE ALSO
 .BR more (1),
 .BR eqn (1),

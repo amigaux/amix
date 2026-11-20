@@ -1,4 +1,4 @@
-.TH XSTART 1 "17 November 2026" "amix-base"
+.TH XSTART 1 "20 November 2026" "amix-base"
 .SH NAME
 xstart \- start X on this machine's display
 .SH SYNOPSIS
@@ -185,7 +185,23 @@ instead of a session, start X11R6's
 .B xdm
 or CDE's
 .B dtlogin
-with the same server line; the boot step
+with the same server line, given as
+.B \-server
+.RI \(dq: N
+.B local
+.IR server-line \(dq
+to
+.BR xdm ,
+and in CDE's extended form
+.B \-server
+.RI \(dq: N
+.B local_uid root
+.IR server-line \(dq
+to
+.BR dtlogin ,
+which otherwise runs the server as
+.B nobody
+(and so it cannot open the card's device node); the boot step
 .B S95display
 does this when
 .B /etc/display

@@ -58,6 +58,15 @@ shell front-end. Its own page is `man/man.1`, installed as
 - **The stock `man` is protected from our tree.** If `MANPATH` points into
   `/opt/amix`, the front-end drops `MANPATH` and `CATPATH` before it calls the
   stock `man`, so the stock command never caches our pages in `/usr/catman`.
+- **A `MANPATH` list.** The stock `man` takes one directory; a colon list
+  (CDE's `dtsearchpath` gives a desktop session `/usr/dt/man:/usr/share/man`)
+  makes it open `/usr/dt/man:/usr/share/man/whatis` and fail. The front-end
+  reads the list itself: entries in `/opt/amix` are dropped (and `CATPATH`
+  with them), and each stock call gets one directory as `MANPATH`, the first
+  whose `whatis` names the page (in the asked section, else in any), else the
+  first with a `whatis`; `-k` and `-f` ask each directory with a `whatis`.
+  The list's indexes stand for `/usr/share/man/whatis` in "which page wins".
+  An unset `MANPATH` and a single directory behave as before.
 
 ## The layout every package follows
 

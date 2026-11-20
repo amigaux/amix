@@ -27,6 +27,12 @@
 # Formatted pages are cached in /var/opt/amix/catman/<sect>/<name>, and only
 # where the invoking user may write (root, as shipped); never in /usr/catman.
 #
+# MANPATH: unset or one directory, it reaches the stock man as it is (one
+# into our tree is dropped, below). A colon-separated list (a CDE session's
+# /usr/dt/man:/usr/share/man) is read here, since the stock man takes one
+# tree: each tree is handed to it alone, the first whose whatis has the name,
+# and the trees' indexes, in order, stand for the stock index.
+#
 # Bourne sh of 1991: no $(...), no test -nt, no local.
 #
 # MIT licence: /opt/amix/doc/amix-base/LICENSE (LICENSE at the top of the
@@ -48,14 +54,46 @@ CMDSECTS='1[a-z]*|8'
 ANYSECT='[^)]*'
 
 # A MANPATH aimed at our tree would make the stock man cache our pages in
-# /usr/catman; the stock man only ever gets its own tree.
+# /usr/catman; the stock man only ever gets its own tree. A list: MTREES
+# holds its trees, ours dropped (and CATPATH with it), each once; MANPATH
+# itself is unset, and each stock call gets one tree. MTREE0 is the tree
+# for a call that names no page: the first with an index, else the first.
+MTREES=
+MTREE0=
 case "${MANPATH:-}" in
+*:*)
+	for mt in `echo "$MANPATH" | tr ':' ' '`
+	do
+		case "$mt" in
+		/opt/amix*|"$TREE"*)
+			unset CATPATH
+			;;
+		*)
+			case " $MTREES " in
+			*" $mt "*) ;;
+			*) MTREES="$MTREES $mt" ;;
+			esac
+			;;
+		esac
+	done
+	unset MANPATH
+	for mt in $MTREES
+	do
+		[ -r "$mt/whatis" ] && { MTREE0=$mt; break; }
+	done
+	[ -n "$MTREE0" ] || MTREE0=`echo $MTREES | awk '{ print $1 }'`
+	;;
 /opt/amix*|"$TREE"*)
 	unset MANPATH CATPATH
 	;;
 esac
 
 stock() {
+	if [ -n "$MTREES" ]
+	then
+		MANPATH=$MTREE0
+		export MANPATH
+	fi
 	exec "$STOCK" "$@"
 }
 
@@ -152,14 +190,75 @@ replaced() {
 		awk '$1 !~ /^#/ && $1 == b && NF >= 3 { print $2, $3; exit }' b="$1"
 }
 
-# stock_sect <name> <sections>: the section of the stock index's first line
-# for <name> in one of <sections> (an egrep alternation), or nothing. The
-# name pattern is the stock man's own lookup.
-stock_sect() {
-	[ -r "$WHATIS" ] || return
-	egrep -i "(^$1[^a-zA-Z0-9]| $1[^a-zA-Z0-9]).*-" "$WHATIS" 2>/dev/null |
-		sed -n 's/^[^ 	(]*(\([^)]*\)).*/\1/p' | egrep -i "^($2)\$" |
+# whatis_sect <index> <name> <sections>: the section of the index's first
+# line for <name> in one of <sections> (an egrep alternation), or nothing.
+# The name pattern is the stock man's own lookup.
+whatis_sect() {
+	[ -r "$1" ] || return
+	egrep -i "(^$2[^a-zA-Z0-9]| $2[^a-zA-Z0-9]).*-" "$1" 2>/dev/null |
+		sed -n 's/^[^ 	(]*(\([^)]*\)).*/\1/p' | egrep -i "^($3)\$" |
 		sed -n 1p | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'
+}
+
+# stock_sect <name> <sections>: the same over the stock index, or with a
+# MANPATH list over its trees' indexes in order
+stock_sect() {
+	if [ -z "$MTREES" ]
+	then
+		whatis_sect "$WHATIS" "$1" "$2"
+		return
+	fi
+	for _t in $MTREES
+	do
+		_s=`whatis_sect "$_t/whatis" "$1" "$2"`
+		[ -n "$_s" ] && { echo "$_s"; return; }
+	done
+}
+
+# stock_tree <name> <sections>: the first tree of the MANPATH list whose
+# index has <name> in one of <sections>, or nothing
+stock_tree() {
+	for _t in $MTREES
+	do
+		[ -n "`whatis_sect "$_t/whatis" "$1" "$2"`" ] && { echo "$_t"; return; }
+	done
+}
+
+# stockrun <sect|""> <name>: the stock man for one page, as it is called
+# without a list. With one, MANPATH is the first tree whose index has the
+# name (in that section, else in any), else MTREE0, whose own answer is then
+# "No manual entry".
+stockrun() {
+	if [ -z "$MTREES" ]
+	then
+		"$STOCK" ${1:+"$1"} "$2"
+		return
+	fi
+	_st=
+	[ -n "$1" ] && _st=`stock_tree "$2" "$1"`
+	[ -n "$_st" ] || _st=`stock_tree "$2" "$ANYSECT"`
+	[ -n "$_st" ] || _st=$MTREE0
+	MANPATH=$_st "$STOCK" ${1:+"$1"} "$2"
+}
+
+# stockidx <-k|-f> <word ...>: the stock man's -k or -f; with a list, once
+# for each tree that has an index (status 0 when one answered)
+stockidx() {
+	if [ -z "$MTREES" ]
+	then
+		"$STOCK" "$@"
+		return
+	fi
+	_rc=1
+	_n=
+	for _t in $MTREES
+	do
+		[ -r "$_t/whatis" ] || continue
+		_n=1
+		MANPATH=$_t "$STOCK" "$@" && _rc=0
+	done
+	[ -n "$_n" ] || { MANPATH=$MTREE0 "$STOCK" "$@"; return; }
+	return $_rc
 }
 
 # stock_first <our sect> <name>: show the stock page before ours? If so,
@@ -206,7 +305,7 @@ case "${1:-}" in
 	do
 		index "$k"
 	done
-	"$STOCK" -k "$@"
+	stockidx -k "$@"
 	exit
 	;;
 -f)
@@ -215,7 +314,7 @@ case "${1:-}" in
 	do
 		index "(^$n[^a-zA-Z0-9]| $n[^a-zA-Z0-9]).*-"
 	done
-	"$STOCK" -f "$@"
+	stockidx -f "$@"
 	exit
 	;;
 -*)
@@ -269,7 +368,7 @@ do
 				[ -n "$all" ] && ssect=`stock_sect "$n" "${sect:-$CMDSECTS}"`
 				if [ -n "$ssect" ]
 				then
-					"$STOCK" "$ssect" "$n" || rc=1
+					stockrun "$ssect" "$n" || rc=1
 				fi
 				continue
 			fi
@@ -278,19 +377,19 @@ do
 	hit=`find_page "$sect" "$n"`
 	if [ -z "$hit" ]
 	then
-		"$STOCK" ${sect:+"$sect"} "$n" || rc=1
+		stockrun "$sect" "$n" || rc=1
 		continue
 	fi
 	set -- $hit
 	if stock_first "$1" "$n"
 	then
-		"$STOCK" "$ssect" "$n" || rc=1
+		stockrun "$ssect" "$n" || rc=1
 		[ -n "$all" ] && show "$1" "$2" "$n" | page
 	else
 		show "$1" "$2" "$n" | page
 		if [ -n "$all" ] && [ -n "`stock_sect "$n" "${sect:-$ANYSECT}"`" ]
 		then
-			"$STOCK" ${sect:+"$sect"} "$n" || rc=1
+			stockrun "$sect" "$n" || rc=1
 		fi
 	fi
 done

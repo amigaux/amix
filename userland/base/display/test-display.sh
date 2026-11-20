@@ -551,9 +551,16 @@ same "-xdm" "xdm -server :0 local $B/Xzz :0 -mode 1920x1080 -w 1920 -h 1080 -bpp
 
 # --- -dtlogin: CDE's dtlogin with the same server line; absent, said
 o=$(run -dtlogin)
-same "-dtlogin" "dtlogin -server :0 local $B/Xzz :0 -mode 1920x1080 -w 1920 -h 1080 -bpp 16 -n 0" "$(cat "$T/calls")"
+same "-dtlogin" "dtlogin -server :0 local_uid root $B/Xzz :0 -mode 1920x1080 -w 1920 -h 1080 -bpp 16 -n 0" "$(cat "$T/calls")"
 o=$(run -n -dtlogin)
-expect "-n -dtlogin" "dtlogin  $B/dtlogin -server" "$o"
+expect "-n -dtlogin" "dtlogin  $B/dtlogin -server \":0 local_uid root $B/Xzz :0 -mode 1920x1080" "$o"
+o=$(run -n -xdm)
+expect "-n -xdm keeps local" "xdm      $B/xdm -server \":0 local $B/Xzz :0" "$o"
+# dtlogin keeps the env in its line, after local_uid root
+printf 'card native\n' | conf
+o=$(run -dtlogin :10)
+same "env: in dtlogin's line" "dtlogin -server :10 local_uid root /usr/bin/env SCREEN_GROUP=10 $B/Xnat :10" "$(cat "$T/calls")"
+printf 'card z3660\nmode 1920x1080\n' | conf
 o=$(DTL=$T/none run -dtlogin)
 expect "no dtlogin: said" "start dtlogin needs CDE's dtlogin ($T/none); not started" "$o"
 expect "no dtlogin: status 1" "rc=1" "$o"

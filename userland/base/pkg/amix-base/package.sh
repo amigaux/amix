@@ -2,7 +2,7 @@
 NAME=amix-base
 PKG=amxbase
 VERSION=1.0
-PKGREV=37
+PKGREV=39
 SUMMARY="Amix base system: boot helpers, the network set-up, the base config files"
 DESC="rc.subr and /etc/rc.conf, ifup/ifdown over /etc/inet/interfaces, dlpi-mac, the DHCP hook, the new inetinit, the device-node and swap boot steps, the time sync (ntpsync), shutdown with its request to init seen through (initwait), the display set-up (xstart, with card probes), man, /etc/amigaux-release (the release this system is), the stock /etc base files as conffiles, and /etc/group with the audio group and the sound device's node /dev/audio"
 CATEGORY=system
