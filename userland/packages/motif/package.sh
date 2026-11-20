@@ -2,7 +2,7 @@
 NAME=motif
 PKG=motif
 VERSION=2.3.8
-PKGREV=1
+PKGREV=2   # -2: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
 SOURCE_EPOCH=1795046400   # 2026-11-19 00:00 UTC
 SUMMARY="Motif 2.3.8 - the Motif toolkit (Xm, Mrm, Uil), mwm, uil and xmbind"
 DESC="Motif 2.3.8, the Open Group's LGPL release, built from the upstream source against X11R6.3 under /opt/amix/X11R6: the libXm, libMrm and libUil libraries with their headers, the mwm window manager, the uil compiler, xmbind, the bindings and the manual pages. Xft, Xprint, PNG and JPEG are off (X11R6.3 has none of them); Motif's own XPM reader is in libXm."
