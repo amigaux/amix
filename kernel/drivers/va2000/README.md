@@ -25,6 +25,13 @@ card's file for xstart (amix-base display.d(4)): with `card auto`, or
 node opens only when a board answers, and no monitor switch, because the card
 passes the Amiga picture through and the driver puts it back at the last close.
 
-**Status: not tested on a real card.** The VA2000 cannot be emulated, so the
-packages are tested only for their install and for a boot with the module in
-the boot set and no board present.
+**Status: run on a real card on the 68040/68060 line.** On an Amiga 3000 with
+a 68060 (kernel k46 -67, va2000-k46 1.1.0-2, x11r63 6.3-11) the module loads at
+the first open of `/dev/va2000` and stays loaded; the card's test tools work
+(colours, the blitter, 7 of the 9 modes: the monitor refused 1280x1024 and
+1920x1080); and Xrtg, started by `xstart card=va2000`, drives the card at
+1024x768 and 1280x720 with mouse and keyboard. Not yet run on a real card: the
+68030 package, XDM, unloading and reloading the module, a boot with the module
+in the boot set, and long runs. The VA2000 cannot be emulated; in emulation the
+packages are tested for their install and for a boot with the module in the
+boot set and no board present.
