@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — image.ref names the build images published from 7df961d1 (528b29a6)
+
+dist @sha256:03a597df…, media @sha256:3fc555dd… (gcc-cross-amix 33ebadc, gcc14-cross-amix c806d49, amix-system 988b0f8); make tools takes them by digest, and they compare equal to the images built here.
+
 ## 2026-11-20 — rpcgen.distfile falls back to our copy (d51f29be)
 
 rpcgen.distfile names our copy of rpcsvc-proto 1.4.4 (amigaux/amix-distfiles) as its fallback; test-tools checks, offline, that a failing original falls back to it and that other bytes are refused.
