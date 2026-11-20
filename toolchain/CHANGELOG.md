@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — image.ref names the build images published from next (f055fb8c)
+
+dist @sha256:f19db483…, media @sha256:13aad17f… (gcc-cross-amix 33ebadc, gcc14-cross-amix d0082c9, amix-system 988b0f8), published under their pinned tags only (PINNED_ONLY=1), so dist and media stay on master's images; make tools takes them by digest, and they compare equal to the images built here.
+
 ## 2026-11-20 — publish-image PINNED_ONLY=1 (ad1411a1)
 
 With PINNED_ONLY=1, publish-image tags and pushes only dist-<pins> and media-<pins> and leaves the floating dist and media tags on the release line's images; any value other than 0 or 1 is refused before the checks. test-tools 73/73.
