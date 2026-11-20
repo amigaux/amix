@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — cut 68060-261120-68 is the k46 cut of record; kern46m -68 (8c76e7e6, bb67961b)
+
+port.pin moves to 2dff5e4 on the port's release-1.1 (REV 43f80fc, core at amix 09b89ffb). Exec under vfork now unloads the parent's translations of the exec stack image, so a program started from a vfork child no longer finds its arguments overwritten when the parent starts another program the same way (CDE's session manager starts every client so). The ufs objects, abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -67's. kern46m k46.1.6.261120-68: unix ff751c21 (2362531 bytes), kabi 05970a8b, ufs.mod 773726b9.
+
 ## 2026-11-15 — cut 68060-261115-67 is the k46 cut of record; kern46m -67 (284770af, 94a3944f, d231cf4b)
 
 port.pin moves to 1e99468 on the port's release-1.1 (REV 59e1b77, core at amix 09b89ffb). The kernel goes to kabi k46.1.6: a module can ask for the fast framebuffer class (non-cacheable, not serialised) on a page-aligned window of its Zorro III board (fb_register). A kernel that cannot mount its root now panics once, not twice: sync() skips every filesystem while there is no root. The ufs objects, abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -66's. The description says the 1.1 module packages (kabi 1.2 to 1.4) keep working with this kernel. kern46m k46.1.6.261115-67: unix 454d5d65 (2362438 bytes), kabi 98958dc9, ufs.mod bcd350fa.

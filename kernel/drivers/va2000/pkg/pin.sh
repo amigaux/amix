@@ -30,12 +30,15 @@
 # (pkg/va2000.display, display.d(4)), so that xstart can start X on the card:
 # node /dev/va2000 (no probe: the node opens only with a board), the server
 # Xrtg with -card va2000 (x11r63 6.3-10 or later), no monitor switch.
+# 1.1.0-3 (2026-11-20): the same module and files; the descriptions say the
+# card has run on a real board on the 68040/68060 line (module, test tools,
+# Xrtg at 1024x768 and 1280x720), the 68030 line not yet.
 
 KM_NAME=va2000
 KM_SHORT=va2000
 KM_REPO=kernel/drivers/va2000
 KM_VERSION=1.1.0-1
-KM_PKG_VERSION=1.1.0-2
+KM_PKG_VERSION=1.1.0-3
 KM_VERSION_FILE=out/cache/forks/va2000/module/VERSION
 
 KM_K30_SHA=2307fed3e4890e03345ce8fc7c16f25c4dd6ab4c6ce2ea1ef6266c76d2e042ff
