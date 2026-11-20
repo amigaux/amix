@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — 1.1 notes: the 68060 image's boots on real hardware (67294ee9)
+
+docs/releases/1.1.md: the 68060 image's line says it was booted on an A4000T with a Z3660 before release (its first boot and four cold boots, on the 1.1 and the stock Z3660 firmware). Docs only.
+
 ## 2026-11-20 — the 1.1.x release notes say released (4a679e16)
 
 docs/releases/1.1.md, 1.1.1.md and 1.1.2.md say released, with the dates (2026-11-10, 2026-11-15, 2026-11-17) and a link to each release's files. Docs only.
