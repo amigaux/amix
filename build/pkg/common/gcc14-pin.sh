@@ -1,7 +1,7 @@
 # gcc14-pin.sh -- the gcc14-cross-amix identity: the pinned commit, the
 # sha256 of its cc1, libgcc.a, libamixc99.a, specs, amix_init.o, amix_initS.o
-# and libamixrt.so.1, and the return-value
-# ABI self-check.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
+# and libamixrt.so.1, the return-value ABI self-check, and the check that
+# fold-mem-offsets stays off.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
 # recipes) and by dlm-src.sh before it builds amix-dlm's box binaries
 # (kbootset, modadmin), which amix-dlm's Makefile links with the toolchain
 # prefix directly.  One pin for both: a new toolchain is a re-pin HERE (and a
@@ -153,9 +153,39 @@ amix_g14_align_check() {
 	return $_gal_rc
 }
 
-# amix_g14_identity <prefix> -- both: the pins, then the self-check of the
-# prefix's own compiler.
+# amix_g14_fold_check <cc> [<cflags>] -- fold-mem-offsets stays off: GCC
+# 14.2's pass (on from -O2) miscompiles m68k code, deleting the add of a
+# memory-to-memory store's address so a[n - 1] is stored as a[n].  The pinned
+# specs pass -fno-fold-mem-offsets to cc1 and cc1plus at every level unless
+# the compile asks for -ffold-mem-offsets (gcc14-cross-amix 74ca29a).  Checked
+# from the driver's own -### for C and C++: cc1's and cc1plus's lines carry
+# -fno-fold-mem-offsets and no -ffold-mem-offsets, with <cflags> or without.
+# amix_g14_identity runs it bare (the default compile), gcc14-env.sh with a
+# recipe's AMIX_CFLAGS.
+amix_g14_fold_check() {
+	_gf_rc=0
+	for _gf_x in c c++; do
+		_gf_l=$($1 $2 -x $_gf_x -### -c -o /dev/null /dev/null 2>&1 | grep -E '/cc1(plus)?"? ')
+		case " $_gf_l " in
+		*' "-ffold-mem-offsets" '*|*' -ffold-mem-offsets '*) _gf_rc=1 ;;
+		*' "-fno-fold-mem-offsets" '*|*' -fno-fold-mem-offsets '*) ;;
+		*) _gf_rc=1 ;;
+		esac
+		[ $_gf_rc -eq 0 ] || {
+			echo "[FAIL] TOOLCHAIN=gcc14: $1 ${2:+$2 }(-x $_gf_x) does not pass -fno-fold-mem-offsets to the compiler" >&2
+			echo "       (GCC 14.2's fold-mem-offsets miscompiles m68k code; the pinned specs turn it off):" >&2
+			echo "${_gf_l:-no cc1 line in -###}" | sed 's/^/         /' >&2
+			break
+		}
+	done
+	unset _gf_x _gf_l
+	return $_gf_rc
+}
+
+# amix_g14_identity <prefix> -- the pins, then the self-checks of the
+# prefix's own compiler: the return-value ABI and fold-mem-offsets off.
 amix_g14_identity() {
 	amix_g14_pincheck "$1" || return 1
 	amix_g14_abi_selfcheck "$1/bin/m68k-elf-gcc" || return 1
+	amix_g14_fold_check "$1/bin/m68k-elf-gcc" || return 1
 }

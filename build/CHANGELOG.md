@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — gcc14-pin.sh for 9d13dcd; amix_g14_fold_check (15a66acd)
+
+gcc14-pin.sh pins 9d13dcd's cc1, libgcc.a, libamixc99.a, specs and libamixrt.so.1; amix_g14_fold_check refuses a compiler, or recipe flags, that leave fold-mem-offsets on, both bare and with AMIX_CFLAGS. gate-gcc14-selftest 32 checks.
+
 ## 2026-11-19 — scan060-g14: one instruction between a table load and its jmp (f5ce019f)
 
 For the trusted-by-shape rule, scan060-g14.py reads past exactly one instruction between a table load and its jmp (libstdc++'s __facet_shims::__time_get<char>) when it changes no control flow, writes neither the index nor the jmp register and no branch lands on it; the NOTE names it. CDE's dtappgather and dtsearchpath now pass D4; no other verdict changed over the 543 ELFs and CDE.

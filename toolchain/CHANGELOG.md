@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — gcc14 pinned to release-1.1 9d13dcd: fold-mem-offsets off (15a66acd)
+
+gcc14-cross-amix release-1.1 9d13dcd: fold-mem-offsets off in the specs (a GCC 14.2 m68k -O2 miscompile: a store one element too far) and the PR 126121 bset/bclr fixes. Tree 78ce903e; cc1, libgcc.a, libamixc99.a, the specs and libamixrt.so.1 (f18b7635) change; the init objects do not.
+
 ## 2026-11-20 — gcc14 pin to the fork's next 413f38e: fold-mem-offsets off (73fee0f5)
 
 The specs pass -fno-fold-mem-offsets at every level (GCC 14.2.0's pass dropped an add that a memory-to-memory move's destination still used, so a store went one element too far), and gcc-0003 fixes the pass for -ffold-mem-offsets. gcc14-cross-amix.tree is 5357d750; cc1, libgcc.a, libamixc99.a, the specs and libamixrt.so.1 (f18b7635) change, with libstdc++ and libsupc++; the init objects and binutils stay. The fork's test-wrong-code.sh is in the image. image.ref still names the d0082c9 images until the new pair is published.
