@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — new revisions for the gcc14 9d13dcd rebuild (b1cd8e67)
+
+The packages whose bytes change with gcc14-cross-amix 9d13dcd, where fold-mem-offsets is off: amix-benchmark-gcc14 1.3-11, gzip 1.3.12-11, make 3.81-11, motif 2.3.8-2, python3 3.11.18-6, rsync 3.1.3-5, tar 1.14-12, vim 9.1.0000-6, x11r6.3 6.3-13, xztop 1.1.1-3, zlib 1.2.13-11. A unit-by-unit comparison with the c806d49 build found only correct folds no longer made and PR 126121's bit-operation rewrites at sites bounded to bits 0–7; no shipped code had a wrong fold.
+
 ## 2026-11-19 — motif: makestrs with X11R6.3's headers (e07ca8d6)
 
 The build's makestrs tool takes X11R6.3's <X11/Xos.h> instead of the build host's; make dist's container has no X headers. The package is unchanged (2.3.8-1, the same bytes from the container).

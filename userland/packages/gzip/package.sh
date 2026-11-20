@@ -2,7 +2,7 @@
 NAME=gzip
 PKG=gzip
 VERSION=1.3.12
-PKGREV=10   # -10: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
+PKGREV=11   # -11: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
 SUMMARY="GNU gzip 1.3.12 - the .gz compressor"
 DESC="GNU gzip 1.3.12 reads and writes the universal .gz (deflate) format, which stock Amix cannot -- stock ships only 1985 LZW compress/.Z. Installs /opt/amix/bin/{gzip,gunzip,zcat}. Integer-only; links nothing outside the stock libc. Add /opt/amix/bin to PATH to use it."
 CATEGORY=archive
