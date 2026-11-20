@@ -62,15 +62,20 @@ esac
 # dl_makelist reads them, and two checks are added. Only libamixrt.so.1
 # changes here (relinked by the new ld, the bytes release-1.1 pins); cc1 is
 # 13ed718's, and libgcc.a, libamixc99.a, the specs and the init objects stay.
-AMIX_GCC14_COMMIT=d0082c9ecbc2a0c4c77b40688d9694e453eeed6f
+# 413f38e (2026-11-20; the fork's next with release-1.1 merged in again):
+# the specs pass -fno-fold-mem-offsets at every level (GCC 14.2.0's pass
+# dropped an add a memory-to-memory move's destination still used), with
+# gcc-0003 fixing the pass itself: cc1, libgcc.a, libamixc99.a, the specs
+# and libamixrt.so.1 change; both init objects and binutils stay.
+AMIX_GCC14_COMMIT=413f38e098cc638290573cf280d05f78e2da6de2
 AMIX_GCC14_PINS="\
-libexec/gcc/m68k-elf/14.2.0/cc1 cd9909a665bd5cb7721fe3e5196bb563f9179632ad9137fc72e8d1234e253b64
-lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
-m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9d67b9496de
-lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
+libexec/gcc/m68k-elf/14.2.0/cc1 10ee4bf556707d7f483fd36a848a4d211f6f696d42e6a5ea861992953b81a356
+lib/gcc/m68k-elf/14.2.0/libgcc.a f271dcd62d64f1ddd334e2592106539cc936a60dc9dbfac5cedc5315de1523cb
+m68k-elf/lib/libamixc99.a 2b91d5062d35f4a6f324ee831b9979b301645f8eceafb0d5dbac51d3e5eb4d39
+lib/gcc/m68k-elf/14.2.0/specs ed28f1683322cfa00528370b699675928c2a7af1f64dbdea6be31ff9c3a1903b
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 0ae586a7698d2bdae23f01d2bb49fab0c86ec56edf2c4bd7bb5379aa6ec76283"
+m68k-elf/lib/amixrt/libamixrt.so.1 f18b763593c978435e3738c4518b4dcad329e6c2ddc176f8ceb6fc992e61f3ea"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {

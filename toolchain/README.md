@@ -30,15 +30,19 @@ shared library needs, which the image also copies to the sysroot's
 its 1.1.x fixes, today ld putting the library names first in `.dynstr`, where
 AMIX's runtime linker reads them, and two checks (`check-dynstr-order.py`,
 `check-got-addend.py`). The development line pins the fork's `next`, which has
-those fixes too (`release-1.1` is merged into it, never the other way) and adds two GCC
-patches that `build-cross.sh` applies to the release: upstream's fix for GCC
-PR target/126121 (`bset`/`bclr` on a byte in memory with a bit number of 8 or
-more changed bit `n & 7`, where C changes nothing) and a guard against the
-bit-field clear at offset `7 - n` that the fix alone leaves, which writes the
-byte before. The runtime libraries come out instruction for instruction the
-same. The fork's `tools/check-bset-mem.py` finds both forms in objects,
-archives and programs, and is in the image with the toolchain. Once upstream
-has them, the pin moves back to upstream. Kernel-space code is never built with GCC 14: it
+those fixes too (`release-1.1` is merged into it, never the other way). Both
+carry three GCC patches that `build-cross.sh` applies to the release: upstream's
+fix for GCC PR target/126121 (`bset`/`bclr` on a byte in memory with a bit
+number of 8 or more changed bit `n & 7`, where C changes nothing), a guard
+against the bit-field clear at offset `7 - n` that the fix alone leaves, which
+writes the byte before, and a fix to the fold-mem-offsets pass, which on m68k
+deleted an add that a memory-to-memory move's destination still used, so the
+store went one element too far. The specs also turn that pass off
+(`-fno-fold-mem-offsets`) at every level, and the runtime libraries are built
+without it. The fork's `tools/check-bset-mem.py` finds both PR 126121 forms in
+objects, archives and programs, and `tools/test-wrong-code.sh` runs the cases;
+both are in the image with the toolchain. Once upstream has the patches,
+the pin moves back to upstream. Kernel-space code is never built with GCC 14: it
 has to be object-compatible with what AMIX itself was built with.
 
 Both toolchains need an AMIX sysroot (the system headers, libraries and
