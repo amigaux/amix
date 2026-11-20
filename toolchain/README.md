@@ -29,7 +29,8 @@ shared library needs, which the image also copies to the sysroot's
 `release-1.1`: the fork's `1.1` tag (the commit amix 1.1 was built with) plus
 its 1.1.x fixes, today ld putting the library names first in `.dynstr`, where
 AMIX's runtime linker reads them, and two checks (`check-dynstr-order.py`,
-`check-got-addend.py`). The development line pins the fork's `next`, which adds two GCC
+`check-got-addend.py`). The development line pins the fork's `next`, which has
+those fixes too (`release-1.1` is merged into it, never the other way) and adds two GCC
 patches that `build-cross.sh` applies to the release: upstream's fix for GCC
 PR target/126121 (`bset`/`bclr` on a byte in memory with a bit number of 8 or
 more changed bit `n & 7`, where C changes nothing) and a guard against the
