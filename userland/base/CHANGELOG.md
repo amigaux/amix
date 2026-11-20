@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — amixrt 1.0-4 (3789a135, 5b46eba4)
+
+libamixrt.so.1 from gcc14-cross-amix 9d13dcd (release-1.1: fold-mem-offsets off by default, the PR 126121 fixes); sha256 0ae586a7 → f18b7635, 22728 bytes; only __cxa_finalize's code changes.
+
 ## 2026-11-20 — amix-base 1.0-38: dtlogin's local_uid line, man with a MANPATH list (1dcdce9d, 8c2d5deb, 6d757272, ca9c2212, 086d5dfa)
 
 `xstart -dtlogin` gives dtlogin CDE's extended server line `:N local_uid root <line>`; without it dtlogin runs the X server as nobody, which cannot open /dev/zz9000 (xdm keeps `local`). `man` reads a colon-separated MANPATH (a CDE session's /usr/dt/man:/usr/share/man) one tree at a time, chosen by each tree's whatis; unset or one directory as before. plan.md lists cde's S78cde-rpc/K38cde-rpc and its rc.conf keys. The CDE greeter comes up through S95display on the emulator.
