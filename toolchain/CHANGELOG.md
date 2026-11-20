@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — rpcgen.distfile falls back to our copy (d51f29be)
+
+rpcgen.distfile names our copy of rpcsvc-proto 1.4.4 (amigaux/amix-distfiles) as its fallback; test-tools checks, offline, that a failing original falls back to it and that other bytes are refused.
+
 ## 2026-11-20 — gcc14 pin to the fork's next d0082c9 on the development line (b059b546)
 
 d0082c9 is next with release-1.1 merged in: library names first in .dynstr on top of the PR 126121 patches. gcc14-cross-amix.tree is 13d30d30; among the pinned files only libamixrt.so.1 changes (0ae586a7, the bytes amixrt 1.0-3 ships), and cc1 stays 13ed718's. Linked programs differ in .dynstr order only; static archives are unchanged. image.ref still names the dcfd12d images.
