@@ -346,6 +346,17 @@ check "publish-image: checks, then pushes each by name and pins, and prints imag
 		[ \"\$(grep -n 'check-image' '$ip/log' | cut -d: -f1)\" -lt \"\$(grep -n 'docker push' '$ip/log' | head -1 | cut -d: -f1)\" ] &&
 		grep -qx 'dist r.example/t@sha256:cccc[c]*' '$ip/out' && grep -qx 'media r.example/t@sha256:cccc[c]*' '$ip/out'"
 rm -f "$ip/log"
+check "publish-image: PINNED_ONLY=1 pushes only the tags with the pins, dist and media stay" \
+	sh -c "CONTAINER='$ip/docker' PINNED_ONLY=1 AMIX_IMAGE=l:dist AMIX_MEDIA_IMAGE=l:media sh '$ip/toolchain/publish-image' r.example/t > '$ip/out' &&
+		[ \"\$(grep '^docker push' '$ip/log')\" = \"\$(printf '%s\n' \
+			'docker push --platform linux/amd64 r.example/t:dist-aaaaaaa-aaaaaaa-bbbbbbb' \
+			'docker push --platform linux/amd64 r.example/t:media-aaaaaaa-aaaaaaa-bbbbbbb')\" ] &&
+		! grep -Eq 'r\.example/t:(dist|media)\$' '$ip/log' &&
+		grep -qx 'dist r.example/t@sha256:cccc[c]*' '$ip/out' && grep -qx 'media r.example/t@sha256:cccc[c]*' '$ip/out'"
+rm -f "$ip/log"
+refused "publish-image: PINNED_ONLY other than 0 or 1 is refused before anything" "PINNED_ONLY is 0 or 1" sh -c "
+	CONTAINER='$ip/docker' PINNED_ONLY=yes sh '$ip/toolchain/publish-image' r.example/t; r=\$?; [ -s '$ip/log' ] && exit 0; exit \$r"
+rm -f "$ip/log"
 refused "publish-image: an image that fails its checks is not pushed" "check-image" env CHECK_RC=1 sh -c "
 	CONTAINER='$ip/docker' sh '$ip/toolchain/publish-image' r.example/t; r=\$?; cat '$ip/log'; ! grep -q 'docker push' '$ip/log' && exit \$r"
 

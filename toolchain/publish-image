@@ -11,6 +11,8 @@
 #   CONTAINER         docker (default) or podman
 #   AMIX_IMAGE        the build container (default amix-toolchain:dist)
 #   AMIX_MEDIA_IMAGE  the media image (default amix-toolchain:media)
+#   PINNED_ONLY       1: push only the tags with the pins, and leave dist and
+#                     media where they are (a line other than the release's)
 #
 # The images are checked first, as image-pull checks a pulled pair: this
 # checkout's pins, the pinned gcc14, and the media image's toolchains. Each is
@@ -28,6 +30,10 @@ tool=${CONTAINER:-docker}
 repo=${1:-ghcr.io/amigaux/amix-toolchain}
 dist=${AMIX_IMAGE:-amix-toolchain:dist}
 media=${AMIX_MEDIA_IMAGE:-amix-toolchain:media}
+case ${PINNED_ONLY:-0} in
+0|1) ;;
+*) echo "publish-image: PINNED_ONLY is 0 or 1, not '$PINNED_ONLY'" >&2; exit 2 ;;
+esac
 
 "$here/check-image" "$dist"
 "$here/extract-g14.sh" --check "$dist"
@@ -49,7 +55,9 @@ lines=
 for n in dist media; do
 	if [ $n = dist ]; then img=$dist; else img=$media; fi
 	d=
-	for t in "$n" "$n-$pins"; do
+	tags="$n $n-$pins"
+	[ "${PINNED_ONLY:-0}" = 0 ] || tags=$n-$pins
+	for t in $tags; do
 		"$tool" tag "$img" "$repo:$t"
 		push "$repo:$t"
 		g=$(cat "$work/digest")
