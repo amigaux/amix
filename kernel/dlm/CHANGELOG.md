@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — writing-a-module.md names the DMA calls (bc6d19f3)
+
+§4 no longer says DDI has no DMA interface: it names the DMA calls of minor 2 (k30.1.2, k46.1.2: dma_alloc, dma_prepare/dma_complete, dma_addr) and points to ddi.md and C4-5. The kits' docs/guide.md changes with it at the next kit rebuild.
+
 ## 2026-11-17 — C2-2 version 8: the module-floor base (186fc776)
 
 C2-2 version 8: kbootset.conf's module-floor base. A module row whose kbootset floor is at or below it is written without kbootset=, so apkg 0.3.11 on 1.1.1 takes it in its first upgrade; kbmin.sh checks the line.
