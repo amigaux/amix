@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — dhcp-client 1.0-10: the gcc14 9d13dcd rebuild (2075df7b, bdea30cc)
+
+dhcpc rebuilt with gcc14-cross-amix 9d13dcd (fold-mem-offsets off by default): dhcpparse, dlopen_if, dlsend and udpsend lose correct offset folds. No fold the patched pass refuses and no bset/bclr rewrite; the shipped 1.0-9 had the same code, so 1.1.x was not exposed.
+
 ## 2026-11-20 — amixrt 1.0-4 (3789a135, 5b46eba4)
 
 libamixrt.so.1 from gcc14-cross-amix 9d13dcd (release-1.1: fold-mem-offsets off by default, the PR 126121 fixes); sha256 0ae586a7 → f18b7635, 22728 bytes; only __cxa_finalize's code changes.
