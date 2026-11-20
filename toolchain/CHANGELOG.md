@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — rpcgen.distfile falls back to our copy (d51f29be)
+
+rpcgen.distfile names our copy of rpcsvc-proto 1.4.4 (amigaux/amix-distfiles) as its fallback; test-tools checks, offline, that a failing original falls back to it and that other bytes are refused.
+
 ## 2026-11-19 — ksh in the build container (622777ba)
 
 The build container installs ksh (ksh93u+m 1.0.8) from the pinned snapshot, for CDE's ksh build scripts; TOOLCHAIN.sha256 unchanged.
