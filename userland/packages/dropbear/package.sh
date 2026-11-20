@@ -2,7 +2,7 @@
 NAME=dropbear
 PKG=dropbear
 VERSION=2026.94
-PKGREV=5   # -5: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
+PKGREV=6   # -6: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
 SOURCE_EPOCH=1793520000   # this version's epoch, kept when only the build scripts change
 SUMMARY="Dropbear SSH 2026.94"
 DESC="Dropbear 2026.94, a small SSH server and client: dropbear, dbclient, dropbearkey and scp in one binary, with curve25519 and ML-KEM key exchange, ed25519 and RSA keys, chacha20-poly1305 and aes128-ctr. Needs /dev/urandom (the random module)."
