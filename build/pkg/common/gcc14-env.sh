@@ -215,6 +215,8 @@ AMIX_ARCH_FLAGS="${AMIX_ARCH_FLAGS:--m68020-60 -mno-strict-align}"
 AMIX_CFLAGS="${AMIX_CFLAGS:-$AMIX_ARCH_FLAGS -O2 -Wall}"
 export AMIX_ARCH_FLAGS AMIX_CFLAGS
 amix_g14_align_check "$CC" "$AMIX_ARCH_FLAGS" "$AMIX_CFLAGS" || exit 1
+# and fold-mem-offsets off with the recipe's flags (amix_g14_fold_check)
+amix_g14_fold_check "$CC" "$AMIX_CFLAGS" || exit 1
 
 # configure only (see the header); never on a make line.
 export AMIX_CONFIGURE_LENIENT="-Wno-error=implicit-function-declaration -Wno-error=implicit-int -Wno-error=int-conversion -Wno-error=incompatible-pointer-types -Wno-error=return-mismatch"

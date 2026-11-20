@@ -1,7 +1,7 @@
 # gcc14-pin.sh -- the gcc14-cross-amix identity: the pinned commit, the
 # sha256 of its cc1, libgcc.a, libamixc99.a, specs, amix_init.o, amix_initS.o
-# and libamixrt.so.1, and the return-value
-# ABI self-check.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
+# and libamixrt.so.1, the return-value ABI self-check, and the check that
+# fold-mem-offsets stays off.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
 # recipes) and by dlm-src.sh before it builds amix-dlm's box binaries
 # (kbootset, modadmin), which amix-dlm's Makefile links with the toolchain
 # prefix directly.  One pin for both: a new toolchain is a re-pin HERE (and a
@@ -53,19 +53,25 @@ esac
 # where AMIX's dl_makelist reads them, and two checks are added. Only
 # libamixrt.so.1 changes here (relinked by the new ld); cc1, libgcc.a,
 # libamixc99.a, the specs and the init objects are the same bytes.
+# 9d13dcd (2026-11-20; release-1.1) fixes two wrong-code faults: the specs
+# pass -fno-fold-mem-offsets at every level (GCC 14.2's pass stored a[n - 1]
+# as a[n] at -O2 on m68k; gcc-0003 patches the pass for -ffold-mem-offsets),
+# and gcc-0001/0002 backport the PR 126121 bset/bclr fixes. cc1, libgcc.a,
+# libamixc99.a, the specs and libamixrt.so.1 change; the init objects do not.
+# amix_g14_fold_check proves the flag reaches cc1 and cc1plus.
 # toolchain/extract-g14.sh puts it on the host, where it builds the same
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=c806d4962790dac10c72d26a6e3e293d280f6856
+AMIX_GCC14_COMMIT=9d13dcda219bb6b2366c3248e08b40fcc28a89b4
 AMIX_GCC14_PINS="\
-libexec/gcc/m68k-elf/14.2.0/cc1 ff4241a6de847b321985f0dfe80d00f20d485f85cd4f947ee593836a96009182
-lib/gcc/m68k-elf/14.2.0/libgcc.a bb531a7db3c28351864a4ceb6dbbc6785a4dddd75d985ad35050543be2d8244f
-m68k-elf/lib/libamixc99.a 257b10bbd90b758fc6b47a1b624ec2e5d927f143caec37228ae0d9d67b9496de
-lib/gcc/m68k-elf/14.2.0/specs d2f36ec2d67912727d5791b7912f690651fc68e4abbc9250532fa37c24d97398
+libexec/gcc/m68k-elf/14.2.0/cc1 10ee4bf556707d7f483fd36a848a4d211f6f696d42e6a5ea861992953b81a356
+lib/gcc/m68k-elf/14.2.0/libgcc.a f271dcd62d64f1ddd334e2592106539cc936a60dc9dbfac5cedc5315de1523cb
+m68k-elf/lib/libamixc99.a 2b91d5062d35f4a6f324ee831b9979b301645f8eceafb0d5dbac51d3e5eb4d39
+lib/gcc/m68k-elf/14.2.0/specs ed28f1683322cfa00528370b699675928c2a7af1f64dbdea6be31ff9c3a1903b
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 0ae586a7698d2bdae23f01d2bb49fab0c86ec56edf2c4bd7bb5379aa6ec76283"
+m68k-elf/lib/amixrt/libamixrt.so.1 f18b763593c978435e3738c4518b4dcad329e6c2ddc176f8ceb6fc992e61f3ea"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
@@ -143,9 +149,39 @@ amix_g14_align_check() {
 	return $_gal_rc
 }
 
-# amix_g14_identity <prefix> -- both: the pins, then the self-check of the
-# prefix's own compiler.
+# amix_g14_fold_check <cc> [<cflags>] -- fold-mem-offsets stays off: GCC
+# 14.2's pass (on from -O2) miscompiles m68k code, deleting the add of a
+# memory-to-memory store's address so a[n - 1] is stored as a[n].  The pinned
+# specs pass -fno-fold-mem-offsets to cc1 and cc1plus at every level unless
+# the compile asks for -ffold-mem-offsets (gcc14-cross-amix 74ca29a).  Checked
+# from the driver's own -### for C and C++: cc1's and cc1plus's lines carry
+# -fno-fold-mem-offsets and no -ffold-mem-offsets, with <cflags> or without.
+# amix_g14_identity runs it bare (the default compile), gcc14-env.sh with a
+# recipe's AMIX_CFLAGS.
+amix_g14_fold_check() {
+	_gf_rc=0
+	for _gf_x in c c++; do
+		_gf_l=$($1 $2 -x $_gf_x -### -c -o /dev/null /dev/null 2>&1 | grep -E '/cc1(plus)?"? ')
+		case " $_gf_l " in
+		*' "-ffold-mem-offsets" '*|*' -ffold-mem-offsets '*) _gf_rc=1 ;;
+		*' "-fno-fold-mem-offsets" '*|*' -fno-fold-mem-offsets '*) ;;
+		*) _gf_rc=1 ;;
+		esac
+		[ $_gf_rc -eq 0 ] || {
+			echo "[FAIL] TOOLCHAIN=gcc14: $1 ${2:+$2 }(-x $_gf_x) does not pass -fno-fold-mem-offsets to the compiler" >&2
+			echo "       (GCC 14.2's fold-mem-offsets miscompiles m68k code; the pinned specs turn it off):" >&2
+			echo "${_gf_l:-no cc1 line in -###}" | sed 's/^/         /' >&2
+			break
+		}
+	done
+	unset _gf_x _gf_l
+	return $_gf_rc
+}
+
+# amix_g14_identity <prefix> -- the pins, then the self-checks of the
+# prefix's own compiler: the return-value ABI and fold-mem-offsets off.
 amix_g14_identity() {
 	amix_g14_pincheck "$1" || return 1
 	amix_g14_abi_selfcheck "$1/bin/m68k-elf-gcc" || return 1
+	amix_g14_fold_check "$1/bin/m68k-elf-gcc" || return 1
 }

@@ -44,6 +44,8 @@
 #     passes the pinned compiler and rejects the pre-fix one;
 #   - dlm-src.sh's check before amix-dlm's box builds (kbootset, modadmin)
 #     uses the same pins: it refuses that prefix and passes the real one;
+#   - fold-mem-offsets stays off: -fno-fold-mem-offsets reaches cc1 and
+#     cc1plus, and specs without it or flags asking for it are refused;
 #   - -mno-strict-align is enforced: amix-env.sh
 #     refuses flags without it or ending in -mstrict-align, the -S probe
 #     rejects a compiler that still splits an unaligned load, and
@@ -912,6 +914,25 @@ if amix_gate_g14_strict "$T/bad.log" > "$T/al4.log" 2>&1; then fail "the strict 
 grep '2 of 3 gcc14 compile lines lack' "$T/al4.log" >/dev/null || { cat "$T/al4.log" >&2; fail "the strict gate miscounted the bad log"; }
 if amix_gate_g14_strict "$T/none.log" >/dev/null 2>&1; then fail "the strict gate passed a log with no compile line"; fi
 ok "-mno-strict-align: env refuses flags without it or overriding it, -S probe rejects a strict compiler, make-log gate counts 2/3 bad and refuses an empty log"
+
+# fold-mem-offsets off (GCC 14.2 miscompiles m68k with it; gcc14-cross-amix
+# 9d13dcd's specs pass -fno-fold-mem-offsets): the pinned compiler passes
+# the check bare and with the recipe flags; refused are the same compiler
+# with its specs' flag removed (the specs before 9d13dcd, by -specs=) and
+# recipe flags that ask for -ffold-mem-offsets, which amix-env.sh refuses.
+amix_g14_fold_check "$AMIX_GCC14_CC" >/dev/null 2>&1 || fail "the fold check rejected the pinned compiler"
+amix_g14_fold_check "$CC" "$AMIX_CFLAGS" >/dev/null 2>&1 || fail "the fold check rejected the recipe flags"
+sed 's/ %{!ffold-mem-offsets:-fno-fold-mem-offsets}//' "$AMIX_GCC14_PREFIX/lib/gcc/m68k-elf/14.2.0/specs" > "$T/nofold.specs"
+cmp -s "$T/nofold.specs" "$AMIX_GCC14_PREFIX/lib/gcc/m68k-elf/14.2.0/specs" && fail "the pinned specs carry no -fno-fold-mem-offsets to remove"
+if amix_g14_fold_check "$AMIX_GCC14_CC -specs=$T/nofold.specs" > "$T/fo1.log" 2>&1; then
+	fail "the fold check passed a compiler whose specs leave fold-mem-offsets on"
+fi
+grep 'does not pass -fno-fold-mem-offsets' "$T/fo1.log" >/dev/null || { cat "$T/fo1.log" >&2; fail "fo1 refused, but not by the fold check"; }
+if (AMIX_CFLAGS="$AMIX_ARCH_FLAGS -O2 -ffold-mem-offsets"; export AMIX_CFLAGS; . "$AMIX_PKG_COMMON/amix-env.sh") > "$T/fo2.log" 2>&1; then
+	fail "amix-env.sh accepted AMIX_CFLAGS with -ffold-mem-offsets"
+fi
+grep 'does not pass -fno-fold-mem-offsets' "$T/fo2.log" >/dev/null || { cat "$T/fo2.log" >&2; fail "fo2 refused, but not by the fold check"; }
+ok "fold-mem-offsets off: -fno-fold-mem-offsets reaches cc1 and cc1plus bare and with the recipe flags; specs without it, and -ffold-mem-offsets in AMIX_CFLAGS, are refused"
 
 # amix-decls.h: what the AMIX headers never declare, so an implicit
 # declaration (an error under gcc14) never reaches a link: readv/writev
