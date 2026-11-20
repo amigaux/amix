@@ -28,7 +28,9 @@
 # newer base) and a mistake in another card's file are warned about. -xdm
 # runs X11R6's xdm with that server instead of a session, -dtlogin CDE's
 # dtlogin the same way (it takes xdm's -server, which outranks its
-# Xconfig). The stock startx is not touched.
+# Xconfig), in CDE's form "<disp> local_uid root <server line>": without
+# local_uid, dtlogin runs the server as nobody. The stock startx is not
+# touched.
 #
 # Installed as /usr/amix/bin/xstart. Exit 0 when the session (or xdm) ran,
 # 1 when the display cannot be set up, 2 on a usage mistake.
@@ -346,7 +348,7 @@ then
 		echo "xdm      `first "$XDMS"` -server \"$disp local $xline\""
 	elif [ -n "$dtlogin" ]
 	then
-		echo "dtlogin  `first "$DTLOGINS"` -server \"$disp local $xline\""
+		echo "dtlogin  `first "$DTLOGINS"` -server \"$disp local_uid root $xline\""
 	else
 		echo "xinit    ${xinit:-none} $s -- $sline${env:+ (env for the server only)}"
 		r=`disp_val $C restore`
@@ -382,7 +384,9 @@ if [ -n "$dtlogin" ]
 then
 	x=`first "$DTLOGINS"` || { say "start dtlogin needs CDE's dtlogin ($DTLOGINS); not started"; exit 1; }
 	[ -n "$tool" ] && "$tool" $monsw rtg > /dev/null
-	exec $x -server "$disp local $xline"
+	# CDE's extended line: without "local_uid <user>" dtlogin runs the
+	# server as nobody, which cannot open the card's node (root sys 0660)
+	exec $x -server "$disp local_uid root $xline"
 fi
 
 [ -n "$xinit" ] || { say "no xinit installed ($XINITS)"; exit 1; }
