@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — amix-base 1.0-38: dtlogin's local_uid line, man with a MANPATH list (1dcdce9d, 8c2d5deb, 6d757272, ca9c2212, 086d5dfa)
+
+`xstart -dtlogin` gives dtlogin CDE's extended server line `:N local_uid root <line>`; without it dtlogin runs the X server as nobody, which cannot open /dev/zz9000 (xdm keeps `local`). `man` reads a colon-separated MANPATH (a CDE session's /usr/dt/man:/usr/share/man) one tree at a time, chosen by each tree's whatis; unset or one directory as before. plan.md lists cde's S78cde-rpc/K38cde-rpc and its rc.conf keys. The CDE greeter comes up through S95display on the emulator.
+
 ## 2026-11-19 — amixrt 1.0-3 (65e98c3b)
 
 libamixrt.so.1 from gcc14-cross-amix c806d49 (release-1.1), relinked with library names first in .dynstr; 22728 bytes, sha256 0ae586a7. Only the library, pkginfo and pkgmap differ from 1.0-2.
