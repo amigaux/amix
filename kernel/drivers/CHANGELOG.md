@@ -3,6 +3,10 @@
 Changes to the shared kernel/drivers README and the fork pins. Each source driver keeps its own CHANGELOG in its
 directory.
 
+## 2026-11-20 — va2000 1.1.0-3: run on a real card on the 68040/68060 line (76faeba2)
+
+The README and both package descriptions say what has run on a real VA2000: on an Amiga 3000 with a 68060 (kernel k46 -67, va2000-k46 1.1.0-2, x11r63 6.3-11) the module loads at the first open and stays loaded, the card's test tools work (colours, the blitter, 7 of 9 modes; the monitor refused 1280x1024 and 1920x1080), and Xrtg through xstart card=va2000 drives it at 1024x768 and 1280x720 with mouse and keyboard. Not yet on a real card: the 68030 package, XDM, unload and reload, a boot with the module in the set, long runs. Same module and files as 1.1.0-2.
+
 ## 2026-11-16 — va2000 1.1.0-2: the card file /etc/display.d/va2000 (eca4df61)
 
 The package installs /etc/display.d/va2000 (display.d(4)), so xstart starts Xrtg -card va2000 on the card. It has no probe line (the node opens only when a board answers), no monitor switch and no limits. The module is unchanged (1.1.0). Packages va200030 a2363193, va200046 a662f898, two rolls identical, the same bytes on master.
