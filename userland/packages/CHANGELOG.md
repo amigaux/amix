@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — dropbear 2026.94-6, libzz9k 2.9.1-4: the gcc14 9d13dcd rebuild
+
+The two remaining packages whose bytes change with gcc14-cross-amix 9d13dcd: dropbear (libtommath's multiplication routines and cli-runopts) and libzz9k (zz9k_host, and the zlib zz9k-test links); correct folds no longer made, nothing wrong as shipped.
+
 ## 2026-11-20 — new revisions for the gcc14 9d13dcd rebuild (b1cd8e67)
 
 The packages whose bytes change with gcc14-cross-amix 9d13dcd, where fold-mem-offsets is off: amix-benchmark-gcc14 1.3-11, gzip 1.3.12-11, make 3.81-11, motif 2.3.8-2, python3 3.11.18-6, rsync 3.1.3-5, tar 1.14-12, vim 9.1.0000-6, x11r6.3 6.3-13, xztop 1.1.1-3, zlib 1.2.13-11. A unit-by-unit comparison with the c806d49 build found only correct folds no longer made and PR 126121's bit-operation rewrites at sites bounded to bits 0–7; no shipped code had a wrong fold.
