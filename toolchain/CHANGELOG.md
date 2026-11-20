@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-20 — gcc14 pin to the fork's next 413f38e: fold-mem-offsets off (73fee0f5)
+
+The specs pass -fno-fold-mem-offsets at every level (GCC 14.2.0's pass dropped an add that a memory-to-memory move's destination still used, so a store went one element too far), and gcc-0003 fixes the pass for -ffold-mem-offsets. gcc14-cross-amix.tree is 5357d750; cc1, libgcc.a, libamixc99.a, the specs and libamixrt.so.1 (f18b7635) change, with libstdc++ and libsupc++; the init objects and binutils stay. The fork's test-wrong-code.sh is in the image. image.ref still names the d0082c9 images until the new pair is published.
+
 ## 2026-11-20 — image.ref names the build images published from next (f055fb8c)
 
 dist @sha256:f19db483…, media @sha256:13aad17f… (gcc-cross-amix 33ebadc, gcc14-cross-amix d0082c9, amix-system 988b0f8), published under their pinned tags only (PINNED_ONLY=1), so dist and media stay on master's images; make tools takes them by digest, and they compare equal to the images built here.
