@@ -1016,7 +1016,8 @@ def scan(tool, path):
 
 
 def explain(tables, hitfile, starts):
-    """-> (all hit addresses, in-table, odd, mid, unexplained).  A hit is
+    """-> (all hit addresses, in-table, odd, mid, unexplained), or None when
+    the hit lines read are not as many as scan060.py's HITS lines count.  A hit is
     data if it lies inside a sized table; it is a decode artifact if its
     address is odd (every 680x0 instruction starts on an even address, so a
     decode starting at an odd one is out of sync by construction), or if it
@@ -1028,11 +1029,19 @@ def explain(tables, hitfile, starts):
     after them as one instruction and lands inside the next (CDE 2.5.3's
     dtwm: `0068 01d8 23ef' read as an oriw, then the 0588 inside `movel
     %sp@(36),0x803b0588' as a movepw)."""
-    addrs = []
+    # scan060.py's hit lines, `      <addr> <sym> <mnem> <ops>  -- <why>': the
+    # address as objdump prints it, any width (a shared object is linked at 0:
+    # 22c51 in libXaw.so.6.1, 2026-11-22); its `HITS <n>' lines say how many
+    addrs, said = [], 0
     for raw in open(hitfile, errors="replace"):
-        m = re.match(r"^\s+([0-9a-f]{8})\s+<", raw)
+        m = re.match(r"^\s+([0-9a-f]+) <[^>]*> \S.*  -- ", raw)
         if m:
             addrs.append(int(m.group(1), 16))
+        m = re.match(r"^\s+HITS\s+(\d+)\s", raw)
+        if m:
+            said += int(m.group(1))
+    if said != len(addrs):
+        return None
     intab = [a for a in addrs if any(s <= a < e for s, e in tables)]
     odd = [a for a in addrs if a & 1 and a not in intab]
     mid = []
@@ -1081,7 +1090,13 @@ def main(argv):
                       % (name, "; ".join(r["problems"] + r["desync"])[:300]))
                 rc = max(rc, 3)
                 continue
-            addrs, intab, odd, mid, unexplained = explain(r["tables"], hitfile, r["starts"])
+            ex = explain(r["tables"], hitfile, r["starts"])
+            if ex is None:
+                print("  UNTRUSTWORTHY %s: %s's hit lines are not as many as its HITS lines count"
+                      % (name, hitfile))
+                rc = max(rc, 3)
+                continue
+            addrs, intab, odd, mid, unexplained = ex
             if not addrs:
                 print("  UNTRUSTWORTHY %s: %s names no hit to explain" % (name, hitfile))
                 rc = max(rc, 3)
