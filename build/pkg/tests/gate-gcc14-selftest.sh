@@ -31,6 +31,9 @@
 #   - scan060-g14.py sizes a table with one instruction between its load and
 #     the jmp by the trusted-by-shape rule, and refuses one that writes the
 #     index, two, a call, and a branch landing there;
+#   - the D4 gate reads scan060.py's hits in a shared object (short
+#     addresses), refuses a hit file that lost hit lines, and still fails a
+#     real movep in a shared object;
 #   - the D4 gate explains a scan060.py hit inside an instruction of the
 #     re-synced listing as a decode out of sync, not one at an instruction
 #     start;
@@ -699,12 +702,50 @@ echo "$out" | grep '1 inside an instruction of the re-synced listing' >/dev/null
 jt=$("$OBJDUMP" -d "$T/sw-mid" | awk '$2 == "4efb" && $3 == "0002" { sub(":", "", $1); print $1; exit }')
 [ -n "$jt" ] || fail "no dispatch in the mid-instruction probe"
 mv=$(printf '%08x' $((0x$jt + 4 + 0x22)))	# the movel just after the 17-entry table
-printf '    %s <swp+0x0>\tmovepw %%d2,%%a0@(12079)  -- movepw (not implemented on the 060)\n' "$mv" > "$T/sw-mid.start"
+printf '  HITS 1    sw-mid!sw-mid (1 insns, 1 switch tables skipped)\n      %s <swp+0x0> movepw %%d2,%%a0@(12079)  -- movepw (not implemented on the 060)\n' "$mv" > "$T/sw-mid.start"
 if out=$(python3 "$G14S" --objdump "$OBJDUMP" --explain "$T/sw-mid.start" "$T/sw-mid"); then
 	fail "scan060-g14.py explained a hit at an instruction start: $out"
 fi
 echo "$out" | grep "UNEXPLAINED sw-mid: 1 of 1 .*$mv" >/dev/null || fail "scan060-g14.py on a hit at an instruction start: $out"
 ok "the D4 gate explains a scan060.py hit inside an instruction of the re-synced listing as a decode out of sync; a hit at an instruction start stays unexplained"
+
+# scan060.py's hits in a shared object (linked at 0: addresses of fewer than
+# 8 digits; libXaw.so.6.1's 22c51, 2026-11-22).  A 2-entry table, then
+# `move.w #9,%d0' and two `pea 1' (libXaw's): scan060.py ends the table at
+# the 0x0009, resumes at T+9 and reads `01 48 78 00' at T+11 as a movepl, at
+# an odd address.  The D4 gate explains it; a hit file whose hit lines are
+# fewer than its HITS count is refused; a real movep in the shared object
+# still fails.
+so_probe() {	# so_probe <name> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"\tmove.l 4(%sp),%d0\n\tcmp.l #1,%d0\n\tbhi.w 9f\n\tadd.l %d0,%d0\n"'
+		printf '%s\n' '	"\t.word 0x303b,0x0806\n\t.word 0x4efb,0x0002\n"'	# movew %pc@(T,%d0:l),%d0; jmp
+		printf '%s\n' '	"\t.word 0x0040,0x0040\n\tmove.w #9,%d0\n\tpea 1\n\tpea 1\n"'
+		[ -z "$2" ] || printf '\t%s\n' "$2"
+		printf '%s\n' '	"\t.fill 0x40,2,0x4e71\n9:\trts\n.size swp,.-swp\n");'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -shared -o "$T/$1" "$T/$1.c" || fail "the shared object probe $1 did not build"
+}
+so_probe libsw.so ''
+so_probe libswm.so '"\t.word 0x074c,0x0056\n"'
+[ "$(od -An -tx1 -j16 -N2 "$T/libsw.so" | tr -d ' ')" = 0003 ] || fail "libsw.so is not a shared object (ET_DYN)"
+amix_pm_scan060 "$T/libsw.so" > "$T/libsw.hits" 2>&1 && fail "scan060.py found no hit in the shared object probe: it tests nothing"
+grep -E '^ +[0-9a-f]{1,7} <[^>]*> movepl ' "$T/libsw.hits" >/dev/null ||
+	fail "scan060.py's hit in the shared object probe is no movepl at a short address: $(cat "$T/libsw.hits")"
+out=$(amix_g14_scan3 "$T/libsw.so" 2>&1) || fail "the D4 gate did not explain scan060.py's hit in a shared object: $out"
+echo "$out" | grep 'at odd addresses' >/dev/null || fail "the D4 gate explained the shared object, but not as odd: $out"
+nh=$(grep -cE '^ +[0-9a-f]+ <[^>]*> \S.*  -- ' "$T/libsw.hits")
+{ printf '  HITS %d    libsw.so!libsw.so (1 insns, 1 switch tables skipped)\n' $((nh + 1)); grep -v '^ *HITS ' "$T/libsw.hits"; } > "$T/libsw.short"
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" --explain "$T/libsw.short" "$T/libsw.so"); then
+	fail "scan060-g14.py explained a hit file with fewer hit lines than its HITS count: $out"
+fi
+echo "$out" | grep "hit lines are not as many as its HITS lines count" >/dev/null || fail "scan060-g14.py on the short hit file: $out"
+if out=$(amix_g14_scan3 "$T/libswm.so" 2>&1); then
+	fail "the D4 gate passed a real movep in a shared object: $out"
+fi
+echo "$out" | grep 'HITS 1 ' >/dev/null || fail "scan060-g14.py on the shared object movep probe: $out"
+ok "the D4 gate explains scan060.py's odd-address hit in a shared object (an address of fewer than 8 digits), refuses a hit file that lost hit lines, and fails a real movep in a shared object"
 
 # A sized data object in .text (values-Xa.o's _lib_version, which the period
 # toolchain links): objdump -d dumps it as hex up to the next symbol, and the
