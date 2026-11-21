@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — scan060-g14 --explain reads hit addresses of any width (764aa717)
+
+scan060-g14.py --explain reads scan060.py's hit addresses at any width, so a shared object's (linked at 0) are explained, and refuses a hit file whose hit lines do not match its HITS count; libXaw.so.6.1 now passes D4, no other verdict changed over 585 ELFs.
+
 ## 2026-11-20 — gcc14-pin.sh for 9d13dcd; amix_g14_fold_check (15a66acd)
 
 gcc14-pin.sh pins 9d13dcd's cc1, libgcc.a, libamixc99.a, specs and libamixrt.so.1; amix_g14_fold_check refuses a compiler, or recipe flags, that leave fold-mem-offsets on, both bare and with AMIX_CFLAGS. gate-gcc14-selftest 32 checks.
