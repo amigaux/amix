@@ -1,6 +1,67 @@
 --- amiga/alien/dd.c.orig
 +++ amiga/alien/dd.c
-@@ -78,6 +78,9 @@
+@@ -7,6 +7,8 @@
+ #include	"sys/types.h"
+ #include	"sys/param.h"
+ #include	"sys/buf.h"
++#include	"sys/conf.h"
++#include	"vm/page.h"
+ #include	"sys/uio.h"
+ #include	"sys/inline.h"
+ #include	"sys/errno.h"
+@@ -17,13 +19,31 @@
+ 
+ #define BSIZE 512
+ 
++/*
++ * dd says D_NOBRKUP (its bdevsw row points at ddflag), so the kernel's gen_strategy no longer
++ * cuts block requests for it and dd cuts them itself, into the pieces gen_strategy and
++ * buf_breakup made, one command per piece:
++ *   - a request of at most a page: one command, as it comes;
++ *   - a page list (B_PAGEIO) longer than a page: a command per page, at the page's physical
++ *     address, every page tried;
++ *   - any other buffer longer than a page: to the first page boundary, then a page at a time,
++ *     stopping at the first error.
++ * A request's pieces run one after another on its unit.  Nothing is allocated, nothing sleeps,
++ * and no page count is assumed: the count and the page list both end it.
++ */
++int	ddflag = D_NOBRKUP;
+ 
+ struct dd {
+ 	uint		state;
+ 	struct buf	*bhead,
+ 			*btail;
+ 	struct sdcom	com;
+-	uchar		sense[16];
++	uint		off,		/* bytes of bhead done */
++			boff,		/* blocks of bhead done */
++			len;		/* bytes in the command */
++	struct page	*pp;		/* the command's page, for a page list */
++	bool		inq,		/* in sdqueue( ) */
++			again;		/* a command was set up meanwhile */
+ };
+ /* dd.state
+  */
+@@ -33,13 +53,17 @@
+ 
+ 
+ static struct dd	ddtab[SDCARDS][SDUNITS];
++/* REQUEST SENSE data: 16 bytes per unit, on a 16-byte boundary */
++static uchar		ddsensebuf[SDCARDS*SDUNITS*16 + 15];
++#define	ddsense( dp)	((uchar *)(((uint)ddsensebuf + 15) & ~15) + 16*((dp) - &ddtab[0][0]))
+ 
+ void	ddstrategy( ),
+ 	ddprint( );
+ static void
+ 	breakup( ),
+ 	startio( ),
+-	getsense( );
++	getsense( ),
++	kick( );
+ 
+ 
+ ddopen( devp, mode, type, cr)
+@@ -78,6 +102,9 @@
  
  	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
  		return 0;
@@ -10,7 +71,7 @@
  	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
  		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
  	return uiophysio( breakup, (struct buf *)0, dev, B_READ, uiop);
-@@ -92,6 +95,9 @@
+@@ -92,6 +119,9 @@
  
  	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
  		return 0;
@@ -20,3 +81,166 @@
  	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
  		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
  	return uiophysio( breakup, (struct buf *)0, dev, B_WRITE, uiop);
+@@ -190,11 +220,13 @@
+ {
+ 	struct dd	*dp;
+ 	struct buf	*bp;
++	bool		bad;
+ 
+ 	dp = &ddtab[cp->card][cp->unit];
+ 	bp = dp->bhead;
++	bad = FALSE;
+ 	if (not cp->okay)
+-		bp->b_flags |= B_ERROR;
++		bad = TRUE;
+ 	else
+ 		switch (dp->state) {
+ 		case FIRST:
+@@ -208,19 +240,44 @@
+ 				printf( "%s: disk c%dd%ds%d: ",
+ 				        sdhardwarename( cp->card),
+ 				        cp->card*8+cp->unit, 0, sdpart( bp->b_edev));
+-				printf( "blk%d 0x%x 0x%x\n", sdblkno( bp), dp->sense[2], dp->sense[12]);
++				printf( "blk%d 0x%x 0x%x\n", sdblkno( bp) + dp->boff,
++				        ddsense( dp)[2], ddsense( dp)[12]);
+ 				startio( RETRY, dp);
+ 				return;
+ 			}
+-			bp->b_flags |= B_ERROR;
++			bad = TRUE;
+ 			break;
+ 		case RETRY:
+ 			if (cp->status != 0)
+-				bp->b_flags |= B_ERROR;
++				bad = TRUE;
++		}
++	if (bad)
++		bp->b_flags |= B_ERROR;
++	dp->off += dp->len;
++	dp->boff += (dp->len + BSIZE-1)/BSIZE;
++	if (dp->off < bp->b_bcount) {
++		if (not (bp->b_flags & B_PAGEIO)) {
++			unless (bad) {
++				startio( FIRST, dp);
++				return;
++			}
+ 		}
++		else if ((dp->pp = dp->pp->p_next) != bp->b_pages) {
++			startio( FIRST, dp);
++			return;
++		}
++		else
++			bp->b_flags |= B_ERROR;		/* the page list is shorter than the count */
++	}
++	dp->off = 0;
++	dp->boff = 0;
+ 	dp->bhead = bp->av_forw;
+-	iodone( bp);
++	/*
++	 * The next request first: iodone( )'s b_iodone callback can call ddstrategy, which would
++	 * otherwise find the queue empty and issue dp->com while this startio( ) issues it too.
++	 */
+ 	startio( FIRST, dp);
++	iodone( bp);
+ }
+ 
+ 
+@@ -230,14 +287,35 @@
+ {
+ 	struct buf	*bp;
+ 	uint		bn;
++	paddr_t		pa;
+ 
+ 	bp = dp->bhead;
+ 	if (not bp)
+ 		return;
+-	bn = sdblkno( bp);
++	if (bp->b_bcount <= PAGESIZE)
++		dp->len = bp->b_bcount;
++	else if (bp->b_flags & B_PAGEIO) {
++		if (dp->off == 0)
++			dp->pp = bp->b_pages;
++		dp->len = min( bp->b_bcount - dp->off, PAGESIZE);
++	}
++	else if (dp->off == 0)
++		dp->len = min( bp->b_bcount, PAGESIZE - ((uint)bp->b_un.b_addr & PAGEOFFSET));
++	else
++		dp->len = min( bp->b_bcount - dp->off, PAGESIZE);
++	if (bp->b_flags & B_PAGEIO) {
++		/* a frame's physical address; never b_proc, which a reused page-I/O header can leave stale */
++		if (bp->b_bcount <= PAGESIZE)
++			pa = ptob( pages_base + (bp->b_pages - pages)) + (uint)bp->b_un.b_addr;
++		else
++			pa = ptob( pages_base + (dp->pp - pages));
++		dp->com.addr = (caddr_t)vtop( (caddr_t)pa, (struct proc *)0);
++	}
++	else
++		dp->com.addr = (caddr_t)vtop( bp->b_un.b_addr + dp->off, bp->b_proc);
++	bn = sdblkno( bp) + dp->boff;
+ 	dp->com.card = sdcard( bp->b_edev);
+ 	dp->com.unit = sdunit( bp->b_edev);
+-	dp->com.addr = (caddr_t)vtop(bp->b_un.b_addr, bp->b_proc);
+ 	if (bp->b_flags & B_READ) {
+ 		dp->com.reading = TRUE;
+ 		dp->com.cdb[0] = 0x28;
+@@ -252,13 +330,13 @@
+ 	dp->com.cdb[4] = byte1( bn);
+ 	dp->com.cdb[5] = byte0( bn);
+ 	dp->com.cdb[6] = 0;
+-	dp->com.cdb[7] = byte1( bp->b_bcount/BSIZE);
+-	dp->com.cdb[8] = byte0( bp->b_bcount/BSIZE);
++	dp->com.cdb[7] = byte1( dp->len/BSIZE);
++	dp->com.cdb[8] = byte0( dp->len/BSIZE);
+ 	dp->com.cdb[9] = 0;
+-	dp->com.nbyte = bp->b_bcount;
++	dp->com.nbyte = dp->len;
+ 	dp->com.intr = ihandle;
+ 	dp->state = s;
+-	sdqueue( &dp->com);
++	kick( dp);
+ }
+ 
+ 
+@@ -269,15 +347,38 @@
+ 	struct buf	*bp;
+ 
+ 	bp = dp->bhead;
+-	dp->com.addr = vtop( dp->sense, (struct proc *)0);
++	dp->com.addr = (caddr_t)vtop( ddsense( dp), (struct proc *)0);
+ 	dp->com.reading = TRUE;
+ 	dp->com.cdb[0] = 0x03;
+ 	dp->com.cdb[1] = 0;
+ 	dp->com.cdb[2] = 0;
+ 	dp->com.cdb[3] = 0;
+-	dp->com.cdb[4] = sizeof dp->sense;
++	dp->com.cdb[4] = 16;
+ 	dp->com.cdb[5] = 0;
+-	dp->com.nbyte = sizeof dp->sense;
++	dp->com.nbyte = 16;
+ 	dp->state = SENSE;
+-	sdqueue( &dp->com);
++	kick( dp);
++}
++
++
++/*
++ * Queue dp's command.  A controller that completes it inside sdqueue( ) calls ihandle, which
++ * sets up the next command; that one is queued here when sdqueue( ) returns, so a request of
++ * many pieces does not nest a call per piece on the stack.
++ */
++static void
++kick( dp)
++struct dd	*dp;
++{
++
++	if (dp->inq) {
++		dp->again = TRUE;
++		return;
++	}
++	do {
++		dp->again = FALSE;
++		dp->inq = TRUE;
++		sdqueue( &dp->com);
++		dp->inq = FALSE;
++	} while (dp->again);
+ }
