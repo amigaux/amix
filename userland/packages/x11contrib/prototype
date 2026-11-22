@@ -1,0 +1,33 @@
+#
+# prototype -- x11contrib 6.0's installed layout under /opt/amix/X11R6.
+#
+# AUTHORED, NOT GENERATED, no host paths: build.sh runs `pkgmk -r <destroot>`.
+# PREFIX /opt/amix/X11R6, x11r63's (docs/coexistence.md); manual pages under
+# /opt/amix/man.  NO INSTALL SCRIPTS: CLASSES=none, class `none` on every
+# object.  Two programs, xedit's app-defaults (a conffile), their manual
+# pages and whatis line, and the notices of the clients and of X11R6.3,
+# whose libraries they link.
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/X11R6 0755 root sys
+d none /opt/amix/X11R6/bin 0755 root sys
+f none /opt/amix/X11R6/bin/xeyes 0755 root bin
+f none /opt/amix/X11R6/bin/xedit 0755 root bin
+d none /opt/amix/X11R6/lib 0755 root sys
+d none /opt/amix/X11R6/lib/X11 0755 root sys
+d none /opt/amix/X11R6/lib/X11/app-defaults 0755 root sys
+f none /opt/amix/X11R6/lib/X11/app-defaults/Xedit 0644 root bin
+d none /opt/amix/X11R6/doc 0755 root sys
+d none /opt/amix/X11R6/doc/x11contrib 0755 root sys
+f none /opt/amix/X11R6/doc/x11contrib/xeyes-NOTICE 0644 root bin
+f none /opt/amix/X11R6/doc/x11contrib/xedit-NOTICE 0644 root bin
+f none /opt/amix/X11R6/doc/x11contrib/X11R6.3-LABEL 0644 root bin
+f none /opt/amix/X11R6/doc/x11contrib/X11R6.3-NOTICE 0644 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/xeyes 0644 root bin
+f none /opt/amix/man/1/xedit 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/x11contrb 0644 root bin

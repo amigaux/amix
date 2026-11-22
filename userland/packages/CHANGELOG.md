@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — x11contrib 6.0-1: xeyes and xedit (a1f7fa52)
+
+New package: xeyes and xedit from the X11R6 contrib distribution, which X11R6.3 left out of its core tree, under /opt/amix/X11R6, statically linked with X11R6.3's libraries. xload is not included: Amix cannot give it a true load average (README).
+
+## 2026-11-22 — x11r6.3 6.3-14: xrdb works with the stock cpp; x11perf, x11perfcomp and oclock (405b33f3)
+
+xrdb hands the stock cpp its definitions as #define lines in the file it preprocesses, so COLOR, PLANES, CLASS and the rest reach resource files (the stock cpp dropped all but a few -D options). New: x11perf, the X server benchmark, with x11perfcomp to compare its results, and oclock; oclock's Clock-color resources are a configuration file.
+
 ## 2026-11-22 — cde 2.5.3-1 and libjpeg 9f-1: CDE built from upstream, static (80bad70a)
 
 CDE 2.5.3 (cdesktopenv) built from the upstream release against X11R6.3 and Motif 2.3.8, its programs linked statically, for measurement and testing: dtlogin and dtsession, dtwm with the front panel, dtterm, dtfile, dtpad, dtcalc, dtcm, dtmail and the other desktop programs, ToolTalk and its types database (compiled to the bytes the box's own tt_type_comp writes), dtterm's terminfo entry (the box's own tic output), help volumes and manual pages. Under /opt/amix/dt with /usr/dt a link to it; a line "start dtlogin" in /etc/display starts the graphical login. The RPC servers rpc.ttdbserver and rpc.cmsd are off unless /etc/rc.conf turns them on (cde-rpc(1M)); dtspcd gets documented lines only. dtksh, dtinfo, dtappbuilder, ttsnoop and dtdocbook are not built yet; the README lists them as the work before CDE ships. libjpeg 9f (IJG), which CDE's help viewer links, ships its static library and libjpeg.so.9.

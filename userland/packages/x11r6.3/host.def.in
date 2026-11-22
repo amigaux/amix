@@ -60,3 +60,8 @@ XMULIB = -lXmu
  * stage hook installs as the build user, -c and -m only */
 #undef InstallCmd
 #define InstallCmd $(SHELL) $(CONFIGSRC)/util/install.sh
+/* xrdb runs the stock /usr/ccs/lib/cpp on the box, which takes only a few -D
+ * options and drops the rest (COLOR, PLANES, CLASS among them): xrdb writes its
+ * definitions as #define lines into the file it hands cpp instead */
+#undef PatheticCpp
+#define PatheticCpp YES

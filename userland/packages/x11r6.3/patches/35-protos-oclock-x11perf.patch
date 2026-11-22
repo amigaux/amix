@@ -1,0 +1,55 @@
+Ours.  Declarations gcc 14 needs in oclock and x11perf, as 10-protos-clients gives
+the other small clients: a prototype after the includes for each function called
+with no declaration, taken from the definition the call links with.  The K&R
+definitions take no narrow parameters and return an implicit int:
+  programs/oclock/transform.h: TFillPolygon, TDrawArc, TFillArc (with <X11/Xlib.h>);
+    SetTransform
+  programs/oclock/Clock.c: paint_jewel, check_jewel, compute_hands, paint_hands
+  programs/x11perf/x11perf.c: GetNumbers, GetRops
+
+--- a/programs/oclock/transform.h
++++ b/programs/oclock/transform.h
+@@ -48,6 +48,17 @@
+ 	double	x, y, width, height;
+ } TRectangle;
+ 
++#ifdef _XLIB_H_
++int TFillPolygon(Display *dpy, Drawable d, GC gc, Transform *t, TPoint *points,
++		 int n_points, int shape, int mode);
++int TDrawArc(Display *dpy, Drawable d, GC gc, Transform *t, double x, double y,
++	     double width, double height, int angle1, int angle2);
++int TFillArc(Display *dpy, Drawable d, GC gc, Transform *t, double x, double y,
++	     double width, double height, int angle1, int angle2);
++#endif
++int SetTransform(Transform *t, int xx1, int xx2, int xy1, int xy2,
++		 double tx1, double tx2, double ty1, double ty2);
++
+ # define Xx(x,y,t)	((int)((t)->mx * (x) + (t)->bx + 0.5))
+ # define Xy(x,y,t)	((int)((t)->my * (y) + (t)->by + 0.5))
+ # define Xwidth(w,h,t)	((int)((t)->mx * (w) + 0.5))
+--- a/programs/oclock/Clock.c
++++ b/programs/oclock/Clock.c
+@@ -49,6 +49,11 @@
+ #define Time_t time_t
+ #endif
+ 
++int paint_jewel(ClockWidget w, Drawable d, GC gc);
++int check_jewel(ClockWidget w, Drawable d, GC gc);
++int compute_hands(ClockWidget w);
++int paint_hands(ClockWidget w, Drawable d, GC minute_gc, GC hour_gc);
++
+ #define offset(field) XtOffsetOf(ClockRec, clock.field)
+ #define goffset(field) XtOffsetOf(WidgetRec, core.field)
+ 
+--- a/programs/x11perf/x11perf.c
++++ b/programs/x11perf/x11perf.c
+@@ -35,6 +35,9 @@
+ #include "x11perf.h"
+ #include <X11/Xmu/SysUtil.h>
+ 
++int GetNumbers(int argi, int argc, char **argv, unsigned long *intsp, int *nump);
++int GetRops(int argi, int argc, char **argv, int *ropsp, int *nump);
++
+ #ifdef X_NOT_STDC_ENV
+ #define Time_t long
+ extern Time_t time ();

@@ -4,7 +4,11 @@ The X Window System, release 6.3, under `/opt/amix/X11R6`:
 - the `Xrtg` server for RTG cards, the ZZ9000, the Z3660 RTG and the VA2000 (the Amiga DDX; who wrote it:
   below), also installed as `Xzz9000` and `X`;
 - the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (static) with their headers;
-- xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart.
+- xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart;
+- x11perf with x11perfcomp (the server benchmark and its result comparer), and oclock.
+
+xeyes and xedit, which X11R6 moved out of the core tree into its contrib distribution, are in
+the x11contrib package.
 
 It coexists with the stock X11R4/R5 in `/usr/X`.
 
@@ -50,7 +54,7 @@ The files an admin edits are conffiles (package.sh's `CONFFILES`): an upgrade ke
 and puts the new default beside it as `<name>.new`; an untouched one is replaced. They are
 `/etc/profile.d/x11r63.sh` and, under `/opt/amix/X11R6/lib/X11`: xdm's `Xaccess`, `Xresources`,
 `Xservers`, `Xsession`, `Xsetup_0`, `xdm-config`, `GiveConsole` and `TakeConsole`;
-`xinit/xinitrc`; `twm/system.twmrc`; the app-defaults `Chooser`, `XClock` and `XTerm`; the three
+`xinit/xinitrc`; `twm/system.twmrc`; the app-defaults `Chooser`, `Clock-color` (oclock's, since 6.3-14), `XClock` and `XTerm`; the three
 `fonts.alias`; rstart's `config` and its contexts `default` and `x11r6`; and the SECURITY
 extension's `xserver/SecurityPolicy`. Binaries (xdm's `chooser` too), fonts and `fonts.dir`, the
 xkb data and its listings, `rgb.txt` and rstart's command scripts are not configuration.
@@ -104,6 +108,7 @@ directory that holds both; the default is the sysroot's `usr`.
 | `32-rtg-va2000.patch` | Ours: the MNT VA2000 card under the RTG layer. `FORKDIRS` copies the card directory from the xrtg-amix fork at the pin (`xrtg-amix.pin`: `x11r6.3/hw/amix/rtg/va2000`, Antti Sokero's VA2000 driver, MIT, ported to the card record, MIT) into `programs/Xserver/hw/amix/rtg/va2000` before the patches; this patch puts it in `rtg/Imakefile`'s SUBDIRS and RTGCARDS (after the ZZ9000, so `-card auto` probes it second), links its library after the rtg library and names it in the `-card` usage line. |
 | `33-rtg-dev.patch` | Ours: `-dev PATH`, the card's device node, for a machine with two graphics cards (a ZZ9000 beside a Z3660 is `/dev/zz9001`): the layer's `rtgDevice` and `rtgCardDevice(card)`, which a card's probe and initHW open instead of a fixed path; unset, each card opens its own node as before; with `-card auto` each card is tried on the node; a node no card answers on stops the server with a message. |
 | `34-xinit-catch-sigterm.patch` | Ours: xinit catches SIGTERM as it catches SIGHUP, SIGINT, SIGQUIT and SIGPIPE, so `kill` (TERM) of xinit runs the same shutdown as a hangup: the session's process group gets SIGHUP, the server's SIGTERM (SIGKILL after 10 s), and xinit exits 1 after "unexpected signal 15". Before, TERM killed xinit alone and the server and the session, each in a process group of its own, kept the display. |
+| `35-protos-oclock-x11perf.patch` | Ours: the prototypes gcc 14 needs in oclock and x11perf, as patch 10 gives the other small clients. |
 
 Not taken from isoriano's overlay, done our own way or not needed here:
 - his `amix.cf` and `amix.rules`, the shared-data `.so`/`.sa` model (this package is static);
@@ -136,7 +141,10 @@ Not taken from isoriano's overlay, done our own way or not needed here:
   nibble) and `lib/font/Type1/type1.c` (Decode: the bound is set on the only path into the block).
   Those switches compile to compare chains; nothing else changes.
 - **xrdb** runs the box's `/usr/ccs/lib/cpp` (the stock SVR4 cpp; the stock xrdb names
-  `/usr/public/lib/gcc-cpp`); `xrdb -cpp <path>` picks another, `-nocpp` none.
+  `/usr/public/lib/gcc-cpp`); `xrdb -cpp <path>` picks another, `-nocpp` none. That cpp takes
+  only a few `-D` options and drops the rest, COLOR, PLANES and CLASS among them, so xrdb is
+  built with `PatheticCpp` (`host.def.in`): it writes its definitions as `#define` lines into a
+  temporary file that includes the resource file, and hands cpp that file.
 - **Installs** go through the tree's BSD-style `config/util/install.sh`, because `bsdinst.sh` calls
   an SVR4 `install`.
 - **Fonts** misc, 75dpi and 100dpi are compiled and indexed by this tree's own `bdftopcf` and

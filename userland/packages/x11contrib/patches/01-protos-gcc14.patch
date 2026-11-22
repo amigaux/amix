@@ -1,0 +1,61 @@
+Ours.  Declarations gcc 14 needs, for each function called with no declaration,
+taken from the definition the call links with (the K&R definitions take no narrow
+parameters and return an implicit int), or from the system header that declares it:
+  programs/xeyes/transform.h: TFillPolygon, TDrawArc, TFillArc (with <X11/Xlib.h>);
+    SetTransform
+  programs/xeyes/Eyes.c: eyeLiner, eyeBall
+  programs/xeyes/transform.c: <stdlib.h> (malloc, free)
+  programs/xedit/xedit.h: <stdlib.h> (exit)
+
+--- a/programs/xeyes/transform.h
++++ b/programs/xeyes/transform.h
+@@ -16,6 +16,17 @@
+ 	double	x, y, width, height;
+ } TRectangle;
+ 
++#ifdef _XLIB_H_
++int TFillPolygon(Display *dpy, Drawable d, GC gc, Transform *t, TPoint *points,
++		 int n_points, int shape, int mode);
++int TDrawArc(Display *dpy, Drawable d, GC gc, Transform *t, double x, double y,
++	     double width, double height, int angle1, int angle2);
++int TFillArc(Display *dpy, Drawable d, GC gc, Transform *t, double x, double y,
++	     double width, double height, int angle1, int angle2);
++#endif
++int SetTransform(Transform *t, int xx1, int xx2, int xy1, int xy2,
++		 double tx1, double tx2, double ty1, double ty2);
++
+ # define Xx(x,y,t)	((int)((t)->mx * (x) + (t)->bx + 0.5))
+ # define Xy(x,y,t)	((int)((t)->my * (y) + (t)->by + 0.5))
+ # define Xwidth(w,h,t)	((int)((t)->mx * (w) + 0.5))
+--- a/programs/xeyes/transform.c
++++ b/programs/xeyes/transform.c
+@@ -3,6 +3,7 @@
+  */
+ 
+ # include	<X11/Xlib.h>
++# include	<stdlib.h>
+ # include	"transform.h"
+ 
+ static XPoint *
+--- a/programs/xeyes/Eyes.c
++++ b/programs/xeyes/Eyes.c
+@@ -48,6 +48,9 @@
+ extern double hypot(double, double);
+ #endif
+ 
++int eyeLiner(EyesWidget w, Drawable d, GC outgc, GC centergc, int num);
++int eyeBall(EyesWidget w, GC gc, int num);
++
+ #define offset(field) XtOffsetOf(EyesRec, eyes.field)
+ #define goffset(field) XtOffsetOf(WidgetRec, core.field)
+ 
+--- a/programs/xedit/xedit.h
++++ b/programs/xedit/xedit.h
+@@ -28,6 +28,7 @@
+  */
+ 
+ #include <stdio.h>
++#include <stdlib.h>
+ #include <X11/Intrinsic.h>
+ #include <X11/StringDefs.h>
+ #include <X11/cursorfont.h>

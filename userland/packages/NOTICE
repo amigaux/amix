@@ -7,6 +7,7 @@ licences (GPL-2.0-or-later: grep, gzip, tar, patch, make, diffutils,
 coreutils; GPL-3.0-or-later: rsync; GPL-3.0-or-later OR BSD-2-Clause: less;
 Zlib: zlib; bzip2-1.0.6: bzip2; LGPL-2.0-or-later: Motif; Spencer-94:
 regex; IJG: libjpeg; LGPL-2.0-or-later with CC-BY-SA-3.0 media: CDE;
+HPND-DEC: xedit, in x11contrib;
 public domain: Dhrystone 2.1, in amix-benchmark and amix-benchmark-gcc14);
 INDEX.md lists each package's licence. Each
 package ships its upstream licence text under <prefix>/doc/<tool>/, and each
