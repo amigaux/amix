@@ -1,0 +1,73 @@
+dtfile.msg: leave out the two usage messages over the catalogue limit.
+
+Set 18 messages 23 and 24 are dtfile's usage text, already split in two
+upstream (1048 and 1060 bytes). A System V catalogue message holds at most 1024 bytes (NL_TEXTMAX), and
+gencat refuses the whole file for one longer message. The C catalogue
+leaves them out, with a comment; catgets then returns the program's
+built-in text, which is the same text (for message 24 the built-in text is the
+better one: the catalogue has a stray "/" in "-tree_files /never/always/
+choose"). A translated catalogue
+cannot carry them while the limit stands.
+
+--- a/programs/dtfile/dtfile.msg	2026-11-20 12:03:13
++++ b/programs/dtfile/dtfile.msg	2026-11-20 12:03:13
+@@ -886,56 +886,9 @@
+ 
+ 22 Drag Error
+ 
+-23 \nUsage: %s...\n\n\
+-   -noview\n\n\
+-\tDtfile runs in server mode.\n\n\
+-   -session SessionFile\n\n\
+-\tDtfile runs with the session file specified in the SessionFile\n\
+-\tparameter.\n\n\
+-   -folder Folder[,Folder,Folder]\n\
+-   -dir Folder[,Folder,Folder]\n\n\
+-\tDtfile displays a window for each folder specified in the\n\
+-\tFolder parameter.  The Folder parameter may contain many\n\
+-\tfolders separated by commas.  Folders may be in the form\n\
+-\t'path'.\n\n\
+-   -title Title\n\n\
+-\tDtfile uses the string specified in the Title parameter as the\n\
+-\ttitle for its windows.\n\n\
+-   -help_volume HelpVolume\n\n\
+-\tDtfile uses the help volume specified in the HelpVolume parameter.\n\n\
+-   -restricted\n\n\
+-\tDtfile will not display folders above the restricted folder.\n\
+-\tIf the -dir option is used, the folder specified in that option\n\
+-\tis the restricted folder.  If the -dir option is not used, the\n\
+-\tuser's current folder is the restricted folder.\n\n\
+-   -grid on/off\n\n\
+-\ton     = Files are displayed in a grid pattern.\n\
+-\toff    = Files are displayed as placed.\n\n\
+-   -tree on/off\n\n\
+-\ton     = Files are displayed in single folder mode.\n
+-
+-24 \toff    = Files are displayed in folder tree mode.\n\n\
+-   -tree_files /never/always/choose\n\n\
+-\tnever  = Tree mode has two states: partially expanded or collapsed.\n\
+-\talways = Tree mode has two states: fully expanded or collapsed.\n\
+-\tchoose = Tree mode has three states: partially expanded, fully\n\
+-\texpanded, or collapsed.\n\n\
+-   -order alphabetical/file_type/date/size\n\n\
+-\tFiles are displayed in the specified order: alphabetical, by file\n\
+-\ttype, by date, or by size.\n\n\
+-   -view no_icon/large_icon/small_icon/attributes\n\n\
+-\tFiles are displayed in the specified format: text only, text and\n\
+-\tlarge icons, text and small icons, with attributes.\n\n\
+-   -direction ascending/descending\n\n\
+-\tFiles are displayed in the specified direction: ascending or\n\
+-\tdescending.\n\n\
+-   -large_icon_width <size>\n\n\
+-   -large_icon_height <size>\n\n\
+-   -small_icon_width  <size>\n\n\
+-   -small_icon_height <size>\n\n\
+-       The display area size for the icon images in File Manager\n\
+-       Icon images larger than this size will be clipped to this size\n\
+-       The default display area size for large is 38 and small is 24\n\n
++$ message 23 of set 18 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
++
++$ message 24 of set 18 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
+ 26 \nRestricted Mode Usage: %s...\n\n\
+    -folder Folder[,Folder,Folder]\n\
+    -dir Folder[,Folder,Folder]\n\n\

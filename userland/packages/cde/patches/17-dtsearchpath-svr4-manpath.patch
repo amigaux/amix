@@ -1,0 +1,17 @@
+dtsearchpath: the SVR4 manual page path.
+
+With no MANPATH, dtsearchpath used a per-system default and had none for
+SVR4, which left the statement without its body. SVR4 keeps its pages in
+/usr/share/man, as Sun does.
+
+--- a/programs/dtsearchpath/libCliSrv/UnixEnv.C	2026-11-20 12:03:13
++++ b/programs/dtsearchpath/libCliSrv/UnixEnv.C	2026-11-20 12:03:13
+@@ -61,7 +61,7 @@
+ 
+     CString temp = getEnvironmentVariable("MANPATH");
+     if (temp.isNull())
+-#if defined(sun)
++#if defined(sun) || defined(SVR4)
+ 	manpath = "/usr/share/man";
+ #elif defined(_AIX)
+ 	manpath = "/usr/share/man:/usr/lpp/info";

@@ -1,0 +1,47 @@
+DtSearch: build for SVR4.
+
+- raima/Makefile.am: -D_POSIX_SOURCE only when not SVR4; SVR4's
+  <netinet/in.h> needs u_short, which _POSIX_SOURCE hides.
+- Dt/vista.h: LONG is int where int is 32 bits, before long: Search.h's
+  DtSrINT32 is int, and a DB_ADDR (a LONG) is passed where DtSrINT32 is
+  expected, which GCC 14 refuses when the two are int and long. Where int
+  and long are both 32 bits the size is the same either way.
+
+--- a/include/Dt/vista.h	2026-11-20 12:03:13
++++ b/include/Dt/vista.h	2026-11-20 12:03:13
+@@ -205,12 +205,14 @@
+ #error Unable to typedef INT and UINT
+ #endif
+ 
+-#if (LONG_BIT == 32)
++/* int first, as Search.h's DtSrINT32: on a 32-bit system both are
++ * 32 bits, and DB_ADDR (a LONG) is passed where DtSrINT32 is expected */
++#if (WORD_BIT == 32)
++  typedef int             LONG;
++  typedef unsigned int    ULONG;
++#elif   (LONG_BIT == 32)
+   typedef long            LONG;
+   typedef unsigned long   ULONG;
+-#elif   (WORD_BIT == 32)
+-  typedef int             LONG;
+-  typedef unsigned int    ULONG;
+ #else
+ #error Unable to typedef LONG and ULONG
+ #endif
+--- a/lib/DtSearch/raima/Makefile.am	2026-11-20 12:03:13
++++ b/lib/DtSearch/raima/Makefile.am	2026-11-20 12:03:13
+@@ -5,7 +5,13 @@
+ libraima_la_CFLAGS = -DCDE_INSTALLATION_TOP=\"$(CDE_INSTALLATION_TOP)\" \
+ 		     $(DT_INCDIR) -I$(top_srcdir)/include \
+ 		     -DCDE_CONFIGURATION_TOP=\"$(CDE_CONFIGURATION_TOP)\" \
+-		     -DNO_TRANS -DUNIX -D_POSIX_SOURCE -DMULTIBYTE
++		     -DNO_TRANS -DUNIX -DMULTIBYTE
++
++# SVR4's headers are not POSIX-clean: <netinet/in.h> needs u_short, which
++# _POSIX_SOURCE hides
++if !SVR4
++libraima_la_CFLAGS += -D_POSIX_SOURCE
++endif
+ 
+ if SOLARIS
+ libraima_la_CFLAGS += -D_XOPEN_SOURCE=500

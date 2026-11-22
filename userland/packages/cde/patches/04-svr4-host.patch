@@ -1,0 +1,50 @@
+configure: decide the target system by host_os, and know SVR4.
+
+configure.ac chose its per-system settings by ${build_os}, the machine the
+build runs on, so a cross build for another system took the build
+machine's branch (Linux: -D_POSIX_SOURCE and friends). It now uses
+${host_os}, the system the programs are for, which is the same in a native
+build. A new sysv4* branch (Amiga UNIX, Amix, and other System V Release 4
+systems) sets build_svr4 and adds -DSVR4 to SOURCE_CPP_DEFINES, as the X11
+and Motif builds of these systems define it; AM_CONDITIONAL([SVR4]) is for
+the Makefiles. Native builds on the existing systems are unchanged.
+
+--- a/configure.ac	2026-11-20 12:03:13
++++ b/configure.ac	2026-11-20 12:03:13
+@@ -62,6 +62,7 @@
+ build_netbsd=no
+ build_solaris=no
+ build_aix=no
++build_svr4=no
+ 
+ dnl locations of libs/includes if not in 'standard' places like on
+ dnl linux (/usr/...).  We build these up based on where X11 is, and
+@@ -72,7 +73,7 @@
+ # pam currently only works on netbsd (9.2 tested) and linux
+ supports_pam=no
+ 
+-case "${build_os}" in
++case "${host_os}" in
+ 	linux*)
+ 		build_linux=yes
+                 SOURCE_CPP_DEFINES="${SOURCE_CPP_DEFINES} -D_POSIX_SOURCE \
+@@ -101,6 +102,11 @@
+ 	aix*)
+ 		build_aix=yes
+ 		;;
++	sysv4*)
++		dnl Amiga UNIX (Amix) and other SVR4 systems
++		build_svr4=yes
++		SOURCE_CPP_DEFINES="${SOURCE_CPP_DEFINES} -DSVR4"
++		;;
+ esac
+ 
+ AM_CONDITIONAL([LINUX], [test "$build_linux" = "yes"])
+@@ -110,6 +116,7 @@
+ AM_CONDITIONAL([NETBSD], [test "$build_netbsd" = "yes"])
+ AM_CONDITIONAL([SOLARIS], [test "$build_solaris" = "yes"])
+ AM_CONDITIONAL([AIX], [test "$build_aix" = "yes"])
++AM_CONDITIONAL([SVR4], [test "$build_svr4" = "yes"])
+ 
+ dnl set CSRG_BASED define for the BSD's.
+ if test "$bsd" = "yes"

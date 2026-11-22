@@ -1,0 +1,58 @@
+fontaliases: build with X11R6.3's font tools; the test program under check.
+
+- The dtinfo font is written uncompressed, and fonts.dir is made by
+  running mkfontdir in a directory that holds only the PCF: X11R6.3's
+  server reads no gzip-compressed fonts, and its mkfontdir has no -x to
+  leave the .bdf source out.
+- test_fonts_alias is a test: built by "make check", not by "make all".
+
+--- a/programs/fontaliases/Makefile.am	2026-11-20 12:03:13
++++ b/programs/fontaliases/Makefile.am	2026-11-20 12:03:13
+@@ -3,14 +3,15 @@
+ fontaliasesconfdir = $(sysconfdir)/$(PACKAGE_TARNAME)/fontaliases
+ fontaliasesdatadir = $(pkgdatadir)/fontaliases
+ 
+-BUILT_SOURCES = dtinfo.pcf.gz fixed.alias mixed.alias fonts.dir
++BUILT_SOURCES = dtinfo.pcf fixed.alias mixed.alias fonts.dir
+ fontaliasesdata_DATA = $(BUILT_SOURCES)
+ CLEANFILES = $(BUILT_SOURCES)
+ 
+ mk_fonts_alias_SOURCES = mk_fonts_alias.c
+ test_fonts_alias_SOURCES = test_fonts_alias.c
+ test_fonts_alias_LDADD = $(XTOOLLIB)
+-noinst_PROGRAMS = mk_fonts_alias test_fonts_alias
++noinst_PROGRAMS = mk_fonts_alias
++check_PROGRAMS = test_fonts_alias
+ 
+ if MISC_FIXED
+ FONTS_ALIAS = fixed.alias
+@@ -18,9 +19,11 @@
+ FONTS_ALIAS = mixed.alias
+ endif
+ 
+-dtinfo.pcf.gz: dtinfo.bdf
++# uncompressed, and mkfontdir in a directory holding only the PCF: X11R6.3's
++# server reads no gzip fonts, and its mkfontdir has no -x to leave out a .bdf
++dtinfo.pcf: dtinfo.bdf
+ 	$(RM) $@
+-	$(BDFTOPCF) -t $< |$(GZIP) > $@
++	$(BDFTOPCF) -t $< > $@
+ 
+ fixed.alias: mk_fonts_alias
+ 	./$< > $@
+@@ -28,8 +31,13 @@
+ mixed.alias: mk_fonts_alias
+ 	./$< 1 > $@
+ 
+-fonts.dir: dtinfo.pcf.gz
+-	$(MKFONTDIR) -x bdf .
++fonts.dir: dtinfo.pcf
++	$(RM) -r fontdir.tmp
++	$(MKDIR_P) fontdir.tmp
++	cp dtinfo.pcf fontdir.tmp/
++	$(MKFONTDIR) fontdir.tmp
++	mv fontdir.tmp/fonts.dir $@
++	$(RM) -r fontdir.tmp
+ 
+ install-data-hook:
+ 	$(MKDIR_P) $(DESTDIR)$(fontaliasesconfdir)

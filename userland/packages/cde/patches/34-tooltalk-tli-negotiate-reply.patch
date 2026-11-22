@@ -1,0 +1,24 @@
+ToolTalk: take TLI's answer to T_NEGOTIATE as a success.
+
+ToolTalk sets TCP_NODELAY on its TLI endpoints with t_optmgmt(T_NEGOTIATE)
+and takes anything but T_SUCCESS in the answer's flags as a failure,
+printing "t_optmgmt: No Error" for each connection.  TLI's t_optmgmt
+answers T_NEGOTIATE with the negotiated options and T_NEGOTIATE in flags;
+only an answer to T_CHECK carries T_SUCCESS or T_FAILURE.  Amix's TCP
+answers so, with the option set (level IPPROTO_TCP, TCP_NODELAY, value 1).
+Either answer is now a success.
+
+--- a/lib/tt/lib/mp/mp_rpc_fns.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/mp/mp_rpc_fns.C	2026-11-20 12:03:13
+@@ -65,7 +65,10 @@
+ 	resp.opt.buf = (char *)&reqbuf;
+ 	resp.opt.maxlen = sizeof (reqbuf);
+ 
+-	if (t_optmgmt(fd, &req, &resp) < 0 || resp.flags != T_SUCCESS) {
++	/* TLI answers T_NEGOTIATE with the negotiated options and T_NEGOTIATE
++	 * in flags; only a T_CHECK answer carries T_SUCCESS or T_FAILURE */
++	if (t_optmgmt(fd, &req, &resp) < 0 ||
++	    (resp.flags != T_SUCCESS && resp.flags != T_NEGOTIATE)) {
+ 		t_error("t_optmgmt");
+ 		return (0);
+ 	}

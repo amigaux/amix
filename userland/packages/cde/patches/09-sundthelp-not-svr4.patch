@@ -1,0 +1,31 @@
+DtSvc: leave SunDtHelp.c out on SVR4.
+
+SunDtHelp.c gives libDtSvc weak DtCreateHelpDialog,
+DtCreateHelpQuickDialog, DtHelpQuickDialogGetChild and
+DtHelpReturnSelectedWidgetId that dlopen libDtHelp.so.2.1, for programs not
+linked with libDtHelp. Nothing in libDtSvc calls them. Linked statically,
+a program that names DtCreateHelpDialog with libDtSvc before libDtHelp gets
+the weak copy and needs dlopen, which an SVR4 libc has only in its shared
+form. On SVR4 every program that needs help links libDtHelp itself, so
+the file is built everywhere else only.
+
+--- a/lib/DtSvc/Makefile.am	2026-11-20 12:03:13
++++ b/lib/DtSvc/Makefile.am	2026-11-20 12:03:13
+@@ -166,7 +166,6 @@
+ 	DtUtil2/PrintXErr.c \
+ 	DtUtil2/SharedProcs.c \
+ 	DtUtil2/SmCreateDirs.c \
+-	DtUtil2/SunDtHelp.c \
+ 	DtUtil2/SvcTT.c \
+ 	DtUtil2/UErrNoBMS.c \
+ 	DtUtil2/Utility.c \
+@@ -177,3 +176,9 @@
+ libDtSvc_la_SOURCES += DtUtil2/SvcPam.c
+ libDtSvc_la_LIBADD = $(PAMLIB)
+ endif
++
++# a weak fallback that dlopens libDtHelp for programs not linked with it;
++# on SVR4 every program that needs help links libDtHelp itself
++if !SVR4
++libDtSvc_la_SOURCES += DtUtil2/SunDtHelp.c
++endif

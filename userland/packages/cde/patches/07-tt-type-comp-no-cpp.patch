@@ -1,0 +1,30 @@
+tt_type_comp: say so when the preprocessor is missing.
+
+tt_type_comp runs the types file through the system's cpp (CPP_PROGRAM,
+found by configure) and, when that file is not there, reads the source as
+it is; the comment above the test promises a warning, but none is
+printed. On a system where cpp comes only with the C development set, a
+user's types file with #include or #define then fails to parse with no
+hint why. Print, once: "tt_type_comp: warning: no preprocessor <path> (it
+comes with the C development set): types files are read as they are, so
+#include and #define in them are not handled". Nothing else changes.
+
+--- a/lib/tt/bin/tt_type_comp/mp_types_table.C	2026-11-20 12:03:13
++++ b/lib/tt/bin/tt_type_comp/mp_types_table.C	2026-11-20 12:03:13
+@@ -121,6 +121,16 @@
+ 	// This may cause trouble, but it\'s the best thing to try.
+ 	// A warning will be issued if cpp is not around.
+ 	use_cpp = (-1 != access(OPT_CPP_PATH,X_OK));
++	if (!use_cpp) {
++		static int warned;
++
++		if (!warned++)
++			fprintf(stderr, "tt_type_comp: warning: no preprocessor "
++				"%s (it comes with the C development set): "
++				"types files are read as they are, so #include "
++				"and #define in them are not handled\n",
++				OPT_CPP_PATH);
++	}
+ 
+ 	_file_name = path;
+ 	if ((fd = open(path, O_RDONLY)) == -1) {

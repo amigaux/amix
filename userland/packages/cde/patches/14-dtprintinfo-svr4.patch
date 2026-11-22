@@ -1,0 +1,83 @@
+dtprintinfo: build for SVR4, and fix the spool path buffers.
+
+- libUI/BaseUI.h, objects/BaseObj.h: the bool-based boolean on SVR4, as on
+  Linux; the fallback enum names its values false and true, which are
+  keywords in C++.
+- libUI/BaseUI.C: <sys/time.h> for struct timeval on SVR4.
+- util/Invoke.C: assign SIG_IGN through sa_handler's own type.
+- objects/PrintObj/ParseJobs.C: the SVR4 LP parser (spool files under
+  /var/spool/lp) on SVR4, which runs the System V print service, as Sun
+  does. In that parser, three snprintf calls passed sizeof of a pointer as
+  the size of a PATH_MAX buffer, cutting each path to 3 characters, and
+  the spool directory was formatted with the directory pattern as an
+  argument instead of as the format; both now as the request path is.
+
+--- a/programs/dtprintinfo/libUI/BaseUI.C	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/libUI/BaseUI.C	2026-11-20 12:03:13
+@@ -42,7 +42,7 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <stdlib.h>
+-#if defined(__linux__)
++#if defined(__linux__) || defined(SVR4)
+   #include <sys/time.h>
+ #else
+   #include <sys/select.h>
+--- a/programs/dtprintinfo/libUI/BaseUI.h	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/libUI/BaseUI.h	2026-11-20 12:03:13
+@@ -45,7 +45,7 @@
+    #define true B_TRUE
+    #define false B_FALSE
+ # endif
+-#elif defined(__linux__) || defined(CSRG_BASED)
++#elif defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ #include <stdbool.h>
+ #define boolean bool
+ #else
+--- a/programs/dtprintinfo/objects/BaseObj.h	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/objects/BaseObj.h	2026-11-20 12:03:13
+@@ -46,7 +46,7 @@
+    #define true B_TRUE
+    #define false B_FALSE
+ # endif
+-#elif defined(__linux__) || defined(CSRG_BASED)
++#elif defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ #include <stdbool.h>
+ #define boolean bool
+ #else
+--- a/programs/dtprintinfo/objects/PrintObj/ParseJobs.C	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/objects/PrintObj/ParseJobs.C	2026-11-20 12:03:13
+@@ -338,7 +338,7 @@
+ }
+ #endif
+ 
+-#if defined(sun)
++#if defined(sun) || defined(SVR4)
+ 
+ // JET - this *really* needs to be re-written for sun
+ 
+@@ -473,10 +473,10 @@
+    char *spool_dir = new char[PATH_MAX];
+ 
+    if (getenv("REQ_DIR"))
+-       snprintf(request, sizeof(request), "%s/%s", getenv("REQ_DIR"), tmp_dir);
++       snprintf(request, PATH_MAX, "%s/%s", getenv("REQ_DIR"), tmp_dir);
+    else
+-       snprintf(request, sizeof(request), REQ_DIR, tmp_dir);
+-   snprintf(spool_dir, sizeof(spool_dir), "%s/%s", SPOOL_DIR, tmp_dir);
++       snprintf(request, PATH_MAX, REQ_DIR, tmp_dir);
++   snprintf(spool_dir, PATH_MAX, SPOOL_DIR, tmp_dir);
+    spool_len = strlen(spool_dir);
+ 
+    if (!(lp_tmp_dir = opendir(".")))
+--- a/programs/dtprintinfo/util/Invoke.C	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/util/Invoke.C	2026-11-20 12:03:13
+@@ -114,7 +114,7 @@
+    memset(&oldsigquit_act, '\0', sizeof (struct sigaction));
+    memset(&oldsigint_act, '\0', sizeof (struct sigaction));
+ 
+-   action.sa_handler = SIG_IGN;
++   action.sa_handler = (decltype(action.sa_handler))SIG_IGN;
+ 
+    sigaction(SIGINT, &action, &oldsigint_act);
+    sigaction(SIGQUIT, &action, &oldsigquit_act);

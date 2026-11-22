@@ -1,0 +1,19 @@
+# package.sh -- libjpeg 9f (IJG); assignments only.
+NAME=libjpeg
+PKG=libjpeg
+VERSION=9f
+PKGREV=1
+SOURCE_EPOCH=1795046400   # 2026-11-19 00:00 UTC
+SUMMARY="libjpeg 9f - the Independent JPEG Group's JPEG library and tools"
+DESC="The Independent JPEG Group's libjpeg 9f under /opt/amix: libjpeg.a with its headers (jpeglib.h, jconfig.h, jmorecfg.h, jerror.h), and the cjpeg, djpeg, jpegtran, rdjpgcom and wrjpgcom programs with their manual pages. CDE's help viewer links the library."
+CATEGORY=library
+SET=extra
+LICENSE=IJG
+URL=https://www.ijg.org/files/jpegsrc.v9f.tar.gz
+SHA256=04705c110cb2469caa79fb71fba3d7bf834914706e9641a4589485c1f832565b
+SRCDIR=jpeg-9f
+STYLE=hooks
+TOOLCHAIN=gcc14
+PREFIX=/opt/amix
+DEPENDS=""
+BUILD_DEPENDS=""

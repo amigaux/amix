@@ -1,0 +1,180 @@
+merge: read its scratch catalogues itself.
+
+localized/util/merge, run on the build machine, expands the message
+references in the app-defaults templates. It made scratch catalogues from
+the .tmsg files with the gencat on PATH and read them with the build
+machine's catopen and catgets. Where the build's gencat writes the target
+system's format, as in a cross build, the build machine's libc cannot read
+them ("Can't open message files"). merge now runs "gencat -m" and reads
+that format itself: a 20-byte header, 12-byte set and message headers,
+32-bit big-endian integers. Its output is byte-identical to before.
+
+--- a/programs/localized/util/merge.c	2026-11-20 12:03:13
++++ b/programs/localized/util/merge.c	2026-11-20 12:03:13
+@@ -101,8 +101,90 @@
+ 
+ #include <Dt/MsgCatP.h>
+ 
++/*
++ * merge runs on the build host only.  It makes its scratch catalogues with
++ * the gencat on PATH, which in a cross build writes the target's format, so
++ * it reads them itself instead of with the host's catopen: "gencat -m"
++ * writes one file, a 20-byte header (magic 0xFF88FF89, sets, size, offset
++ * of the message headers and of the text after the header), 12 bytes per
++ * set (number, messages, first message header) and per message (number,
++ * length with the NUL, offset in the text); every integer 32 bits,
++ * big-endian.  A catalogue that cannot be read counts as missing.
++ */
++typedef struct { unsigned char *buf; size_t len; } mcat_t;
++
++static unsigned long mcat_word(const mcat_t *c, size_t off)
++{
++    const unsigned char *b = c->buf + off;
++
++    return ((unsigned long)b[0] << 24) | ((unsigned long)b[1] << 16) |
++           ((unsigned long)b[2] << 8) | (unsigned long)b[3];
++}
++
++static int mcat_open(mcat_t *c, const char *path)
++{
++    FILE *f = fopen(path, "rb");
++    long n;
++
++    c->buf = NULL;
++    c->len = 0;
++    if (f == NULL)
++        return -1;
++    if (fseek(f, 0, SEEK_END) != 0 || (n = ftell(f)) < 20 ||
++        fseek(f, 0, SEEK_SET) != 0 || (c->buf = malloc(n)) == NULL ||
++        fread(c->buf, 1, n, f) != (size_t)n) {
++        fclose(f);
++        free(c->buf);
++        c->buf = NULL;
++        return -1;
++    }
++    fclose(f);
++    c->len = n;
++    if (mcat_word(c, 0) != 0xFF88FF89UL || mcat_word(c, 8) != c->len - 20) {
++        free(c->buf);
++        c->buf = NULL;
++        return -1;
++    }
++    return 0;
++}
++
++/* the text of message num in set, or NULL; every offset is checked */
++static char *mcat_get(const mcat_t *c, unsigned long set, unsigned long num)
++{
++    unsigned long nsets, mhdr, text, i, j, cnt, first, len, off;
++
++    if (c->buf == NULL)
++        return NULL;
++    nsets = mcat_word(c, 4);
++    mhdr = mcat_word(c, 12);
++    text = mcat_word(c, 16);
++    if (nsets > (c->len - 20) / 12 || mhdr != 12 * nsets || text > c->len - 20)
++        return NULL;
++    for (i = 0; i < nsets; i++) {
++        if (mcat_word(c, 20 + 12 * i) != set)
++            continue;
++        cnt = mcat_word(c, 20 + 12 * i + 4);
++        first = mcat_word(c, 20 + 12 * i + 8);
++        for (j = first; j < first + cnt; j++) {
++            /* message header j follows the set headers */
++            if (mhdr + 12 * j + 12 > text)
++                return NULL;
++            if (mcat_word(c, 20 + mhdr + 12 * j) != num)
++                continue;
++            len = mcat_word(c, 20 + mhdr + 12 * j + 4);
++            off = mcat_word(c, 20 + mhdr + 12 * j + 8);
++            if (len == 0 || off > c->len - 20 - text ||
++                len > c->len - 20 - text - off ||
++                c->buf[20 + text + off + len - 1] != '\0')
++                return NULL;
++            return (char *)c->buf + 20 + text + off;
++        }
++    }
++    return NULL;
++}
++
+ /* [0] for primary, [1] for default */
+-nl_catd catfile[2] = {(nl_catd) -1, (nl_catd) -1};
++mcat_t catfile[2];
+ char *big_buff;
+ char *lang = NULL;
+ char envvar[100];
+@@ -175,8 +257,8 @@
+         c = get_char ();
+     }
+ 
+-    CATCLOSE(catfile[0]);
+-    CATCLOSE(catfile[1]);
++    free(catfile[0].buf);
++    free(catfile[1].buf);
+ 
+     unlink(pFilename);
+     unlink(dFilename);
+@@ -248,18 +330,18 @@
+ 
+     if(pfile != NULL)
+     {
+-        snprintf(line, PATH_MAX, "gencat %s %s", pFilename, pfile);
++        snprintf(line, PATH_MAX, "gencat -m %s %s", pFilename, pfile);
+         if ( system(line) != 0 )
+ 	{
+            fatal("primary .tmsg file would not gencat\n",0,9);
+ 	}
+     }
+ 
+-    catfile[0] =  CATOPEN(pFilename,0);
++    mcat_open(&catfile[0], pFilename);
+ 
+     if(dfile != NULL)
+     {
+-        snprintf(line, PATH_MAX, "gencat %s %s", dFilename, dfile);
++        snprintf(line, PATH_MAX, "gencat -m %s %s", dFilename, dfile);
+         if ( system(line) != 0 )
+ 	{
+            fatal("default .tmsg file would not gencat\n",0,9);
+@@ -267,10 +349,10 @@
+ 
+     }
+ 
+-    catfile[1] = CATOPEN(dFilename,0);
++    mcat_open(&catfile[1], dFilename);
+ 
+     /* if all fails */
+-    if((catfile[0] == (nl_catd) -1) && (catfile[1] == (nl_catd) -1))
++    if(catfile[0].buf == NULL && catfile[1].buf == NULL)
+         fatal("Can't open message files.\n", 0, 9);
+ 
+ }
+@@ -284,9 +366,9 @@
+ {
+     int ret = 0;
+ 
+-    if(catfile[0] != (nl_catd) -1)
++    if(catfile[0].buf != NULL)
+         ret = find_msg_in_file(msg, 0);
+-    if(ret == 0 && catfile[1] != (nl_catd) -1)
++    if(ret == 0 && catfile[1].buf != NULL)
+         ret = find_msg_in_file(msg, 1);
+     return ret;
+ }
+@@ -301,11 +383,12 @@
+  */
+ int find_msg_in_file (int msg, int file)
+ {
+-        big_buff = CATGETS(catfile[file],1,msg,"MSG_NOT_FOUND");
+-        if ( strcmp(big_buff,"MSG_NOT_FOUND") )
+-           return(1);
+-        else
++        char *m = mcat_get(&catfile[file], 1, msg);
++
++        if (m == NULL)
+            return(0);
++        big_buff = m;
++        return(1);
+ }
+ 
+ /*

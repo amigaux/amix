@@ -1,0 +1,100 @@
+.TH CDE-RPC 1M "2026-11-19" "Amiga UNIX add-on" "CDE"
+.SH NAME
+cde-rpc \- start and stop CDE's RPC servers
+.SH SYNOPSIS
+.B sh /etc/init.d/cde-rpc
+.BR start " | " stop
+.SH DESCRIPTION
+.B cde-rpc
+starts CDE's two RPC servers at boot, each only when
+.I /etc/rc.conf
+turns it on.
+Both are off as installed: nothing of CDE listens on the network until
+the administrator chooses it.
+.TP
+.B ttdbserver=yes
+starts
+.BR rpc.ttdbserver ,
+ToolTalk's database server (RPC program 100083).
+ToolTalk uses it for objects and file-scoped messages shared between
+machines; a desktop on one machine works without it.
+.TP
+.B cmsd=yes
+starts
+.BR rpc.cmsd ,
+the calendar server (RPC program 100068).
+The calendar,
+.BR dtcm ,
+opens every calendar through it, including the user's own.
+.TP
+.BI cde_rpc_wait= seconds
+how long the boot waits for
+.B rpcbind
+before giving up (default 120).
+.PP
+Both servers run standalone and register themselves with
+.BR rpcbind ,
+which the stock
+.I /etc/rc2.d/S75rpc
+starts in the background.
+So
+.B start
+hands the work to a background run (rc.subr's
+.BR rc_bg ):
+it waits until
+.B rpcinfo \-p
+answers, then starts each server that is turned on and not already
+running, and the boot goes on.
+.B stop
+ends both.
+The script is linked as
+.I /etc/rc2.d/S78cde-rpc
+and as
+.I K38cde-rpc
+in
+.I /etc/rc0.d
+and
+.IR /etc/rc1.d .
+Its messages are in
+.IR /var/adm/rc.log ,
+the background run's output in
+.IR /var/adm/rclog/cde-rpc .
+.SH EXAMPLES
+Turn the calendar server on, now and at every boot:
+.PP
+.RS
+.nf
+echo cmsd=yes >> /etc/rc.conf
+sh /etc/init.d/cde-rpc start
+.fi
+.RE
+.SH DTSPCD
+CDE's subprocess control daemon,
+.BR dtspcd ,
+lets another machine's desktop run actions on this one (TCP port 6112).
+It is started by
+.BR inetd ,
+and no line for it is installed: it is needed only for remote
+execution.
+To turn it on, add the service and the inetd line by hand, then
+restart inetd:
+.PP
+.RS
+.nf
+echo 'dtspc 6112/tcp' >> /etc/inet/services
+echo 'dtspc stream tcp nowait root /usr/dt/bin/dtspcd /usr/dt/bin/dtspcd' >> /etc/inet/inetd.conf
+sacadm -k -p inetd; sacadm -s -p inetd
+.fi
+.RE
+.PP
+To turn it off, remove the two lines and restart inetd the same way.
+.SH FILES
+.TP
+.I /etc/rc.conf
+the switches (rc.conf(4))
+.TP
+.I /usr/dt/bin/rpc.ttdbserver
+.TP
+.I /usr/dt/bin/rpc.cmsd
+.SH SEE ALSO
+rc.subr(1M), rc.conf(4), rpcbind(1M), rpcinfo(1M), inetd(1M), sacadm(1M)

@@ -1,0 +1,76 @@
+DtSvc: build for SVR4.
+
+- Dt/FileUtil.h: include <dirent.h>, as its prototypes use DIR.
+- EUSCompat.h: MAXNAMELEN from <sys/param.h> on SVR4 (only Linux and the
+  BSDs get a definition here).
+- DbLoad.c, DtsInit.c, FileUtil.c, Utility.c: <dirent.h> on SVR4, as on
+  Sun and the BSDs.
+
+--- a/include/Dt/FileUtil.h	2026-11-20 12:03:13
++++ b/include/Dt/FileUtil.h	2026-11-20 12:03:13
+@@ -35,6 +35,8 @@
+ #ifndef _FileUtil_h
+ #define _FileUtil_h
+ 
++
++#include <dirent.h>	/* DIR, in the prototypes below */
+ extern int _DtCreateDirs( char *path,
+                          int mode) ;
+ 
+--- a/include/EUSCompat.h	2026-11-20 12:03:13
++++ b/include/EUSCompat.h	2026-11-20 12:03:13
+@@ -73,6 +73,10 @@
+ #define MAXNAMELEN      	256
+ #endif
+ 
++#if defined(SVR4) && !defined(MAXNAMELEN)
++#include <sys/param.h>	/* MAXNAMELEN */
++#endif
++
+ 
+ /*
+ ** AIX defines
+--- a/lib/DtSvc/DtUtil1/DbLoad.c	2026-11-20 12:03:13
++++ b/lib/DtSvc/DtUtil1/DbLoad.c	2026-11-20 12:03:13
+@@ -49,7 +49,7 @@
+ #include <stdio.h>
+ #include <sys/types.h>
+ 
+-#if defined(sun) || defined(CSRG_BASED)
++#if defined(sun) || defined(CSRG_BASED) || defined(SVR4)
+ #include <dirent.h>
+ #else
+ #include <sys/dir.h>
+--- a/lib/DtSvc/DtUtil1/DtsInit.c	2026-11-20 12:03:13
++++ b/lib/DtSvc/DtUtil1/DtsInit.c	2026-11-20 12:03:13
+@@ -47,7 +47,7 @@
+ #include <stdio.h>
+ #include <sys/types.h>
+ 
+-#if defined(sun) || defined(CSRG_BASED)
++#if defined(sun) || defined(CSRG_BASED) || defined(SVR4)
+ #include <dirent.h>
+ #else
+ #include <sys/dir.h>
+--- a/lib/DtSvc/DtUtil2/FileUtil.c	2026-11-20 12:03:13
++++ b/lib/DtSvc/DtUtil2/FileUtil.c	2026-11-20 12:03:13
+@@ -37,7 +37,7 @@
+ #include <sys/param.h>		/* MAXPATHLEN */
+ #include <errno.h>		/* errno(2) */
+ 
+-#if defined(sun) || defined(CSRG_BASED)
++#if defined(sun) || defined(CSRG_BASED) || defined(SVR4)
+ #include <dirent.h>		/* opendir(), directory(3C) */
+ #else
+ #include <sys/dir.h>
+--- a/lib/DtSvc/DtUtil2/Utility.c	2026-11-20 12:03:13
++++ b/lib/DtSvc/DtUtil2/Utility.c	2026-11-20 12:03:13
+@@ -35,7 +35,7 @@
+ #include <stdio.h>
+ #include <sys/types.h>
+ 
+-#if defined(sun) || defined(CSRG_BASED)
++#if defined(sun) || defined(CSRG_BASED) || defined(SVR4)
+ #include <dirent.h>
+ #else
+ #include <sys/dir.h>

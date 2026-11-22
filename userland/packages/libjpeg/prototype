@@ -1,0 +1,40 @@
+#
+# prototype -- libjpeg 9f under /opt/amix.
+#
+# Listed from the stage hook's install, one line per object; the header is
+# written by hand.  pkginfo is generated from package.sh.  No install scripts.
+# Directories 0755 root sys, files 0644 root bin, programs 0755 root bin.
+#
+i pkginfo
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/bin 0755 root sys
+f none /opt/amix/bin/cjpeg 0755 root bin
+f none /opt/amix/bin/djpeg 0755 root bin
+f none /opt/amix/bin/jpegtran 0755 root bin
+f none /opt/amix/bin/rdjpgcom 0755 root bin
+f none /opt/amix/bin/wrjpgcom 0755 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/libjpeg 0755 root sys
+f none /opt/amix/doc/libjpeg/README 0644 root bin
+f none /opt/amix/doc/libjpeg/change.log 0644 root bin
+f none /opt/amix/doc/libjpeg/libjpeg.txt 0644 root bin
+f none /opt/amix/doc/libjpeg/usage.txt 0644 root bin
+d none /opt/amix/include 0755 root sys
+f none /opt/amix/include/jconfig.h 0644 root bin
+f none /opt/amix/include/jerror.h 0644 root bin
+f none /opt/amix/include/jmorecfg.h 0644 root bin
+f none /opt/amix/include/jpeglib.h 0644 root bin
+d none /opt/amix/lib 0755 root sys
+f none /opt/amix/lib/libjpeg.a 0644 root bin
+f none /opt/amix/lib/libjpeg.so.9 0755 root bin
+s none /opt/amix/lib/libjpeg.so=/opt/amix/lib/libjpeg.so.9
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1 0755 root sys
+f none /opt/amix/man/1/cjpeg 0644 root bin
+f none /opt/amix/man/1/djpeg 0644 root bin
+f none /opt/amix/man/1/jpegtran 0644 root bin
+f none /opt/amix/man/1/rdjpgcom 0644 root bin
+f none /opt/amix/man/1/wrjpgcom 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/libjpeg 0644 root bin

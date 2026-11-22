@@ -1,0 +1,54 @@
+Install hooks: owners, set-id modes and terminfo only for a direct install.
+
+dtterm, dtsession and dtappgather are made setuid root, and dtmail setgid
+mail, by chown/chgrp and chmod in their install hooks, and dtterm's hook
+compiles dtterm.ti into the installing machine's terminfo with tic. An
+install into DESTDIR is a staging tree for a package: it is made by an
+ordinary user, who cannot give files to root or mail, and the package
+itself sets owners and modes; its terminfo is for the target, not the
+machine that stages it. Each of these commands now runs only when
+DESTDIR is empty. A direct install is unchanged.
+
+--- a/programs/dtmail/dtmail/Makefile.am	2026-11-20 12:03:13
++++ b/programs/dtmail/dtmail/Makefile.am	2026-11-20 12:03:13
+@@ -47,4 +47,4 @@
+ # Don't fail if we can't set the mail group which might not exist on
+ # some systems
+ install-exec-hook:
+-	-(chgrp mail $(DESTDIR)$(bindir)/dtmail && chmod 2755 $(DESTDIR)$(bindir)/dtmail)
++	test -n "$(DESTDIR)" || (chgrp mail $(DESTDIR)$(bindir)/dtmail && chmod 2755 $(DESTDIR)$(bindir)/dtmail) || :
+--- a/programs/dtsearchpath/dtappg/Makefile.am	2026-11-20 12:03:13
++++ b/programs/dtsearchpath/dtappg/Makefile.am	2026-11-20 12:03:13
+@@ -14,5 +14,5 @@
+ 
+ # can't use INSTALL here as the program is already installed
+ install-exec-hook:
+-	chown root $(DESTDIR)$(bindir)/dtappgather
+-	chmod 4755 $(DESTDIR)$(bindir)/dtappgather
++	test -n "$(DESTDIR)" || chown root $(DESTDIR)$(bindir)/dtappgather
++	test -n "$(DESTDIR)" || chmod 4755 $(DESTDIR)$(bindir)/dtappgather
+--- a/programs/dtsession/Makefile.am	2026-11-20 12:03:13
++++ b/programs/dtsession/Makefile.am	2026-11-20 12:03:13
+@@ -130,7 +130,7 @@
+ 
+ install-exec-hook:
+ if !HAS_PAM_LIBRARY
+-	chown root $(DESTDIR)$(bindir)/dtsession
+-	chmod 4755 $(DESTDIR)$(bindir)/dtsession
++	test -n "$(DESTDIR)" || chown root $(DESTDIR)$(bindir)/dtsession
++	test -n "$(DESTDIR)" || chmod 4755 $(DESTDIR)$(bindir)/dtsession
+ endif
+ 
+--- a/programs/dtterm/Makefile.am	2026-11-20 12:03:13
++++ b/programs/dtterm/Makefile.am	2026-11-20 12:03:13
+@@ -49,7 +49,7 @@
+ 
+ install-exec-hook:
+ if !HAS_UTEMPTER_LIBRARY
+-	chown root $(DESTDIR)$(bindir)/dtterm
+-	chmod 4755 $(DESTDIR)$(bindir)/dtterm
++	test -n "$(DESTDIR)" || chown root $(DESTDIR)$(bindir)/dtterm
++	test -n "$(DESTDIR)" || chmod 4755 $(DESTDIR)$(bindir)/dtterm
+ endif
+-	@TIC@ dtterm.ti
++	test -n "$(DESTDIR)" || @TIC@ dtterm.ti

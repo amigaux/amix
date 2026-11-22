@@ -1,0 +1,252 @@
+Documentation: only for the parts that are built.
+
+The manual pages, help volumes and information library were made for
+every part, whatever configure left out. With dtinfo, dtdocbook, dtksh or
+dtappbuilder disabled, their documentation is now left out too:
+- man/Makefile.am: the pages of dtbuilder, dtcodegen, dtbuilderaction and
+  ttsnoop (dtappbuilder), dtksh and ksh-cde (dtksh), dtdocbook and
+  dtdocbook2infolib (dtdocbook), and dtinfo with the DtInfo and DtMmdb
+  interfaces (dtinfo) join their sections only when that part is built;
+- help: AppBuilder.sdl and Infomgr.sdl, and their graphics, likewise;
+- en_US.UTF-8/Makefile.am: guides, the information library, is made only
+  with dtinfo; the manual pages still read their sources from it;
+- without dtdocbook, the pages and help volumes are made with its
+  configured dtdocbook2man and dtdocbook2sdl, which take the locations of
+  instant and the DocBook files from the environment (dtdcbk_libdir,
+  dtdcbk_libexecdir, dtdcbk_datarootdir); doc_utils' wrappers, which point
+  them at the tree's own dtdocbook build, are used when it is built.
+With every part enabled the same files are made as before.
+
+--- a/doc/common/help/sdl-data.am	2026-11-20 12:03:13
++++ b/doc/common/help/sdl-data.am	2026-11-20 12:03:13
+@@ -21,8 +21,10 @@
+ dist_appmanager_DATA = $(shell [ -d Appmanager/graphics ] && find Appmanager/graphics/* |grep -v /CDR)
+ 
+ # AppBuilder
++if BUILD_DTAPPBUILDER
+ appbuilderdir = $(CDE_INSTALLATION_TOP)/appconfig/help/$(LANG)/AppBuilder/graphics
+ dist_appbuilder_DATA = $(shell [ -d AppBuilder/graphics ] && find AppBuilder/graphics/* |grep -v /CDR)
++endif
+ 
+ # Calculator
+ calculatordir = $(CDE_INSTALLATION_TOP)/appconfig/help/$(LANG)/Calculator/graphics
+@@ -53,8 +55,10 @@
+ dist_iconed_DATA = $(shell [ -d Iconed/graphics ] && find Iconed/graphics/* |grep -v /CDR)
+ 
+ # Infomgr
++if BUILD_DTINFO
+ infomgrdir = $(CDE_INSTALLATION_TOP)/appconfig/help/$(LANG)/Infomgr/graphics
+ dist_infomgr_DATA = $(shell [ -d Infomgr/graphics ] && find Infomgr/graphics/* |grep -v /CDR)
++endif
+ 
+ # Intromgr
+ intromgrdir = $(CDE_INSTALLATION_TOP)/appconfig/help/$(LANG)/Intromgr/graphics
+--- a/doc/common/help/sdl-docs.am	2026-11-20 12:03:13
++++ b/doc/common/help/sdl-docs.am	2026-11-20 12:03:13
+@@ -2,17 +2,24 @@
+ 
+ BUILT_SOURCES = Appmanager.sdl $(APPBUILDER) Calculator.sdl		\
+     Calendar.sdl CreatAct.sdl Filemgr.sdl FPanel.sdl Help4Help.sdl	\
+-    Iconed.sdl Infomgr.sdl Intromgr.sdl LibDtPrint.sdl Loginmgr.sdl	\
++    Iconed.sdl Intromgr.sdl LibDtPrint.sdl Loginmgr.sdl		\
+     Mailer.sdl Printmgr.sdl PrnSetup.sdl Stylemgr.sdl Terminal.sdl	\
+     Textedit.sdl
+ 
++if BUILD_DTINFO
++BUILT_SOURCES += Infomgr.sdl
++endif
+ CLEANFILES = $(BUILT_SOURCES)
+ 
+ # install the help SDL files
+ sdlhelpdir = $(CDE_INSTALLATION_TOP)/appconfig/help/$(LANG)
+ dist_sdlhelp_DATA = $(BUILT_SOURCES)
+ 
++if BUILD_DTDOCBOOK
+ DTDOCBOOK = $(top_srcdir)/programs/dtdocbook/doc_utils/dtdocbook2sdl
++else
++DTDOCBOOK = $(top_builddir)/programs/dtdocbook/dtdocbook2sdl
++endif
+ DTHELP_HTAG2 = $(top_builddir)/programs/dthelp/parser/pass2/parser/dthelp_htag2
+ 
+ # let's try a rule here.  I don't like the backticks for running basename
+--- a/doc/en_US.UTF-8/Makefile.am	2026-11-20 12:03:13
++++ b/doc/en_US.UTF-8/Makefile.am	2026-11-20 12:03:13
+@@ -1,3 +1,8 @@
+ MAINTAINERCLEANFILES = Makefile.in
+ 
+-SUBDIRS = m-guides man guides help
++SUBDIRS = m-guides man help
++
++# the information library (dtinfo's); the manual pages read its sources
++if BUILD_DTINFO
++SUBDIRS += guides
++endif
+--- a/doc/en_US.UTF-8/help/Makefile.am	2026-11-20 12:03:13
++++ b/doc/en_US.UTF-8/help/Makefile.am	2026-11-20 12:03:13
+@@ -2,7 +2,9 @@
+ 
+ # This is only available for the C locale, it will be blank for other
+ # languages
++if BUILD_DTAPPBUILDER
+ APPBUILDER = AppBuilder.sdl
++endif
+ 
+ # this sets the LANG variables
+ include $(top_srcdir)/programs/localized/templates/English.am
+--- a/doc/en_US.UTF-8/man/Makefile.am	2026-11-20 12:03:13
++++ b/doc/en_US.UTF-8/man/Makefile.am	2026-11-20 12:03:13
+@@ -3,28 +3,33 @@
+ # this sets the LANG variables
+ include $(top_srcdir)/programs/localized/templates/English.am
+ 
++# without dtdocbook, its configured script, which takes the locations of
++# instant and the DocBook files from the environment (dtdcbk_*)
++if BUILD_DTDOCBOOK
+ DBTOMAN = $(KSH_FOR_BUILD) $(top_srcdir)/programs/dtdocbook/doc_utils/dtdocbook2man $(LANG)
++else
++DBTOMAN = $(KSH_FOR_BUILD) $(top_builddir)/programs/dtdocbook/dtdocbook2man $(LANG)
++endif
+ 
+ # first, the man pages broken down by sections
+ MANSEC1 = man1/tttrace.1 man1/tttar.1 man1/ttsession.1 man1/ttrmdir.1	\
+     man1/ttrm.1 man1/ttmv.1 man1/ttcp.1 man1/tt_type_comp.1		\
+-    man1/ksh-cde.1 man1/huffcode.1 man1/dtwm.1 man1/dtudcfonted.1		\
++    man1/huffcode.1 man1/dtwm.1 man1/dtudcfonted.1	\
+     man1/dtudcexch.1 man1/dttypes.1 man1/dtterm.1 man1/dtstyle.1	\
+     man1/dtsrload.1 man1/dtsrkdump.1 man1/dtsrindex.1 man1/dtsrhan.1	\
+     man1/dtsrdbrec.1 man1/dtsrcreate.1 man1/dtsession_res.1		\
+     man1/dtsession.1 man1/dtsearchpath.1 man1/dtscreen.1		\
+     man1/dtprintinfo.1 man1/dtpdmd.1 man1/dtpdm.1 man1/dtpad.1		\
+     man1/dtmailpr.1 man1/dtmail.1 man1/dtlp.1 man1/dtlogin.1		\
+-    man1/dtksh.1 man1/dtdocbook2infolib.1 man1/dtinfo.1			\
+     man1/dtimsstart.1 man1/dticon.1 man1/dthelpview.1 man1/dthelptag.1	\
+     man1/dthelpprint.1 man1/dthelpgen.1 man1/dthelp_htag2.1		\
+     man1/dthelp_htag1.1 man1/dthelp_ctag1.1 man1/dthello.1		\
+     man1/dtgreet.1 man1/dtfplist.1 man1/dtfile_error.1			\
+-    man1/dtfile_copy.1 man1/dtfile.1 man1/dtexec.1 man1/dtdocbook.1	\
++    man1/dtfile_copy.1 man1/dtfile.1 man1/dtexec.1	\
+     man1/dtcreate.1 man1/dtconvertvf.1 man1/dtconfig.1			\
+-    man1/dtcodegen.1 man1/dtcm_lookup.1 man1/dtcm_insert.1		\
++    man1/dtcm_lookup.1 man1/dtcm_insert.1	\
+     man1/dtcm_editor.1 man1/dtcm_delete.1 man1/dtcm.1			\
+-    man1/dtchooser.1 man1/dtcalc.1 man1/dtbuilder.1			\
++    man1/dtchooser.1 man1/dtcalc.1	\
+     man1/dtappintegrate.1 man1/dtappgather.1 man1/dtaction.1		\
+     man1/dsdm.1
+ 
+@@ -193,28 +198,7 @@
+     man3/DtPrintFillSetupData.3 man3/DtPrintCopySetupData.3		\
+     man3/DtMsgLogSetHandler.3 man3/DtMsgLogOpenFile.3			\
+     man3/DtMsgLogMessage.3 man3/DtMrmInitialize.3			\
+-    man3/DtMmdbTocGetParentId.3 man3/DtMmdbTocGetNumOfChildren.3	\
+-    man3/DtMmdbTocGetChildIds.3 man3/DtMmdbStylesheetGetName.3		\
+-    man3/DtMmdbStylesheetGetData.3 man3/DtMmdbSectionGetTocLoc.3	\
+-    man3/DtMmdbSectionGetStyleSheetId.3					\
+-    man3/DtMmdbSectionGetShortTitle.3					\
+-    man3/DtMmdbSectionGetLongTitle.3 man3/DtMmdbSectionGetLoc.3		\
+-    man3/DtMmdbSectionGetDataSize.3 man3/DtMmdbSectionGetData.3		\
+-    man3/DtMmdbSectionGetBookId.3 man3/DtMmdbQuit.3			\
+-    man3/DtMmdbOpenInfoLib.3 man3/DtMmdbLocatorGetSectionObjectId.3	\
+-    man3/DtMmdbLocatorGetSectionLoc.3 man3/DtMmdbInit.3			\
+-    man3/DtMmdbInfoLibGetInfo.3 man3/DtMmdbInfoLibFreeInfo.3		\
+-    man3/DtMmdbGraphicGetInfo.3 man3/DtMmdbGraphicGetData.3		\
+-    man3/DtMmdbGetBookCaseByName.3 man3/DtMmdbGetBookCaseByLocs.3	\
+-    man3/DtMmdbGetBookCaseByLoc.3 man3/DtMmdbGetBookCaseByIndex.3	\
+-    man3/DtMmdbFreeHandleList.3 man3/DtMmdbFreeHandle.3			\
+-    man3/DtMmdbFreeGraphicInfo.3 man3/DtMmdbDlpGetPrevSectionId.3	\
+-    man3/DtMmdbDlpGetNextSectionId.3 man3/DtMmdbCloseInfoLib.3		\
+-    man3/DtMmdbBookGetTocObjectId.3 man3/DtMmdbBookGetTabList.3		\
+-    man3/DtMmdbBookGetShortTitle.3 man3/DtMmdbBookGetSeqNum.3		\
+-    man3/DtMmdbBookGetLongTitle.3 man3/DtMmdbBookGetLicense.3		\
+-    man3/DtMmdbBookCaseGetInfo.3 man3/DtMmdbBookCaseFreeInfo.3		\
+-    man3/DtMenuButton.3 man3/DtInfoShowTopic.3				\
++    man3/DtMenuButton.3	\
+     man3/DtHelpSetCatalogName.3 man3/DtHelpReturnSelectedWidgetId.3	\
+     man3/DtHelpQuickDialogGetChild.3 man3/DtHelpQuickDialog.3		\
+     man3/DtHelpDialog.3 man3/DtEditorUndoEdit.3				\
+@@ -282,32 +266,74 @@
+     man4/Get_XInfo.4 man4/Get_Sysinfo.4 man4/Get_Status.4		\
+     man4/Get_Situation.4 man4/Get_Modified.4 man4/Get_Mapped.4		\
+     man4/Get_Locale.4 man4/Get_Iconified.4 man4/Get_Geometry.4		\
+-    man4/Get_Environment.4 man4/Edit.4 man4/DtInfo_ShowInfoAtLoc.4	\
+-    man4/DtInfo_Quit.4 man4/DtInfo_PrintInfoAtLoc.4			\
+-    man4/DtInfo_LoadInfoLib.4 man4/DtDndProtocol.4 man4/Display.4	\
++    man4/Get_Environment.4 man4/Edit.4	\
++    man4/DtDndProtocol.4 man4/Display.4	\
+     man4/Deposit.4 man4/BIL.4
+ 
+ MANSEC5 = man5/dttrashaction.5 man5/dttextaction.5			\
+     man5/dttermaction.5 man5/dtterm.5 man5/dtstyleaction.5		\
+     man5/dtsessionaction.5 man5/dtprintinfoaction.5			\
+-    man5/dtmanaction.5 man5/dtmailaction.5 man5/dtinfoaf.5		\
+-    man5/dtinfoaction.5 man5/dtinfoTOCdtd.5 man5/dtinfoStyledtd.5	\
+-    man5/dtinfoBookdtd.5 man5/dtimsstartaction.5 man5/dticonaction.5	\
++    man5/dtmanaction.5 man5/dtmailaction.5	\
++    man5/dtimsstartaction.5 man5/dticonaction.5	\
+     man5/dthelpaction.5 man5/dtfilsys.5 man5/dtfileaction.5		\
+     man5/dtenvvar.5 man5/dtcalendaraction.5 man5/dtcalcaction.5		\
+-    man5/dtbuilderaction.5 man5/dtappaction.5 man5/dtactionaction.5	\
++    man5/dtappaction.5 man5/dtactionaction.5	\
+     man5/csacsa.5 man5/Tttttk.5 man5/Tttt_c.5 man5/DtWsm.5		\
+     man5/DtTerm.5 man5/DtStdInterfaceFontNames.5			\
+     man5/DtStdAppFontNames.5 man5/DtSpinBox.5 man5/DtSession.5		\
+     man5/DtSearch.5 man5/DtSaver.5 man5/DtPrint.5 man5/DtMsgLog.5	\
+-    man5/DtMrm.5 man5/DtMmdbInfoRequest.5 man5/DtMmdbInfoLibInfo.5	\
+-    man5/DtMmdbHandle.5 man5/DtMmdbGraphicInfo.5			\
+-    man5/DtMmdbBookCase.5 man5/DtMenuButton.5 man5/DtInfoLib.5		\
++    man5/DtMrm.5	\
++    man5/DtMenuButton.5	\
+     man5/DtHelpQuickD.5 man5/DtHelpDialog.5 man5/DtHelp.5		\
+     man5/DtEditor.5 man5/DtDts.5 man5/DtDnd.5 man5/DtComboBox.5		\
+     man5/DtAction.5 man5/Dt.5
+ 
+-MANSEC6 = man6/ttsnoop.6
++MANSEC6 =
++
++# the pages of the parts that may be left out (configure)
++if BUILD_DTAPPBUILDER
++MANSEC1 += man1/dtcodegen.1 man1/dtbuilder.1
++MANSEC5 += man5/dtbuilderaction.5
++MANSEC6 += man6/ttsnoop.6
++endif
++if BUILD_DTKSH
++MANSEC1 += man1/ksh-cde.1 man1/dtksh.1
++endif
++if BUILD_DTDOCBOOK
++MANSEC1 += man1/dtdocbook2infolib.1 man1/dtdocbook.1
++endif
++if BUILD_DTINFO
++MANSEC1 += man1/dtinfo.1
++MANSEC3 += man3/DtMmdbTocGetParentId.3 \
++    man3/DtMmdbTocGetNumOfChildren.3 man3/DtMmdbTocGetChildIds.3 \
++    man3/DtMmdbStylesheetGetName.3 man3/DtMmdbStylesheetGetData.3 \
++    man3/DtMmdbSectionGetTocLoc.3 man3/DtMmdbSectionGetStyleSheetId.3 \
++    man3/DtMmdbSectionGetShortTitle.3 man3/DtMmdbSectionGetLongTitle.3 \
++    man3/DtMmdbSectionGetLoc.3 man3/DtMmdbSectionGetDataSize.3 \
++    man3/DtMmdbSectionGetData.3 man3/DtMmdbSectionGetBookId.3 \
++    man3/DtMmdbQuit.3 man3/DtMmdbOpenInfoLib.3 \
++    man3/DtMmdbLocatorGetSectionObjectId.3 \
++    man3/DtMmdbLocatorGetSectionLoc.3 man3/DtMmdbInit.3 \
++    man3/DtMmdbInfoLibGetInfo.3 man3/DtMmdbInfoLibFreeInfo.3 \
++    man3/DtMmdbGraphicGetInfo.3 man3/DtMmdbGraphicGetData.3 \
++    man3/DtMmdbGetBookCaseByName.3 man3/DtMmdbGetBookCaseByLocs.3 \
++    man3/DtMmdbGetBookCaseByLoc.3 man3/DtMmdbGetBookCaseByIndex.3 \
++    man3/DtMmdbFreeHandleList.3 man3/DtMmdbFreeHandle.3 \
++    man3/DtMmdbFreeGraphicInfo.3 man3/DtMmdbDlpGetPrevSectionId.3 \
++    man3/DtMmdbDlpGetNextSectionId.3 man3/DtMmdbCloseInfoLib.3 \
++    man3/DtMmdbBookGetTocObjectId.3 man3/DtMmdbBookGetTabList.3 \
++    man3/DtMmdbBookGetShortTitle.3 man3/DtMmdbBookGetSeqNum.3 \
++    man3/DtMmdbBookGetLongTitle.3 man3/DtMmdbBookGetLicense.3 \
++    man3/DtMmdbBookCaseGetInfo.3 man3/DtMmdbBookCaseFreeInfo.3 \
++    man3/DtInfoShowTopic.3
++MANSEC4 += man4/DtInfo_ShowInfoAtLoc.4 man4/DtInfo_Quit.4 \
++    man4/DtInfo_PrintInfoAtLoc.4 man4/DtInfo_LoadInfoLib.4
++MANSEC5 += man5/dtinfoaf.5 man5/dtinfoaction.5 man5/dtinfoTOCdtd.5 \
++    man5/dtinfoStyledtd.5 man5/dtinfoBookdtd.5 \
++    man5/DtMmdbInfoRequest.5 man5/DtMmdbInfoLibInfo.5 \
++    man5/DtMmdbHandle.5 man5/DtMmdbGraphicInfo.5 man5/DtMmdbBookCase.5 \
++    man5/DtInfoLib.5
++endif
+ 
+ # installation
+ 

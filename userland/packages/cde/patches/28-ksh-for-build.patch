@@ -1,0 +1,70 @@
+KSH_FOR_BUILD: the Korn shell the build runs, apart from the one it installs.
+
+KSH names the Korn shell of the installed system: it goes into the
+scripts' first lines and into programs as KORNSHELL. The build also runs
+ksh scripts itself with the same shell: sym2num (dtprintinfo's message
+header and the localized catalogues), dtdocbook2sdl (the help volumes,
+through $(KSH)) and dtdocbook2man (the manual pages, through its first
+line, which names $(KSH)). In a cross build the installed system's ksh is
+not on the build machine. configure gets KSH_FOR_BUILD (an environment
+variable, default: KSH), and those three runs use it. Without it set
+nothing changes.
+
+--- a/configure.ac	2026-11-20 12:03:13
++++ b/configure.ac	2026-11-20 12:03:13
+@@ -417,6 +417,11 @@
+       fi
+    fi
+ fi
++
++dnl the Korn shell the build itself runs (sym2num); KSH is the one the
++dnl installed scripts name, which a cross build cannot run
++AC_ARG_VAR([KSH_FOR_BUILD], [Korn shell for scripts run during the build (default: KSH)])
++test -n "$KSH_FOR_BUILD" || KSH_FOR_BUILD=$KSH
+ 
+ AC_PATH_PROG(XRDB, xrdb)
+ if test -z "$ac_cv_path_XRDB"; then
+--- a/doc/common/help/sdl-docs.am	2026-11-20 12:03:13
++++ b/doc/common/help/sdl-docs.am	2026-11-20 12:03:13
+@@ -20,7 +20,7 @@
+ 
+ %.sdl:
+ 	SGML_SEARCH_PATH=".:.." \
+-		$(KSH) $(DTDOCBOOK) -H $(DTHELP_HTAG2) -L $(LANG) \
++		$(KSH_FOR_BUILD) $(DTDOCBOOK) -H $(DTHELP_HTAG2) -L $(LANG) \
+ 			-o $@ `basename $@ .sdl`/book.sgm
+ 
+ APPMANAGER_SRCS = Appmanager/GEntity.sgm Appmanager/TOC.sgm		\
+--- a/doc/en_US.UTF-8/man/Makefile.am	2026-11-20 12:03:13
++++ b/doc/en_US.UTF-8/man/Makefile.am	2026-11-20 12:03:13
+@@ -3,7 +3,7 @@
+ # this sets the LANG variables
+ include $(top_srcdir)/programs/localized/templates/English.am
+ 
+-DBTOMAN = $(top_srcdir)/programs/dtdocbook/doc_utils/dtdocbook2man $(LANG)
++DBTOMAN = $(KSH_FOR_BUILD) $(top_srcdir)/programs/dtdocbook/doc_utils/dtdocbook2man $(LANG)
+ 
+ # first, the man pages broken down by sections
+ MANSEC1 = man1/tttrace.1 man1/tttar.1 man1/ttsession.1 man1/ttrmdir.1	\
+--- a/programs/dtprintinfo/Makefile.am	2026-11-20 12:03:13
++++ b/programs/dtprintinfo/Makefile.am	2026-11-20 12:03:13
+@@ -52,7 +52,7 @@
+ 	DtPrintinfo.C dtprintinfomsg.h
+ 
+ # special processing for message files
+-SYM2NUM_CMD = CPP=$(GENCPP) $(KSH) sym2num
++SYM2NUM_CMD = CPP=$(GENCPP) $(KSH_FOR_BUILD) sym2num
+ 
+ BUILT_SOURCES = dtprintinfo_cat.h dtprintinfo_msg.h dtprintinfo.msg
+ CLEANFILES = $(BUILT_SOURCES)
+--- a/programs/localized/templates/msg.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/msg.am	2026-11-20 12:03:13
+@@ -13,7 +13,7 @@
+ 	$(RM) $@
+ 	LANG=$(LANG) $(GENCAT) $@ $^ || { $(RM) $@; exit 1; }
+ 
+-SYM2NUM_CMD = $(KSH) $(top_builddir)/programs/dtprintinfo/sym2num
++SYM2NUM_CMD = $(KSH_FOR_BUILD) $(top_builddir)/programs/dtprintinfo/sym2num
+ 
+ dtprintinfo.cat: export CPP := $(CPP) -
+ dtprintinfo.cat: export LANG := $(LANG)

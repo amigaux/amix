@@ -1,0 +1,99 @@
+Amiga UNIX branches in the files the build preprocesses.
+
+dtlogin's configuration (Xsetup, Xfailsafe, Xsession, Xservers, Xconfig)
+and the action file unsupported.dt are made with the build's tradcpp,
+each with branches for the systems CDE knows and a fallback that names
+/usr/bin/X11. On Amiga UNIX (Amix) the X11R6 binaries are in
+/opt/amix/X11R6/bin, so the fallback finds no xset or xsetroot, and
+dtlogin's default server line names no server there. Each gets an
+__AMIX__ branch: the X11R6 directory; Xsession's mail file, ~/.xinitrc,
+xdm's Xsession and the dthello line; the X server run as root
+(local_uid root: dtlogin runs it as nobody otherwise, and the RTG card
+device is root's); the exported NLSPATH and LANG; and a user PATH in the
+order Amix's own logins have. __AMIX__ is predefined by a tradcpp built
+for Amix (CONFIG_OS); on every other system nothing changes.
+
+--- a/programs/dtlogin/config/Xconfig.src	2026-11-20 12:03:13
++++ b/programs/dtlogin/config/Xconfig.src	2026-11-20 12:03:13
+@@ -75,7 +75,7 @@
+ Dtlogin.exportList:		ODMDIR NLSPATH TZ
+ #endif
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(__AMIX__)
+ Dtlogin.exportList:		NLSPATH LANG
+ #endif
+ 
+@@ -124,6 +124,9 @@
+ 
+ #if defined(__linux__) || defined(CSRG_BASED)
+ Dtlogin*userPath:          /bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin:CDE_INSTALLATION_TOP/bin
++#endif
++#if defined(__AMIX__)
++Dtlogin*userPath:          /usr/amix/bin:/usr/bin:/usr/sbin:/usr/ucb:/opt/amix/bin:/opt/amix/X11R6/bin:CDE_INSTALLATION_TOP/bin
+ #endif
+ 
+ 
+--- a/programs/dtlogin/config/Xfailsafe.src	2026-11-20 12:03:13
++++ b/programs/dtlogin/config/Xfailsafe.src	2026-11-20 12:03:13
+@@ -63,6 +63,8 @@
+    XDIR=/usr/X11R6/bin
+ #elif defined(__NetBSD__)
+    XDIR=/usr/X11R7/bin
++#elif defined(__AMIX__)
++   XDIR=/opt/amix/X11R6/bin
+ #endif
+ 
+ $XDIR/xsetroot -default &
+--- a/programs/dtlogin/config/Xservers.src	2026-11-20 12:03:13
++++ b/programs/dtlogin/config/Xservers.src	2026-11-20 12:03:13
+@@ -107,6 +107,8 @@
+    :0   Local local@console /usr/X11R7/bin/X :0
+ #elif defined (__FreeBSD__)
+    :0   Local local@console /usr/local/bin/X :0
++#elif defined (__AMIX__)
++   :0	Local local_uid@console root /opt/amix/X11R6/bin/X :0
+ #else
+    *	Local local@console /usr/bin/X11/X :0
+ #endif
+--- a/programs/dtlogin/config/Xsession.src	2026-11-20 12:03:13
++++ b/programs/dtlogin/config/Xsession.src	2026-11-20 12:03:13
+@@ -90,6 +90,15 @@
+ #  define cpp_MAIL "/var/mail/$USER"
+ #  define cpp_XINITUSER "$HOME/.xinitrc"
+ #  define cpp_XDMSYS "/etc/X11/xdm/Xsession"
++#  undef cpp_HELLO
++#  define cpp_HELLO "$DT_BINPATH/dthello -file $DT_INSTALL/copyright &"
++#endif
++
++#ifdef __AMIX__
++#  define cpp_MAIL "/var/mail/$USER"
++#  define cpp_XDIR "/opt/amix/X11R6/bin"
++#  define cpp_XINITUSER "$HOME/.xinitrc"
++#  define cpp_XDMSYS "/opt/amix/X11R6/lib/X11/xdm/Xsession"
+ #  undef cpp_HELLO
+ #  define cpp_HELLO "$DT_BINPATH/dthello -file $DT_INSTALL/copyright &"
+ #endif
+--- a/programs/dtlogin/config/Xsetup.src	2026-11-20 12:03:13
++++ b/programs/dtlogin/config/Xsetup.src	2026-11-20 12:03:13
+@@ -64,6 +64,8 @@
+   XDIR=/usr/X11R7/bin
+ #elif defined(__FreeBSD__)
+   XDIR=/usr/local/bin
++#elif defined(__AMIX__)
++  XDIR=/opt/amix/X11R6/bin
+ #else
+   XDIR=/usr/bin/X11
+ #endif
+--- a/programs/types/unsupported.dt.src	2026-11-20 12:03:13
++++ b/programs/types/unsupported.dt.src	2026-11-20 12:03:13
+@@ -28,6 +28,9 @@
+ #elif defined(__sun)
+ #define XBIN /usr/openwin/bin
+ #define XBIN_CONTRIB /usr/openwin/bin
++#elif defined(__AMIX__)
++#define XBIN /opt/amix/X11R6/bin
++#define XBIN_CONTRIB /opt/amix/X11R6/bin
+ #else
+ #define XBIN /usr/bin/X11
+ #define XBIN_CONTRIB /usr/local/bin/X11

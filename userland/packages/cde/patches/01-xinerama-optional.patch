@@ -1,0 +1,108 @@
+Xinerama optional: build CDE where the X libraries have no Xinerama.
+
+CDE 2.5.3's configure stops without libXinerama, and dtwm links it through
+libDtXinerama. X11R6.3, which Amix's X is, predates Xinerama (X11R6.4). The
+callers already handle "no Xinerama": dtsession, dtlogin, dtfile and DtSvc
+guard their own calls with USE_XINERAMA, and dtwm's WmMultiHead.c falls back
+to the one screen when _DtXineramaInit returns NULL. So:
+- configure.ac: a missing libXinerama is a warning; USE_XINERAMA and
+  XINERAMALIB (-lXinerama) are set only when it is there;
+- lib/DtXinerama: links $(XINERAMALIB); built without USE_XINERAMA,
+  _DtXineramaInit returns NULL and _DtXineramaGetScreen False;
+- Dt/DtXinerama.h: includes <X11/extensions/Xinerama.h> only with
+  USE_XINERAMA (else <X11/Xlib.h>), and the screen list is an opaque pointer.
+With libXinerama present nothing changes.
+
+--- a/configure.ac	2026-11-20 12:03:13
++++ b/configure.ac	2026-11-20 12:03:13
+@@ -456,10 +456,14 @@
+ AC_SEARCH_LIBS(dlopen, [dl dld], [], [])
+ 
+ AC_CHECK_LIB(crypt, crypt)
+-dnl this should be configurable, for now it is required
++dnl Xinerama is optional: without it libDtXinerama reports no Xinerama and
++dnl dtwm, dtsession, dtlogin and dtfile use the one screen
++XINERAMALIB=""
+ AC_CHECK_LIB(Xinerama, XineramaQueryScreens,
+-                [SOURCE_CPP_DEFINES="${SOURCE_CPP_DEFINES} -DUSE_XINERAMA"],
+-                [AC_MSG_ERROR([libXinerama not found])], $X_LIBS)
++                [SOURCE_CPP_DEFINES="${SOURCE_CPP_DEFINES} -DUSE_XINERAMA"
++                 XINERAMALIB="-lXinerama"],
++                [AC_MSG_WARN([libXinerama not found: one screen only])], $X_LIBS)
++AC_SUBST(XINERAMALIB)
+ 
+ dnl Special check for tirpc...
+ AC_CHECK_LIB(tirpc, svc_register,
+--- a/include/Dt/DtXinerama.h	2026-11-20 12:03:13
++++ b/include/Dt/DtXinerama.h	2026-11-20 12:03:13
+@@ -35,12 +35,20 @@
+ #include <stdio.h>
+ #include <X11/Xfuncs.h>
+ 
++#ifdef USE_XINERAMA
+ #include <X11/extensions/Xinerama.h>
++#else
++#include <X11/Xlib.h>
++#endif
+ 
+ typedef struct _DtXineramaInfo 
+ {
+   int numscreens;	
++#ifdef USE_XINERAMA
+   XineramaScreenInfo *ScreenInfo;
++#else
++  void *ScreenInfo;		/* built without Xinerama: never set */
++#endif
+ } DtXineramaInfo_t, *DtXineramaInfoPtr_t;
+ 
+ 
+--- a/lib/DtXinerama/DtXinerama.c	2026-11-20 12:03:13
++++ b/lib/DtXinerama/DtXinerama.c	2026-11-20 12:03:13
+@@ -40,6 +40,10 @@
+ 
+ DtXineramaInfo_t *_DtXineramaInit(Display *dpy)
+ {
++#ifndef USE_XINERAMA
++  /* built without Xinerama: never active, the callers use the one screen */
++  return(NULL);
++#else
+   DtXineramaInfo_t *tmpDtXI = NULL;
+   XineramaScreenInfo *XinerScrnInfo = NULL;
+   int number = 0;
+@@ -67,6 +71,7 @@
+   tmpDtXI->ScreenInfo = XinerScrnInfo;
+ 
+   return(tmpDtXI);
++#endif /* USE_XINERAMA */
+ }
+ 
+ 
+@@ -86,6 +91,10 @@
+   if (screen >= DtXI->numscreens)
+     return(False);		/* invalid screen */
+ 
++#ifndef USE_XINERAMA
++  return(False);		/* built without Xinerama */
++#else
++
+ 				/* now get the info from the XinerInfo */
+ 				/* struct and return it */
+ 
+@@ -99,5 +108,6 @@
+     *yorg = (DtXI->ScreenInfo[screen]).y_org;
+ 
+   return(True);
++#endif /* USE_XINERAMA */
+ }
+   
+--- a/lib/DtXinerama/Makefile.am	2026-11-20 12:03:13
++++ b/lib/DtXinerama/Makefile.am	2026-11-20 12:03:13
+@@ -4,7 +4,7 @@
+ 
+ libDtXinerama_la_SOURCES = DtXinerama.c
+ 
+-libDtXinerama_la_LIBADD = -lXinerama
++libDtXinerama_la_LIBADD = $(XINERAMALIB)
+ 
+ # in order to try to keep lib versions the same across platforms, (2.1.0)
+ if BSD

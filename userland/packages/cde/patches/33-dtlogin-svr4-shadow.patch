@@ -1,0 +1,34 @@
+dtlogin: read the password from the shadow file on SVR4.
+
+dtlogin's generic Authenticate compares the typed password with
+getpwnam()'s pw_passwd, which on a shadowed system is a placeholder:
+it fetches the real one with getspnam() only on Linux (and with
+getpwnam_shadow() on OpenBSD). System V Release 4 keeps the passwords in
+/etc/shadow, read with getspnam() from <shadow.h>, so every login was
+"Login incorrect". The Linux branch is taken on SVR4 too. dtsession's
+screen lock already reads the shadow file on SVR4.
+
+--- a/programs/dtlogin/sysauth.c	2026-11-20 12:03:13
++++ b/programs/dtlogin/sysauth.c	2026-11-20 12:03:13
+@@ -117,7 +117,7 @@
+ #define generic
+ #endif
+ 
+-#if defined(__linux__)
++#if defined(__linux__) || defined(SVR4)
+ #    include <shadow.h>
+ #endif
+ 
+@@ -1010,9 +1010,9 @@
+ 
+     p = getpwnam(name);
+     
+-#if defined(__linux__)
+-    /*
+-     * Use the Linux Shadow Password system to get the crypt()ed password
++#if defined(__linux__) || defined(SVR4)
++    /*
++     * Use the shadow password file (Linux, SVR4) to get the crypt()ed password
+      */
+     if(p) {
+         struct spwd *s = getspnam(name);
