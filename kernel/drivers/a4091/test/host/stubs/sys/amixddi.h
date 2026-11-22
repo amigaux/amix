@@ -4,6 +4,8 @@
  * mock.c implements them. */
 extern int		sd_register();
 extern int		root_defer();
+extern int		intr_attach(), intr_detach();
+extern int		spl5(), splx();
 #ifndef DMA_TO_DEVICE
 #define	DMA_TO_DEVICE	0
 #define	DMA_FROM_DEVICE	1

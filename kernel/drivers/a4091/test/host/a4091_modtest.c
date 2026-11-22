@@ -640,6 +640,213 @@ t_module_lean(void)
 #endif
 }
 
+
+/* ---- the interrupt path ---- */
+
+extern unsigned long	a4091_iq[];	/* 12 longs, magic first */
+#define IQ_MODE		1
+#define IQ_PARAM	2
+#define IQ_SELFTEST	3
+#define IQ_CLAIMED	5
+#define IQ_SPURIOUS	6
+#define IQ_LOST		7
+#define IQ_HUNG		8
+#define IQ_QUEUED	9
+#define IQ_QMAX		10
+#define IQ_FALLBACK	11
+#define R_SIEN		0x00
+#define R_DIEN		0x3a
+
+/* one A4091 loaded and its deferred self-test run, the boards answering */
+static struct mock_board *
+intr_up(void)
+{
+	struct mock_board *b;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(mock_defer_fn != 0, "load asked for the deferred call");
+	CHECK(a4091_iq[0] == 0x4134494eUL && a4091_iq[IQ_MODE] == 0,
+	    "iq magic A4IN, polled until the self-test");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn((char *)0) == 0, "the deferred call returns 0");
+	return b;
+}
+
+static struct sdcom	qcp[4];
+static char		qbuf[4][512] __attribute__((aligned(16)));
+
+static int
+qcmd(int i, unsigned unit, int reading, unsigned char op)
+{
+	memset(&qcp[i], 0, sizeof qcp[i]);
+	qcp[i].reading = reading;
+	qcp[i].cdb[0] = op;
+	qcp[i].addr = qbuf[i];
+	qcp[i].nbyte = 512;
+	qcp[i].card = 1;
+	qcp[i].unit = unit;
+	qcp[i].intr = (void (*)())cb;
+	return mock_reg[0].fn(0, &qcp[i]);
+}
+
+static unsigned long
+ds_target(struct mock_board *b)
+{
+	struct ds_mirror *d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+
+	return d ? d->scsi_addr : 0;
+}
+
+static void
+t_intr_selftest(void)
+{
+	struct mock_board *b = intr_up();
+
+	CHECK(a4091_iq[IQ_MODE] == 1 && a4091_iq[IQ_SELFTEST] == 1, "self-test passed: mode 1");
+	CHECK(mock_isr != 0 && mock_isr_level == 2, "the handler on level 2");
+	CHECK(mock_to_fn != 0 && mock_to_ticks > 0, "the watchdog armed");
+	CHECK(!strcmp(mock_last_line, "a4091: completion on the interrupt (level 2)\n"),
+	    "console: completion on the interrupt (level 2)");
+	CHECK(mock_wr8(b, R_DIEN) == 0 && mock_wr8(b, R_SIEN) == 0,
+	    "the enables off again after the test");
+	CHECK(mock_sleeps == 1, "one tick waited");
+}
+
+static void
+t_intr_selftest_fails(void)
+{
+	struct mock_board *b;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(mock_defer_fn((char *)0) == 0, "the deferred call returns 0");
+	CHECK(a4091_iq[IQ_MODE] == 0 && a4091_iq[IQ_SELFTEST] == 0, "no interrupt: polled");
+	CHECK(mock_isr == 0 && mock_isr_detached == 1, "the handler detached");
+	CHECK(mock_sleeps == 10, "ten ticks waited");
+	CHECK(strstr(mock_last_line, "board 0: no interrupt from the self-test: polled") != NULL,
+	    "console: no interrupt from the self-test: polled");
+	mock_chip_done(b);
+	CHECK(mock_isr_last((char *)0) == 0, "polled: the handler leaves a pending ISTAT alone");
+	CHECK(run_queue(0, 0, 1, qbuf[0], 512, 0x28) && intr_calls == 1,
+	    "a polled READ completes inside the queue call");
+}
+
+static void
+t_intr_param0(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	CHECK(a4091_load("intr=0") == 0, "load returns 0");
+	CHECK(mock_defer_fn == 0 && a4091_iq[IQ_PARAM] == 0, "intr=0: no deferred call");
+	CHECK(a4091_iq[IQ_MODE] == 0, "polled");
+}
+
+static void
+t_intr_complete(void)
+{
+	struct mock_board *b = intr_up();
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28), "queue accepts a READ");
+	CHECK(intr_calls == 0, "not completed inside the queue call");
+	CHECK(mock_wr8(b, R_DIEN) == 0x35 && mock_wr8(b, R_SIEN) == 0xaf,
+	    "DIEN 0x35, SIEN 0xaf for the command");
+	CHECK(ds_target(b) == (0x10000UL << 6), "the chip armed for id 6");
+	CHECK(mock_isr((char *)0) == 0, "chip still running: not claimed");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1, "the chip's interrupt claimed");
+	CHECK(intr_calls == 1 && qcp[0].okay, "completed from the handler, okay");
+	CHECK(a4091_iq[IQ_CLAIMED] == 2 && a4091_iq[IQ_SPURIOUS] == 0,
+	    "claimed 2 (the self-test and the command), spurious 0");
+}
+
+static void
+t_intr_fifo(void)
+{
+	struct mock_board *b = intr_up();
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && qcmd(1, 5, 0, 0x2a), "two commands queued");
+	CHECK(a4091_iq[IQ_QUEUED] == 1 && a4091_iq[IQ_QMAX] == 1, "one waited, high-water 1");
+	CHECK(ds_target(b) == (0x10000UL << 6), "the first one runs");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1, "first interrupt claimed");
+	CHECK(intr_calls == 1 && qcp[0].okay, "the first completed");
+	CHECK(ds_target(b) == (0x10000UL << 5), "the second armed from the handler");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 2 && qcp[1].okay, "the second completed");
+	mock_chip_idle(b);
+	CHECK(mock_isr((char *)0) == 0, "then nothing pending");
+}
+
+static void
+t_intr_spurious(void)
+{
+	struct mock_board *b = intr_up();
+
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(mock_isr((char *)0) == 1, "a pending ISTAT with nothing in flight: claimed");
+	CHECK(a4091_iq[IQ_SPURIOUS] == 1 && intr_calls == 0, "counted spurious, no completion");
+}
+
+static void
+t_intr_lost(void)
+{
+	struct mock_board *b = intr_up();
+	int i;
+
+	intr_calls = 0;
+	for (i = 0; i < 3; i++) {
+		mock_chip_idle(b);
+		CHECK(qcmd(i, 6, 1, 0x28) && intr_calls == i, "queued, not completed");
+		mock_chip_done(b);		/* done, but no interrupt comes */
+		lbolt += 31;
+		mock_to_fn(mock_to_arg);
+		CHECK(intr_calls == i + 1 && qcp[i].okay, "the watchdog completed it");
+		CHECK(a4091_iq[IQ_LOST] == (unsigned long)i + 1, "counted lost");
+	}
+	CHECK(a4091_iq[IQ_MODE] == 0 && a4091_iq[IQ_FALLBACK] == 1, "three lost: polled for good");
+	CHECK(!strcmp(mock_last_line, "a4091: 3 interrupts lost: polled from now on\n"),
+	    "console: 3 interrupts lost: polled from now on");
+	CHECK(mock_wr8(b, R_DIEN) == 0 && mock_wr8(b, R_SIEN) == 0, "the enables off");
+	mock_chip_done(b);
+	CHECK(qcmd(3, 6, 1, 0x28) && intr_calls == 4, "the next command runs polled");
+}
+
+static void
+t_intr_hung(void)
+{
+	struct mock_board *b = intr_up();
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28), "queued");
+	lbolt += 31;
+	mock_to_fn(mock_to_arg);
+	CHECK(intr_calls == 0, "still running at the first watchdog: left alone");
+	lbolt += 600;
+	mock_to_fn(mock_to_arg);
+	CHECK(intr_calls == 1 && !qcp[0].okay, "past the bound: failed");
+	CHECK(a4091_iq[IQ_HUNG] == 1 && a4091_iq[IQ_MODE] == 1, "counted hung, still interrupt mode");
+	CHECK(mock_trace_lines == 1, "traced once");
+}
+
+static void
+t_intr_halt(void)
+{
+	struct mock_board *b = intr_up();
+
+	a4091_halt();
+	CHECK(a4091_iq[IQ_MODE] == 0, "halt: the interrupt path stands down");
+	CHECK(mock_wr8(b, R_DIEN) == 0 && mock_wr8(b, R_SIEN) == 0, "halt: enables off");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -668,6 +875,15 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "bus reset: burst beam, NTSC", t_reset_burst_ntsc },
 	{ "bus reset: stuck beam", t_reset_stuck },
 	{ "module: no U77, no dma_off, no last-command globals", t_module_lean },
+	{ "interrupt: self-test passes", t_intr_selftest },
+	{ "interrupt: self-test fails, polled", t_intr_selftest_fails },
+	{ "interrupt: intr=0", t_intr_param0 },
+	{ "interrupt: a command completes", t_intr_complete },
+	{ "interrupt: two commands, one FIFO", t_intr_fifo },
+	{ "interrupt: spurious", t_intr_spurious },
+	{ "interrupt: lost interrupts, fallback", t_intr_lost },
+	{ "interrupt: a command that never ends", t_intr_hung },
+	{ "interrupt: halt", t_intr_halt },
 };
 
 int

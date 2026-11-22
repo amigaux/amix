@@ -49,11 +49,11 @@ unchanged:
 | Wrapper | `MOD_HDRV_WRAPPER(a4091, a4091_load, 0, a4091_halt, …)`: no switch-table slot, no `_unload` |
 | `_load` | Takes one `dma_alloc` area and copies the SCRIPTS into it. Then, for every board `autocon()` finds (four at most): maps it, fills its D42 record, and calls `sd_register(a4091queue, k, base, name, 2)` |
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
-| Interrupts | None in v1. The driver is synchronous and polled, as the static one; `root_defer` is not called (C4-2 §8) |
+| Interrupts | Completion on the 53C710's interrupt, level 2, once a self-test passes; polled before that and with `param intr=0`. See [Completion](#completion-interrupt-or-polled) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (the force-bounce status bug, below) |
-| Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, the poll bound (rc -2), a phase error (rc -3) or a short-read recovery. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
-| Version | `VERSION` (`1.0.0-7`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals |
+| Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, a command over 60 ticks on the interrupt path, the poll bound or the watchdog's bound (rc -2), a phase error (rc -3) or a short-read recovery; its `t=` field is the command's ticks. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
+| Version | `VERSION` (`1.0.0-8`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals; 1.0.0-7 completed every command polled |
 
 ### The `dma_alloc` area
 
@@ -98,6 +98,60 @@ data intact.
 - sd assigns the card numbers after registration closes (rank, then base).
 - The D42 record's `unit` is `c`.
 
+## Completion: interrupt or polled
+
+The module completes a command in one of two ways.
+
+**Polled.** `a4091queue` arms the chip and spins on ISTAT until it stops,
+then completes the command before returning, as the static driver does. This
+is the path through the root pass and the root mount (level 7, no clock), and
+the path for good with `param intr=0`, after a failed self-test, or after a
+fallback.
+
+**Interrupt.** `_load` calls `root_defer` (C4-2 §3). At the first `sysinit`
+entry the deferred call attaches a handler with `intr_attach(2, …)` and
+self-tests each board with a real interrupt that moves no data:
+- SCRIPTS run their `INT 0xff10` alone, with no SCSI phase, and only DIEN
+  SIR set;
+- the handler must claim it and read DSPS 0xff10 within ten one-tick
+  `timeout`/`sleep` rounds.
+
+If every board passes, the console says `a4091: completion on the interrupt
+(level 2)` (`a4kt710:` for the onboard chip) and completion moves to the
+handler. If any board fails, the handler comes off and the module stays
+polled, saying `board N: no interrupt from the self-test: polled`.
+
+On the interrupt path:
+- `a4091queue` puts the command on one FIFO for the whole module and
+  returns. The chip runs one command at a time across every board, because
+  the dma_alloc area holds one DSA table.
+- A command starts from `a4091queue` when the chip is idle, and from the
+  handler when the previous one ends.
+- The handler reads SSTAT0 and DSTAT, which clears the interrupt, and runs
+  the same end as the polled path: the short-read recovery, the D42
+  complete, the bounce's copy-out, the status sync. Then it calls
+  `cp->intr` at level 2 (C4-1 §3.2). DIEN 0x35 (BF, ABRT, SIR, IID) and
+  SIEN 0xaf (M/A, STO, SGE, UDC, RST, PAR) are set for each command.
+- Process-context code holds `spl5` (level 4, which masks level 2) over the
+  FIFO and the chip.
+- In polled mode the handler leaves every board alone: a pending ISTAT
+  belongs to the spinning queue.
+
+A watchdog runs every 30 ticks while the interrupt path is on (C3-6 §1.3):
+- a command whose chip has stopped but whose interrupt never came is
+  completed and counted lost. After three lost interrupts the module goes
+  back to polled for good, with the console line `a4091: 3 interrupts
+  lost: polled from now on`, and every board's enables off;
+- a command still running after 600 ticks ends as the poll bound does
+  (rc -2: traced, chip quiesced, bus reset re-armed).
+
+`_halt` turns the path off first, then resets each chip, which also clears
+the enables.
+
+`a4091_iq` (kmem-readable, magic "A4IN", 12 longwords) counts it:
+`mode` (1 interrupt, 0 polled), `param`, `selftest`, `intrs`, `claimed`,
+`spurious`, `lost`, `hung`, `queued`, `qmax`, `fallback`.
+
 ## What `_load` does in the root pass
 
 `_load` runs in process 0 inside `rth1_mountroot`, at **level 7 with the
@@ -128,7 +182,7 @@ A board that does not map is skipped, and the others are registered.
 
 It never sleeps, calls `timeout()` or `delay()`, waits for an interrupt or
 `lbolt`, allocates with `KM_SLEEP`, takes a page fault or runs an interrupt
-self-test.
+self-test. The self-test waits for the deferred call.
 
 The queue path's polls are bounded by a read count. The once-per-card SCSI
 bus reset before a board's first command is timed by the beam
@@ -176,8 +230,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 18/18 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 18/18 cases |
+| H1 | k30 (`sptalloc` arm) | 36/36 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 36/36 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
@@ -226,7 +280,7 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Chip | `$DD0000`, registers at +0x40 written directly, DCNTL `0x20` (EA), host ID from the DIP bank at +0x3000, SIEN/DIEN 0 at attach; one controller, c 0 |
 | sd | `sd_register(a4091queue, 0, 0xDD0000, "A4000T onboard SCSI", 3)` |
 | Everything else | the A4091 module's: the queue path, the `dma_alloc` area, C4-5, the bounce, the bus reset, `_halt` |
-| Version | `module/a4kt710/VERSION` (`1.0.0-1`) |
+| Version | `module/a4kt710/VERSION` (`1.0.0-5`): 1.0.0-5 completes commands on the interrupt after its self-test, as the a4091 module does |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
 **Metal (2026-10-28, k46):** the A4000T with a Z3660 (060) roots on the onboard bus through `a4kt710`, 3/3 cold boots, with

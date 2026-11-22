@@ -109,6 +109,17 @@ mock_reset(void)
 	mock_beam_start = 0;
 	mock_beam_reads = 0;
 	mock_beam_line = 0;
+	mock_isr = 0;
+	mock_isr_level = mock_isr_detached = mock_attach_errno = 0;
+	mock_defer_fn = 0;
+	mock_defer_errno = 0;
+	mock_to_fn = 0;
+	mock_to_arg = 0;
+	mock_to_ticks = mock_timeouts = mock_sleeps = 0;
+	lbolt = 1000;
+	mock_selftest_irq = 0;
+	mock_isr_last = 0;
+	mock_last_line[0] = 0;
 }
 
 int
@@ -296,7 +307,99 @@ bprobe(char *addr, int v)
 }
 
 int _spl7(void) { return 7; }
+int spl5(void) { return 4; }
 int splx(int s) { return s; }
+
+int	(*mock_isr)();
+int	mock_isr_level, mock_isr_detached, mock_attach_errno;
+int	(*mock_defer_fn)();
+int	mock_defer_errno;
+void	(*mock_to_fn)();
+char	*mock_to_arg;
+int	mock_to_ticks, mock_timeouts, mock_sleeps;
+long	lbolt;
+int	mock_selftest_irq;
+int	(*mock_isr_last)();
+char	mock_last_line[160];
+
+int
+intr_attach(int level, int (*fn)(), char *arg, char *name)
+{
+	(void)arg; (void)name;
+	if (mock_attach_errno)
+		return mock_attach_errno;
+	mock_isr = fn;
+	mock_isr_last = fn;
+	mock_isr_level = level;
+	return 0;
+}
+
+int
+intr_detach(int level, int (*fn)(), char *arg)
+{
+	(void)level; (void)arg;
+	if (fn == mock_isr)
+		mock_isr = 0;
+	mock_isr_detached++;
+	return 0;
+}
+
+int
+root_defer(int (*fn)(), char *arg)
+{
+	(void)arg;
+	if (mock_defer_errno)
+		return mock_defer_errno;
+	mock_defer_fn = fn;
+	return 0;
+}
+
+int
+timeout(void (*fn)(), char *arg, int ticks)
+{
+	mock_to_fn = fn;
+	mock_to_arg = arg;
+	mock_to_ticks = ticks;
+	return ++mock_timeouts;
+}
+
+void untimeout(int id) { (void)id; }
+void wakeup(char *chan) { (void)chan; }
+
+/* the self-test's wait: a tick passes; with mock_selftest_irq every board
+ * whose DSP was sent to the SCRIPTS' INT 0xff10 raises it, and the level-2
+ * chain runs */
+int
+sleep(char *chan, int pri)
+{
+	int i;
+	unsigned long dsps = 0xff10;
+
+	(void)chan; (void)pri;
+	mock_sleeps++;
+	lbolt++;
+	if (mock_selftest_irq && mock_isr) {
+		for (i = 0; i < mock_nboard; i++) {
+			struct mock_board *b = &mock_board[i];
+			if (!b->regs || !(mock_wr8(b, 0x3a) & 0x04))
+				continue;
+			b->regs[0x22] = 0x01;
+			b->regs[0x0f] = 0x04;
+			memcpy(&b->regs[0x30], &dsps, sizeof dsps);
+		}
+		mock_isr((char *)0);
+	}
+	return 0;
+}
+
+/* a command still running: ISTAT shows nothing */
+void
+mock_chip_idle(struct mock_board *b)
+{
+	b->regs[0x22] = 0x00;
+	b->regs[0x0e] = 0x00;
+	b->regs[0x0f] = 0x00;
+}
 
 int
 sd_register(int (*fn)(), unsigned c, char *base, char *name, unsigned rank)
@@ -407,6 +510,9 @@ mock_printf(const char *fmt, ...)
 
 	if (!strncmp(fmt, "A4091 slow", 10))
 		mock_trace_lines++;
+	va_start(ap, fmt);
+	vsnprintf(mock_last_line, sizeof mock_last_line, fmt, ap);
+	va_end(ap);
 	if (strstr(fmt, ": board %d at ")) {	/* the attach line, formatted */
 		va_start(ap, fmt);
 		vsnprintf(mock_attach_line, sizeof mock_attach_line, fmt, ap);

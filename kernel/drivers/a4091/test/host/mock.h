@@ -89,4 +89,18 @@ extern int	mock_trace_lines;		/* printf calls of "A4091 slow" */
 unsigned long	mock_wr32(struct mock_board *b, int reg);	/* last write */
 unsigned char	mock_wr8(struct mock_board *b, int reg);
 
+/* the interrupt path: the level-2 chain, the deferred call, the clock */
+extern int	(*mock_isr)();			/* intr_attach's handler, or 0 */
+extern int	mock_isr_level, mock_isr_detached, mock_attach_errno;
+extern int	(*mock_defer_fn)();		/* root_defer's call, or 0 */
+extern int	mock_defer_errno;
+extern void	(*mock_to_fn)();		/* the last timeout() */
+extern char	*mock_to_arg;
+extern int	mock_to_ticks, mock_timeouts, mock_sleeps;
+extern long	lbolt;
+extern int	mock_selftest_irq;
+extern int	(*mock_isr_last)();		/* intr_attach's handler, kept after a detach */
+extern char	mock_last_line[160];		/* the last console line, formatted */		/* sleep(): the boards answer INT 0xff10 */
+void	mock_chip_idle(struct mock_board *b);	/* ISTAT 0: still running */
+
 #endif

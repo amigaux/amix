@@ -296,6 +296,80 @@ uchar	a4091_rc, a4091_istat, a4091_dstat, a4091_stat;
 ulong	a4091_slow_poll = 1000000;
 ulong	a4091_maxpoll;
 
+#ifdef	A4091_PROBE
+/*
+ * Measurement build only (-DA4091_PROBE; never in a shipped object): per
+ * command counters, kmem-readable, magic first ("A4PR").  sz[] buckets by
+ * cp->nbyte: 0, <=512, <=2K, <=4K, <=8K, <=16K, <=64K, more.  polls is the
+ * sum of the completion spins, so polls/cmds is the chip time per command
+ * in ISTAT reads; lbolt0/lbolt1 bracket the counted span; lq and lc time
+ * the queue call and the chip in beam lines (64 us).
+ */
+struct a4091_probe {
+	ulong	magic;			/* 0x41345052 "A4PR"                       */
+	ulong	cmds, reads, writes, nodata, fails;
+	ulong	bytes;
+	ulong	polls;
+	ulong	sz[8];
+	ulong	lbolt0, lbolt1;
+	ulong	lq;			/* beam lines inside a polled queue call     */
+	ulong	lc;			/* beam lines from the launch to the stop    */
+	ulong	frame;			/* lines per frame the deltas wrap at        */
+};
+struct a4091_probe	a4091_probe = { 0x41345052 };
+extern long	lbolt;
+
+/* the beam's line, 0..312 (PAL) or 0..262 (NTSC): VPOSR V8 and VHPOSR V7-V0;
+ * a line is 64 us, so the deltas time a command to that grain */
+static ulong
+a4091_pline()
+{
+	ushort	p, h;
+
+	p = *(volatile ushort *)0xDFF004;
+	h = *(volatile ushort *)0xDFF006;
+	if (a4091_probe.frame == 0)
+		a4091_probe.frame = (p & 0x1000) ? 263 : 313;
+	return ((ulong)(p & 1) << 8) | (ulong)(h >> 8);
+}
+
+static ulong
+a4091_pdelta( a, b)
+ulong	a, b;
+{
+	return (b + a4091_probe.frame - a) % a4091_probe.frame;
+}
+
+static void
+a4091_probe_cmd( cp, poll, rc)
+struct sdcom	*cp;
+ulong		poll;
+int		rc;
+{
+	ulong	n;
+	int	b;
+
+	n = (ulong)cp->nbyte;
+	if (a4091_probe.cmds == 0)
+		a4091_probe.lbolt0 = (ulong)lbolt;
+	a4091_probe.lbolt1 = (ulong)lbolt;
+	a4091_probe.cmds++;
+	if (n == 0)
+		a4091_probe.nodata++;
+	else if (cp->reading)
+		a4091_probe.reads++;
+	else
+		a4091_probe.writes++;
+	if (rc != 0)
+		a4091_probe.fails++;
+	a4091_probe.bytes = a4091_probe.bytes + n;
+	a4091_probe.polls = a4091_probe.polls + poll;
+	b = n == 0 ? 0 : n <= 512 ? 1 : n <= 2048 ? 2 : n <= 4096 ? 3
+	  : n <= 8192 ? 4 : n <= 16384 ? 5 : n <= 65536 ? 6 : 7;
+	a4091_probe.sz[b]++;
+}
+#endif
+
 #ifdef	A4091_SEAM
 /*
  * ---------------------------------------------------------------------------
@@ -902,6 +976,668 @@ int	card;
  * intermittent (~70%) ld file-write corruption, independent of the poll loop and
  * mitigated by a build-until-stable clean gate.
  */
+#ifdef	A4091_MODULE
+/* ----------------------------------------------------------------------------
+ * The module's queue, both lines and both targets: completion on the 53C710's
+ * interrupt (level 2, the INT2 line of the A4091/A4092 and of the A4000T's
+ * onboard chip), or polled.
+ *
+ * Polled (the boot and root mount, param intr=0, a failed self-test, or after
+ * a fallback): a4091queue arms the chip and spins on ISTAT to the end, the
+ * static driver's path.
+ *
+ * Interrupt (once the deferred call's self-test passes, C4-2 section 3, C3-6
+ * section 1.3): a4091queue puts the command on one FIFO for the whole module
+ * and returns.  The chip runs one command at a time across every board (one
+ * dma_alloc area, one DSA table), started by a4091queue when idle and by the
+ * level-2 handler when one ends; the handler completes it, so cp->intr runs
+ * at level 2 (C4-1 section 3.2).  Process-context code holds spl5 (level 4,
+ * masking level 2) over the FIFO and the chip.  A watchdog (timeout, every
+ * A4091_WD ticks) finds a command whose interrupt never came: if the chip is
+ * done, the command is completed and counted lost, and A4091_LOSTMAX lost
+ * ones put the module back to polled for good, said on the console; if it
+ * still runs after A4091_BOUND ticks it ends as the poll bound does (rc -2).
+ * ------------------------------------------------------------------------- */
+#define	A4091_DIEN	0x35		/* DSTAT: BF ABRT SIR IID raise the line */
+#define	A4091_SIEN	0xaf		/* SSTAT0: M/A STO SGE UDC RST PAR */
+#define	SCRIPT_SELTO	0xb0		/* INT 0xff10, run alone by the self-test */
+#define	A4091_STDSPS	0xff10
+#define	A4091_WD	30		/* watchdog period, ticks */
+#define	A4091_BOUND	600		/* still running after this many ticks: rc -2 */
+#define	A4091_SLOWT	60		/* the trace's threshold on the interrupt path */
+#define	A4091_LOSTMAX	3
+#define	A4091_PRI	20		/* PRIBIO: the self-test's sleep */
+#ifdef	A4091_A4KT
+#define	A4091_NAME	"a4kt710"
+#else
+#define	A4091_NAME	"a4091"
+#endif
+
+extern int	intr_attach(), intr_detach(), root_defer();
+extern int	timeout(), sleep();
+extern void	wakeup(), untimeout();
+extern long	lbolt;
+
+/*
+ * The interrupt path's counters, kmem-readable, magic first ("A4IN").  mode
+ * is the switch the queue reads: 1 completion on the interrupt, 0 polled.
+ */
+struct a4091_iq {
+	ulong	magic;			/* 0x4134494e "A4IN"                        */
+	ulong	mode;			/* 1 interrupt, 0 polled                    */
+	long	param;			/* intr= as _load took it (default 1)       */
+	ulong	selftest;		/* boards whose self-test interrupt came    */
+	ulong	intrs;			/* handler calls (every level-2 interrupt)  */
+	ulong	claimed;		/* calls that found a board's SIP or DIP    */
+	ulong	spurious;		/* SIP/DIP with nothing in flight there     */
+	ulong	lost;			/* commands the watchdog found done          */
+	ulong	hung;			/* commands the watchdog ended (rc -2)       */
+	ulong	queued;			/* commands that waited behind another      */
+	ulong	qmax;			/* the FIFO's high-water length              */
+	ulong	fallback;		/* 1: back to polled after lost interrupts  */
+};
+struct a4091_iq	a4091_iq = { 0x4134494e, 0, 1 };
+
+/* The command in flight (one at a time, module-wide); cp 0 = the chip idle. */
+static struct a4091_fl {
+	struct sdcom	*cp;
+	int		c, dmadir, bounced, recovered, rc;
+	ulong		dpa, dlen, dva, poll, dsps, armed;
+#ifdef	A4091_PROBE
+	ulong		l0, lstop;	/* the probe's beam lines: launch, stop */
+#endif
+} a4091_fl;
+
+static struct sdcom	*a4091_qh, *a4091_qt;	/* waiting: a FIFO by cp->next */
+static ulong		a4091_qn;
+static uchar		a4091_cof[16];		/* sd card -> board index */
+static int		a4091_innext;		/* a4091_next is running */
+static int		a4091_wdid;		/* the watchdog's timeout, 0 none */
+static uchar		a4091_stwait[A4091_NCARD];	/* self-test armed */
+static int		a4091_stany;
+static ulong		a4091_stdsps[A4091_NCARD];	/* DSPS the self-test saw */
+
+static void
+a4091_sel( k)
+int	k;
+{
+	siop = siop_tbl[k];
+	acfg = acfg_tbl[k];
+	board_phys = phys_tbl[k];
+}
+
+static void
+a4091_fail( cp)
+struct sdcom	*cp;
+{
+	cp->status = 0xff; cp->okay = FALSE;
+	(*cp->intr)( cp);
+}
+
+/*
+ * Arm the chip for cp on board c: 0 = launched (a4091_fl holds it), 1 = done
+ * already (refused; cp->intr has run).  The bounce, the DSA table and the D42
+ * prepare are the static driver's, in its order.
+ */
+static int
+a4091_arm( c, cp)
+int		c;
+struct sdcom	*cp;
+{
+	struct a4091_fl	*f;
+	int	i, target, cmdlen;
+	ulong	da;
+
+	f = &a4091_fl;
+	if (a4091map( c)) {
+		a4091_fail( cp);
+		return 1;
+	}
+	if (!a4091_rstdone[c])
+		a4091_busreset_card( c);
+
+	/* The DMA target: the caller's buffer, or the bounce for a misaligned
+	 * FROM_DEVICE range.  TO_DEVICE never bounces (no op at complete, no edge). */
+	f->dmadir = cp->reading ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
+	f->dpa = (ulong)cp->addr;
+	f->dlen = (ulong)cp->nbyte;
+	f->dva = 0;
+	f->bounced = 0;
+	if (f->dmadir == DMA_FROM_DEVICE && cp->nbyte > 0
+	    && ((f->dpa | (f->dpa + (ulong)cp->nbyte)) & 15) != 0) {
+		uchar	*bz;
+		ulong	bi;
+
+		if ((ulong)cp->nbyte > A4091_BOUNCE_MAX) {
+			a4091_kstat.bounce_toolong++;
+			printf("A4091 c%d: misaligned read of %d bytes refused (bounce max %d)\n",
+			    (int)cp->card, (int)cp->nbyte, A4091_BOUNCE_MAX);
+			a4091_fail( cp);
+			return 1;
+		}
+		f->dva = ((ulong)a4091_bounce + 15) & ~(ulong)15;
+		f->dpa = A4091_BUS(f->dva);
+		/* whole lines, cleared first: see the static driver's comment */
+		f->dlen = ((ulong)cp->nbyte + 15) & ~(ulong)15;
+		bz = (uchar *)f->dva;
+		for (bi = 0; bi < f->dlen; ++bi)
+			bz[bi] = 0;
+		f->bounced = 1;
+		a4091_kstat.bounce_n++;
+	}
+
+	a4091init();
+
+	target = (int)cp->unit;
+	cmdlen = ((cp->cdb[0] >> 5) & 7) == 0 ? 6
+	       : ((cp->cdb[0] >> 5) & 7) == 5 ? 12 : 10;
+	ident_buf[0] = 0x80;				/* IDENTIFY, no disconnect */
+	for (i = 0; i < 12; ++i) cdb_buf[i] = cp->cdb[i];
+	status_buf[0] = 0xff;
+	for (i = 0; i < 8; ++i) msg_buf[i] = 0xff;
+
+	ds.scsi_addr = (ulong)0x10000 << target;
+	ds.idlen = 1;        ds.idbuf     = A4091_BUSP(ident_buf);
+	ds.cmdlen = cmdlen;  ds.cmdbuf    = A4091_BUSP(cdb_buf);
+	ds.stslen = 1;       ds.stsbuf    = A4091_BUSP(status_buf);
+	ds.msglen = 1;       ds.msgbuf    = A4091_BUSP(&msg_buf[0]);
+	ds.msginlen = 1;     ds.msginbuf  = A4091_BUSP(&msg_buf[1]);
+	ds.extmsglen = 1;    ds.extmsgbuf = A4091_BUSP(&msg_buf[2]);
+	ds.synmsglen = 1;    ds.synmsgbuf = A4091_BUSP(&msg_buf[3]);
+	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)f->dpa;
+	ds.data2len = 0;     ds.data2buf  = 0;
+
+	/* D42 prepare after the DSA table is final, before the DSP write; then
+	 * C4-5 v3 section 2.3: the chip gets dma_addr(r, pa) (pa on k46, a pool
+	 * bounce on k30 when pa is out of a Zorro master's reach). */
+	a4091_dma_prepare( c, f->dpa, f->dlen, f->dmadir);
+	if (f->dlen != 0) {
+		da = dma_addr( &a4091_dmarec[c], f->dpa);
+		if (da == 0) {
+			a4091_kstat.noreach++;
+			a4091_dma_complete( c, f->dpa, f->dlen, f->dmadir);
+			printf("A4091 c%d: no reachable DMA buffer for %d bytes\n",
+			    (int)cp->card, (int)cp->nbyte);
+			a4091_fail( cp);
+			return 1;
+		}
+		ds.data1buf = (uchar *)da;
+	}
+
+	f->c = c;
+	f->recovered = 0;
+	f->rc = 0;
+	f->poll = 0;
+	f->dsps = 0;
+	f->armed = (ulong)lbolt;
+	f->cp = cp;
+	if (a4091_iq.mode) {
+		WR8( R_DIEN, A4091_DIEN);
+		WR8( R_SIEN, A4091_SIEN);
+	}
+	WR32( R_TEMP, 0);
+	WR8 ( R_SBCL, 0);
+	WR32( R_DSA, A4091_BUS(&ds));
+#ifdef	A4091_PROBE
+	f->l0 = a4091_pline();
+#endif
+	WR32( R_DSP, A4091_BUS(inq_script));
+	return 0;
+}
+
+/* The polled wait: spin on ISTAT until SIP|DIP or the bound. */
+static uchar
+a4091_spin()
+{
+	ulong	n, limit;
+	uchar	istat;
+
+	limit = 8000000;
+	istat = 0;
+	n = 0;
+	while (n < limit) {
+		istat = RD8(R_ISTAT);
+		if (istat & (ISTAT_SIP | ISTAT_DIP))
+			break;
+		n = n + 1;
+	}
+	a4091_fl.poll = a4091_fl.poll + n;
+	return istat;
+}
+
+/*
+ * One stop of the chip, its ISTAT given: 1 = re-launched (the DATA_IN short
+ * read's recovery, once per command: see the static driver's comment), 0 =
+ * the end, a4091_fl.rc set.  Reading SSTAT0 and DSTAT clears the interrupt.
+ */
+static int
+a4091_step( istat)
+uchar	istat;
+{
+	struct a4091_fl	*f;
+	uchar	sstat0, dstat;
+	ulong	dsps, g;
+	int	rc;
+
+	f = &a4091_fl;
+	sstat0 = (istat & ISTAT_SIP) ? RD8(R_SSTAT0) : 0;
+	dstat  = (istat & ISTAT_DIP) ? RD8(R_DSTAT)  : 0;
+	dsps   = RD32(R_DSPS);
+	f->dsps = dsps;
+
+	if (!(istat & (ISTAT_SIP | ISTAT_DIP)))         rc = -2;
+	else if (sstat0 & SSTAT0_STO)                   rc = -1;
+	else if ((dstat & DSTAT_SIR) && dsps == 0xff00) rc = 0;
+	else                                            rc = -3;
+
+	if (rc == -3 && (sstat0 & SSTAT0_M_A) && f->cp->nbyte > 0 && !f->recovered) {
+		WR8( R_CTEST8, RD8(R_CTEST8) | CTEST8_CLF);	/* clear DMA+SCSI FIFO */
+		g = 0;
+		while (g < 100000) {			/* bounded: never hang */
+			if ((RD8(R_CTEST1) & CTEST1_FMT) == CTEST1_FMT) break;
+			g = g + 1;
+		}
+		WR8( R_CTEST8, RD8(R_CTEST8) & ~CTEST8_CLF);	/* CLF is not self-clr */
+		WR32( R_DSP, A4091_BUS(inq_script) + SCRIPT_DISPATCH);
+		f->recovered = 1;
+		return 1;
+	}
+	f->rc = rc;
+#ifdef	A4091_PROBE
+	f->lstop = a4091_pline();
+#endif
+	return 0;
+}
+
+/*
+ * The end of the command in flight: the trace on an anomaly, the stuck-bus
+ * guard, the D42 complete, the bounce's copy-out, the status sync, then the
+ * chip is free and cp->intr runs (it may queue the next command).
+ */
+static void
+a4091_finish()
+{
+	struct a4091_fl	*f;
+	struct sdcom	*cp;
+	int	c, rc;
+	ulong	t;
+
+	f = &a4091_fl;
+	cp = f->cp;
+	c = f->c;
+	rc = f->rc;
+	t = (ulong)lbolt - f->armed;
+	/* A selection timeout is an absent id's normal answer to a bus scan:
+	 * counted, not traced. */
+	if (rc == -1)
+		a4091_kstat.seltimeout++;
+	if (f->poll > a4091_slow_poll || (rc != 0 && rc != -1) || f->recovered
+	    || (a4091_iq.mode && t > A4091_SLOWT)) {
+		uchar	di, dd, d0, d1, d2;
+		ulong	dp, db, dsps;
+
+		di = RD8(R_ISTAT);
+		dd = RD8(R_DSTAT);
+		d0 = RD8(R_SSTAT0);
+		d1 = RD8(R_SSTAT1);
+		d2 = RD8(R_SSTAT2);
+		dp = RD32(R_DSP);
+		db = RD32(R_DBC) & 0x00ffffff;
+		dsps = f->dsps;
+		printf("A4091 slow: poll=%d rc=%d rec=%d istat=%x dstat=%x sstat0=%x sstat1=%x sstat2=%x dsp=%x:%x dbc=%x:%x dsps=%x:%x sts=%x t=%d\n",
+		    (int)f->poll, rc, f->recovered, di, dd, d0, d1, d2,
+		    (int)((dp >> 16) & 0xffff),   (int)(dp & 0xffff),
+		    (int)((db >> 16) & 0xffff),   (int)(db & 0xffff),
+		    (int)((dsps >> 16) & 0xffff), (int)(dsps & 0xffff),
+		    status_buf[0], (int)t);
+	}
+	/* stuck bus: re-arm the once-per-card bus reset (the static driver's guard) */
+	if (rc == -2 || (rc == -3 && (RD8(R_SBCL) & SBCL_BSY))) {
+		a4091_rstdone[c] = 0;
+		a4091_rearm_n++;
+	}
+	if (rc == -2) {			/* SCRIPTS may still run: quiesce first */
+		a4091init();
+		a4091_dmarec[c].drv_quiesce++;
+	}
+	a4091_dma_complete( c, f->dpa, f->dlen, f->dmadir);
+	if (f->bounced) {
+		uchar	*bs, *bd;
+		ulong	bn;
+
+		bs = (uchar *)f->dva;
+		bd = (uchar *)cp->addr;
+		for (bn = 0; bn < (ulong)cp->nbyte; ++bn)
+			bd[bn] = bs[bn];
+	}
+	/* The status (C4-5 v5 section 5.4): after a WRITE or a TUR no FROM_DEVICE
+	 * complete ran; run one over the clear line before the status is read. */
+	if (!(f->dmadir == DMA_FROM_DEVICE && f->dlen != 0)) {
+		ulong	spa;
+
+		spa = A4091_BUS(a4091_da->d_cline);
+		a4091_dma_prepare( c, spa, (ulong)16, DMA_FROM_DEVICE);
+		a4091_dma_complete( c, spa, (ulong)16, DMA_FROM_DEVICE);
+		a4091_kstat.stsync++;
+	}
+	if (f->poll > a4091_maxpoll)
+		a4091_maxpoll = f->poll;
+#ifdef	A4091_PROBE
+	a4091_probe_cmd( cp, f->poll, rc);
+	a4091_probe.lc = a4091_probe.lc + a4091_pdelta( f->l0, f->lstop);
+#endif
+	cp->status = (rc == 0) ? status_buf[0] : 0xff;
+	cp->okay   = (rc == 0) ? TRUE : FALSE;
+	f->cp = 0;
+	(*cp->intr)( cp);
+}
+
+/* One command start to end, polled. */
+static void
+a4091_polled( c, cp)
+int		c;
+struct sdcom	*cp;
+{
+	if (a4091_arm( c, cp))
+		return;
+	while (a4091_step( a4091_spin()))
+		;
+	a4091_finish();
+}
+
+/* Start waiting commands while the chip is idle (spl5, or level 2). */
+static void
+a4091_next()
+{
+	struct sdcom	*cp;
+
+	if (a4091_innext)
+		return;
+	a4091_innext = 1;
+	while (a4091_fl.cp == 0 && a4091_qh != 0) {
+		cp = a4091_qh;
+		a4091_qh = (struct sdcom *)cp->next;
+		if (a4091_qh == 0)
+			a4091_qt = 0;
+		a4091_qn--;
+		if (a4091_iq.mode)
+			(void)a4091_arm( (int)a4091_cof[cp->card & 15], cp);
+		else
+			a4091_polled( (int)a4091_cof[cp->card & 15], cp);
+	}
+	a4091_innext = 0;
+}
+
+bool
+a4091queue( c, cp)
+int		c;
+struct sdcom	*cp;
+{
+	int	s;
+
+	if (!a4091_iq.mode) {
+#ifdef	A4091_PROBE
+		ulong	q0;
+
+		q0 = a4091_pline();
+		a4091_polled( c, cp);
+		a4091_probe.lq = a4091_probe.lq + a4091_pdelta( q0, a4091_pline());
+#else
+		a4091_polled( c, cp);
+#endif
+		return TRUE;
+	}
+	s = spl5();
+	a4091_cof[cp->card & 15] = (uchar)c;
+	cp->next = 0;
+	if (a4091_qt)
+		a4091_qt->next = cp;
+	else
+		a4091_qh = cp;
+	a4091_qt = cp;
+	a4091_qn++;
+	if (a4091_qn > a4091_iq.qmax)
+		a4091_iq.qmax = a4091_qn;
+	if (a4091_fl.cp != 0)
+		a4091_iq.queued++;
+	a4091_next();
+	splx( s);
+	return TRUE;
+}
+
+/* Every chip's interrupt enables off (the fallback, the halt). */
+static void
+a4091_mask()
+{
+	int	k;
+
+	for (k = 0; k < A4091_NCARD; ++k) {
+		if (siop_tbl[k] == 0)
+			continue;
+		siop = siop_tbl[k];
+		WR8( R_DIEN, 0);
+		WR8( R_SIEN, 0);
+	}
+	if (a4091_fl.cp != 0)
+		a4091_sel( a4091_fl.c);
+}
+
+/*
+ * The level-2 handler (C3-6 section 1.3): called on every level-2 interrupt,
+ * nonzero only when one of its boards raised it.  It reads each board's ISTAT
+ * only while the interrupt path is on (or a self-test waits): in polled mode
+ * a pending ISTAT belongs to the spinning queue.
+ */
+static int
+a4091_isr( arg)
+char	*arg;
+{
+	int	k, claimed;
+	uchar	istat;
+
+	if (!a4091_iq.mode && !a4091_stany)
+		return 0;
+	a4091_iq.intrs++;
+	claimed = 0;
+	for (k = 0; k < A4091_NCARD; ++k) {
+		if (siop_tbl[k] == 0)
+			continue;
+		if (!a4091_iq.mode && !a4091_stwait[k])
+			continue;
+		a4091_sel( k);
+		istat = RD8(R_ISTAT);
+		if (!(istat & (ISTAT_SIP | ISTAT_DIP)))
+			continue;
+		claimed = 1;
+		a4091_iq.claimed++;
+		if (a4091_stwait[k]) {
+			if (istat & ISTAT_SIP) (void)RD8(R_SSTAT0);
+			if (istat & ISTAT_DIP) (void)RD8(R_DSTAT);
+			a4091_stdsps[k] = RD32(R_DSPS);
+			a4091_stwait[k] = 0;
+			continue;
+		}
+		if (a4091_fl.cp == 0 || a4091_fl.c != k) {
+			if (istat & ISTAT_SIP) (void)RD8(R_SSTAT0);
+			if (istat & ISTAT_DIP) (void)RD8(R_DSTAT);
+			a4091_iq.spurious++;
+			continue;
+		}
+		if (a4091_step( istat))
+			continue;
+		a4091_finish();
+	}
+	if (a4091_iq.mode)
+		a4091_next();
+	return claimed;
+}
+
+/* The watchdog: a lost interrupt, or a command that never ends. */
+static void
+a4091_wd( arg)
+char	*arg;
+{
+	struct a4091_fl	*f;
+	int	s, r;
+	uchar	istat;
+
+	f = &a4091_fl;
+	a4091_wdid = 0;
+	if (!a4091_iq.mode)
+		return;
+	s = spl5();
+	if (f->cp != 0 && (ulong)lbolt - f->armed > A4091_WD) {
+		a4091_sel( f->c);
+		istat = RD8(R_ISTAT);
+		if (istat & (ISTAT_SIP | ISTAT_DIP)) {
+			a4091_iq.lost++;
+			if (a4091_iq.lost >= A4091_LOSTMAX) {
+				a4091_iq.mode = 0;
+				a4091_iq.fallback = 1;
+				a4091_mask();
+				printf( "%s: %d interrupts lost: polled from now on\n",
+				    A4091_NAME, (int)a4091_iq.lost);
+				splx( s);
+				r = a4091_step( istat);
+				while (r)
+					r = a4091_step( a4091_spin());
+				a4091_finish();
+				a4091_next();		/* the waiting ones, polled */
+				return;
+			}
+			if (!a4091_step( istat))
+				a4091_finish();
+		} else if ((ulong)lbolt - f->armed > A4091_BOUND) {
+			a4091_iq.hung++;
+			f->rc = -2;
+			a4091_finish();
+		}
+	}
+	a4091_next();
+	if (a4091_iq.mode)
+		a4091_wdid = timeout( a4091_wd, (char *)0, A4091_WD);
+	splx( s);
+}
+
+static void
+a4091_wake( arg)
+char	*arg;
+{
+	wakeup( arg);
+}
+
+/*
+ * The deferred call (C4-2 section 3): process context, level 0, after the
+ * root mounted polled.  Attach the handler on level 2, then on each board a
+ * real interrupt that moves no data: SCRIPTS run INT 0xff10 alone (no SCSI
+ * phase) with only SIR enabled, and the handler must claim it and see that
+ * DSPS.  Every board passes: completion moves to the interrupt.  Else the
+ * handler comes off and the module stays polled, said on the console.
+ */
+static int
+a4091_defer( arg)
+char	*arg;
+{
+	int	k, n, s, e, ok, bad;
+
+	if (a4091_iq.param == 0)
+		return 0;
+	e = intr_attach( 2, a4091_isr, (char *)0, A4091_NAME);
+	if (e) {
+		printf( "%s: no level-2 interrupt chain (errno %d): polled\n",
+		    A4091_NAME, e);
+		return 0;
+	}
+	ok = 0;
+	bad = 0;
+	for (k = 0; k < A4091_NCARD; ++k) {
+		if (siop_tbl[k] == 0)
+			continue;
+		s = spl5();
+		a4091_sel( k);
+		a4091init();
+		a4091_stdsps[k] = 0;
+		a4091_stwait[k] = 1;
+		a4091_stany = 1;
+		WR8( R_DIEN, DSTAT_SIR);
+		WR32( R_DSP, A4091_BUS(inq_script) + SCRIPT_SELTO);
+		splx( s);
+		for (n = 0; n < 10 && a4091_stwait[k]; ++n) {
+			(void)timeout( a4091_wake, (char *)&a4091_stdsps[k], 1);
+			(void)sleep( (caddr_t)&a4091_stdsps[k], A4091_PRI);
+		}
+		s = spl5();
+		a4091_stwait[k] = 0;
+		a4091_stany = 0;
+		a4091_sel( k);
+		a4091init();		/* the enables off; ends a test that never came */
+		splx( s);
+		if (a4091_stdsps[k] == A4091_STDSPS) {
+			ok++;
+			a4091_iq.selftest++;
+		} else {
+			bad++;
+			printf( "%s: board %d: no interrupt from the self-test: polled\n",
+			    A4091_NAME, k);
+		}
+	}
+	if (ok == 0 || bad != 0) {
+		(void)intr_detach( 2, a4091_isr, (char *)0);
+		return 0;
+	}
+	s = spl5();
+	a4091_iq.mode = 1;
+	a4091_wdid = timeout( a4091_wd, (char *)0, A4091_WD);
+	splx( s);
+	printf( "%s: completion on the interrupt (level 2)\n", A4091_NAME);
+	return 0;
+}
+
+/* intr=<0|1> from _load's "name=value ..." string; 1 when absent */
+static long
+a4091_intrparam( params)
+char	*params;
+{
+	static char	key[] = "intr=";
+	char	*p;
+	int	i;
+	long	v;
+
+	if (params == 0)
+		return 1;
+	for (p = params; *p; ) {
+		for (i = 0; key[i] && p[i] == key[i]; ++i)
+			;
+		if (key[i] == 0) {
+			p += i;
+			v = 0;
+			while (*p >= '0' && *p <= '9')
+				v = v * 10 + (*p++ - '0');
+			return v;
+		}
+		while (*p && *p != ' ')
+			++p;
+		while (*p == ' ')
+			++p;
+	}
+	return 1;
+}
+
+/* From _load, after the registrations: the deferred self-test, unless intr=0. */
+static void
+a4091_intrsetup( params)
+char	*params;
+{
+	int	e;
+
+	a4091_iq.param = a4091_intrparam( params);
+	if (a4091_iq.param == 0)
+		return;
+	e = root_defer( a4091_defer, (char *)0);
+	if (e)
+		printf( "%s: no deferred call (errno %d): polled\n", A4091_NAME, e);
+}
+#else	/* !A4091_MODULE: the static driver's queue, polled */
 bool
 a4091queue( c, cp)
 int		c;
@@ -1276,6 +2012,8 @@ struct sdcom	*cp;
 	return TRUE;
 }
 
+#endif	/* A4091_MODULE */
+
 #ifndef	A4091_MODULE
 void
 a4091intr()
@@ -1301,8 +2039,10 @@ a4091intr()
  * every poll is bounded by a read count, and the once-per-card bus reset at
  * the first command is timed by the beam counter, not by lbolt or a timeout.
  *
- * Interrupts: none in v1 (C4-2 version 2 section 8).  The driver is
- * synchronous and polled, as the static one; root_defer() is not called.
+ * Interrupts: a4091_intrsetup() asks root_defer() for the deferred call,
+ * whose self-test turns completion on the interrupt on (see "The module's
+ * queue" above); until then, and with param intr=0, the driver polls as the
+ * static one.
  *
  * Returns 0 linked; ENXIO, silently, when autocon() finds no board (boot2 places
  * the module only on a match key, so that is a board the kernel does not see);
@@ -1389,6 +2129,7 @@ char	*params;
 		a4091_da = 0;
 		return ENXIO;		/* silent with no board; else each said why */
 	}
+	a4091_intrsetup( params);
 	return 0;
 }
 #endif	/* !A4091_A4KT */
@@ -1668,6 +2409,7 @@ char	*params;
 		return e;
 	}
 	a4091_nboards = 1;
+	a4091_intrsetup( params);
 	return 0;
 out:
 	dma_free( (char *)a4091_da, (ulong)sizeof (struct a4091_dmaarea));
@@ -1689,6 +2431,7 @@ a4091_halt()
 	int	k;
 
 	a4091_halted++;
+	a4091_iq.mode = 0;		/* the handler and the watchdog stand down */
 	for (k = 0; k < A4091_NCARD; ++k) {
 		if (siop_tbl[k] == 0)
 			continue;

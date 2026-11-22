@@ -8,11 +8,14 @@
 # (c0de:02, as driver.conf has it; untested on hardware).
 # $rank zorro: sd's class 2 (C4-1 section 4), the argument a4091_load passes
 # to sd_register.  No $majors: sd owns the disk majors.
+# $param intr: 1 (default) completion on the 53C710's interrupt once the
+# deferred self-test passes, 0 polled always.
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
 $modtype misc
 $class root
 $match zorro:0202:54,zorro:c0de:01,zorro:c0de:02
 $rank zorro
 $unload never
+$param intr:int:1:0:1
 $desc A4091/A4092/A4770 SCSI (NCR 53C710), root-class disk controller
 a4091	a4091

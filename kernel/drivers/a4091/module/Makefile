@@ -49,6 +49,8 @@ ALIEN  = -I$(KIT)/stock/usr/sys/amiga/alien
 # k46: the 040/060 board mapping (dev_kvmap NCS, bprobe); k30: sptalloc
 LINEFLAGS_k46 = -DA4091_KVA
 CFLAGS = -DA4091_MODULE $(LINEFLAGS_$(LINE)) -fno-common $(ALIEN) -I$(SRC)
+# PROBE=1: the measurement build (counters per command); never packaged
+CFLAGS += $(if $(PROBE),-DA4091_PROBE)
 vpath %.c $(SRC)
 include $(KIT)/mk/module.mk
 
