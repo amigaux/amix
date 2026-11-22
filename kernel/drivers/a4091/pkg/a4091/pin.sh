@@ -27,15 +27,18 @@
 # 1.0.0-11 (2026-11-22): module 1.0.0-8: commands complete on the 53C710's
 # interrupt (level 2) once a self-test after the root mount passes; param intr
 # (1 default, 0 always polled); a watchdog falls back to polled.
+# 1.0.0-12 (2026-11-22): module 1.0.0-9: declares the C4-7 limits after
+# sd_register (one segment of up to 64 KiB through a4091queuex) on a kernel
+# with the segment minor; param limits (1 default, 0 none).
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-8
-KM_PKG_VERSION=1.0.0-11
+KM_VERSION=1.0.0-9
+KM_PKG_VERSION=1.0.0-12
 
-KM_K30_SHA=de78b4dc0aea3061a1613426e15c63c4a27b3a8660211a85db7c9d0b9076c1c9
-KM_K46_SHA=2c7ea9c0e734712e5d027896f7394d1afe4e6d658c6ee56a5f6f3f47b722c025
+KM_K30_SHA=a72a434dd0078976743b48cd168c0ace12b02dbcffb596ec06c129c6417b2bb4
+KM_K46_SHA=524e86f21ac16e1b8e1daab4eb6a1dd9a84667cc1e9870d4cbf298c65aa54223
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -48,6 +51,9 @@ kernel/drivers/a4091/NOTICE f37c3ca7dba3c5b572e961a2ce1bd67e13ecf2eed9f341221866
 KM_EXTRA_NOTE="Commands complete on the 53C710's interrupt (level 2) once a self-test
 after the root mount passes; until then, with param intr=0 in
 /etc/conf/modreg.local.d/a4091, or after interrupts stop, the module polls.
+On a kernel with the segment minor (k30.1.6, k46.1.7) the module declares
+its limits after sd_register: the kernel may then send one segment of up
+to 64 KiB a command; param limits=0 declares none.
 On the 68030 line (a4091-k30) the module's DMA goes through the module
 core's 030 DMA provider: a bounce pool in fast memory below 0x08000000,
 which needs the boot loader of amix 1.1 or later.

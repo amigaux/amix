@@ -35,16 +35,19 @@
 # 1.0.0-9 (2026-11-22): module 1.0.0-5: commands complete on the 53C710's
 # interrupt (level 2) once a self-test after the root mount passes; param intr
 # (1 default, 0 always polled); a watchdog falls back to polled.
+# 1.0.0-10 (2026-11-22): module 1.0.0-6: declares the C4-7 limits after
+# sd_register (one segment of up to 64 KiB through a4091queuex) on a kernel
+# with the segment minor; param limits (1 default, 0 none).
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-5
-KM_PKG_VERSION=1.0.0-9
+KM_VERSION=1.0.0-6
+KM_PKG_VERSION=1.0.0-10
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=d53be43b228b800fc04f830a9911981efa8364dacbf2b0db727c7e66929b05b0
-KM_K46_SHA=688b73f02904a789f7011c565d5d73cd37cc42a20968bdd5f56862bee1e4cfb4
+KM_K30_SHA=65086c16582151edf1c97a686984fcb2a3d6a4e14704cfb6e227069c66d664ba
+KM_K46_SHA=cd70afcd25d4780b6f61aef3d8c14053c4b6291abce08ced06c963a76190e5c1
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -72,6 +75,9 @@ bus, the DMA buffer in the Z3660's memory, and raw reads of 16 MiB through
 that bus matched the host's checksum of the disk.  Commands complete on the
 53C710's interrupt (level 2) once a self-test after the root mount passes;
 until then, with param intr=0, or after interrupts stop, the module polls.
+On a kernel with the segment minor (k30.1.6, k46.1.7) the module declares
+its limits after sd_register: the kernel may then send one segment of up
+to 64 KiB a command; param limits=0 declares none.
 The objects carry
 cc=gcc-2.7.2.3-33ebadc, so they load on kernel-k30-m -68 or later
 (a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The module is

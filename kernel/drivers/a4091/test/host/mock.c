@@ -113,6 +113,10 @@ mock_reset(void)
 	mock_isr_level = mock_isr_detached = mock_attach_errno = 0;
 	mock_defer_fn = 0;
 	mock_defer_errno = 0;
+	mock_nlim = mock_lim_errno = 0;
+	mock_lim_fn = 0;
+	mock_lim_c = 0;
+	mock_lim = 0;
 	mock_to_fn = 0;
 	mock_to_arg = 0;
 	mock_to_ticks = mock_timeouts = mock_sleeps = 0;
@@ -399,6 +403,23 @@ mock_chip_idle(struct mock_board *b)
 	b->regs[0x22] = 0x00;
 	b->regs[0x0e] = 0x00;
 	b->regs[0x0f] = 0x00;
+}
+
+int		mock_nlim, mock_lim_errno;
+int		(*mock_lim_fn)();
+unsigned	mock_lim_c;
+struct sdlim	*mock_lim;
+
+int
+sd_limits(int (*fn)(), unsigned c, struct sdlim *l)
+{
+	mock_nlim++;
+	if (mock_lim_errno)
+		return mock_lim_errno;
+	mock_lim_fn = fn;
+	mock_lim_c = c;
+	mock_lim = l;
+	return 0;
 }
 
 int

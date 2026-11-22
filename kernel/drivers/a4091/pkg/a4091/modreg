@@ -2,5 +2,6 @@
 # (amix-dlm C3-5 sec 1): one `param <name>=<value>` per default other than
 # the module's own, `disable` to ship it off.  None: the package keeps the
 # module's own intr=1 (completion on the interrupt once its self-test passes;
-# param intr=0 keeps it polled).  Local settings belong in /etc/conf/modreg.local.d/a4091,
+# param intr=0 keeps it polled) and limits=1 (the C4-7 limits declared;
+# param limits=0 declares none).  Local settings belong in /etc/conf/modreg.local.d/a4091,
 # which no package owns.

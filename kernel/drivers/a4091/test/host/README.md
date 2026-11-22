@@ -5,7 +5,7 @@ source runs against `mock.c`, which stands in for the kernel names the
 module calls:
 - `autocon`;
 - the board pages (`sptalloc` on k30; `dev_kvmap` and `bprobe` on k46);
-- `sd_register`;
+- `sd_register` and `sd_limits` (C4-7);
 - the C4-5 DMA names.
 
 There are two binaries, one per line's map arm:
@@ -49,6 +49,11 @@ make -C test/host clean
 | interrupt: lost interrupts, fallback | Three commands finish with no interrupt; each watchdog pass completes one and counts it lost. After the third: mode 0, fallback 1, the console line, the enables off, and the next command runs polled |
 | interrupt: a command that never ends | Left alone at the first watchdog pass; past 600 ticks it fails (traced once, counted hung) and the module stays on interrupts |
 | interrupt: halt | `_halt` sets mode 0 and the enables are off |
+| limits: declared after `sd_register` | `sd_limits` gets the registration's queue function and c 0, and limits version 1: no lists, 64 KiB, one segment, align 16, gran 16, reach `0xFFFFFFFF`, with a queue function of its own; `a4091_xs` reads magic `A4XS` and rc 0 |
+| limits: `limits=0` | Nothing declared, rc -1; `intr=0` read from the same string |
+| limits: `sd_limits` refuses | `ENOSYS` kept in rc; the load still returns 0 |
+| limits: sdcomx commands, polled | A 64 KiB READ is one block move and one segment through prepare/addr/complete, okay with `sx_resid` 0; a WRITE out of reach fails with `sx_resid` 65536; a list of two is refused, a list of one runs; a stock READ through the first entry still completes |
+| limits: sdcomx command on the interrupt | `sx_resid` stays 65536 until the handler completes the command, then 0; a stock command queued behind it completes next |
 
 ## The a4kt710 arms
 
@@ -60,7 +65,7 @@ a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`
 | no NCR tag; a tag without `RTF_COLDSTART`, with a wrong name, with a wrong `rt_MatchTag`, with `rt_Name` outside the image | `ENXIO`, zero accesses under `$DD0000`, no DMA area, nothing registered |
 | `declared=0` | `ENXIO` with the tag present; the Kickstart is not even read |
 | not AGA | `ENXIO`, zero accesses (G0) |
-| the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3 |
+| the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3; the C4-7 limits declared for the registration |
 | `declared=1` | registers without the NCR tag; the Kickstart is read once, for `card.resource` |
 | an A1200 Kickstart (`card.resource`), with the default, with `declared=1`, and together with the NCR tag | `ENXIO`, zero accesses under `$DD0000`, no DMA area, `a4kt_gate` 5, the tag's offset in `a4kt_cardoff`; the Kickstart mapped once and unmapped |
 | `card.resource` as a name only, or a tag whose `rt_MatchTag` is wrong | not a tag: the A4000T registers, `a4kt_cardoff` 0 |

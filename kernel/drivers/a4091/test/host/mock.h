@@ -98,6 +98,13 @@ extern void	(*mock_to_fn)();		/* the last timeout() */
 extern char	*mock_to_arg;
 extern int	mock_to_ticks, mock_timeouts, mock_sleeps;
 extern long	lbolt;
+
+/* C4-7: sd_limits' last call (the struct as the module keeps it) */
+struct sdlim;
+extern int		mock_nlim, mock_lim_errno;
+extern int		(*mock_lim_fn)();
+extern unsigned		mock_lim_c;
+extern struct sdlim	*mock_lim;
 extern int	mock_selftest_irq;
 extern int	(*mock_isr_last)();		/* intr_attach's handler, kept after a detach */
 extern char	mock_last_line[160];		/* the last console line, formatted */		/* sleep(): the boards answer INT 0xff10 */

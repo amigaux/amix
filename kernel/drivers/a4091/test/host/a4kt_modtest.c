@@ -196,6 +196,8 @@ t_found(void)
 	CHECK(a4091_dmarec[0].magic == DMA_REC_MAGIC && a4091_dmarec[0].ctlid == 3,
 	    "the D42 record, ctlid 3 (C2-1 a4000t-710)");
 	CHECK(a4kt_gate == 0, "a4kt_gate 0");
+	CHECK(mock_nlim == 1 && mock_lim_fn == mock_reg[0].fn && mock_lim_c == 0,
+	    "C4-7 limits declared for the registration");
 }
 
 static void

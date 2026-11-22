@@ -847,6 +847,133 @@ t_intr_halt(void)
 	CHECK(mock_wr8(b, R_DIEN) == 0 && mock_wr8(b, R_SIEN) == 0, "halt: enables off");
 }
 
+/* C4-7, host layout: the extended command, the limits, the counters */
+struct sdcomx_m {
+	struct sdcom	sx_com;
+	unsigned short	sx_flags, sx_nseg;
+	void		*sx_seg;
+	unsigned	sx_resid;
+};
+struct sdlim_m {
+	unsigned short	sl_ver, sl_flags;
+	unsigned long	sl_maxbytes;
+	unsigned short	sl_maxseg, sl_align, sl_gran, sl_pad;
+	unsigned long	sl_reach;
+	int		(*sl_queue)();
+};
+extern long		a4091_xs[];	/* magic, param, rc[4], cmds, refused */
+#define XS_PARAM	1
+#define XS_RC		2
+#define XS_CMDS		6
+#define XS_REFUSED	7
+
+static char		xbuf[65536] __attribute__((aligned(16)));
+static struct sdcomx_m	xcp;
+
+static int
+xcmd(int reading, unsigned short flags, unsigned short nseg)
+{
+	struct sdlim_m *l = (struct sdlim_m *)mock_lim;
+
+	memset(&xcp, 0, sizeof xcp);
+	xcp.sx_com.reading = reading;
+	xcp.sx_com.cdb[0] = reading ? 0x28 : 0x2a;
+	xcp.sx_com.addr = xbuf;
+	xcp.sx_com.nbyte = sizeof xbuf;
+	xcp.sx_com.card = 1;
+	xcp.sx_com.unit = 6;
+	xcp.sx_com.intr = (void (*)())cb;
+	xcp.sx_flags = flags;
+	xcp.sx_nseg = nseg;
+	xcp.sx_resid = 12345;
+	return l->sl_queue(0, &xcp);
+}
+
+static void
+t_lim_declared(void)
+{
+	struct sdlim_m *l;
+
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(mock_nlim == 1 && mock_lim_fn == mock_reg[0].fn && mock_lim_c == 0,
+	    "sd_limits for the registration: its queuefn, c 0");
+	l = (struct sdlim_m *)mock_lim;
+	CHECK(l && l->sl_ver == 1 && l->sl_flags == 0 && l->sl_maxbytes == 65536
+	    && l->sl_maxseg == 1, "version 1, no lists, 64 KiB, one segment");
+	CHECK(l && l->sl_align == 16 && l->sl_gran == 16 && l->sl_pad == 0
+	    && l->sl_reach == 0xffffffffUL, "align 16, gran 16, reach 0xFFFFFFFF");
+	CHECK(l && l->sl_queue != 0 && l->sl_queue != mock_reg[0].fn, "a queuex of its own");
+	CHECK(a4091_xs[0] == 0x41345853L && a4091_xs[XS_PARAM] == 1 && a4091_xs[XS_RC] == 0,
+	    "xs magic A4XS, limits=1, rc 0");
+}
+
+static void
+t_lim_param0(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	CHECK(a4091_load("intr=0 limits=0") == 0, "load returns 0");
+	CHECK(mock_nlim == 0 && a4091_xs[XS_PARAM] == 0 && a4091_xs[XS_RC] == -1,
+	    "limits=0: nothing declared, rc -1");
+	CHECK(mock_defer_fn == 0, "intr=0 read from the same string");
+}
+
+static void
+t_lim_refused(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	mock_lim_errno = 89;		/* ENOSYS: a kernel before the segment minor */
+	CHECK(a4091_load(NULL) == 0, "load returns 0 all the same");
+	CHECK(a4091_xs[XS_RC] == 89, "the result kept");
+}
+
+static void
+t_lim_queuex(void)
+{
+	struct mock_board *b;
+	struct ds_mirror *d;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(xcmd(1, 0, 0) && intr_calls == 1, "a 64 KiB READ completes (polled)");
+	CHECK(xcp.sx_com.okay && xcp.sx_resid == 0, "okay, sx_resid 0");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	CHECK(d && d->p[DS_DATA1].len == 65536, "one block move of 65536");
+	CHECK(mock_nlog == 3 && mock_log[0].len == 65536, "one segment through prepare/addr/complete");
+	mock_addr_zero = 1;
+	CHECK(xcmd(0, 0, 0) && intr_calls == 2, "a WRITE out of reach completes");
+	CHECK(!xcp.sx_com.okay && xcp.sx_resid == 65536, "failed, sx_resid nbyte");
+	mock_addr_zero = 0;
+	CHECK(xcmd(1, 1, 2) && intr_calls == 3, "a list of two completes at once");
+	CHECK(!xcp.sx_com.okay && xcp.sx_resid == 65536, "refused, sx_resid nbyte");
+	CHECK(xcmd(1, 1, 1) && intr_calls == 4 && xcp.sx_com.okay && xcp.sx_resid == 0,
+	    "a list of one runs");
+	CHECK(a4091_xs[XS_CMDS] == 3 && a4091_xs[XS_REFUSED] == 1, "cmds 3, refused 1");
+	CHECK(run_queue(0, 0, 1, qbuf[0], 512, 0x28) && intr_calls == 5,
+	    "a stock READ through queuefn still completes");
+}
+
+static void
+t_lim_queuex_intr(void)
+{
+	struct mock_board *b = intr_up();
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(xcmd(1, 0, 0) && intr_calls == 0, "queued, not completed in the call");
+	CHECK(xcp.sx_resid == 65536, "sx_resid nbyte until the end");
+	CHECK(qcmd(0, 5, 1, 0x28), "a stock command behind it");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1, "the sdcomx completed from the handler");
+	CHECK(xcp.sx_com.okay && xcp.sx_resid == 0, "okay, sx_resid 0");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 2 && qcp[0].okay, "then the stock one");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -884,6 +1011,11 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "interrupt: lost interrupts, fallback", t_intr_lost },
 	{ "interrupt: a command that never ends", t_intr_hung },
 	{ "interrupt: halt", t_intr_halt },
+	{ "limits: declared after sd_register", t_lim_declared },
+	{ "limits: limits=0", t_lim_param0 },
+	{ "limits: sd_limits refuses", t_lim_refused },
+	{ "limits: sdcomx commands, polled", t_lim_queuex },
+	{ "limits: sdcomx command on the interrupt", t_lim_queuex_intr },
 };
 
 int

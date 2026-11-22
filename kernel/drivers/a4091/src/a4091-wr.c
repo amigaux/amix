@@ -62,6 +62,7 @@
 #define	A4091_D42			/* the module calls the DDI's dma_* (C4-5) */
 #include	"sys/moddefs.h"		/* the ABI kit's wrapper (amix-dlm C3-1, C4-2) */
 #include	"sys/amixddi.h"		/* the kit's DDI: sd_register (C4-1) */
+#include	"sys/sdseg.h"		/* C4-7: struct sdcomx, sd_limits */
 #endif
 #if	defined(A4091_KVA) || defined(A4091_MODULE)
 #define	A4091_SEAM			/* the D42 seam: 040/060 static arm, module */
@@ -1057,6 +1058,49 @@ static uchar		a4091_stwait[A4091_NCARD];	/* self-test armed */
 static int		a4091_stany;
 static ulong		a4091_stdsps[A4091_NCARD];	/* DSPS the self-test saw */
 
+/*
+ * C4-7: the kernel's one-segment commands of up to 64 KiB (struct sdcomx)
+ * come through a4091queuex, the stock ones through a4091queue, and the
+ * two forms are told apart by the entry alone.  a4091queuex notes its
+ * command in a4091_xtab; the completion sets sx_resid for a noted one
+ * (0 or nbyte) before cp->intr.  Counters kmem-readable, magic first
+ * ("A4XS").
+ */
+#define	A4091_XMAX	32		/* sdcomx commands queued or in flight */
+static struct sdcom	*a4091_xtab[A4091_XMAX];
+static int		a4091_xn;		/* entries in use */
+struct a4091_xs {
+	ulong	magic;			/* 0x41345853 "A4XS"                        */
+	long	param;			/* limits= as _load took it (default 1)     */
+	long	rc[A4091_NCARD];	/* per registered board: sd_limits' result, -1 limits=0 */
+	ulong	cmds;			/* sdcomx commands taken                    */
+	ulong	refused;		/* refused: a list, or a4091_xtab full      */
+};
+struct a4091_xs	a4091_xs = { 0x41345853, 1 };
+
+/* Every completion of the module's queue: sx_resid first for an sdcomx. */
+static void
+a4091_done( cp)
+struct sdcom	*cp;
+{
+	int	k, s;
+
+	k = A4091_XMAX;
+	if (a4091_xn != 0) {
+		s = spl5();
+		for (k = 0; k < A4091_XMAX; ++k)
+			if (a4091_xtab[k] == cp) {
+				a4091_xtab[k] = 0;
+				a4091_xn--;
+				break;
+			}
+		splx( s);
+	}
+	if (k < A4091_XMAX)
+		((struct sdcomx *)cp)->sx_resid = cp->okay ? 0 : cp->nbyte;
+	(*cp->intr)( cp);
+}
+
 static void
 a4091_sel( k)
 int	k;
@@ -1071,7 +1115,7 @@ a4091_fail( cp)
 struct sdcom	*cp;
 {
 	cp->status = 0xff; cp->okay = FALSE;
-	(*cp->intr)( cp);
+	a4091_done( cp);
 }
 
 /*
@@ -1329,7 +1373,7 @@ a4091_finish()
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
 	cp->okay   = (rc == 0) ? TRUE : FALSE;
 	f->cp = 0;
-	(*cp->intr)( cp);
+	a4091_done( cp);
 }
 
 /* One command start to end, polled. */
@@ -1593,18 +1637,18 @@ char	*arg;
 	return 0;
 }
 
-/* intr=<0|1> from _load's "name=value ..." string; 1 when absent */
+/* key's number from _load's "name=value ..." string; dflt when absent */
 static long
-a4091_intrparam( params)
-char	*params;
+a4091_param( params, key, dflt)
+char	*params, *key;
+long	dflt;
 {
-	static char	key[] = "intr=";
 	char	*p;
 	int	i;
 	long	v;
 
 	if (params == 0)
-		return 1;
+		return dflt;
 	for (p = params; *p; ) {
 		for (i = 0; key[i] && p[i] == key[i]; ++i)
 			;
@@ -1620,7 +1664,7 @@ char	*params;
 		while (*p == ' ')
 			++p;
 	}
-	return 1;
+	return dflt;
 }
 
 /* From _load, after the registrations: the deferred self-test, unless intr=0. */
@@ -1630,12 +1674,70 @@ char	*params;
 {
 	int	e;
 
-	a4091_iq.param = a4091_intrparam( params);
+	a4091_iq.param = a4091_param( params, "intr=", 1L);
 	if (a4091_iq.param == 0)
 		return;
 	e = root_defer( a4091_defer, (char *)0);
 	if (e)
 		printf( "%s: no deferred call (errno %d): polled\n", A4091_NAME, e);
+}
+
+/*
+ * The C4-7 entry: one segment (no SDX_SEG, or a list of one), up to
+ * a4091_lim's 64 KiB.  A list of more, or a full a4091_xtab, is refused
+ * as a4091_fail refuses (okay 0, sx_resid nbyte).
+ */
+static bool
+a4091queuex( c, xp)
+int		c;
+struct sdcomx	*xp;
+{
+	struct sdcom	*cp;
+	int	k, s;
+
+	cp = &xp->sx_com;
+	xp->sx_resid = cp->nbyte;
+	k = A4091_XMAX;
+	if (!(xp->sx_flags & SDX_SEG) || xp->sx_nseg == 1) {
+		s = spl5();
+		for (k = 0; k < A4091_XMAX; ++k)
+			if (a4091_xtab[k] == 0) {
+				a4091_xtab[k] = cp;
+				a4091_xn++;
+				break;
+			}
+		splx( s);
+	}
+	if (k == A4091_XMAX) {
+		a4091_xs.refused++;
+		cp->status = 0xff; cp->okay = FALSE;
+		(*cp->intr)( cp);
+		return TRUE;
+	}
+	a4091_xs.cmds++;
+	return a4091queue( c, cp);
+}
+
+/*
+ * The limits (C4-7 section 3): one segment of up to 64 KiB, 16-aligned and
+ * a multiple of 16 long, so a read never needs the 1 KiB bounce; the
+ * 53C710 is a 32-bit master.  The reference is weak: on a kernel before
+ * the segment minor DDI_SD_LIMITS gives ENOSYS and the board keeps the
+ * stock commands, as with param limits=0.
+ */
+DDI_SD_LIMITS_DECL;
+static struct sdlim	a4091_lim = {
+	SDLIM_VER, 0, 65536, 1, 16, 16, 0, 0xFFFFFFFF, a4091queuex
+};
+
+/* From _load, after sd_register( a4091queue, k, ...) returned 0. */
+static void
+a4091_limits( params, k)
+char	*params;
+int	k;
+{
+	a4091_xs.param = a4091_param( params, "limits=", 1L);
+	a4091_xs.rc[k] = a4091_xs.param ? DDI_SD_LIMITS( a4091queue, k, &a4091_lim) : -1;
 }
 #else	/* !A4091_MODULE: the static driver's queue, polled */
 bool
@@ -2120,6 +2222,7 @@ char	*params;
 				a4091_da = 0;
 				return e;
 			}
+			a4091_limits( params, k);
 			k++;
 		}
 	}
@@ -2408,6 +2511,7 @@ char	*params;
 		a4091_da = 0;
 		return e;
 	}
+	a4091_limits( params, 0);
 	a4091_nboards = 1;
 	a4091_intrsetup( params);
 	return 0;
@@ -2420,10 +2524,9 @@ out:
 
 /*
  * _halt (C4-2 section 5): stop SCRIPTS on every mapped board -- the init path's
- * abort and soft reset, which also leaves SIEN/DIEN at 0.  The driver runs one
- * command to completion inside a4091queue, so from the halt pass there is
- * normally nothing to stop; the reset makes sure the chip touches no memory
- * after the kernel has gone.
+ * abort and soft reset, which also leaves SIEN/DIEN at 0.  A command may
+ * still be on the chip when completion is on the interrupt; the reset makes
+ * sure the chip touches no memory after the kernel has gone.
  */
 void
 a4091_halt()
