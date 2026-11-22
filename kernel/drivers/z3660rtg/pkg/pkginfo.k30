@@ -1,15 +1,16 @@
 PKG=zrtg30
-NAME=z3660rtg-k30 1.1.2-3 - Z3660 and MNT ZZ9000 RTG graphics module, k30 line
+NAME=z3660rtg-k30 1.1.2-4 - Z3660 and MNT ZZ9000 RTG graphics module, k30 line
 ARCH=Amiga
-VERSION=1.1.2-3
+VERSION=1.1.2-4
 CATEGORY=system
 CLASSES=none z3660rtg
 VENDOR=amix
-PSTAMP=amix-zrtg30-1.1.2-3
+PSTAMP=amix-zrtg30-1.1.2-4
 # Kernel space (amix-dlm C2-2, C3-5 v4 sec 1): a role=module entry of the
 # #ext kpkg block (line=k30, kabi=k30.1.2), never an ordinary entry.  Catalog
-# name z3660rtg-k30, pkginst zrtg30; VERSION is the module's 1.1.2-3 (the
-# fork's module/VERSION at kernel/drivers/z3660rtg/z3660rtg.pin), its object
+# name z3660rtg-k30, pkginst zrtg30; VERSION 1.1.2-4 is a package revision
+# of the module's 1.1.2-3 (the fork's module/VERSION at
+# kernel/drivers/z3660rtg/z3660rtg.pin), its object
 # built with the gcc-2.7.2.3-33ebadc kit, rolled from amix.  depend=monsw:
 # composable only beside monsw30.  Major c 49 is 1.1's, so no APKG_KBOOTSET.
 APKG_DESC=Z3660 and MNT ZZ9000 RTG graphics (the Z3660's onboard RTG, ZZ9000 cards in Zorro II and Zorro III) as a demand-class kernel module for the 68030 module kernel kernel-k30-m (kabi k30.1.2): /etc/conf/mod.d/z3660rtg, /dev/zz9000 and /dev/zz9001 with their info nodes, /etc/display.d/z3660, zz9000 and zz9001, startx-rtg, the tools zz9k_probe, zz9k_monsw, rtg-kbdback and ztop, and the pages zz9000(7) and zz9k_probe(1M); needs the monsw module (monsw30); a Zorro III ZZ9000 needs kernel-k30-m k30.1.5.261115-78 or later.

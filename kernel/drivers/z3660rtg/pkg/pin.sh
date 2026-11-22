@@ -41,11 +41,15 @@
 # 0 (the default) finds the RTG at its fixed base by itself when a Z3660 is
 # listed and no AutoConfig entry gave it, 1 as in 1.1.2-2, -1 never reads it;
 # the read is bprobe-guarded; the same kit.
+# 1.1.2-4 (2026-11-22): module 1.1.2-3 unchanged; zz9k_monsw, rtg-kbdback,
+# ztop and zz9k_probe linked by gcc14-cross-amix 276ef49, whose programs
+# export environ and _environ: the same code at shifted addresses.
 
 KM_NAME=z3660rtg
 KM_SHORT=zrtg
 KM_REPO=kernel/drivers/z3660rtg
 KM_VERSION=1.1.2-3
+KM_PKG_VERSION=1.1.2-4
 KM_VERSION_FILE=out/cache/forks/z3660rtg/module/VERSION
 
 KM_K30_SHA=f53a0a088fb7cef3631b9d6be16f64d01875fd181cad27bb3b2a8f422acd4b17
@@ -71,11 +75,11 @@ ZR_SCREEN_H_SHA=6e6ac7cdbeb4dd53ec5a5d84cf9b7a1b6633a9aefc525694b4a1cac26d71415c
 # what tools.sh writes, verified and shipped verbatim (@PKG@: zrtg30, zrtg46)
 _zr=out/build/z3660rtg-tools/out
 KM_FILES_COMMON="\
-/opt/amix/bin/zz9k_monsw $_zr/bin/zz9k_monsw a6fab7e35cf058f8b651d3c7351701e942d6ddfaed7d03630c49b45391f0dee1 0755
-/opt/amix/bin/rtg-kbdback $_zr/bin/rtg-kbdback e56a8bb7a7f8aaddb7b374111d1d01e3850095b820387038cb9bdf7451e560fb 0755
-/opt/amix/bin/ztop $_zr/bin/ztop 99b99291f767f579bbfc74d828bb573afaa8d602d8ec8622e477776fa5e527e6 0755
+/opt/amix/bin/zz9k_monsw $_zr/bin/zz9k_monsw da870e568f288910069575eee3af20ee0d6c0126cbd9fb6d1e145fa06317e185 0755
+/opt/amix/bin/rtg-kbdback $_zr/bin/rtg-kbdback 4262960a644ea28d54eef2b21d510f3b8f1d71e795eb1b6fd7aea5874d38b430 0755
+/opt/amix/bin/ztop $_zr/bin/ztop 16b4e5134adb6df22d8a97d56bd64096be2d888609bcd394bab43999d9afb0d0 0755
 /opt/amix/bin/startx-rtg $_zr/bin/startx-rtg 4c0173a3c001f68a9bbdaa122171e672da725a3fd4b99e3323918ee4aadf61a4 0755
-/opt/amix/bin/zz9k_probe $_zr/bin/zz9k_probe 6cd19cbdef0e58bc916621db1b520a93a25517f7b1f90ffe2a33323cf206026e 0755
+/opt/amix/bin/zz9k_probe $_zr/bin/zz9k_probe bb5097ec97ccbb936142c0a93b33709c71c403493861892650e9d14c2ffc2794 0755
 /opt/amix/man/1/ztop $_zr/man/1/ztop a7bbd8208aa29ad79a74044fc1e9077567d8f89a80de23ebdf2b4aa2c5197876 0644
 /opt/amix/man/1m/zz9k_probe $_zr/man/1m/zz9k_probe 0daaef3a9630883a81a663e48fd61560f3651dd1990e3e458b9938e7332130e3 0644
 /opt/amix/man/7/zz9000 $_zr/man/7/zz9000 7acd9a07af91d9ea73f3b9c238a98efc4252ce178ef148f0fe6bec7fb5bbd530 0644
@@ -91,4 +95,4 @@ kdrv_prepare() {
 		sh "$AMIX_REPO_ROOT/kernel/drivers/z3660rtg/pkg/tools.sh"
 }
 
-KM_SOURCE_EPOCH=1793491200	# 2026-11-01 00:00 UTC
+KM_SOURCE_EPOCH=1795305600	# 2026-11-22 00:00 UTC
