@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — make kspace keeps the amix-paula repository in out/cache (800261b4)
+
+make kspace keeps the amix-paula repository the kernel recipes read in out/cache/paula-repo, as it keeps the port's, so it is fetched once rather than at every run.
+
 ## 2026-11-22 — pkgbuild reads a shared object's undefined symbols from .dynsym too (214a657b)
 
 The UNDEF gate reads a shared object's undefined symbols from its dynamic symbol table as well as its full one, so a stripped prebuilt is checked (libstdc++.so.6: 89, all defined by libamixrt.so.1 and libc.so.1; nm -u alone saw none), and refuses one nm reads no symbol from.
