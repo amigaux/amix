@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — repro-selftest builds the shared host tools once (4f21caa2)
+
+repro-selftest builds build/hosttools once from the checkout and hands the set to both rolls (AMIX_HOSTTOOLS_BIN); its copies of build/ have no fetch-distfile or distfile cache, so run-selftests failed at repro since the host tools came in.
+
 ## 2026-11-22 — a recipe's shared variant, VARIANT (7b51a824)
 
 A recipe with prototype.shared builds, with VARIANT=shared, the same package at VERSION-SHARED_PKGREV (PKGREV.word, 14.s: apkg's vercmp orders it right at any width) with the SHARED_ summary, description and dependencies, in <name>-shared. make dist VARIANT=shared picks it for the userland build and its catalog; static is the default and its bytes are unchanged (x11r6.3 6.3-14, motif 2.3.8-2). A recipe without prototype.shared builds static and says so.
