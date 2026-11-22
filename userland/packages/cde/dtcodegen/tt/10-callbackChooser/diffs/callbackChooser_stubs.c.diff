@@ -1,0 +1,317 @@
+--- a/callbackChooser_stubs.c
++++ b/callbackChooser_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: callbackChooser_stubs.C.src /main/3 1995/11/06 17:12:25 rswiston $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -21,7 +16,7 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
+-#include <stdlib.h>
++#include <stdint.h>
+ #include <stdio.h>
+ #include <Xm/Xm.h>
+ #include "dtb_utils.h"
+@@ -304,11 +299,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->callbackChooser_shellform);
+     
+@@ -327,14 +323,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, False);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -351,14 +348,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, False);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -375,14 +373,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -399,14 +398,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -423,14 +423,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -447,14 +448,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -471,14 +473,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -495,14 +498,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -519,14 +523,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -543,14 +548,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -567,14 +573,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -591,14 +598,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -615,14 +623,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgDestroyChoice, True);
++    XtSetSensitive(instance->msgDestroyChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -639,14 +648,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbCallbackChooserCallbackChooserInfo	instance = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	dtbTarget = (DtbCallbackChooserCallbackChooserInfo)clientData;
++    DtbCallbackChooserCallbackChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_callback_chooser_callback_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_callback_chooser_callback_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->msgReturnChoice, True);
++    XtSetSensitive(instance->msgReturnChoice_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/

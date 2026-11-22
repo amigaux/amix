@@ -1,0 +1,78 @@
+.TH DTCODEGEN 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtcodegen \- write C code for an App Builder project
+.SH SYNOPSIS
+.B dtcodegen
+.RI [ options ]
+.RI [ project .bip]
+.RI [ module .bil " ...]"
+.SH DESCRIPTION
+.B dtcodegen
+writes the C source of an application designed with
+.BR dtbuilder (1),
+the App Builder.
+For each module named, or for every module of the project when none is
+named, it writes
+.IR module _ui.c
+and
+.IR module _ui.h
+(the user interface, as Motif calls) and
+.IR module _stubs.c
+(the callbacks, to be filled in), and for the project a header, the
+utilities
+.I dtb_utils.c
+and
+.IR dtb_utils.h ,
+and a Makefile.
+With no project file named it looks for one holding the modules in the
+current directory.
+.PP
+A
+.I .bip
+file is a project file, a
+.I .bix
+file an encapsulated project, and a
+.I .bil
+file a module, all in the Builder Interface Language that dtbuilder saves.
+.TP 16
+.BR \-help ", " \-h
+print a usage message
+.TP
+.B \-main
+also write the project's file with
+.BR main()
+.TP
+.B \-changed
+write only the files whose module has changed
+.TP
+.B \-merge
+merge new
+.I _stubs.c
+files with the ones already there, keeping the code written into them
+(the default)
+.TP
+.B \-nomerge
+do not merge; the old stubs are replaced
+.TP
+.BR \-project ", " \-p
+the project file follows (the default when one is found)
+.TP
+.BR \-noproject ", " \-np
+ignore the project file; use default project settings
+.TP
+.B \-showall
+the application maps all its windows at start-up (the default with no
+project file)
+.TP
+.B \-noshowall
+it maps only the windows marked initially visible (the default)
+.TP
+.BR \-silent ", " \-s
+write no messages
+.TP
+.BR \-verbose ", " \-v
+write detailed progress messages
+.SH EXIT STATUS
+1 for a usage error.
+.SH SEE ALSO
+.BR dtbuilder (1)

@@ -1,0 +1,95 @@
+Dates from SOURCE_DATE_EPOCH when it is set.
+
+instant (docbook-to-man) writes the time it ran into every manual page
+and help volume it makes, and eltdef writes it into the help compilers
+it generates, so two builds of one source differ.  When SOURCE_DATE_EPOCH
+is set both use that time, in UTC; otherwise the clock, as before.
+
+--- a/programs/dtdocbook/instant/main.c
++++ b/programs/dtdocbook/instant/main.c
+@@ -341,8 +341,17 @@
+ 
+     /* set some pre-defined variables */
+     SetMappingNV(Variables, "user", (cp=getenv("USER")) ? cp : "UnknownUser" );
+-    time(&tnow);
+-    nowtm = localtime(&tnow);
++    {
++	char *sde = getenv("SOURCE_DATE_EPOCH");
++
++	if (sde != NULL && *sde != '\0') {
++	    tnow = (time_t)strtol(sde, NULL, 10);
++	    nowtm = gmtime(&tnow);
++	} else {
++	    time(&tnow);
++	    nowtm = localtime(&tnow);
++	}
++    }
+     strftime(buf, 100, "%a %d %b %Y, %R", nowtm);
+     SetMappingNV(Variables, "date", buf);
+     strcpy(buf, "unknown-host");
+--- a/programs/dthelp/parser/pass1/eltdef/eltutil.c
++++ b/programs/dthelp/parser/pass1/eltdef/eltutil.c
+@@ -219,8 +219,17 @@
+     /* Discard a trailing carriage return in the sign-on message */
+     if (socr) sochar--;
+ 
+-    time(&storetime);
+-    timeofday = ctime(&storetime);
++    {
++	char *sde = getenv("SOURCE_DATE_EPOCH");
++
++	if (sde != NULL && *sde != '\0') {
++	    storetime = (time_t)strtol(sde, NULL, 10);
++	    timeofday = asctime(gmtime(&storetime));
++	} else {
++	    time(&storetime);
++	    timeofday = ctime(&storetime);
++	}
++    }
+ 
+     len =
+       sochar+strlen(signon1)+strlen(signon2)+strlen(iffile)+strlen(timeofday)
+--- a/programs/dthelp/parser/canon1/eltdef/eltutil.c
++++ b/programs/dthelp/parser/canon1/eltdef/eltutil.c
+@@ -219,8 +219,17 @@
+     /* Discard a trailing carriage return in the sign-on message */
+     if (socr) sochar--;
+ 
+-    time(&storetime);
+-    timeofday = ctime(&storetime);
++    {
++	char *sde = getenv("SOURCE_DATE_EPOCH");
++
++	if (sde != NULL && *sde != '\0') {
++	    storetime = (time_t)strtol(sde, NULL, 10);
++	    timeofday = asctime(gmtime(&storetime));
++	} else {
++	    time(&storetime);
++	    timeofday = ctime(&storetime);
++	}
++    }
+ 
+     len =
+       sochar+strlen(signon1)+strlen(signon2)+strlen(iffile)+strlen(timeofday)
+--- a/programs/dthelp/parser/pass2/eltdef/eltutil.c
++++ b/programs/dthelp/parser/pass2/eltdef/eltutil.c
+@@ -219,8 +219,17 @@
+     /* Discard a trailing carriage return in the sign-on message */
+     if (socr) sochar--;
+ 
+-    time(&storetime);
+-    timeofday = ctime(&storetime);
++    {
++	char *sde = getenv("SOURCE_DATE_EPOCH");
++
++	if (sde != NULL && *sde != '\0') {
++	    storetime = (time_t)strtol(sde, NULL, 10);
++	    timeofday = asctime(gmtime(&storetime));
++	} else {
++	    time(&storetime);
++	    timeofday = ctime(&storetime);
++	}
++    }
+ 
+     len =
+       sochar+strlen(signon1)+strlen(signon2)+strlen(iffile)+strlen(timeofday)

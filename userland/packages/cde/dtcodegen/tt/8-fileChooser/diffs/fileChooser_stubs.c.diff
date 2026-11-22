@@ -1,0 +1,20 @@
+--- a/fileChooser_stubs.c
++++ b/fileChooser_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: fileChooser_stubs.C.src /main/4 1996/10/14 09:35:42 barstow $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -21,6 +16,7 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
++#include <stdint.h>
+ #include <stdio.h>
+ #include <Xm/Xm.h>
+ #include "dtb_utils.h"

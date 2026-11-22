@@ -1,0 +1,46 @@
+libtt prints a message's strings without printf's %C.
+
+tt_message_print() and the ToolTalk trace print each character of a
+string through printf's %C, a wide character, which the C library here
+does not know: it printed a C for every character but the last few
+("CCCCCCCiate" for "Instantiate").  The character's own bytes are
+written instead, and an unprintable one byte by byte as \ooo.
+
+--- a/lib/tt/lib/util/tt_string.C
++++ b/lib/tt/lib/util/tt_string.C
+@@ -146,6 +146,7 @@
+ 	} else {
+ 		wchar_t wc;
+ 		int n;
++		int k;
+ 
+ 		if (quote_it) {
+ 			os << '"';
+@@ -161,17 +162,21 @@
+ 					if (iswprint(wc) || iswspace(wc)) {
+ 						count += (n == 0) ? 1 : n;
+ 
+-						// We do it this way rather than through
+-						// _Tt_iostream operator<<  method because
+-						// wchar_t is equivalent  to a long and the
+-						// compiler doesn't know which method to use.
+-						os.sprintf(MB_LEN_MAX, "%C", wc);
++						// The character's own bytes: printf's
++						// %C (a wide character) is not in
++						// every C library.
++						for (k = 0; k < ((n == 0) ? 1 : n); k++) {
++							os << s[i + k];
++						}
+ 					} else {
+ 						count += (3  + ((n == 0) ? 1 : n));
+ 
+ 						// don't print past limit, even a little.
+ 						if (count < max_print_width) {
+-							os.sprintf(10, "\\%03C", wc);
++							for (k = 0; k < ((n == 0) ? 1 : n); k++) {
++								os.sprintf(10, "\\%03o",
++									   (unsigned char) s[i + k]);
++							}
+ 						}
+ 					}
+ 

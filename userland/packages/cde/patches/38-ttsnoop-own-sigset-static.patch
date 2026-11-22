@@ -1,0 +1,20 @@
+ttsnoop's _tt_sigset kept to itself.
+
+ttsnoop has its own copy of _tt_sigset, the libtt function that installs a
+signal handler that stays installed, and calls it only from its own file.
+With a shared libtt the program's copy wins and the clash goes unseen;
+linked statically with libtt, whose tt_port.o comes in for other calls, it
+is two definitions.  ttsnoop's copy is now static.  (ttsnoop.C.src is the
+input dtcodegen merges into ttsnoop.C: README, The App Builder's code.)
+
+--- a/programs/ttsnoop/ttsnoop.C.src
++++ b/programs/ttsnoop/ttsnoop.C.src
+@@ -195,7 +195,7 @@
+ #define SIG_PF sig_pf_t
+ #endif
+ 
+-int
++static int
+ _tt_sigset(
+ 	int     sig,
+ 	SIG_PF  handler )

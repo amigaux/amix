@@ -1,0 +1,52 @@
+.TH DTLPSETUP 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtlpsetup \- print a file from the desktop (old name of dtlp)
+.SH SYNOPSIS
+.B dtlpsetup
+.RB [ \-b
+.IR title ]
+.RB [ \-d
+.IR destination ]
+.RB [ \-m
+.IR command ]
+.RB [ \-n
+.IR copies ]
+.RB [ \-o
+.IR options ]
+.RB [ \-u
+.IR name ]
+.RB [ \-a ]
+.RB [ \-e ]
+.RB [ \-r ]
+.RB [ \-s ]
+.RB [ \-v ]
+.RB [ \-w ]
+.B \-f
+.I file
+.SH DESCRIPTION
+.B dtlpsetup
+is the CDE 1.0 name of the desktop's print command.
+It hands its options on to
+.BR dtlp (1),
+which prints
+.IR file ;
+each option means what it means to dtlp.
+The CDE 1.0 options that dtlp does not have,
+.BR \-c ,
+.BR \-t ,
+.B \-i
+and
+.BR \-l ,
+are ignored; any other option, or an argument that is not an option,
+gets the usage message.
+.SH EXIT STATUS
+dtlp's, except that its 5 and 6 are returned as 7 and 8, as CDE 1.0
+returned them; 2 for a usage error.
+.SH NOTES
+The message that names ignored options is printed with
+.BR dspmsg ,
+which Amiga UNIX does not have; the shell reports it as not found, and
+printing goes on.
+.SH SEE ALSO
+.BR dtlp (1),
+.BR lp (1)

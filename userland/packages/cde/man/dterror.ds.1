@@ -1,0 +1,36 @@
+.TH DTERROR.DS 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dterror.ds \- show an error dialog
+.SH SYNOPSIS
+.B dterror.ds
+.I message
+.RI [ title
+.RI [ button ]]
+.SH DESCRIPTION
+.B dterror.ds
+shows
+.I message
+in an error dialog, with
+.I title
+as the window's title and one button labelled
+.I button
+(OK when not given), and exits when the button is pressed.
+Programs and scripts use it to report an error where they cannot show a
+dialog themselves: after a failed
+.BR exec (2)
+in a child process, or before their main window exists.
+.BR dtfile (1)
+and
+.BR dtopen (1)
+call it.
+.SH NOTES
+.B dterror.ds
+is a
+.B dtksh
+script.
+.B dtksh
+is not yet part of this package, so the script does not run and its
+callers' errors go unseen.
+.SH SEE ALSO
+.BR dtfile (1),
+.BR dtopen (1)

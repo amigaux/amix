@@ -1,0 +1,69 @@
+ttsnoop runs tail in the form this tail takes.
+
+ttsnoop shows its message and trace logs in terminal panes running
+"tail -n +0 -f file".  The SVR4 tail takes one option, [+-]N[lbc][f], and
+then the file, so it opened "+0" and the pane said "tail: cannot open
+input".  The panes run "tail +1f file" (the whole file, then follows it),
+and a log named with -o or -O is made empty first if it does not exist,
+since tail opens it before ttsnoop writes it.  An input of the App
+Builder's code: the record in dtcodegen/ was made from the patched file.
+
+--- a/programs/ttsnoop/ttsnoop.C.src
++++ b/programs/ttsnoop/ttsnoop.C.src
+@@ -289,6 +289,22 @@
+ 	return 0;
+ }
+ 
++//
++// tail opens its file at once: a log named with -o or -O that does not
++// exist yet is made empty first
++//
++static void
++touchFile(
++	const char *file
++)
++{
++	FILE *f = fopen( file, "a" );
++
++	if (f != 0) {
++		fclose( f );
++	}
++}
++
+ /*** DTB_USER_CODE_END
+  ***
+  *** End of user code section
+@@ -513,12 +529,12 @@
+ 		    clog << "ttsnoop: mkfifo( \"" << traceFile << "\" ) = ";
+ 		    clog << strerror( errno ) << endl;
+ 	    }
++    } else {
++	    touchFile( traceFile );
+     }
+     apiTracerArgv[ 0 ] = "tail";
+-    apiTracerArgv[ 1 ] = "-n";
+-    apiTracerArgv[ 2 ] = "+0";
+-    apiTracerArgv[ 3 ] = "-f";
+-    apiTracerArgv[ 4 ] = traceFile;
++    apiTracerArgv[ 1 ] = "+1f";
++    apiTracerArgv[ 2 ] = traceFile;
+     if (snoopFile == 0) {
+ 	    //
+ 	    // Set up fifo for snoop output
+@@ -528,12 +544,12 @@
+ 		    clog << "ttsnoop: mkfifo( \"" << snoopFile << "\" ) = ";
+ 		    clog << strerror( errno ) << endl;
+ 	    }
++    } else {
++	    touchFile( snoopFile );
+     }
+     snooperArgv[ 0 ] = "tail";
+-    snooperArgv[ 1 ] = "-n";
+-    snooperArgv[ 2 ] = "+0";
+-    snooperArgv[ 3 ] = "-f";
+-    snooperArgv[ 4 ] = snoopFile;
++    snooperArgv[ 1 ] = "+1f";
++    snooperArgv[ 2 ] = snoopFile;
+ 
+     if (optind < argc) {
+ 	    if (committed2Snooping) {

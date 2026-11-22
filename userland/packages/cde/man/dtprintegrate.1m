@@ -1,0 +1,59 @@
+.TH DTPRINTEGRATE 1M "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtprintegrate \- give a printer an icon and actions on the desktop
+.SH SYNOPSIS
+.B dtprintegrate
+.RB [ \-d
+.IR destination ]
+.RB [ \-i
+.IR icon ]
+.RB [ \-h
+.I text
+|
+.B \-f
+.IR helpfile ]
+.RB [ \-r ]
+.RB [ \-u ]
+.RB [ \-v ]
+.I printer
+.SH DESCRIPTION
+.B dtprintegrate
+makes the desktop configuration for a printer of the LP print service:
+the action and data type definitions in
+.IR /etc/dt/appconfig/types/C/ printer .dt
+and the printer's icon in the Application Manager's Printers folder,
+.IR /etc/dt/appconfig/appmanager/C/Printers .
+Files dropped on the icon are printed on that printer.
+The administrator runs it after adding a printer with
+.BR lpadmin (1M).
+.TP 16
+.BI \-d " destination"
+the LP destination the actions print to (default:
+.IR printer )
+.TP
+.BI \-i " icon"
+the icon that stands for the printer
+.TP
+.BI \-h " text"
+the printer's help text
+.TP
+.BI \-f " helpfile"
+a file that holds the printer's help text
+.TP
+.B \-r
+reload the desktop's action database afterwards
+.TP
+.B \-u
+remove the printer's desktop configuration
+.TP
+.B \-v
+report what it does on standard output
+.SH NOTES
+.B dtprintegrate
+is a
+.B ksh
+script.
+.SH SEE ALSO
+.BR dtlp (1),
+.BR dtprintinfo (1),
+.BR lpadmin (1M)

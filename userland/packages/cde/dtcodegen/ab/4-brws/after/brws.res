@@ -1,0 +1,23 @@
+! File: brws.res
+!
+! Intermediate resource file for AppBuilder module brws
+!
+! ** DO NOT EDIT BY HAND. ALL MODIFICATIONS WILL BE LOST!
+
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar.Edit_item.mnemonic:	E
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar.View_item.mnemonic:	V
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar.Help_item.mnemonic:	H
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Undo_item.mnemonic:	U
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Cut_item.mnemonic:	u
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Copy_item.mnemonic:	C
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Paste_item.mnemonic:	P
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Delete_item.mnemonic:	D
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Edit_item_edit_pulldown.Close_item.mnemonic:	C
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_View_item_view_pulldown.Collapse_item.mnemonic:	C
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_View_item_view_pulldown.Expand_item.mnemonic:	E
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.Overview_item.mnemonic:	v
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.Tasks_item.mnemonic:	T
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.Reference_item.mnemonic:	R
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.On_Item_item.mnemonic:	O
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.Using_Help_item.mnemonic:	U
+Dtbuilder*dtb_brws_mainwindow_mainwin*menubar_Help_item_help_pulldown.About_Application_Builder_item.mnemonic:	A

@@ -1,0 +1,9 @@
+./Makefile.aix
+./Makefile.freebsd
+./Makefile.linux
+./Makefile.netbsd
+./Makefile.openbsd
+./Makefile.sunos
+./dtb_utils.c
+./dtb_utils.h
+./dtbuilder.pres
