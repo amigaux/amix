@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — kspace keeps the amix-paula repository in out/cache (bb895bb2)
+
+make dist's kspace step sets AMIX_PAULA_REPO to out/cache/paula-repo, beside AMIX_PORT_REPO, so the kernel recipes keep amix-paula across runs. They made it under out/build/kspace, which the step deletes at every start, so each run fetched amix-paula from GitHub again. test-dist checks the setting. The same change as next's 800261b4.
+
 ## 2026-11-22 — pkgbuild reads a shared object's undefined symbols from .dynsym too (214a657b)
 
 The UNDEF gate reads a shared object's undefined symbols from its dynamic symbol table as well as its full one, so a stripped prebuilt is checked (libstdc++.so.6: 89, all defined by libamixrt.so.1 and libc.so.1; nm -u alone saw none), and refuses one nm reads no symbol from.
