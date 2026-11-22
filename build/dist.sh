@@ -62,6 +62,13 @@
 # `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
 # `drivers/<name>`.
 #
+# VARIANT=static (the default) or shared picks the userland variant of the
+# whole build: with shared, each recipe that has a prototype.shared is rolled
+# as its shared variant (build/pkg/pkgbuild.sh), in BUILD_DEPENDS order of
+# that variant, and the userland catalog takes its dependencies from the
+# same values; the recipes without one are rolled as they are. Only the
+# userland, recipes/<name> and catalogs steps see it.
+#
 # Every step but `tools` runs in the build container: outside it, dist.sh
 # runs itself there (AMIX_IMAGE, default amix-toolchain:dist; the media step
 # AMIX_MEDIA_IMAGE, default amix-toolchain:media; CONTAINER, docker or podman),
@@ -97,6 +104,12 @@ for s; do
 	*) echo "[FAIL] unknown step: $s" >&2; usage ;;
 	esac
 done
+
+case ${VARIANT:=static} in
+static|shared) ;;
+*) echo "[FAIL] make dist: VARIANT=$VARIANT: static or shared" >&2; exit 2 ;;
+esac
+export VARIANT
 
 # a relative path is from the top of the checkout, as the top Makefile is
 # called there (make runs this in build/): SYSTEM=../amix-system is beside it
@@ -230,6 +243,7 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	release) inputs="STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS"; settings="STOCK_URL RELEASE_PUBLIC" ;;
 	media) inputs="ROM_MANIFEST PRIVACY_PATTERNS"; settings="RELEASE_PUBLIC SOURCE_DATE_EPOCH" ;;
 	lock) inputs=LOCK ;;
+	userland|recipes/*|catalogs) settings=VARIANT ;;
 	esac
 	for v in $inputs; do
 		eval "p=\${$v:-}"
@@ -259,6 +273,10 @@ release) unset LOCK 2>/dev/null || : ;;
 media) unset LOCK STOCK STOCK_URL RELEASE_PREVIOUS 2>/dev/null || : ;;
 lock) unset STOCK STOCK_URL RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS RELEASE_PUBLIC 2>/dev/null || : ;;
 *) unset LOCK STOCK STOCK_URL RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PATTERNS RELEASE_PUBLIC 2>/dev/null || : ;;
+esac
+case $1 in
+dist|userland|recipes/*|catalogs) ;;
+*) unset VARIANT ;;
 esac
 AMIX_TOP=$top
 . "$here/pkg/layout.sh"
@@ -415,7 +433,16 @@ step_catalogs() {
 		[ -d "$out/$space/pkgs" ] || {
 			echo "[FAIL] catalogs: no out/$space/pkgs; make $space first" >&2; exit 1; }
 		case $space in
-		userland) conf=$top/userland/packages/conf ;;
+		userland)
+			conf=$top/userland/packages/conf
+			# the shared variant's dependencies: its own fragments
+			if [ "$VARIANT" = shared ]; then
+				conf=$out/build/conf-shared
+				rm -rf "${conf:?}"
+				python3 -I "$here/pkg/pkgmeta" fragments --variant shared $(userland_roots) \
+					-o "$conf" >/dev/null
+			fi
+			;;
 		kspace)
 			conf=$top/kernel/conf
 			if [ ! -f "$conf/names.conf" ]; then
@@ -463,33 +490,40 @@ step_kernel() {
 # order (pkgmeta build-order): each after the packages it builds against, or
 # with names only those and what they need; a name that is no package, or a
 # cycle, is refused
-build_order() {
-	_bo_r=
-	for _bo_d in "$top/userland/packages" "$top/userland/base/pkg"; do
-		[ -d "$_bo_d" ] && _bo_r="$_bo_r $_bo_d"
+userland_roots() {	# the userland package directories there are
+	for _ur_d in "$top/userland/packages" "$top/userland/base/pkg"; do
+		[ -d "$_ur_d" ] && echo "$_ur_d"
 	done
+	return 0
+}
+
+build_order() {
+	_bo_r=$(userland_roots)
 	if [ -z "$_bo_r" ]; then
 		[ $# -eq 0 ] || { echo "[FAIL] userland: no userland package $1" >&2; exit 1; }
 		return 0
 	fi
-	_bo=$(python3 -I "$here/pkg/pkgmeta" build-order $_bo_r \
+	_bo=$(python3 -I "$here/pkg/pkgmeta" build-order --variant "$VARIANT" $_bo_r \
 		$(for n; do printf ' --for %s' "$n"; done) 2>&1) || {
 		echo "$_bo" | sed 's/^pkgmeta: /[FAIL] userland: /' >&2; exit 1; }
 	echo "$_bo"
 }
 
 roll_recipe() {	# roll_recipe <package dir>
+	_rr=$(basename "$1")
+	# the shared variant builds in <name>-shared (pkgbuild.sh)
+	[ "$VARIANT" = static ] || [ ! -f "$1/prototype.shared" ] || _rr=$_rr-shared
 	AMIX_BUILD_ROOT=$out/build/userland AMIX_GCC14_BUILD_ROOT=$out/build/userland \
-		sh "$here/pkg/pkgbuild.sh" "$1" > "$out/build/userland/$(basename "$1").log" 2>&1 || {
-		tail -20 "$out/build/userland/$(basename "$1").log" >&2
-		echo "[FAIL] userland: $(basename "$1") did not build; log out/build/userland/$(basename "$1").log" >&2
+		sh "$here/pkg/pkgbuild.sh" "$1" > "$out/build/userland/$_rr.log" 2>&1 || {
+		tail -20 "$out/build/userland/$_rr.log" >&2
+		echo "[FAIL] userland: $_rr did not build; log out/build/userland/$_rr.log" >&2
 		exit 1
 	}
 	mkdir -p "$out/userland/pkgs"
 	for p in "$out/build/userland/pkg/"*.pkg; do
 		cmp -s "$p" "$out/userland/pkgs/${p##*/}" 2>/dev/null || cp "$p" "$out/userland/pkgs/"
 	done
-	grep '^pkg ' "$out/build/userland/$(basename "$1")/BUILD.txt" | sed "s|$out/||"
+	grep '^pkg ' "$out/build/userland/$_rr/BUILD.txt" | sed "s|$out/||"
 }
 
 # host_pkgtools: the host pkgmk and pkgtrans every roll uses, make dist's

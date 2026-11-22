@@ -845,6 +845,70 @@ try:
     recipe(cyc, "y", PKG="y", BUILD_DEPENDS='"x"')
     refused("build-order refuses a cycle, naming it", ("build-order", cyc), "BUILD_DEPENDS cycle: x -> y -> x")
 
+    # --- the shared variant: prototype.shared and the SHARED_ values --------------------
+    SPROTO = PROTO + "f none /opt/amix/lib/libfoo.so.1 0755 root bin\n"
+
+    def variant(where, name, sproto=SPROTO, **over):
+        r = recipe(os.path.join(tmp, where), name, PKG=name, **over)
+        write(os.path.join(r, "prototype"), PROTO)
+        if sproto is not None:
+            write(os.path.join(r, "prototype.shared"), sproto)
+        return r
+
+    sh = variant("var", "vgood", SHARED_PKGREV="2.s", SHARED_SUMMARY='"foo, shared"',
+                 SHARED_DESC='"foo with libfoo.so.1"', DEPENDS='"zlib"', SHARED_DEPENDS='"zlib amixrt"',
+                 CONFFILES='"/etc/foo.conf"')
+    rc, out, err = run("check", sh)
+    check("variant: a recipe with prototype.shared and SHARED_PKGREV passes (control)", rc == 0, err)
+    rc, static, err = run("pkginfo", sh)
+    check("variant: pkginfo is the static one by default",
+          rc == 0 and "\nVERSION=2.8.1-2\n" in static and "NAME=GNU diffutils 2.8.1\n" in static
+          and "\nCLASSES=none conffile\n" in static, err or static)
+    rc, out, err = run("pkginfo", "--variant", "static", sh)
+    check("variant: --variant static is the default's bytes", rc == 0 and out == static, err or out)
+    rc, out, err = run("pkginfo", "--variant", "shared", sh)
+    check("variant: --variant shared takes SHARED_PKGREV, SHARED_SUMMARY and SHARED_DESC",
+          rc == 0 and "\nVERSION=2.8.1-2.s\n" in out and "NAME=foo, shared\n" in out
+          and "\nDESC=foo with libfoo.so.1\n" in out and "PSTAMP=amix-packages-vgood-2.8.1-2.s-gcc14\n" in out,
+          err or out)
+    rc, out, err = run("catalog", "--variant", "shared", sh, "--md5", "0" * 32, "--size", "1")
+    f = out.split("|")
+    check("variant: the shared catalog line: its version, file name and SHARED_DEPENDS",
+          rc == 0 and f[1] == "2.8.1-2.s" and f[3] == "vgood-2.8.1-2.s.pkg" and f[6] == "zlib,amixrt", err or out)
+    rc, out, err = run("catalog", sh, "--md5", "0" * 32, "--size", "1")
+    f = out.split("|")
+    check("variant: the static catalog line keeps DEPENDS",
+          rc == 0 and f[1] == "2.8.1-2" and f[6] == "zlib", err or out)
+    plain = variant("var", "vplain", None)
+    rc, a, err = run("pkginfo", plain)
+    rc2, b, err2 = run("pkginfo", "--variant", "shared", plain)
+    check("variant: a recipe without prototype.shared gives its static variant for --variant shared",
+          rc == 0 and rc2 == 0 and a == b, err + err2)
+    for name, sproto, over, needle in (
+            ("vnorev", SPROTO, {}, "there is a prototype.shared, but SHARED_PKGREV is not set"),
+            ("vsuffix", SPROTO, {"SHARED_PKGREV": "2s"}, "SHARED_PKGREV=2s is not PKGREV, a dot and a lowercase word"),
+            ("vother", SPROTO, {"SHARED_PKGREV": "3.s"}, "SHARED_PKGREV=3.s is not PKGREV=2 and a suffix"),
+            ("vnoproto", None, {"SHARED_DESC": '"x"'}, "SHARED_DESC is set, but there is no prototype.shared"),
+            ("vconf", PROTO.replace("f none /etc/foo.conf", "f none /etc/bar.conf"),
+             {"SHARED_PKGREV": "2.s", "CONFFILES": '"/etc/foo.conf"'},
+             "prototype.shared: CONFFILES: /etc/foo.conf is not in the prototype"),
+            ("vpipe", SPROTO, {"SHARED_PKGREV": "2.s", "SHARED_DESC": '"a|b"'},
+             "SHARED_DESC holds '|'")):
+        refused("variant: check refuses %s" % name, ("check", variant("varbad", name, sproto, **over)), needle)
+    vb = os.path.join(tmp, "vbo")
+    for name, deps, sdeps in (("p", "", ""), ("q", "", ""), ("r", "p", "q")):
+        variant("vbo", name, SHARED_PKGREV="2.s", BUILD_DEPENDS='"%s"' % deps,
+                SHARED_BUILD_DEPENDS='"%s"' % sdeps)
+    rc, out, err = run("build-order", "--variant", "shared", vb, "--for", "r")
+    check("variant: build-order --variant shared follows SHARED_BUILD_DEPENDS",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["q", "r"], out + err)
+    rc, out, err = run("build-order", vb, "--for", "r")
+    check("variant: build-order keeps BUILD_DEPENDS for the static variant",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["p", "r"], out + err)
+    rc, out, err = run("fragments", "--variant", "shared", os.path.join(tmp, "var"))
+    check("variant: fragments --variant shared writes SHARED_DEPENDS into deps.conf",
+          rc == 0 and "\nvgood: zlib,amixrt\n" in out, err or out)
+
     # --- a gate over nothing is no gate ------------------------------------------------
     os.makedirs(os.path.join(tmp, "nothing-built"))
     refused("guard over an empty directory is refused", ("guard", os.path.join(tmp, "nothing-built")), "nothing was checked")

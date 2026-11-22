@@ -6,9 +6,10 @@
 """Generate and check package metadata from package.sh.
 
 Commands:
-  check RECIPE|ROOT...      validate recipes; the ROOTs (directories of recipe
-                            directories) also get the one-version guard,
-                            over all of them together
+  check RECIPE|ROOT...      validate recipes, both variants of one that has
+                            a prototype.shared; the ROOTs (directories of
+                            recipe directories) also get the one-version
+                            guard, over all of them together
   pkginfo RECIPE            the pkginfo(4) the roll packs
   catalog RECIPE (--pkg FILE | --md5 HEX --size N) [--filename PATH]
                             the package's catalog v1 line
@@ -39,6 +40,12 @@ Commands:
                             (otherwise in the ROOTs' order); with --for, only
                             those packages and what they need; refused on a
                             name that is no package, or on a cycle
+
+pkginfo, catalog, fragments and build-order take --variant static|shared
+(default static): shared is the variant of a recipe with a prototype.shared,
+with the SHARED_ values of its package.sh (SHARED_PKGREV, SHARED_SUMMARY,
+SHARED_DESC, SHARED_DEPENDS, SHARED_BUILD_DEPENDS); a recipe without one
+gives its static variant.
 
 A RECIPE is a directory holding package.sh; a ROOT is a directory whose
 subdirectories are recipes (userland/packages, userland/base/pkg). The ROOTs
@@ -74,7 +81,9 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
             ("PREBUILT", ""), ("FORKPIN", ""), ("FORKDIRS", ""), ("MAN_REPLACES", ""),
-            ("STOCK_PATCHED", ""))
+            ("STOCK_PATCHED", ""),
+            ("SHARED_PKGREV", ""), ("SHARED_SUMMARY", ""), ("SHARED_DESC", ""),
+            ("SHARED_DEPENDS", ""), ("SHARED_BUILD_DEPENDS", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
 
 # The closed category list: one catalog group per package.
@@ -85,6 +94,16 @@ CATEGORIES = ("system", "network", "utility", "archive", "library", "shell",
 # sets, and extra (the add-on userland).
 SETS = ("base", "minimal", "standard", "full", "developer", "x11", "extra")
 TOOLCHAINS = ("gcc14", "period", "none")
+
+# The variants a recipe builds (VARIANT): static, and shared for a recipe
+# with a prototype.shared beside its prototype. The shared one is the same
+# package (PKG, name, conffiles, source, epoch) at another version: it takes
+# each SHARED_ value that is set in place of its key, and that prototype.
+VARIANTS = ("static", "shared")
+SHARED_PROTO = "prototype.shared"
+SHARED_KEYS = (("PKGREV", "SHARED_PKGREV"), ("SUMMARY", "SHARED_SUMMARY"),
+               ("DESC", "SHARED_DESC"), ("DEPENDS", "SHARED_DEPENDS"),
+               ("BUILD_DEPENDS", "SHARED_BUILD_DEPENDS"))
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
 VENDOR = "amix-packages"
@@ -144,6 +163,29 @@ def forkdirs_problems(recipe, value):
             out.append("FORKDIRS: %s is named twice as a path in the tree" % to)
         seen.add(to.rstrip("/"))
     return out
+
+
+def has_shared(recipe):
+    return os.path.isfile(os.path.join(recipe, SHARED_PROTO))
+
+
+def variant_view(recipe, m, variant):
+    """package.sh's values for VARIANT: shared, for a recipe with a
+    prototype.shared, takes each SHARED_ value that is set and that
+    prototype; anything else is the recipe's static variant."""
+    v = dict(m)
+    if variant == "shared" and has_shared(recipe):
+        for k, s in SHARED_KEYS:
+            if m[s]:
+                v[k] = m[s]
+        v["_PROTO"], v["_VARIANT"] = SHARED_PROTO, "shared"
+    else:
+        v["_PROTO"], v["_VARIANT"] = "prototype", "static"
+    return v
+
+
+def proto_name(m):
+    return m.get("_PROTO", "prototype")
 
 
 def sh_quote(s):
@@ -253,10 +295,10 @@ def kspace_prototypes(tree):
     return out
 
 
-def prototype_objects(recipe):
+def prototype_objects(recipe, name="prototype"):
     """(ftype, class, path, target) for every object line of RECIPE's
-    prototype, or None when it has no prototype."""
-    proto = os.path.join(recipe, "prototype")
+    prototype (or prototype.shared), or None when it has none."""
+    proto = os.path.join(recipe, name)
     if not os.path.isfile(proto):
         return None
     out = []
@@ -485,7 +527,7 @@ def replaces_problems(m, objs):
 def prototype_problems(recipe, m):
     """The CONFFILES and run-level link checks against the prototype."""
     out = []
-    objs = prototype_objects(recipe)
+    objs = prototype_objects(recipe, proto_name(m))
     conf = words(m["CONFFILES"])
     if conf and objs is None:
         return ["CONFFILES is set, but there is no prototype to check it against"]
@@ -500,7 +542,7 @@ def prototype_problems(recipe, m):
         if c.startswith("/") and not c.startswith(roots):
             out.append("CONFFILES: %s is not under /etc, /var or PREFIX=%s" % (c, m["PREFIX"]))
     if objs is not None:
-        out += shared_dir_problems(os.path.join(recipe, "prototype"))
+        out += shared_dir_problems(os.path.join(recipe, proto_name(m)))
     if m["MAN_REPLACES"] and objs is None:
         out.append("MAN_REPLACES is set, but there is no prototype to check it against")
     out += replaces_problems(m, objs or ())
@@ -604,7 +646,7 @@ def man_warnings(recipe, m):
     (link.d(4) for /etc/inet/link.d/aen), and a STOCK_ETC file by the stock
     page of its name (inittab(4)); a stock binary the package replaces by the
     page MAN_REPLACES names (/usr/sbin/tar by heirloom-tar(1))."""
-    objs = prototype_objects(recipe) or []
+    objs = prototype_objects(recipe, proto_name(m)) or []
     pages = set()
     for ftype, _, path, _ in objs:
         d = path.split("/")
@@ -712,7 +754,7 @@ def problems(recipe, m):
     for s in m["SET"].split():
         if s not in SETS:
             out.append("SET: unknown set '%s' (known: %s)" % (s, " ".join(SETS)))
-    for k in ("SUMMARY", "DESC", "APKG_DESC"):
+    for k in ("SUMMARY", "DESC", "APKG_DESC", "SHARED_SUMMARY", "SHARED_DESC"):
         if "\n" in m[k]:
             out.append("%s must be one line" % k)
         if "|" in m[k]:
@@ -734,20 +776,45 @@ def problems(recipe, m):
     if m["TOOLCHAIN"] not in TOOLCHAINS:
         out.append("TOOLCHAIN=%s -- known: %s"
                    % (m["TOOLCHAIN"], ", ".join(TOOLCHAINS)))
-    for k in ("DEPENDS", "BUILD_DEPENDS"):
+    for k in ("DEPENDS", "BUILD_DEPENDS", "SHARED_DEPENDS", "SHARED_BUILD_DEPENDS"):
         for d in words(m[k]):
             if not TOKEN_RE.match(d):
                 out.append("%s: '%s' is not a package name" % (k, d))
     out += prototype_problems(recipe, m)
+    out += shared_problems(recipe, m)
     return out
 
 
-def load(recipe):
+def shared_problems(recipe, m):
+    """The shared variant's own checks: its version, and prototype.shared
+    against package.sh as the prototype is."""
+    if not has_shared(recipe):
+        return ["%s is set, but there is no %s" % (s, SHARED_PROTO)
+                for _, s in SHARED_KEYS if m[s]]
+    out = []
+    rev = m["SHARED_PKGREV"]
+    # PKGREV, a dot, a lowercase word: apkg's vercmp splits at the dot, so
+    # the word is a segment of its own, past the static PKGREV and before
+    # PKGREV+1 at any width (14s would sort 9s above 10 and 10s below 9s)
+    if not rev:
+        out.append("there is a %s, but SHARED_PKGREV is not set" % SHARED_PROTO)
+    elif not re.match(r"^[0-9]+\.[a-z]+$", rev):
+        out.append("SHARED_PKGREV=%s is not PKGREV, a dot and a lowercase word "
+                   "(%s.s)" % (rev, m["PKGREV"] or "14"))
+    elif rev.split(".")[0] != m["PKGREV"]:
+        out.append("SHARED_PKGREV=%s is not PKGREV=%s and a suffix"
+                   % (rev, m["PKGREV"]))
+    out += ["%s: %s" % (SHARED_PROTO, b) for b in
+            prototype_problems(recipe, variant_view(recipe, m, "shared"))]
+    return out
+
+
+def load(recipe, variant="static"):
     m = source(recipe)
     bad = problems(recipe, m)
     if bad:
         raise Refused("\n".join("%s: %s" % (recipe, b) for b in bad))
-    return m
+    return variant_view(recipe, m, variant)
 
 
 def recipes(root):
@@ -758,14 +825,15 @@ def recipes(root):
             if os.path.isfile(os.path.join(root, d, "package.sh"))]
 
 
-def load_roots(roots):
+def load_roots(roots, variant="static"):
     """(recipe, package.sh values) for every recipe of the ROOTs, checked,
-    plus the one-version guard over all of them: the ROOTs are one catalog."""
+    plus the one-version guard over all of them: the ROOTs are one catalog.
+    The values are VARIANT's (variant_view)."""
     errors, loaded, where = [], [], {}
     for root in roots:
         for r in recipes(root):
             try:
-                loaded.append((r, load(r)))
+                loaded.append((r, load(r, variant)))
             except Refused as e:
                 errors.append(str(e))
     for r, m in loaded:
@@ -839,7 +907,7 @@ def pkginfo(m, recipe):
     return ("PKG=%s\nNAME=%s\nARCH=%s\nVERSION=%s\nCATEGORY=%s\n"
             "CLASSES=%s\nVENDOR=%s\nPSTAMP=%s-%s-%s-%s\n%s%sDESC=%s\n"
             % (m["PKG"], m["SUMMARY"], ARCH, v, m["CATEGORY"],
-               " ".join(classes(m, prototype_objects(recipe))), VENDOR,
+               " ".join(classes(m, prototype_objects(recipe, proto_name(m)))), VENDOR,
                VENDOR, m["PKG"], v, m["TOOLCHAIN"],
                "APKG_DESC=%s\n" % m["APKG_DESC"] if m["APKG_DESC"] else "",
                "APKG_ESSENTIAL=yes\n" if m["ESSENTIAL"] == "yes" else "",
@@ -1040,14 +1108,17 @@ def main(argv):
     p.add_argument("paths", nargs="+")
     p = sub.add_parser("pkginfo")
     p.add_argument("recipe")
+    p.add_argument("--variant", choices=VARIANTS, default="static")
     p = sub.add_parser("catalog")
     p.add_argument("recipe")
+    p.add_argument("--variant", choices=VARIANTS, default="static")
     p.add_argument("--pkg")
     p.add_argument("--md5")
     p.add_argument("--size", type=int)
     p.add_argument("--filename")
     p = sub.add_parser("fragments")
     p.add_argument("roots", nargs="+")
+    p.add_argument("--variant", choices=VARIANTS, default="static")
     p.add_argument("-o", "--output-dir")
     p.add_argument("--check", action="store_true")
     p = sub.add_parser("index")
@@ -1063,6 +1134,7 @@ def main(argv):
     p = sub.add_parser("build-order")
     p.add_argument("roots", nargs="+")
     p.add_argument("--for", dest="names", action="append")
+    p.add_argument("--variant", choices=VARIANTS, default="static")
     a = ap.parse_args(argv)
 
     if a.cmd == "check":
@@ -1079,14 +1151,16 @@ def main(argv):
             print("pkgmeta: %s ok, %d recipe(s), one version each"
                   % (" ".join(roots), len(ms)))
         for r, m in loaded:
-            miss = man_warnings(r, m)
-            if miss:
-                sys.stderr.write("pkgmeta: warning: %s: no man page for %s\n"
-                                 % (m["NAME"], " ".join(miss)))
+            for v in VARIANTS if has_shared(r) else ("static",):
+                miss = man_warnings(r, variant_view(r, m, v))
+                if miss:
+                    sys.stderr.write("pkgmeta: warning: %s%s: no man page for %s\n"
+                                     % (m["NAME"], " (shared)" if v == "shared" else "",
+                                        " ".join(miss)))
     elif a.cmd == "pkginfo":
-        sys.stdout.write(pkginfo(load(a.recipe), a.recipe))
+        sys.stdout.write(pkginfo(load(a.recipe, a.variant), a.recipe))
     elif a.cmd == "catalog":
-        m = load(a.recipe)
+        m = load(a.recipe, a.variant)
         if a.pkg:
             if a.md5 or a.size is not None:
                 ap.error("--pkg excludes --md5 and --size")
@@ -1105,7 +1179,7 @@ def main(argv):
             ap.error("--filename holds '|' or a newline")
         sys.stdout.write(catalog_line(m, a.recipe, filename, md5, size))
     elif a.cmd == "fragments":
-        frags = fragments([m for _, m in load_roots(a.roots)])
+        frags = fragments([m for _, m in load_roots(a.roots, a.variant)])
         if a.check:
             if not a.output_dir:
                 ap.error("fragments --check needs -o DIR")
@@ -1179,7 +1253,7 @@ def main(argv):
         print("pkgmeta: one version per name: %d package(s) in %s"
               % (len(entries), " ".join(a.paths)))
     elif a.cmd == "build-order":
-        for r in build_order(load_roots(a.roots), a.names):
+        for r in build_order(load_roots(a.roots, a.variant), a.names):
             print(r)
     return 0
 

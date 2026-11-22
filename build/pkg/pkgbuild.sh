@@ -54,12 +54,22 @@
 # sha256 after it; nothing may be compiled, every ELF of the payload must be
 # listed, and the listed ones are gated but never stripped.
 #
+# VARIANT=static (the default) or shared: a recipe with a prototype.shared
+# beside its prototype builds its shared variant with VARIANT=shared, the
+# same package (PKG, conffiles, source, epoch) at version
+# VERSION-SHARED_PKGREV, with SHARED_SUMMARY, SHARED_DESC, SHARED_DEPENDS
+# and SHARED_BUILD_DEPENDS in place of their keys where set, rolled from
+# prototype.shared, in $AMIX_BUILD_ROOT/<NAME>-shared; a BUILD_DEPENDS
+# package's tree is then its shared one where that was built. A recipe
+# without a prototype.shared builds its one variant, static, and says so.
+# The hooks see the variant built as $VARIANT.
+#
 # The shared host tools (build/hosttools: gencat, bdftopcf, mkfontdir, imake,
 # makedepend) go first on PATH, and hosttools.sh refuses a build that ran the
 # build host's own copies (PATH before the build and after the stage, the
 # absolute paths in the build's logs).
 #
-# Outputs: $AMIX_BUILD_ROOT/<NAME>/{src,work,dest,pkgwork,*.log,BUILD.txt}
+# Outputs: $AMIX_BUILD_ROOT/<NAME>[-shared]/{src,work,dest,pkgwork,*.log,BUILD.txt}
 # and $AMIX_BUILD_ROOT/pkg/<PKG>-<VERSION>-<PKGREV>.pkg.
 
 set -e
@@ -94,7 +104,24 @@ python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
 URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT= FORKPIN= FORKDIRS=
 MAN_REPLACES= STOCK_PATCHED=
+SHARED_PKGREV= SHARED_SUMMARY= SHARED_DESC= SHARED_DEPENDS= SHARED_BUILD_DEPENDS=
 . "$HERE/package.sh"
+PROTO=$HERE/prototype BUILDNAME=$NAME
+case ${VARIANT:=static} in
+static) ;;
+shared)
+	if [ -f "$HERE/prototype.shared" ]; then
+		PROTO=$HERE/prototype.shared BUILDNAME=$NAME-shared
+		PKGREV=$SHARED_PKGREV
+		SUMMARY=${SHARED_SUMMARY:-$SUMMARY} DESC=${SHARED_DESC:-$DESC}
+		DEPENDS=${SHARED_DEPENDS:-$DEPENDS} BUILD_DEPENDS=${SHARED_BUILD_DEPENDS:-$BUILD_DEPENDS}
+	else
+		echo "  VARIANT=shared: $NAME has no prototype.shared; its one variant, static, is built"
+		VARIANT=static
+	fi ;;
+*) echo "[FAIL] VARIANT=$VARIANT: static or shared" >&2; exit 2 ;;
+esac
+export VARIANT
 SRCDIR=${SRCDIR:-$NAME-$VERSION}
 if [ -n "$SRCPKG" ]; then
 	SRCTREE=$(cd "$HERE/../$SRCPKG/src" && pwd)
@@ -169,15 +196,25 @@ if [ "$LAYOUT" = amix ]; then
 	}
 fi
 
-BUILD="$AMIX_BUILD_ROOT/$NAME"
+BUILD="$AMIX_BUILD_ROOT/$BUILDNAME"
 SRC="$BUILD/src"
 WORKDIR="$BUILD/work"
 TREE="$WORKDIR/$SRCDIR"
 DEST="$BUILD/dest"
 PKGOUT="$AMIX_BUILD_ROOT/pkg"
 export HERE BUILD TREE DEST
+# dep_tree <package>: the build tree of a BUILD_DEPENDS package: its shared
+# one when this is the shared variant and that was built, else its own
+dep_tree() {
+	if [ $VARIANT = shared ] && [ -d "$AMIX_BUILD_ROOT/$1-shared/dest" ]; then
+		echo "$AMIX_BUILD_ROOT/$1-shared"
+	else
+		echo "$AMIX_BUILD_ROOT/$1"
+	fi
+}
 
-echo "=== $NAME $PKGVERSION ($PKG, $CATEGORY, set $SET, style $STYLE) ==="
+echo "=== $NAME $PKGVERSION ($PKG, $CATEGORY, set $SET, style $STYLE$(
+	[ $VARIANT = static ] || echo ", variant $VARIANT")) ==="
 amix_env_banner
 # the shared host tools (build/hosttools) first on PATH
 [ "$LAYOUT" != amix ] || amix_hosttools_setup || exit 1
@@ -406,7 +443,7 @@ for p in $STOCK_ETC; do
 	echo "  STOCK ok  $p (amix-system, sha256 $want)"
 done
 # the prototype is the payload: every f/d/s line staged, nothing staged unlisted
-awk '$1 ~ /^[fdvesl]$/ && NF >= 3 { p = $3; sub(/=.*$/, "", p); print p }' "$HERE/prototype" | LC_ALL=C sort > "$BUILD/proto.list"
+awk '$1 ~ /^[fdvesl]$/ && NF >= 3 { p = $3; sub(/=.*$/, "", p); print p }' "$PROTO" | LC_ALL=C sort > "$BUILD/proto.list"
 ( cd "$DEST" && find . -mindepth 1 | sed 's|^\.||' ) | LC_ALL=C sort > "$BUILD/dest.list"
 # a directory staged only as a parent of listed paths (/usr and /usr/bin under
 # PREFIX=/usr/local) is the system's, not the package's: not compared
@@ -495,7 +532,8 @@ for b in $BINS; do
 			for d in $rpath; do
 				[ -f "$DEST$d/$n" ] && { l=$DEST$d/$n w="package $d"; break; }
 				for p in $BUILD_DEPENDS; do
-					[ -f "$AMIX_BUILD_ROOT/$p/dest$d/$n" ] && { l=$AMIX_BUILD_ROOT/$p/dest$d/$n w="$p $d"; break; }
+					t=$(dep_tree "$p")
+					[ -f "$t/dest$d/$n" ] && { l=$t/dest$d/$n w="${t##*/} $d"; break; }
 				done
 				[ -n "$l" ] && break
 				[ -f "$AMIX_SYSROOT$d/$n" ] && { l=$AMIX_SYSROOT$d/$n w="sysroot $d"; break; }
@@ -542,13 +580,14 @@ echo
 echo "--- package ---"
 WORK="$BUILD/pkgwork"
 rm -rf "${WORK:?}"; mkdir -p "${WORK:?}"
-python3 -I "$PKGDIR/pkgmeta" pkginfo "$HERE" > "$WORK/pkginfo"
-cp "$HERE/prototype" "$WORK/prototype"
+python3 -I "$PKGDIR/pkgmeta" pkginfo --variant $VARIANT "$HERE" > "$WORK/pkginfo"
+cp "$PROTO" "$WORK/prototype"
 echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 
 {
 	echo "$NAME $PKGVERSION ($PKG) toolchain $AMIX_TOOLCHAIN"
+	[ $VARIANT = static ] || echo "variant $VARIANT (prototype.shared)"
 	[ -z "$SRCTREE" ] || echo "source ${SRCTREE#$TOP/} digest $SRCDIGEST"
 	[ -z "$FORKPIN" ] || echo "source $FORKPIN $_fp_url $_fp_c digest $SRCDIGEST"
 	[ -z "$FD_LINES" ] || echo "${FD_LINES#?}"
@@ -559,7 +598,7 @@ amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 	done
 } > "$BUILD/BUILD.txt"
 sed 's/^/  /' "$BUILD/BUILD.txt"
-python3 -I "$PKGDIR/pkgmeta" catalog "$HERE" --pkg "$PKGOUT/$PKG-$PKGVERSION.pkg" > "$BUILD/catalog.line"
+python3 -I "$PKGDIR/pkgmeta" catalog --variant $VARIANT "$HERE" --pkg "$PKGOUT/$PKG-$PKGVERSION.pkg" > "$BUILD/catalog.line"
 echo "  catalog: $(cat "$BUILD/catalog.line")"
 echo
 echo "=== $NAME $PKGVERSION built ==="

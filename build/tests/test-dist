@@ -111,6 +111,9 @@ try:
     check("media: a SOURCE_DATE_EPOCH that is not seconds is refused",
           rc == 1 and "SOURCE_DATE_EPOCH 'yesterday' is not seconds" in out and not os.path.exists(me), out)
     os.remove(os.path.join(top, "media", "build.sh"))
+    rc, out = run("userland", VARIANT="dynamic")
+    check("VARIANT: anything but static or shared: exit 2",
+          rc == 2 and "VARIANT=dynamic: static or shared" in out, out)
     rc, out = run("recipes/nosuch")
     check("recipes/<name> of no package: refused", rc == 1 and "no userland package nosuch" in out, out)
     # two recipes that build against each other: refused before anything builds
@@ -125,6 +128,22 @@ try:
     rc, out = run("recipes/cx")
     check("recipes/<name>: a BUILD_DEPENDS cycle is refused, named, before any build",
           rc == 1 and "[FAIL] userland: BUILD_DEPENDS cycle: cx -> cy -> cx" in out
+          and "host pkgtools" not in out, out)
+    # the shared variants' order: SHARED_BUILD_DEPENDS, here a cycle of its own
+    shutil.copytree(os.path.join(TOP, "userland", "packages", "diffutils"),
+                    os.path.join(top, "userland", "packages", "cz"))
+    for name, dep in (("cx", "cz"), ("cy", "cx"), ("cz", "cy")):
+        d = os.path.join(top, "userland", "packages", name)
+        shutil.copy(os.path.join(d, "prototype"), os.path.join(d, "prototype.shared"))
+        ps = [l for l in open(os.path.join(d, "package.sh")).read().splitlines()
+              if not l.startswith(("NAME=", "PKG=", "BUILD_DEPENDS="))]
+        pr = [l for l in ps if l.startswith("PKGREV=")][0].split("=")[1].split()[0]
+        write(os.path.join(d, "package.sh"), "\n".join(
+            ps + ["NAME=%s" % name, "PKG=%s" % name, 'BUILD_DEPENDS=""',
+                  "SHARED_PKGREV=%s.s" % pr, 'SHARED_BUILD_DEPENDS="%s"' % dep]) + "\n")
+    rc, out = run("recipes/cx", VARIANT="shared")
+    check("recipes/<name> VARIANT=shared: the order is SHARED_BUILD_DEPENDS's; its cycle is refused",
+          rc == 1 and "[FAIL] userland: BUILD_DEPENDS cycle: cx -> cz -> cy -> cx" in out
           and "host pkgtools" not in out, out)
     shutil.rmtree(os.path.join(top, "userland", "packages"))
 
@@ -487,6 +506,10 @@ clean:
     rc2, out2 = run("catalogs")
     check("catalogs: two runs, the same catalogs",
           rc2 == 0 and all(open(os.path.join(top, "out", s, "catalog")).read() == cats[s] for s in cats), out2)
+    rc3, out3 = run("catalogs", VARIANT="shared")
+    check("catalogs VARIANT=shared: the userland layer is the shared variants' fragments",
+          rc3 == 0 and os.path.isfile(os.path.join(top, "out", "build", "conf-shared", "deps.conf"))
+          and all(open(os.path.join(top, "out", s, "catalog")).read() == cats[s] for s in cats), out3)
     check("catalogs: the staging layer, tools/repo's four confs, is in each pkgs/",
           all(os.path.isfile(os.path.join(top, "out", s, "pkgs", c + ".conf"))
               for s in ("kspace", "userland") for c in ("deps", "names", "cats", "descs")))

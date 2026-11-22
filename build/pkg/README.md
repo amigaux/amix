@@ -59,9 +59,27 @@ so each fact about a package is written in one place.
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools). For the base packages a machine cannot boot without |
 | `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc`, `/var` or the package's own `PREFIX` tree (X's `/opt/amix/X11R6/lib/X11/xinit/xinitrc`), space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, followed by any other class the prototype names, in its order (a device node whose group a conffile creates goes in a class of its own, so pkgadd makes it after that file), and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
+| `SHARED_PKGREV=""` | the shared variant's revision, for a recipe with a `prototype.shared`: `PKGREV`, a dot and a lowercase word (`14.s`, version `6.3-14.s`). apkg compares versions split at `.` and `-`, a numeric segment against a numeric one by number and any other pair as strings, so the word is a segment of its own: above `6.3-14`, below `6.3-15`, at any width. Required with a `prototype.shared`, refused without one |
+| `SHARED_SUMMARY=""`, `SHARED_DESC=""`, `SHARED_DEPENDS=""`, `SHARED_BUILD_DEPENDS=""` | the shared variant's values in place of `SUMMARY`, `DESC`, `DEPENDS` and `BUILD_DEPENDS`, where set |
 
 `pkgmeta` reads `package.sh` by sourcing it with `/bin/sh`, exactly as the
 driver does, so the two never disagree about a value.
+
+### Variants: static and shared
+
+A recipe that builds its libraries both ways has a `prototype.shared` beside
+its `prototype`. `VARIANT=shared` (the driver's environment; `make dist
+VARIANT=shared` for the whole userland) builds that variant: the same package
+(`PKG`, catalog name, conffiles, source and epoch) at version
+`VERSION-SHARED_PKGREV`, with the `SHARED_` values, rolled from
+`prototype.shared` in `<build root>/<name>-shared/`, so the static build tree
+stays as it is. A `BUILD_DEPENDS` package's tree is then its `-shared` one
+where that was built. The hooks see the variant as `$VARIANT` (`static` or
+`shared`), and `BUILD.txt` names it. A recipe without a `prototype.shared`
+builds its one variant, static, under either value, and says so. `pkgmeta
+check` checks both prototypes, and `check-packages` the shared variants'
+`BUILD_DEPENDS` order and versions. Being one package, a box has one variant
+or the other; a catalog holds the variant its build was made with.
 
 A package has one source: the tarball at `URL`, a fork at the commit a
 checkout pin names (`FORKPIN`), or the source in the tree. That is the
@@ -238,6 +256,7 @@ object names all fit s5's 14 bytes must have no two in one directory that
 share their first 14; a package with a longer name is marked UFS-only,
 `APKG_FSTYPE=ufs` in its pkginfo, which apkg refuses to install on s5.
 
-Outputs: `<build root>/<name>/` (the source, the build tree, the staged
-payload, the logs, `BUILD.txt` and `catalog.line`, the package's catalog
-line) and `<build root>/pkg/<PKG>-<VERSION>-<PKGREV>.pkg`.
+Outputs: `<build root>/<name>/` (`<name>-shared/` for the shared variant:
+the source, the build tree, the staged payload, the logs, `BUILD.txt` and
+`catalog.line`, the package's catalog line) and
+`<build root>/pkg/<PKG>-<VERSION>-<PKGREV>.pkg`.
