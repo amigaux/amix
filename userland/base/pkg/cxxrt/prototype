@@ -1,0 +1,8 @@
+i pkginfo
+f none /usr/lib/libstdc++.so.6 0755 root bin
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/cxxrt 0755 root sys
+f none /opt/amix/doc/cxxrt/COPYING.RUNTIME 0644 root bin
+f none /opt/amix/doc/cxxrt/COPYING3 0644 root bin
