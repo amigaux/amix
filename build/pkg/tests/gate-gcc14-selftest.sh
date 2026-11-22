@@ -28,6 +28,10 @@
 #     (the ways into a masked dispatch block; a bound branch after another
 #     conditional branch, the table read through an address register set to
 #     it) and still refuses each with the bound widened, moved or removed;
+#   - scan060-g14.py sizes the second of them position-independent, as in
+#     the shared libstdc++.so.6 (the table's address from a GOT slot
+#     relocated to it, %a5 the GOT), and refuses it with no bound, a slot to
+#     another address, %a5 not the GOT, or the base rewritten;
 #   - scan060-g14.py sizes a table with one instruction between its load and
 #     the jmp by the trusted-by-shape rule, and refuses one that writes the
 #     index, two, a call, and a branch landing there;
@@ -618,6 +622,62 @@ for form in dsn cti; do
 	done
 done
 ok "scan060-g14.py sizes libstdc++'s d_special_name table (x54, by its bls ways in) and ctype<char>::is table (x65, the bound past a blt, the base moveal #T), catches a movep after each; widened, unbounded, other-register, narrower-than-mask, missing, wrong-base and base-rewritten bounds stay untrustworthy"
+
+# The same ctype<char>::is form in the toolchain's shared libstdc++.so.6
+# (276ef49, 2026-11-22): position-independent, the table's address loaded
+# from the GOT, `lea %pc@(GOT),%a5 ; ... ; moveal %a5@(d),%a2', the slot
+# an R_68K_RELATIVE to the table after the jmp; with a 32-bit displacement
+# (as in libstdc++.so.6) and a 16-bit one.  The negatives: the bound branch
+# removed, a slot to the table plus 2, %a5 set to other than the GOT, and
+# the base written on a path back to the dispatch.
+pic_probe() {	# pic_probe <name> <variant> <extra asm string or empty>
+	{
+		printf '%s\n' '__asm__(".text\n.globl swp\n.type swp,@function\nswp:\n"'
+		printf '%s\n' '	"4:\tmovem.l %d2-%d6/%a2/%a5,-(%sp)\n\tlea (%pc, _GLOBAL_OFFSET_TABLE_@GOTPC), %a5\n"'
+		[ "$2" != a5 ] || printf '%s\n' '	"\tlea 2f(%pc),%a5\n"'
+		printf '%s\n' '	"\tmove.l 32(%sp),%d1\n\tmoveq #0,%d2\n"'
+		case "$2" in
+		word) printf '%s\n' '	"\tmove.l 2f@GOT.w(%a5),%a2\n"' ;;
+		slot) printf '%s\n' '	"\tmove.l 5f@GOT(%a5),%a2\n"' ;;
+		*) printf '%s\n' '	"\tmove.l 2f@GOT(%a5),%a2\n"' ;;
+		esac
+		if [ "$2" = nobound ]; then
+			printf '%s\n' '	"3:\tmoveq #64,%d0\n\tcmp.l %d1,%d0\n\tblt.w 9f\n"'
+		else
+			printf '%s\n' '	"3:\tmoveq #64,%d0\n\tcmp.l %d1,%d0\n\tblt.w 9f\n\tbcs.w 9f\n"'
+		fi
+		printf '%s\n' '	"\tadd.l %d1,%d1\n\t.word 0x3032,0x1800\n\t.word 0x4efb,0x0002\n"'
+		printf '%s\n' '	"2:\t.word 4b-2b\n5:\t.rept 64\n\t.word 4b-2b\n\t.endr\n"'
+		[ -z "$3" ] || printf '\t%s\n' "$3"
+		printf '%s\n' '	"\t.fill 0x40,2,0x4e71\n"'
+		if [ "$2" = loop ]; then
+			printf '%s\n' '	"\taddq.l #2,%a2\n\tbra.w 3b\n"'
+		else
+			printf '%s\n' '	"\taddq.l #1,%d2\n\tbra.w 3b\n"'
+		fi
+		printf '%s\n' '	"9:\tmovem.l (%sp)+,%d2-%d6/%a2/%a5\n\t.fill 0x200,2,0x4e71\n\trts\n.size swp,.-swp\n");'
+	} > "$T/$1.c"
+	$CC $AMIX_CFLAGS -fPIC -shared -o "$T/$1" "$T/$1.c" || fail "the PIC switch probe $1 did not build"
+}
+for v in ok word; do
+	pic_probe "libsw-pic-$v.so" $v ''
+	out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/libsw-pic-$v.so") || fail "scan060-g14.py on the PIC $v switch: $out"
+	echo "$out" | grep ' 1 switch tables sized' >/dev/null || fail "scan060-g14.py did not size the PIC $v table: $out"
+done
+pic_probe libsw-pic-movep.so ok '"\t.word 0x074c,0x0056\n"'
+if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/libsw-pic-movep.so"); then
+	fail "scan060-g14.py passed a real movep after the PIC table: $out"
+fi
+echo "$out" | grep 'HITS 1 .*1 switch tables sized' >/dev/null || fail "scan060-g14.py on the PIC movep probe: $out"
+for v in nobound slot a5 loop; do
+	pic_probe "libsw-pic-$v.so" $v ''
+	if out=$(python3 "$G14S" --objdump "$OBJDUMP" "$T/libsw-pic-$v.so"); then
+		fail "scan060-g14.py sized the PIC table with $v: $out"
+	fi
+	echo "$out" | grep UNTRUSTWORTHY >/dev/null && echo "$out" | grep 'no bound check found' >/dev/null ||
+		fail "scan060-g14.py on the PIC $v probe, not 'no bound check found': $out"
+done
+ok "scan060-g14.py sizes libstdc++.so.6's PIC ctype<char>::is table (x65, the base from a GOT slot relocated to it, %a5 the GOT; 32- and 16-bit displacements), catches a movep after it; no bound, a slot to another address, %a5 not the GOT and a base rewritten stay untrustworthy"
 
 # One instruction between the table load and the jmp (libstdc++'s
 # std::__facet_shims::__time_get<char>, CDE 2.5.3, 2026-11-19: `andil #255,
