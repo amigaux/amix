@@ -31,19 +31,29 @@ contiguous memory above a page, so every path cuts at the page:
   (`gen_strategy`), and buffers larger than a page one piece per page
   (`buf_breakup`).
 
-So a disk moves 2 KiB (k30) or 2–4 KiB (k46) per command, and the
-per-command cost (selection, the command and status phases, the
-driver's setup, on the raw path a sleep, a wakeup and a copy) sets the
-throughput whatever the request size. A 16 MiB read is 8192
-commands on k30.
+So a disk moves 2 KiB per command on the raw path of both lines (the
+k46 port leaves `amiga_dma_pageio`'s 2 KiB pieces as they are) and a
+page per command on the block path, and the per-command cost
+(selection, the command and status phases, the driver's setup, on the
+raw path a sleep, a wakeup and a copy) sets the throughput whatever the
+request size.
 
 This contract lets one command carry up to a controller's declared
 maximum, as a list of segments, while every stock driver and every
 module built for an earlier minor sees exactly the commands it sees
 today.
 
-The measured per-command cost on the A4091 line, and the gain it
-predicts, will be added here when they are measured.
+Measured with the A4091 driver on k46:
+- raw I/O goes out as 8192 commands of exactly 2048 bytes per 16 MiB,
+  at every `dd` block size; ufs as 4 KiB commands;
+- on metal a raw read moves 1580 KB/s: about 790 commands a second,
+  1.27 ms per command.
+
+A 64 KiB command replaces 32 of today's raw commands. Where the
+per-command cost dominates, as these figures say it does, that is the
+gain to expect, until the bus or the disk becomes the bound. The bounce
+form (§5) keeps one CPU copy per command; a 2 KiB copy is estimated at a
+few hundred microseconds on an 030, small against 1.27 ms.
 
 ## 2. The extended command, `struct sdcomx`
 
