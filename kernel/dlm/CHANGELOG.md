@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — C4-7 (draft) §1: measured per-command figures (939a6d5b)
+
+The measured per-command figures (k46, A4091 driver: raw 8192 × 2048-byte commands per 16 MiB, ufs 4 KiB; 1580 KB/s, 1.27 ms per command).
+
 ## 2026-11-22 — C4-7 (draft): disk commands with segment lists (06a0ca2f)
 
 struct sdcomx, a stock sdcom followed by a segment list, a flag and a residual, and sd_limits, a controller's limits declared after sd_register through a weak reference. Header sys/sdseg.h; not in the kit or ddi.list until a kernel takes it. kit-test checks the layouts on both lines.
