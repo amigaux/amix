@@ -1,0 +1,503 @@
+Subject: sd_limits, sd_lim, sdqueuex: a disk controller's limits (C4-7)
+
+Contract C4-7, kabi k30.1.6 / k46.1.7.  A controller that registered
+(queuefn, c) with sd_register may attach a struct sdlim to that
+registration from the same _load (sd_limits: EBUSY after sd's first
+open, ENOENT for another module's or no registration, EINVAL for a
+field out of range, each with one console line).  The limits sit in
+dlm_sdlim[] beside dlm_sdreg[]; dlm_sdreg's layout, which sd reads, is
+unchanged, and the backstop sweep removes both.  The core keeps no card
+numbers: sd_lim(card) and sdqueuex(cpx) find a card's registration by
+what the four-card sd's sdcardbase and sdhardwarename return (the
+registration's base and name); two registrations alike get no limits.
+sdqueuex gives the extended command to the card's sl_queue, and
+completes it at once (okay 0, sx_resid nbyte) for a card with none.
+include/sys/sdseg.h is the header the kit ships.  The state harness
+covers each case.
+
+--- a/dlm_ddi.c
++++ b/dlm_ddi.c
+@@ -25,6 +25,14 @@
+ 
+ #include "dlm.h"
+ #include "sys/vfs.h"
++/* struct sdcom needs the stock rico.h's bool and uchar; rico.h itself
++ * (not, and, or, roundup) stays out of the core */
++#define	bool	char
++#define	uchar	unsigned char
++#include "amiga/alien/sd.h"
++#include "sys/sdseg.h"
++#undef	bool
++#undef	uchar
+ 
+ struct ifs_link {			/* struct ifstats begins with its link */
+ 	struct ifs_link	*ifs_next;
+@@ -204,6 +212,8 @@
+ 	for (i = 0; !dlm_sdclosed && i < dlm_nsdreg; )
+ 		if ((unsigned long)dlm_sdreg[i].sr_f >= lo && (unsigned long)dlm_sdreg[i].sr_f < hi) {
+ 			dlm_sdreg[i] = dlm_sdreg[--dlm_nsdreg];
++			dlm_sdlim[i] = dlm_sdlim[dlm_nsdreg];
++			dlm_sdlim[dlm_nsdreg] = 0;
+ 			n++;
+ 		} else
+ 			i++;
+@@ -246,6 +256,7 @@
+ 		printf("sd: too many controllers\n");
+ 		return ENOSPC;
+ 	}
++	dlm_sdlim[dlm_nsdreg] = 0;
+ 	r = &dlm_sdreg[dlm_nsdreg++];
+ 	r->sr_f = f;
+ 	r->sr_c = c;
+@@ -266,6 +277,104 @@
+ 	return dlm_nsdreg;
+ }
+ 
++/*
++ * sd_limits, sd_lim, sdqueuex (C4-7, k30.1.6, k46.1.7).  A controller
++ * that registered (queuefn, c) may attach limits to that registration in
++ * the same _load (sd_limits); dd asks a card's limits after sd's first
++ * open (sd_lim) and queues the extended command to the card's sl_queue
++ * (sdqueuex).  The core keeps no card numbers: sd ranks the table after
++ * dlm_sd_close, and a card is matched to its registration by what sd's
++ * own sdcardbase and sdhardwarename return, which are the registration's
++ * base and name.  Registrations alike in both get no limits.
++ */
++struct sdlim	*dlm_sdlim[DLM_SDREG];	/* dlm_sdreg[i]'s limits, or 0 */
++extern char	*sdcardbase(), *sdhardwarename();
++
++#define	POW2(v)		((v) != 0 && ((v) & ((v) - 1)) == 0)
++
++int
++sd_limits(f, c, l)
++	int (*f)();
++	unsigned c;
++	struct sdlim *l;
++{
++	struct dlm_mod *m = dlm_curmod;
++	int i, e = 0;
++
++	for (i = 0; i < dlm_nsdreg; i++)
++		if (dlm_sdreg[i].sr_f == f && dlm_sdreg[i].sr_c == c)
++			break;
++	if (dlm_sdclosed)
++		e = EBUSY;
++	else if (i == dlm_nsdreg || m == 0 || (unsigned long)f < m->m_run ||
++	    (unsigned long)f >= m->m_run + m->m_size)
++		e = ENOENT;
++	else if (l == 0 || l->sl_ver < 1 || l->sl_queue == 0 ||
++	    (l->sl_flags & ~(SDL_SEG | SDL_ALLRAM)) != 0 ||
++	    l->sl_maxbytes < 512 || l->sl_maxbytes % 512 != 0 || l->sl_maxseg < 1 ||
++	    (!(l->sl_flags & SDL_SEG) && l->sl_maxseg != 1) ||
++	    !POW2(l->sl_align) || l->sl_align > 4096 || !POW2(l->sl_gran) || l->sl_gran > 512 ||
++	    l->sl_pad != 0 || l->sl_reach == 0)
++		e = EINVAL;
++	if (e) {
++		printf("sd: %s: limits refused (%d)\n", i < dlm_nsdreg ? dlm_sdreg[i].sr_name : "?", e);
++		return e;
++	}
++	dlm_sdlim[i] = l;
++	return 0;
++}
++
++/* the registration a card came from, or -1 (none, or two alike) */
++static int
++sdreg_of(card)
++	unsigned card;
++{
++	char *b, *nm;
++	int i, k = -1;
++
++	if (!dlm_sdclosed || card >= DLM_SDREG)
++		return -1;
++	b = sdcardbase(card);
++	nm = sdhardwarename(card);
++	for (i = 0; i < dlm_nsdreg; i++)
++		if (dlm_sdreg[i].sr_base == b && dlm_sdreg[i].sr_name == nm) {
++			if (k >= 0)
++				return -1;
++			k = i;
++		}
++	return k;
++}
++
++/* a card's limits after sd's first open, or 0: dd asks only about a card sdopen took */
++struct sdlim *
++sd_lim(card)
++	unsigned card;
++{
++	int k = sdreg_of(card);
++
++	return k < 0 ? (struct sdlim *)0 : dlm_sdlim[k];
++}
++
++/*
++ * The extended command to its card's sl_queue, as sdqueue gives a stock
++ * one to queuefn.  A card with no limits cannot take it: the command is
++ * completed at once, okay false, nothing transferred.
++ */
++void
++sdqueuex(cpx)
++	struct sdcomx *cpx;
++{
++	int k = sdreg_of(cpx->sx_com.card);
++
++	if (k < 0 || dlm_sdlim[k] == 0) {
++		cpx->sx_com.okay = 0;
++		cpx->sx_resid = cpx->sx_com.nbyte;
++		(*cpx->sx_com.intr)(cpx);
++		return;
++	}
++	(void)(*dlm_sdlim[k]->sl_queue)(dlm_sdreg[k].sr_c, cpx);
++}
++
+ #ifndef DLM_HOST
+ /* the stock entry, wrapped: the hook first, then the native screen code */
+ int
+--- a/dlm.h
++++ b/dlm.h
+@@ -338,6 +338,11 @@
+ extern struct dlm_sdreg dlm_sdreg[];
+ extern int dlm_nsdreg, dlm_sdclosed;
+ extern int sd_register(), dlm_sd_close();
++/* a controller's limits (C4-7): dlm_sdlim[i] beside dlm_sdreg[i] */
++extern struct sdlim *dlm_sdlim[];
++extern int sd_limits();
++extern struct sdlim *sd_lim();
++extern void sdqueuex();
+ extern struct dlm_mod *dlm_curmod;	/* the module whose _load runs */
+ extern int dlm_rootpass;		/* set while marc_root links modules */
+ extern char dlm_static_root[];		/* the kernel's built-in root controllers (mkident) */
+--- a/include/sys/sdseg.h
++++ b/include/sys/sdseg.h
+@@ -0,0 +1,89 @@
++/*
++ * sdseg.h -- disk commands with segment lists, and a controller's limits
++ * (amix-dlm docs/contracts/C4-7-sd-segments.md): k30.1.6, k46.1.7.  The
++ * module core's (sd_limits, sd_lim, sdqueuex in dlm_ddi.c); the kit
++ * ships it in include/sys/.
++ *
++ * Include after <amiga/alien/rico.h> (bool) and <amiga/alien/sd.h>, whose
++ * struct sdcom this extends without changing it: struct sdcomx begins
++ * with one, and its new fields follow the stock 40 bytes.  A controller
++ * that declares nothing keeps receiving stock commands through its
++ * sd_register queue function; one that declares limits receives struct
++ * sdcomx commands through sl_queue as well (C4-7 section 3.1).
++ *
++ * K&R declarations: the kernel is built with gcc 2.7.2.3 -traditional.
++ * Every field sits on its natural boundary, so the layout is the same
++ * with long aligned to 2 or to 4.
++ *
++ * Copyright (c) 2026 Jussi Alanärä.  MIT licence, see LICENSE.
++ */
++
++#ifndef _SYS_SDSEG_H
++#define _SYS_SDSEG_H
++
++/* one segment: a physical address, as sdcom.addr, and its length */
++struct sdseg {
++	unsigned long	ss_pa;
++	unsigned long	ss_len;		/* > 0 */
++};
++
++/*
++ * The extended command.  With SDX_SEG the data is sx_seg[0 .. sx_nseg-1]
++ * in that order, sx_com.nbyte their sum and sx_com.addr sx_seg[0].ss_pa;
++ * without it, sx_com.addr/nbyte as today.  sx_resid is the number of
++ * bytes not transferred (the landed bytes are the first ones), set by the
++ * driver before it calls sx_com.intr: 0 or nbyte for a driver that knows
++ * only all or nothing.
++ */
++struct sdcomx {
++	struct sdcom	sx_com;		/* the stock command, at offset 0 */
++	unsigned short	sx_flags;	/* 40: SDX_SEG */
++	unsigned short	sx_nseg;	/* 42: 1 .. sl_maxseg, with SDX_SEG */
++	struct sdseg	*sx_seg;	/* 44: the issuer's, until intr returns */
++	unsigned int	sx_resid;	/* 48: bytes not transferred */
++};					/* 52 */
++
++#define	SDX_SEG		0x0001
++
++/*
++ * A controller's limits, given to sd_limits after sd_register: the
++ * module's storage for the kernel's life.  sl_queue's result is ignored,
++ * as sd ignores queuefn's: a controller that cannot run a command
++ * completes it, sx_com.okay 0 and sx_resid nbyte.
++ */
++struct sdlim {
++	unsigned short	sl_ver;		/*  0: SDLIM_VER */
++	unsigned short	sl_flags;	/*  2: SDL_SEG, SDL_ALLRAM */
++	unsigned long	sl_maxbytes;	/*  4: per command, a multiple of 512 */
++	unsigned short	sl_maxseg;	/*  8: 1 without SDL_SEG */
++	unsigned short	sl_align;	/* 10: segment start, a power of two, 1..4096 */
++	unsigned short	sl_gran;	/* 12: segment length, a power of two, 1..512 */
++	unsigned short	sl_pad;		/* 14: 0 */
++	unsigned long	sl_reach;	/* 16: the last physical address the engine reaches */
++	bool		(*sl_queue)();	/* 20: sl_queue(c, struct sdcomx *), result ignored */
++};					/* 24 */
++
++#define	SDLIM_VER	1
++#define	SDL_SEG		0x0001		/* takes SDX_SEG commands */
++#define	SDL_ALLRAM	0x0002		/* reaches all RAM the CPU does (C4-7 3.2) */
++
++/*
++ * sd_limits(queuefn, c, l): root pass, level 7, no sleep, after
++ * sd_register(queuefn, c, ...) returned 0 in the same _load.  0, EBUSY
++ * (registration closed), ENOENT (no such registration of this module),
++ * EINVAL (a field out of range); a refusal leaves today's commands.
++ *
++ * DDI_SD_LIMITS_DECL; once at file scope, then DDI_SD_LIMITS(queuefn, c,
++ * l), with <sys/errno.h>.  The reference is weak, so the module keeps the
++ * minor its other names give it and loads on a kernel before the segment
++ * minor, where the call gives ENOSYS and the controller gets today's
++ * commands.
++ */
++extern int	sd_limits();		/* (bool (*queuefn)(), uint c, struct sdlim *) */
++#define	DDI_SD_LIMITS_DECL \
++	asm(".weak sd_limits"); \
++	static int (*volatile ddi_sdlim)() = sd_limits
++#define	DDI_SD_LIMITS(queuefn, c, l) \
++	(ddi_sdlim ? (*ddi_sdlim)((queuefn), (unsigned int)(c), (l)) : ENOSYS)
++
++#endif /* _SYS_SDSEG_H */
+--- a/test/dlmhost.h
++++ b/test/dlmhost.h
+@@ -82,6 +82,7 @@
+ extern short prt_where;
+ extern struct cred *crget();
+ extern int nosys(), nodev();
++extern char *host_sdbase[], *host_sdname[];
+ 
+ struct execsw {
+ 	short	*exec_magic;
+--- a/test/hostk.c
++++ b/test/hostk.c
+@@ -48,6 +48,23 @@
+ 	return ENODEV;
+ }
+ 
++/* sd's card accessors, as sd ranked the cards (sd_lim, sdqueuex: C4-7) */
++char	*host_sdbase[4], *host_sdname[4];
++
++char *
++sdcardbase(card)
++	unsigned card;
++{
++	return host_sdbase[card & 3];
++}
++
++char *
++sdhardwarename(card)
++	unsigned card;
++{
++	return host_sdname[card & 3];
++}
++
+ char *
+ kmem_zalloc(n, f)
+ 	size_t n;
+--- a/test/include/amiga/alien/rico.h
++++ b/test/include/amiga/alien/rico.h
+@@ -0,0 +1,5 @@
++/* the harness's stand-in for the stock rico.h: bool and uchar only */
++#ifndef bool
++#define	bool		char
++#endif
++typedef unsigned char	uchar;
+--- a/test/include/amiga/alien/sd.h
++++ b/test/include/amiga/alien/sd.h
+@@ -0,0 +1,13 @@
++/*
++ * the harness's stand-in for the stock struct sdcom (amiga/alien/sd.h):
++ * the members the core touches, host-sized; the layout on the box is the
++ * stock header's, which dlmoffs.c measures
++ */
++struct sdcom {
++	struct sdcom	*next;
++	bool		reading, okay;
++	uchar		status, cdb[12];
++	char		*addr;
++	unsigned	nbyte, card, unit;
++	void		(*intr)();
++};
+--- a/test/mkmods.py
++++ b/test/mkmods.py
+@@ -121,6 +121,12 @@
+ mod('sr4', extra=['rank=zorro'])
+ mod('srbad', extra=['rank=scsi'])
+ 
++# sd_limits (C4-7): sl1 zorro (two boards, limits on one), sl2 zorro
++# (names sl1's entry), sl3 ide (its _load fails after declaring limits)
++mod('sl1', extra=['rank=zorro'])
++mod('sl2', extra=['rank=zorro'])
++mod('sl3', extra=['rank=ide'])
++
+ 
+ # vfs_register (C4-6): each fs module has <p>_init and <p>_ops.
+ # vf1 registers its own type; vf2 a name not its fs=; vf3 the stock ufs;
+--- a/test/state.c
++++ b/test/state.c
+@@ -13,6 +13,9 @@
+ 
+ #include "dlm.h"
+ #include "sys/vfs.h"
++#include "amiga/alien/rico.h"
++#include "amiga/alien/sd.h"
++#include "sys/sdseg.h"
+ 
+ extern char *host_root;
+ extern long host_kbytes;
+@@ -1427,6 +1430,145 @@
+ 	dlm_devload = odev;
+ }
+ 
++/* ---- sd_limits, sd_lim, sdqueuex (C4-7) ---- */
++static int	sl_e[8], sl_n, sl_qc, sl_qn, sl_in;
++static unsigned	sl_qcard;
++static struct sdcomx	*sl_qp;
++
++static bool
++sl_queue(c, cpx)
++	unsigned c;
++	struct sdcomx *cpx;
++{
++	sl_qc = c;
++	sl_qp = cpx;
++	sl_qn++;
++	cpx->sx_com.okay = 1;
++	cpx->sx_resid = 0;
++	(*cpx->sx_com.intr)(cpx);
++	return 1;
++}
++
++static void
++sl_intr(cpx)
++	struct sdcomx *cpx;
++{
++	sl_in++;
++	sl_qcard = cpx->sx_com.card;
++}
++
++static struct sdlim	sl_good = { SDLIM_VER, SDL_SEG, 65536, 16, 4, 4, 0, 0xFFFFFFFF, sl_queue };
++static struct sdlim	sl_bad = { SDLIM_VER, 0, 65536, 2, 4, 4, 0, 0xFFFFFFFF, sl_queue };	/* 2 segments, no SDL_SEG */
++static struct sdlim	sl_one = { SDLIM_VER, 0, 65536, 1, 1, 1, 0, 0x00FFFFFF, sl_queue };
++
++static int (*sl_f1)();		/* sl1's queue entry */
++
++int
++h_sl1(m, a, b)
++	char *m, *a;
++	long b;
++{
++	struct dlm_mod *dm = (struct dlm_mod *)m;
++
++	sl_f1 = (int (*)())modsym(dm, "sl1_load");
++	sl_e[sl_n++] = sr_reg(m, 2, 0);
++	sl_e[sl_n++] = sr_reg(m, 2, 1);
++	sl_e[sl_n++] = sd_limits(sl_f1, 0, &sl_good);	/* 0 */
++	sl_e[sl_n++] = sd_limits(sl_f1, 1, &sl_bad);	/* EINVAL */
++	sl_e[sl_n++] = sd_limits(sl_f1, 5, &sl_good);	/* ENOENT: no board 5 */
++	return 0;
++}
++
++int
++h_sl2(m, a, b)
++	char *m, *a;
++	long b;
++{
++	sl_e[sl_n++] = sd_limits(sl_f1, 1, &sl_one);	/* ENOENT: sl1's, not ours */
++	return 0;
++}
++
++int
++h_sl3(m, a, b)
++	char *m, *a;
++	long b;
++{
++	struct dlm_mod *dm = (struct dlm_mod *)m;
++
++	sl_e[sl_n++] = sr_reg(m, 4, 0);
++	sl_e[sl_n++] = sd_limits((int (*)())modsym(dm, "sl3_load"), 0, &sl_one);
++	return EIO;				/* fails after declaring limits */
++}
++
++void
++sdlim_tests()
++{
++	struct dlm_sdreg *t;
++	struct sdcomx x;
++	int i1, i2, i3, b0, b1, n;
++
++	host_handler("sl1_load", h_sl1);
++	host_handler("sl2_load", h_sl2);
++	host_handler("sl3_load", h_sl3);
++	check(sd_limits(nodev, 0, &sl_good) == ENOENT, "sd_limits: outside a module's _load -> ENOENT");
++	sl_n = 0;
++	check(modload("sl1", &i1) == 0 && sl_e[0] == 0 && sl_e[1] == 0 && sl_e[2] == 0,
++	    "sd_limits: after sd_register in the same _load -> 0");
++	check(sl_e[3] == EINVAL, "sd_limits: two segments without SDL_SEG -> EINVAL");
++	check(sl_e[4] == ENOENT, "sd_limits: a board the module did not register -> ENOENT");
++	check(dlm_nsdreg == 2 && dlm_sdlim[0] == &sl_good && dlm_sdlim[1] == 0,
++	    "sd_limits: the limits sit beside their registration; a refusal leaves none");
++	check(modload("sl2", &i2) == 0 && sl_e[5] == ENOENT && dlm_sdlim[1] == 0,
++	    "sd_limits: another module's registration -> ENOENT");
++	sl_n = 0;
++	check(modload("sl3", &i3) == EIO && !byname("sl3") && sl_e[0] == 0 && sl_e[1] == 0 &&
++	    dlm_nsdreg == 2 && dlm_sdlim[2] == 0,
++	    "sd_limits: a _load that fails after declaring limits leaves neither entry");
++	check(sd_lim(0) == 0, "sd_lim: before sd's first open -> 0");
++
++	/* sd ranks: card 0 is board 1 (no limits), card 1 board 0 */
++	n = dlm_sd_close(&t);
++	b0 = t[0].sr_c == 0 ? 0 : 1;
++	b1 = 1 - b0;
++	host_sdbase[0] = t[b1].sr_base;
++	host_sdname[0] = t[b1].sr_name;
++	host_sdbase[1] = t[b0].sr_base;
++	host_sdname[1] = t[b0].sr_name;
++	check(n == 2 && sd_lim(1) == &sl_good && sd_lim(0) == 0 && sd_lim(5) == 0,
++	    "sd_lim: a card's limits by sdcardbase and sdhardwarename; 0 for a card without");
++	check(sd_limits(sl_f1, 0, &sl_good) == EBUSY, "sd_limits: after sd's first open -> EBUSY");
++
++	bzero((caddr_t)&x, sizeof x);
++	x.sx_com.card = 1;
++	x.sx_com.nbyte = 4096;
++	x.sx_com.intr = sl_intr;
++	x.sx_resid = 4096;
++	sl_qn = sl_in = 0;
++	sl_qc = -1;
++	sdqueuex(&x);
++	check(sl_qn == 1 && sl_qc == 0 && sl_qp == &x && sl_in == 1 && x.sx_com.okay && x.sx_resid == 0,
++	    "sdqueuex: the card's sl_queue gets the board index and the command");
++	x.sx_com.card = 0;
++	x.sx_com.okay = 1;
++	x.sx_resid = 0;
++	sl_qn = sl_in = 0;
++	sdqueuex(&x);
++	check(sl_qn == 0 && sl_in == 1 && sl_qcard == 0 && !x.sx_com.okay && x.sx_resid == 4096,
++	    "sdqueuex: a card without limits completes the command at once, okay 0, resid nbyte");
++
++	/* two registrations alike in base and name: none of them has limits */
++	t[b1].sr_base = t[b0].sr_base;
++	t[b1].sr_name = t[b0].sr_name;
++	host_sdbase[0] = t[b0].sr_base;
++	host_sdname[0] = t[b0].sr_name;
++	check(sd_lim(1) == 0 && sd_lim(0) == 0, "sd_lim: two registrations alike -> 0 for both");
++
++	dlm_sdclosed = dlm_nsdreg = 0;
++	dlm_sdlim[0] = dlm_sdlim[1] = 0;
++	moduload(i2);
++	moduload(i1);
++}
++
+ /* ---- block rows (30 section 2 patch 7) ---- */
+ void
+ blk_tests()
+@@ -2496,6 +2638,7 @@
+ 	nosleep_tests();
+ 	blk_tests();
+ 	sdreg_tests();
++	sdlim_tests();
+ 	post_tests();
+ 	intr_tests();
+ 	kinfo_tests();

@@ -454,11 +454,20 @@ for IMG; do
 	awk '$2=="func" {printf "\t.text\n\t.globl\t%s\n%s:\n\trts\n", $1, $1}
 	     $2=="data" {printf "\t.data\n\t.globl\t%s\n%s:\n\t.long\t0\n", $1, $1}' \
 		"$A/stubbed" > "$A/stubs.s"
+	# sd_lim and sdqueuex (core 0059, C4-7) ask the four-card sd's
+	# sdcardbase (k30: sd.c.in; k46: the port's sdcardbase040.s), which a
+	# base older than the four-card sd lacks: stubbed here (no card) and
+	# said, not failed
+	basesd=
+	if grep -qx sdcardbase "$B/obj/dlm.undef" && ! grep -qx sdcardbase "$A/defined"; then
+		basesd=sdcardbase
+		printf '\t.text\n\t.globl\tsdcardbase\nsdcardbase:\n\tclrl\t%%d0\n\tsubal\t%%a0,%%a0\n\trts\n' >> "$A/stubs.s"
+	fi
 	m68k-cbm-sysv4-as -o "$A/stubs.o" "$A/stubs.s"
 	if [ -s "$A/lost" ]; then	# a lost provider fails the run (stubbed only so later checks run)
 		fail "$K: allowlisted names with no provider in the spliced kernel: $(awk '{printf "%s ", $1}' "$A/lost")"
 	else
-		pass "$K: every allowlisted name has its real provider in the spliced kernel${portdma:+ (the port's dma_cache040.o defines ${portdma% }, stubbed in this base)}"
+		pass "$K: every allowlisted name has its real provider in the spliced kernel${portdma:+ (the port's dma_cache040.o defines ${portdma% }, stubbed in this base)}${basesd:+; sdcardbase, the four-card sd's, stubbed in this older base}"
 	fi
 	python3 "$R/tools/mkident.py" --asm $LINE $KABI 0x60000 > "$A/ident.s"
 	m68k-cbm-sysv4-as -o "$A/ident.o" "$A/ident.s"
@@ -605,6 +614,30 @@ PY
 		pass "$K: a $K3 claim without the audio patch's flags fails the gate and the fingerprint"
 	else
 		fail "$K: the $K3 claim without the flags: $(cat "$A/abi3n.log"; grep '^FAIL' "$A/gate3n.log")"
+	fi
+	# the line's segment minor (C4-7: k30.1.6, k46.1.7): a kernel that
+	# claims it, with the 1.3 flags, exports sd_limits from this core and
+	# passes the gate and the fingerprint (no new layout lines)
+	KN=$([ $LINE = k46 ] && echo k46.1.7 || echo k30.1.6)
+	python3 "$R/tools/mkident.py" --asm $LINE $KN 0x60000 > "$A/identn.s"
+	"$TB/mkksym" -k $KN -a "$L" -a "$LC" > "$A/ksymn.s" 2> "$A/ksymn.log"
+	for f in identn ksymn; do m68k-cbm-sysv4-as -o "$A/$f.o" "$A/$f.s"; done
+	m68k-cbm-sysv4-ld -r -o "$A/kerneln.o" "$A/spliced.o" "$A/prov.o" "$A/ksymn.o" "$A/identn.o" "$A/stubs.o" "$A/paula3.o"
+	REFN=$R/abi/$LINE/abi-$KN.txt
+	[ "$REF" = "$A/abi-ref.txt" ] && { sed 's/^data cputype 4$/data cputype 0/' "$REFN" > "$A/abi-refn.txt"; REFN=$A/abi-refn.txt; }
+	if "$TB/mkksym" -f "$A/kerneln.o" > "$A/filln.log" 2>&1 &&
+	   python3 "$R/tools/mkident.py" --fill "$A/kerneln.o" > /dev/null &&
+	   python3 "$R/tools/mkabi.py" --check "$REFN" "$A/kerneln.o" "$L" "$DLM/dlm_offs.h" > "$A/abin.log" 2>&1 &&
+	   python3 "$R/tools/ksymgate.py" "$B/test-bin/axrel" "$A/kerneln.o" "$L" "$LC" > "$A/gaten.log" 2>&1 &&
+	   grep -q "sd_limits" "$A/ksymn.s"; then
+		pass "$K: a $KN kernel exports sd_limits: fingerprint as abi-$KN.txt ($(cat "$A/abin.log")), gate $(grep -c '^PASS' "$A/gaten.log") checks"
+	else
+		fail "$K: the $KN kernel: $(cat "$A/filln.log" "$A/abin.log"; grep '^FAIL' "$A/gaten.log")"
+	fi
+	if ! grep -q "sd_limits" "$A/ksym.s"; then
+		pass "$K: the ${LINE}.1.2 kernel's block leaves sd_limits out (a module's weak reference stays 0)"
+	else
+		fail "$K: sd_limits in the ${LINE}.1.2 block"
 	fi
 	# modules against the block as the loader leaves it at 0x08000000
 	python3 "$R/tools/ksymgate.py" --extract "$B/test-bin/axrel" "$A/kernel.o" 0x08000000 "$A/ksym.bin"
