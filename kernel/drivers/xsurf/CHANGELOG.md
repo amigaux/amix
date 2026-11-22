@@ -1,5 +1,9 @@
 # Changelog — kernel/drivers/xsurf
 
+## 2026-11-22 — xsurf 1.0.0-5: xsf re-pinned for gcc14 d5a43a7 (cd90ec0a)
+
+gcc14 d5a43a7 exports environ and _environ from every program, so /usr/sbin/xsf links 20 bytes longer (15088 bytes, a1c0485b; was 38a3bd99), the same code at shifted addresses, and make kspace refused it as unpinned. Package revision 1.0.0-5 of module 1.0.0-4 (module unchanged), rolled in dist 67826aff: xsurf30 6fd48f9c, xsurf46 a8cd1ba7.
+
 ## 2026-11-16 — xsurf 1.0.0-4 (db9167e9..9a479fe4)
 
 The driver follows the link: the X-Surf-100's link state, speed and duplex are read from the chip, a lost link is said once on the console, and transmit timeouts are noted with what the chip showed. The probe was reworked: a longer reset wait, registers tried by byte and then by word, a remote-DMA self-test, and a check that the registers answer; a board that fails is refused with the reason. The probe reads the station-address PROM through the board's data path, so a card whose registers answer only in the low half of a word is accepted. New: `xsf` is packaged (`/usr/sbin/xsf`, through `/dev/xsfctl`) and prints the board, the probe's readings, the link and the counters; pages xsurf(7) and xsf(1M). The packages carry `kbootset=` and need kbootset 1.1.0.261114-45 or later. Module 1.0.0-4 (k30 e8e7cd7a…, k46 b4e8316b…), packages xsurf30 1984592d…, xsurf46 5431d4df…. Host tests: 835, 152 and 53 checks. Run in emulation on the X-Surf-100 in Zorro III and II and on the X-Surf, on both lines, with strict-word, low-half, busy and fault rows, and as an upgrade on an installed 1.1.1; the README's Tested section lists the rows and what users reported from real cards.
