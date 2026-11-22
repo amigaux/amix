@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — image.ref names the build images published from next (f3d03808)
+
+ghcr.io/amigaux/amix-toolchain dist @sha256:67826aff… and media @sha256:2fcf2fea…, built at gcc-cross-amix 33ebadc, gcc14-cross-amix d5a43a7 and amix-system 988b0f8. make tools pulls them; TOOLS_FROM_SOURCE=1 builds the same images.
+
 ## 2026-11-22 — gcc14 pin to the fork's next d5a43a7: the shared C++ runtime (6d18403a)
 
 libstdc++.so.6 in m68k-elf/lib/cxxrt for g++ -shared and -shared-libgcc (one runtime per process, exceptions across libraries), environ and _environ exported from every program, and more of libc in libamixrt for CDE's shared libraries. gcc14-cross-amix.tree is 23591a40; among the pinned files only the specs and libamixrt.so.1 (216fdce0) change; cc1, libgcc.a, libamixc99.a and the init objects stay. image.ref still names the d0082c9 images until a new pair is published.
