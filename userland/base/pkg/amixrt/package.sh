@@ -3,9 +3,9 @@
 NAME=amixrt
 PKG=amixrt
 VERSION=1.0
-PKGREV=4   # -4: gcc14-cross-amix 9d13dcd (release-1.1): __cxa_finalize rebuilt, fold-mem-offsets off
+PKGREV=5   # -5: gcc14-cross-amix 276ef49 (release-1.1): libc's second wave, errno through the GOT (30948 bytes)
 SUMMARY="libamixrt.so.1: the runtime GCC 14 shared libraries need"
-DESC="/usr/lib/libamixrt.so.1, the runtime a shared library built with gcc -shared NEEDs: libamixc99 built position-independent, and gettimeofday, select, truncate, realpath, interval timers and message tables, which libc.so.1 does not export. One copy serves every program that loads such a library."
+DESC="/usr/lib/libamixrt.so.1, the runtime a shared library built with gcc -shared (or the C++ runtime, cxxrt) NEEDs: libamixc99 built position-independent, and what libc.so.1 does not export: gettimeofday, select, truncate, realpath, interval timers, message tables, fpsetround and fpsetsticky, getmntent and getmntany, the getutx* utmpx functions, siglongjmp, sysinfo, syslog (openlog, vsyslog, setlogmask, closelog) and vfork. A failing call stores errno itself, through the GOT (before 1.0-5 the first one left a wrong errno, _cerror's address). One copy serves every program that loads such a library."
 CATEGORY=library
 SET=base
 LICENSE="MIT AND GPL-3.0-or-later WITH GCC-exception-3.1"
