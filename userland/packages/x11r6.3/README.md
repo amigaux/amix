@@ -64,6 +64,37 @@ to 6.3-8's, so the upgrade from 6.3-8 keeps every edit (with `.new` beside it) a
 untouched files as they are, under every apkg. Upgrade with `apkg upgrade x11r63`; do not remove 6.3-8 and install
 the new revision, since removing 6.3-8, which shipped these files as ordinary ones, deletes edits.
 
+## The shared variant
+
+`VARIANT=shared` builds the same package with shared libraries, version `6.3-<PKGREV>.s`
+(`SHARED_PKGREV`), from `prototype.shared` in the build tree `x11r6.3-shared`, to compare memory
+use with the static build. It is the same package (`x11r63`, the same paths and configuration
+files), so a machine has one variant or the other. The hooks take the variant from `$VARIANT`;
+with `VARIANT=static`, the default, the build and its bytes are as before.
+
+- **Plain shared libraries**, made by X11R6.3's own SVR4 rules (`host-shared.def.in`):
+  `libX11.so.6.1`, `libXt.so.6.0`, `libXext.so.6.3`, `libXmu.so.6.0`, `libXaw.so.6.1`,
+  `libSM.so.6.0`, `libICE.so.6.3`, `libXi`, `libXtst`, `libXp`, `liboldX` and `libXIE` (which
+  `xdpyinfo` uses), each the file its soname names with a `lib*.so` link beside it, in
+  `/opt/amix/X11R6/lib`. `libXau`, `libXdmcp`, `libFS` and `libxkbfile` stay static, as upstream
+  builds them. `libPEX5` is left out: nothing uses it, and its `sin`, `cos` and `sqrt` exist on
+  Amix only in the static, non-PIC `libm`.
+- **Each library records the libraries it calls** (`DT_NEEDED`); X11R6.3's SVR4 template names
+  none, so `host-shared.def.in` gives each its `Shared*Reqs`. Programs carry
+  `DT_RPATH /opt/amix/X11R6/lib`. Libraries are linked by the driver's `-shared`, which brings
+  GCC 14's runtime pieces and `libamixrt.so.1` (package `amixrt`) where they are needed.
+- **`libXtInherit.a`**, a stopgap for Amix's runtime linker. A widget class asks to inherit a
+  method by storing `_XtInherit`'s address, and `libXt` compares with that address. A program
+  takes the address through its PLT entry, which the stock runtime linker does not bind
+  `libXt`'s own reference to, so a class defined in a program inherited nothing. Every program is
+  linked with its own `_XtInherit` (`xtinherit.c`, `-Wl,-u,_XtInherit -lXtInherit` ahead of
+  `-lXt`); `libXt` and the other libraries bind to it. A runtime linker that honours a program's
+  canonical PLT address, or programs built without one, would make it unnecessary.
+- **Gates**: no `sym+N@GOT` in a PIC object (`check-got-addend.py`), library names first in
+  `.dynstr` (`check-dynstr-order.py`), and no text relocations (`DT_TEXTREL`) in any library.
+- The build host's tools (`xkbcomp`, `bdftopcf`, `mkfontdir`) are built from the static
+  configuration.
+
 ## Source
 
 `xc-1.tar.gz` (the tree) and `xc-2.tar.gz` (fonts, docs) from

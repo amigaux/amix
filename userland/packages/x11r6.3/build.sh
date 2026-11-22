@@ -3,6 +3,10 @@
 
 ASM_REVIEWED="other platforms' .s files (xfree86, cfb/stip*); none is in an AMIX build"
 
+# the variant pkgbuild builds: static, or shared (prototype.shared, host-shared.def.in)
+X11_VARIANT=${VARIANT:-static}
+G14TOOLS=${AMIX_GCC14_PREFIX:+$AMIX_GCC14_PREFIX/../../tools}
+
 # the X server's one name (host.def's AmixServerName); Xzz9000 and X are hard
 # links to it, and the name it is started under picks its card (README)
 XSERVER=Xrtg
@@ -66,6 +70,11 @@ XCC
 	sed -e "s|@XCC@|$BUILD/xcc|g" -e "s|@XCPP@|$BUILD/xcpp|g" -e "s|@AR@|$AR|g" -e "s|@RANLIB@|$RANLIB|g" -e "s|@AS@|$_b/$AMIX_TARGET-as|g" \
 		-e "s|@LD@|$LD|g" -e "s|@PREFIX@|$PREFIX|g" -e "s|@XSERVER@|$XSERVER|g" -e "s|@SYSROOT@|$AMIX_SYSROOT|g" -e "s|@USRAMIGA@|$AMIX_USR_AMIGA|g" \
 		"$HERE/host.def.in" > config/cf/host.def
+	# the shared variant: plain shared libraries, linked by the driver (host-shared.def.in)
+	if [ "$X11_VARIANT" = shared ]; then
+		cp config/cf/host.def "$BUILD/host.def.static"	# hostx's tools are built static
+		sed -e "s|@PREFIX@|$PREFIX|g" "$HERE/host-shared.def.in" >> config/cf/host.def
+	fi
 	# build-time tools the tree runs on the build host
 	( cd config/imake && make -f Makefile.ini BOOTSTRAPCFLAGS="-DAMIX -DSVR4 -Dm68k" CC="gcc -std=gnu89 -fcommon -w" imake ) > "$BUILD/x-imake.log" 2>&1 || {
 		echo "[FAIL] host imake; see $BUILD/x-imake.log" >&2; exit 1; }
@@ -82,6 +91,14 @@ XCC
 	make -f xmakefile includes > "$BUILD/x-includes.log" 2>&1 || {
 		echo "[FAIL] make includes; see $BUILD/x-includes.log" >&2; exit 1; }
 	hostx
+	# the shared variant: libXtInherit.a (xtinherit.c), which every program links
+	# ahead of libXt (host-shared.def.in's ExtraLoadOptions)
+	if [ "$X11_VARIANT" = shared ]; then
+		mkdir -p exports/lib
+		$CC $AMIX_CFLAGS -fPIC -c -o "$BUILD/xtinherit.o" "$HERE/xtinherit.c" &&
+		rm -f exports/lib/libXtInherit.a && $AR rc exports/lib/libXtInherit.a "$BUILD/xtinherit.o" &&
+		$RANLIB exports/lib/libXtInherit.a || { echo "[FAIL] libXtInherit.a" >&2; exit 1; }
+	fi
 	xmake x-lib.log -C lib
 	xmake x-server.log -C programs/Xserver
 	for c in $XCLIENTS; do
@@ -94,6 +111,16 @@ XCC
 			xmake x-$c.log -C programs/$c
 		fi
 	done
+	# the shared variant: no PIC object may hold sym+N@GOT, which ld links to sym
+	# (gcc14-cross-amix tools/check-got-addend.py)
+	if [ "$X11_VARIANT" = shared ]; then
+		# the shared libraries' objects: each library's directory holds only them
+		_po=$(for _so in $(find lib -name '*.so.*' -type f); do find "$(dirname "$_so")" -maxdepth 1 -name '*.o'; done | LC_ALL=C sort -u)
+		[ -n "$_po" ] || { echo "[FAIL] the shared variant built no PIC objects" >&2; exit 1; }
+		python3 -I "$G14TOOLS/check-got-addend.py" $_po > "$BUILD/x-got-addend.log" 2>&1 || {
+			tail -20 "$BUILD/x-got-addend.log" >&2; echo "[FAIL] check-got-addend" >&2; exit 1; }
+		echo "  X: check-got-addend: $(echo "$_po" | wc -l) PIC objects clean"
+	fi
 	echo "  X: strict counts: $(grep -c 'implicit declaration' "$BUILD/make.log") implicit," \
 		"$(grep -c 'pointer from integer\|integer from pointer' "$BUILD/make.log") pointer/integer," \
 		"$(grep -c ' error: ' "$BUILD/make.log") errors"
@@ -114,6 +141,17 @@ hostx() {
 		( cd "$HX" && patch -p1 --batch --fuzz=0 < "$_hp" ) > /dev/null || {
 			echo "[FAIL] host patch $(basename "$_hp")" >&2; exit 1; }
 	done
+	# the shared variant: the build host's tools from the static configuration
+	if [ "$X11_VARIANT" = shared ]; then
+		cp "$BUILD/host.def.static" "$HX/config/cf/host.def"
+		( set -e
+			for _d in lib/xkbfile lib/Xext lib/X11 lib/font programs/xkbcomp programs/bdftopcf programs/mkfontdir; do
+				( cd "$HX/$_d" && ../../config/imake/imake -I../../config/cf -DTOPDIR=../.. -DCURDIR=$_d )
+			done
+			make -C "$HX/lib/font" Makefiles
+		) > "$BUILD/x-hostx-makefiles.log" 2>&1 < /dev/null || {
+			echo "[FAIL] hostx Makefiles; see $BUILD/x-hostx-makefiles.log" >&2; exit 1; }
+	fi
 	_hxcc="gcc -std=gnu89 -fcommon -fpermissive -w -D_GNU_SOURCE -DLONG64"
 	( set -e
 		for _d in lib/xkbfile lib/Xext lib/X11; do
@@ -151,6 +189,14 @@ stage() {
 	done
 	# the XIE and PEX client libraries: their extensions are not built
 	rm -f -- "${DEST:?}${PREFIX:?}/lib/libXIE.a" "${DEST:?}${PREFIX:?}/lib/libPEX5.a"
+	# the shared variant ships libXtInherit.a, for programs built against it
+	if [ "$X11_VARIANT" = shared ]; then
+		cp exports/lib/libXtInherit.a "$DEST$PREFIX/lib/libXtInherit.a"
+		chmod 0644 "$DEST$PREFIX/lib/libXtInherit.a"
+	fi
+	# the shared variant: libPEX5 too (no client needs it, and its sin/cos/sqrt
+	# would need the static-only libm); xdpyinfo NEEDs libXIE, which stays
+	[ "$X11_VARIANT" != shared ] || rm -f -- "${DEST:?}${PREFIX:?}"/lib/libPEX5.so*
 	for c in $XCLIENTS; do
 		# xkbcomp's data dirs index themselves with xkbcomp -lfhlpR (hostx's), and
 		# rstart's contexts give remote commands the man pages' home after the relayout
@@ -209,4 +255,17 @@ stage() {
 	amix_man_alias Xzz9000 1 "$XSERVER"
 	amix_man "$HERE/man/x11r63.sh.4" 4 x11r63.sh
 	amix_man_whatis
+	# the shared variant: every shared library and dynamic program has its library
+	# names first in .dynstr (gcc14-cross-amix tools/check-dynstr-order.py)
+	if [ "$X11_VARIANT" = shared ]; then
+		_dy=$(cd "$DEST" && find . -type f \( -name '*.so.*' -o -perm -u+x \) | while read -r _f; do
+			"$READELF" -d "$DEST/$_f" 2>/dev/null | grep -q NEEDED && echo "$DEST/$_f"; done | LC_ALL=C sort)
+		[ -n "$_dy" ] || { echo "[FAIL] the shared variant staged no dynamic objects" >&2; exit 1; }
+		python3 -I "$G14TOOLS/check-dynstr-order.py" $_dy > "$BUILD/x-dynstr.log" 2>&1 || {
+			tail -20 "$BUILD/x-dynstr.log" >&2; echo "[FAIL] check-dynstr-order" >&2; exit 1; }
+		# and no text relocations: a shared library's text must stay shared
+		_tr=$(for _f in $_dy; do "$READELF" -d "$_f" | grep -q TEXTREL && echo "$_f"; done; :)
+		[ -z "$_tr" ] || { echo "[FAIL] text relocations (DT_TEXTREL) in:" $_tr >&2; exit 1; }
+		echo "  X: check-dynstr-order: $(echo "$_dy" | wc -l) dynamic objects clean"
+	fi
 }

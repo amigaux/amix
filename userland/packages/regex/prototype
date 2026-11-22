@@ -13,6 +13,8 @@ d none /opt/amix 0755 root sys
 # --- the static library and its header -------------------------------------
 d none /opt/amix/lib 0755 root sys
 f none /opt/amix/lib/libregex.a 0644 root bin
+f none /opt/amix/lib/libregex.so.1 0755 root bin
+s none /opt/amix/lib/libregex.so=/opt/amix/lib/libregex.so.1
 d none /opt/amix/include 0755 root sys
 f none /opt/amix/include/regex.h 0644 root bin
 #

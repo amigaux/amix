@@ -1,0 +1,37 @@
+/*
+ * host-shared.def -- the shared variant's additions (VARIANT=shared), appended
+ * to host.def by build.sh when X11_VARIANT=shared: plain shared libraries,
+ * built by X11R6.3's own SVR4 rules, linked by the driver.
+ */
+/* amix.cf builds static libraries only */
+#undef HasSharedLibraries
+#define HasSharedLibraries YES
+/* gcc -fPIC, and the driver's -shared: it links what a shared library needs
+ * (crti, crtbeginS, -lamixrt as needed, -lgcc, amix_initS, crtendS, crtn),
+ * where sv4Lib.rules' plain ld -G would leave them out */
+#define PositionIndependentCFlags -fPIC
+#define SharedLibraryLoadFlags -shared
+#define LinkWithExports(libname,rev,solist,down,up) \
+	(cd down; $(CC) -o up/$@~ -shared -Wl,-h,$@ -Wl,-rpath,@PREFIX@/lib -Wl,-rpath-link,$(BUILDLIBDIR) solist $(REQUIREDLIBS))
+/* the libraries live in @PREFIX@/lib, not /usr/lib: programs carry its path */
+/* every program takes its own _XtInherit, ahead of libXt's (xtinherit.c says
+ * why): a stopgap for the stock runtime linker */
+#define ExtraLoadOptions -Wl,-u,_XtInherit -L$(BUILDLIBDIR) -lXtInherit
+#undef ExtraLoadFlags
+#define ExtraLoadFlags -Wl,-rpath,@PREFIX@/lib -Wl,-rpath-link,$(BUILDLIBDIR)
+/* each library records the libraries it uses (DT_NEEDED), so a program links
+ * only what it calls: R6.3's SVR4 template names none of these */
+#define SharedX11Reqs -lsocket -lnsl
+#define SharedICEReqs -lsocket -lnsl
+#define SharedSMReqs $(LDPRELIB) $(ICELIB) -lsocket -lnsl
+#define SharedXextReqs $(LDPRELIB) $(XONLYLIB)
+#define SharedOldXReqs $(LDPRELIB) $(XONLYLIB)
+#define SharedXtReqs $(LDPRELIB) $(SMLIB) $(ICELIB) $(XONLYLIB) -lsocket -lnsl
+#define SharedXmuReqs $(LDPRELIB) $(XTOOLLIB) $(XLIB) -lsocket -lnsl
+#define SharedXawReqs $(LDPRELIB) $(XMULIB) $(XTOOLLIB) $(XLIB)
+#define SharedXiReqs $(LDPRELIB) $(XLIB)
+#define SharedXtstReqs $(LDPRELIB) $(XLIB)
+#define SharedXpReqs $(LDPRELIB) $(XLIB)
+#define SharedXieReqs $(LDPRELIB) $(XLIB)
+#define SharedPexReqs $(LDPRELIB) $(XLIB)
+#include <sv4Lib.rules>
