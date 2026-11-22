@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — C4-7 accepted; core 0059; kit k30.1.6 / k46.1.7 (d5e1036e, 17cc5692)
+
+C4-7 version 1, accepted: disk commands with segment lists. Core 0059 adds sd_limits (a controller's limits beside its sd_register entry), sd_lim and sdqueuex for dd; the kit is k30.1.6 / k46.1.7, lists sd_limits, ships sys/sdseg.h (DDI_SD_LIMITS, weak), and keeps the fingerprint texts of the minor before.
+
 ## 2026-11-22 — C4-7 (draft) §1: measured per-command figures (939a6d5b)
 
 The measured per-command figures (k46, A4091 driver: raw 8192 × 2048-byte commands per 16 MiB, ufs 4 KiB; 1580 KB/s, 1.27 ms per command).
