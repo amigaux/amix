@@ -63,15 +63,20 @@ esac
 # bytes as in the container. The earlier pin was a workstation build of the
 # same commit; these four files differ from it by how they were built (see
 # toolchain/README.md), not by source.
-AMIX_GCC14_COMMIT=9d13dcda219bb6b2366c3248e08b40fcc28a89b4
+# 276ef49 (2026-11-22; release-1.1): the shared C++ runtime (libstdc++.so.6,
+# in its own directory, for g++ -shared), libc's second wave in
+# libamixrt.so.1, errno set through the GOT, and environ and _environ
+# exported from every program (the specs): the specs and libamixrt.so.1
+# change, nothing else pinned here.
+AMIX_GCC14_COMMIT=276ef490a22a97f5ff8f22e5a6a84dbe0c77fa51
 AMIX_GCC14_PINS="\
 libexec/gcc/m68k-elf/14.2.0/cc1 10ee4bf556707d7f483fd36a848a4d211f6f696d42e6a5ea861992953b81a356
 lib/gcc/m68k-elf/14.2.0/libgcc.a f271dcd62d64f1ddd334e2592106539cc936a60dc9dbfac5cedc5315de1523cb
 m68k-elf/lib/libamixc99.a 2b91d5062d35f4a6f324ee831b9979b301645f8eceafb0d5dbac51d3e5eb4d39
-lib/gcc/m68k-elf/14.2.0/specs ed28f1683322cfa00528370b699675928c2a7af1f64dbdea6be31ff9c3a1903b
+lib/gcc/m68k-elf/14.2.0/specs 5f61d48351b44038352d51949a5f1a03212942fa203d5badeb0472b32aa44cc4
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 f18b763593c978435e3738c4518b4dcad329e6c2ddc176f8ceb6fc992e61f3ea"
+m68k-elf/lib/amixrt/libamixrt.so.1 216fdce003219b30f43697af548fb30c86680f657d4170908dad5b43c5e73a29"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
