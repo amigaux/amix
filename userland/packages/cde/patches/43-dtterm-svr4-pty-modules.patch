@@ -1,0 +1,45 @@
+DtTerm pushes ptem and ldterm on an SVR4 pty slave.
+
+configure builds TermPrimGetPty-pts.c everywhere but Solaris, and its
+_DtTermPrimSetupPty does nothing.  On SVR4 a pty slave is a bare
+stream until its opener pushes the terminal modules, as the -svr4.c
+variant does, so dtterm's shell found no terminal (no prompt, no echo)
+and ttsnoop's panes printed each line where the last one ended.  On
+SVR4 the slave now gets ptem and ldterm, each unless I_FIND finds it.
+
+--- a/lib/DtTerm/TermPrim/TermPrimGetPty-pts.c
++++ b/lib/DtTerm/TermPrim/TermPrimGetPty-pts.c
+@@ -37,6 +37,9 @@
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <stdlib.h>
++#if defined(SVR4) && !defined(__linux__)
++#include <stropts.h>
++#endif
+ 
+ int
+ _DtTermPrimGetPty(char **ptySlave, char **ptyMaster)
+@@ -100,5 +103,23 @@
+ int
+ _DtTermPrimSetupPty(char *ptySlave, int ptyFd)
+ {
++#if defined(SVR4) && !defined(__linux__)
++    /* An SVR4 STREAMS pty slave is a bare stream: the terminal emulation
++     * (ptem) and the line discipline (ldterm) are pushed by the process
++     * that opens it, unless the system pushes them already (autopush).
++     * Without them the slave has no termio, no echo and no output
++     * processing, and a shell finds no terminal on it.
++     */
++    if (ioctl(ptyFd, I_FIND, "ptem") == 0 &&
++	ioctl(ptyFd, I_PUSH, "ptem") == -1) {
++	(void) perror("Error pushing ptem");
++	return(1);
++    }
++    if (ioctl(ptyFd, I_FIND, "ldterm") == 0 &&
++	ioctl(ptyFd, I_PUSH, "ldterm") == -1) {
++	(void) perror("Error pushing ldterm");
++	return(1);
++    }
++#endif
+   return(0);
+ }

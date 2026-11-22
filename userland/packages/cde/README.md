@@ -34,7 +34,7 @@ against shared X11R6.3 and Motif) follows as a new revision.
   compiles `/usr/dt` into its programs and files (its installation top), and keeps doing so.
 - Configuration under **`/etc/dt`**, CDE's configuration top, as on every CDE system; logs under
   `/var/dt`.
-- **Manual pages.** The commands' pages, sections 1 and 1m (68 pages: `dtterm`, `dtwm`,
+- **Manual pages.** The commands' pages, sections 1 and 1m (89 pages: `dtterm`, `dtwm`,
   `ttsession`, `rpc.ttdbserver` and the rest), are in `/opt/amix/man` with `whatis.d/cde`, as every
   package's, so `man dtterm` and `man -k` find them. The reference sections stay whole in CDE's own
   tree under upstream's names, as Motif's section 3 does: section 3 (419 pages of the Dt and
@@ -140,6 +140,7 @@ pages, help volumes and catalogues of the parts not built are left out with them
 | `40-dates-from-source-date-epoch` | instant (docbook-to-man) and the help compilers' generator eltdef take their date from `SOURCE_DATE_EPOCH` (UTC) when it is set, not from the clock: the manual pages, help volumes and help compilers no longer carry the time of the build, so a rebuild gives the same bytes |
 | `41-libtt-print-without-wide-printf` | libtt prints a message's strings (tt_message_print, the ToolTalk trace, ttsnoop's log) with each character's own bytes: it used printf's `%C`, a wide character, which the C library here does not know, and printed a C for every character but the last few |
 | `42-ttsnoop-svr4-tail` | ttsnoop's panes run `tail +1f file`, the form the SVR4 tail takes (it opened `+0` from `tail -n +0 -f` and said "cannot open input"), and a log named with `-o` or `-O` is made first, since tail opens it before ttsnoop writes it (also an input of the App Builder's code: the record was made from the patched file) |
+| `43-dtterm-svr4-pty-modules` | DtTerm (dtterm, and ttsnoop's panes) pushes `ptem` and `ldterm` on its pty slave, each unless `I_FIND` finds it: configure builds the `-pts` variant everywhere but Solaris, whose setup does nothing, and an SVR4 pty slave is a bare stream until its opener pushes them, so dtterm's shell found no terminal (no prompt, no echo) and output lines were not returned to the left margin |
 
 Each patch has a header that says what and why.
 
