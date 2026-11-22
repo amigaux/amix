@@ -1,0 +1,19 @@
+dtbuilder(1): its NAME line in the form whatis reads.
+
+The page's NAME heading is "Name" and its line separates the name from
+the purpose with \(mi and sets CDE in a smaller size; whatis and man -k
+read "name \- text" under ".SH NAME", as patch 30 gives the other pages.
+
+--- a/programs/dtappbuilder/src/ab/dtbuilder.1
++++ b/programs/dtappbuilder/src/ab/dtbuilder.1
+@@ -48,8 +48,8 @@
+ .\"--- or:
+ .\"--- dtgather \(mi gather application files for presentation by the Application Manager
+ .\"---
+-.SH Name
+-dtbuilder \(mi the \s-1CDE\s+1 Application Builder
++.SH NAME
++dtbuilder \- the CDE Application Builder
+ .\"---
+ .\"----------------------------------------------------------------------------
+ .\"--- SYNOPSIS

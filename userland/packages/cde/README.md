@@ -5,8 +5,9 @@ CDE 2.5.3 (cdesktopenv), built from the upstream release against X11R6.3 and Mot
 - `dtwm`, the window manager, with the front panel and workspaces;
 - `dtterm`, `dtfile`, `dtpad`, `dtcalc`, `dtcm` (calendar, with `rpc.cmsd`), `dtmail`, `dticon`,
   `dtstyle`, `dthelpview`, `dtprintinfo`, `dtscreen` and the other desktop programs;
-- ToolTalk (`ttsession`, `rpc.ttdbserver`, the `tt*` commands, `tt_type_comp`) and its types
-  database;
+- ToolTalk (`ttsession`, `rpc.ttdbserver`, the `tt*` commands, `tt_type_comp`, the message
+  viewer `ttsnoop`) and its types database;
+- the App Builder, `dtbuilder`, with its code generator `dtcodegen`;
 - the action and data-type databases, the app-defaults, the C locale's message catalogues, the
   backdrops, palettes and icons.
 
@@ -75,7 +76,6 @@ built first: the release gate is that no CDE component is left out.
 |---|---|---|
 | `dtksh` (the desktop Korn shell) | its ksh93 is built by AST's own system, which compiles and runs hundreds of feature probes on the build machine | run the probes once on the emulator, commit Amix's answers as a reviewed file, cross-build ksh93 from them |
 | `dtinfo` (the information library browser), with `DtMmdb` | needs LMDB, whose 0.9 locking needs process-shared POSIX mutexes or semaphores, which Amix lacks | LMDB 0.9 with upstream's System V semaphore locking backported |
-| `dtappbuilder` (App Builder), `ttsnoop` | their user interface code is written at build time by `dtcodegen`, a program for the target | generate that code on the emulator with the target `dtcodegen` and keep it as reviewed files |
 | `dtdocbook` (`instant`, `dtdocbook2sdl`, `dtdocbook2man`) and the information library tools | they need Tcl and OpenSP on the box | Tcl and OpenSP ported as Amix packages |
 
 Until then the scripts that run under `dtksh` are installed but do not work: `dterror` (dtfile's
@@ -106,7 +106,7 @@ pages, help volumes and catalogues of the parts not built are left out with them
 | `02-dtinfo-dtdocbook-optional` | `--disable-dtinfo`, `--disable-dtdocbook`; LMDB and Tcl checked only for them; their catalogues, app-defaults, actions and ToolTalk types only with them |
 | `03-build-time-tools-fail` | the localized and tttypes rules went on after their tool failed; now they stop the build |
 | `04-svr4-host` | configure chose the build machine's system branch; now the target's, with an SVR4 branch (`-DSVR4`) |
-| `05-dtksh-dtappbuilder-optional` | `--disable-dtksh`, `--disable-dtappbuilder` (with ttsnoop) |
+| `05-dtksh-dtappbuilder-optional` | `--disable-dtksh`, `--disable-dtappbuilder` (with ttsnoop); this build uses the first only |
 | `06-tooltalk-svr4` | ToolTalk's SVR4 options: TLI, sysinfo, the SVR4 mount table; signal handler types; vsyslog |
 | `07-tt-type-comp-no-cpp` | tt_type_comp says so when cpp is missing |
 | `08-dtsvc-svr4` | DtSvc's headers on SVR4 (dirent.h, MAXNAMELEN) |
@@ -133,8 +133,40 @@ pages, help volumes and catalogues of the parts not built are left out with them
 | `33-dtlogin-svr4-shadow` | dtlogin reads the password from the shadow file on SVR4, as on Linux |
 | `34-tooltalk-tli-negotiate-reply` | ToolTalk takes TLI's answer to `T_NEGOTIATE` as a success (no "t_optmgmt: No Error" per connection) |
 | `35-dtlogin-close-unopened-catalog` | the greeter closes its message catalogue only when it opened one (a null descriptor read address 0) |
+| `36-dtdbcache-no-arguments` | dtdbcache looks at `argv[1]` only when there is one (ToolTalk starts it with no arguments, and it read through the null pointer that ends `argv`) |
+| `37-libabil-parser-prefix` | the App Builder's BIL parser under the prefix `abil_yy`: dtbuilder also links Motif's UIL compiler, another yacc parser, and statically both defined `yyparse`, `yylval`, `yychar`, `yynerrs` |
+| `38-ttsnoop-own-sigset-static` | ttsnoop's own copy of libtt's `_tt_sigset` is static, so the static link with libtt has one definition (also an input of the App Builder's code: the record was made from the patched file) |
+| `39-dtbuilder-man-name-line` | dtbuilder(1)'s NAME line in the form whatis reads, as patch 30 gives the other pages |
+| `40-dates-from-source-date-epoch` | instant (docbook-to-man) and the help compilers' generator eltdef take their date from `SOURCE_DATE_EPOCH` (UTC) when it is set, not from the clock: the manual pages, help volumes and help compilers no longer carry the time of the build, so a rebuild gives the same bytes |
+| `41-libtt-print-without-wide-printf` | libtt prints a message's strings (tt_message_print, the ToolTalk trace, ttsnoop's log) with each character's own bytes: it used printf's `%C`, a wide character, which the C library here does not know, and printed a C for every character but the last few |
+| `42-ttsnoop-svr4-tail` | ttsnoop's panes run `tail +1f file`, the form the SVR4 tail takes (it opened `+0` from `tail -n +0 -f` and said "cannot open input"), and a log named with `-o` or `-O` is made first, since tail opens it before ttsnoop writes it (also an input of the App Builder's code: the record was made from the patched file) |
 
 Each patch has a header that says what and why.
+
+## The App Builder's code
+
+The user interfaces of `dtbuilder` and `ttsnoop` are C that `dtcodegen` writes at build time from
+their `.bil` files, and `dtcodegen` is a program for the target, built in the same tree. The build
+cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
+
+- `dtcodegen/ab` (dtbuilder) and `dtcodegen/tt` (ttsnoop) hold one record per dtcodegen run, in the
+  order make runs them (36 and 11): its arguments, what it created (`after/`), what it rewrote with
+  other contents (`diffs/`, unified diffs: the callbacks files and the message file it merges into),
+  and in `before.sha256` the sums of the run's `.bip` and `.bil` and of the earlier contents of
+  every file it rewrote.
+- In the build, make's `DTCODEGEN` is `dtcodegen/replay.sh`. Each time make runs dtcodegen, replay
+  finds the record with the same arguments, checks that the directory is as it was on Amix (the
+  sums, and that no file the run created is there already), and writes what the run wrote. make's
+  own steps around dtcodegen (copying the callbacks templates, ttsnoop's `sed` edits) run as
+  upstream wrote them. Any change of input or order stops the build.
+- **To make the record again** (a new CDE release, or a patch to a `.bil` file): build CDE, which
+  installs `dtcodegen` and its catalogue; write the box scripts from make's dry run with
+  `dtcodegen/regen/mkgen.py` (`make -n` in `programs/dtappbuilder/src/ab` and `programs/ttsnoop` of
+  the configured tree, so the directories are as patched); on Amix, put `dtcodegen`, `dtcodegen.cat`, `regen/gen-lib.sh`,
+  `regen/run.sh`, the two scripts and copies of the two directories under `/var/pk` as `run.sh`
+  describes, and run `sh run.sh`; then `regen/collect.py out.tar <the two directories> dtcodegen`
+  writes the records. Review the difference before committing it.
+- dtcodegen's own log, `.dtcodegen.log` (times of day; only dtcodegen reads it), is not kept.
 
 ## Build notes
 
@@ -144,6 +176,14 @@ Each patch has a header that says what and why.
 - **The shared variant's hooks are here, switched off**: the recipe `cde-shared` sources these
   hooks with `CDE_VARIANT=shared` (CDE's libraries shared, against the shared X11R6.3 and Motif);
   this build does not use them. Its README section comes with that recipe.
+- **dtbuilder links Motif's `libMrm`** after `libUil`, which calls it: the link line's
+  `$(MRESOURCELIB)`, which configure never sets, is given as `-lMrm`.
+- **Manual pages for every program**: upstream's `dtbuilder.1` and ToolTalk's `ttauth.man`, which
+  make install leaves out, and ours in `man/` for the programs upstream has none for (`Xsession`,
+  `dtdbcache`, `dtdspmsg`, `dterror.ds`, `dtlpsetup`, `dtopen` with its four names, `dtprintegrate`,
+  `dtsrclean`, `dtsrdelete`, `dtcodegen`, `ttsnoop`). Upstream's `ttsnoop.6` is left out: it is the
+  page of the TeleUse ttsnoop this one replaced, with options this ttsnoop does not have. `dthelpgen.dtsh`, `dthelpprint.sh` and
+  `rpc.ttdbserver` get alias pages to upstream's `dthelpgen`, `dthelpprint` and `ttdbserver`.
 - **The build machine's tools are built from this tree**: `tradcpp`, `lineToData`,
   `mk_fonts_alias`, `merge`, `mkcatdefs`, the dthelp parsers' generators, and ToolTalk's
   `tt_type_comp` (with the build container's TI-RPC; `host/mp_desktop_nox.C` stands in for the one

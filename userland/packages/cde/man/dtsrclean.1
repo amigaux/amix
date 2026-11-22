@@ -1,0 +1,88 @@
+.TH DTSRCLEAN 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtsrclean \- compress and check a DtSearch database
+.SH SYNOPSIS
+.B dtsrclean
+.RB [ \-p\c
+.IR N ]
+.RB [ \-oy | \-on ]
+.RB [ \-v [\c
+.IR file ]]
+.RB [ \-c\c
+.IR N ]
+.I database
+.I newpath
+.SH DESCRIPTION
+.B dtsrclean
+copies the word index of the DtSearch database
+.I database
+(its
+.I .d99
+and
+.I .d2x
+files) into the directory
+.IR newpath ,
+leaving out the space that deleted records left unused.
+The old files are read only; the new ones replace them when the
+administrator moves them into place.
+.I database
+is the 1 to 8 character database name, found in the current directory or
+on
+.BR DBFPATH .
+A relative
+.I newpath
+is relative to the current directory.
+.TP 12
+.BI \-p N
+print a progress dot every
+.I N
+records (default 1000), and a progress line every 50 dots
+.TP
+.B \-oy
+overwrite
+.I .d99
+and
+.I .d2x
+files already in
+.I newpath
+.TP
+.B \-on
+exit if there are such files
+.TP
+.BR \-v [\c
+.IR file ]
+also check every link between the
+.I .d99
+and
+.I .d00
+files, repair the
+.I .d99
+file and correct the record count; with
+.IR file ,
+write the
+.I .d00
+records no
+.I .d99
+entry refers to into
+.I file
+in the form
+.BR dtsrload (1)
+reads
+.TP
+.BI \-c N
+exit after more than
+.I N
+damaged or incomplete links (default 100);
+.B \-c0
+never exits for them
+.SH EXIT STATUS
+0 success; 1 warnings; 2 the job did not start; 3 to 49 the job ended
+early, the old files are good and the new ones unusable; 50 to 99 a fatal
+error that may have damaged the old database too; 100 and above a signal
+(the exit status less 100) ended the job, and the new files may be
+unusable.
+.SH SEE ALSO
+.BR dtsrcreate (1),
+.BR dtsrdbrec (1),
+.BR dtsrdelete (1),
+.BR dtsrload (1)

@@ -1,0 +1,56 @@
+.TH DTDSPMSG 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtdspmsg \- print a message from a message catalogue
+.SH SYNOPSIS
+.B dtdspmsg
+.RB [ \-s
+.IR set ]
+.I catalogue
+.I number
+.RI [ default
+.RI [ argument " ...]]"
+.SH DESCRIPTION
+.B dtdspmsg
+prints message
+.I number
+of
+.I set
+(default 1) from the message catalogue
+.IR catalogue ,
+found through
+.B NLSPATH
+as
+.BR catopen (3C)
+finds it, with the
+.IR argument s
+put in for its conversions
+.RB ( %s ,
+or
+.BI % n \e
+for the
+.IR n th).
+When the catalogue or the message is not found it prints
+.I default
+instead, with the escapes
+.BR \en ,
+.BR \et ,
+.BR \eb ,
+.BR \er ,
+.BR \ev ,
+.BR \ef ,
+.BI \ex hh
+and octal
+.BI \e ooo
+in it expanded.
+Shell scripts of the desktop use it to print their messages in the
+user's language.
+.SH ENVIRONMENT
+.TP 12
+.B NLSPATH
+where the catalogues are looked for
+.TP
+.B LANG
+the language
+.SH SEE ALSO
+.BR gencat (1),
+.BR catgets (3C)

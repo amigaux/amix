@@ -1,0 +1,31 @@
+.TH DTDBCACHE 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtdbcache \- build the desktop's action and data type cache
+.SH SYNOPSIS
+.B dtdbcache
+.RB [ \-init ]
+.SH DESCRIPTION
+The desktop's programs read the action and data type definitions (the
+.I .dt
+files) from a cache that
+.B dtdbcache
+writes,
+.IR /tmp/dtdbcache_ display ,
+one per display.
+.PP
+ToolTalk starts
+.B dtdbcache
+(its ptype is SDTDTSCACHE) when a program asks for the cache to be
+rebuilt, typically after a change to the definitions; it rebuilds the
+cache for each such request, and exits when none has come for a while.
+With
+.B \-init
+it builds the cache once without connecting to ToolTalk and exits.
+.SH FILES
+.TP 30
+.IR /tmp/dtdbcache_ display
+the cache of the display's session
+.SH SEE ALSO
+.BR dtaction (1),
+.BR dtsession (1),
+.BR ttsession (1)

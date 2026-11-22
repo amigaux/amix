@@ -1,0 +1,4 @@
+./Dtbuilder
+./cgen_props.res
+./cgen_props_ui.c
+./cgen_props_ui.h
