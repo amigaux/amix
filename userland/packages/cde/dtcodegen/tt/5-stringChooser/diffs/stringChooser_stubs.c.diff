@@ -1,0 +1,36 @@
+--- a/stringChooser_stubs.c
++++ b/stringChooser_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: stringChooser_stubs.C.src /main/3 1995/11/06 17:13:57 rswiston $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -21,6 +16,7 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
++#include <stdint.h>
+ #include <stdio.h>
+ #include <Xm/Xm.h>
+ #include "dtb_utils.h"
+@@ -206,11 +202,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbStringChooserStringChooserInfo	instance = (DtbStringChooserStringChooserInfo)clientData;
++    DtbStringChooserStringChooserInfo	dtbTarget = (DtbStringChooserStringChooserInfo)clientData;
++    DtbStringChooserStringChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_string_chooser_string_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_string_chooser_string_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->stringChooser_shellform);
+     

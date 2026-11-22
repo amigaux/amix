@@ -1,0 +1,63 @@
+.TH DTOPEN 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtopen, dtopen_image, dtopen_pdf, dtopen_ps, dtopen_video \- open a file in a helper program
+.SH SYNOPSIS
+.B dtopen_image
+.I file
+.br
+.B dtopen_pdf
+.I file
+.br
+.B dtopen_ps
+.I file
+.br
+.B dtopen_video
+.I file
+.SH DESCRIPTION
+.B dtopen
+is one script under five names; the name it is called by says what the
+file is.
+The desktop's actions call it to open a file of a type CDE has no viewer
+for: it runs the first viewer of a list that it finds on the
+.BR PATH ,
+and shows an error dialog naming the list when it finds none.
+.TP 16
+.B dtopen_image
+images: xv, display, gimp
+.TP
+.B dtopen_pdf
+PDF documents: okular, xpdf
+.TP
+.B dtopen_ps
+PostScript documents: mgv, gv
+.TP
+.B dtopen_video
+video: vlc, ffplay
+.PP
+Called as
+.B dtopen
+or any other name, it shows an error dialog listing the four names.
+.SH ENVIRONMENT
+.TP 16
+.B DTOPEN_VIMAGE
+.PD 0
+.TP
+.B DTOPEN_VPDF
+.TP
+.B DTOPEN_VPS
+.TP
+.B DTOPEN_VVIDEO
+.PD
+a space-separated list of viewers that replaces the default list of that
+name.
+.SH NOTES
+None of the default viewers is part of Amiga UNIX; set the variables to
+viewers that are installed.
+The error dialog is drawn by
+.BR dterror.ds (1),
+which needs
+.BR dtksh ,
+not yet part of this package; without it the error goes unseen.
+.SH SEE ALSO
+.BR dtaction (1),
+.BR dterror.ds (1)

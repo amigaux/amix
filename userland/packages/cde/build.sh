@@ -111,11 +111,16 @@ CDE_LIBS="-lXp -lSM -lICE -lXext -lX11 -lgen -lsocket -lnsl -lelf -lamixcompat-c
 # with the build host's instant, the tree's own SGML, Tcl and tpt files,
 # and the build host's dthelp_htag2; the help volumes uncompressed (-u):
 # compressed, each topic is run through the build host's compress
+# DTCODEGEN: the App Builder's code as the target dtcodegen wrote it (dtcodegen/replay.sh);
+# MRESOURCELIB, which dtbuilder links after -lUil and configure never sets: Motif's libMrm,
+# which the static libUil calls
 make_cde() {	# make_cde [make args]
 	dtdcbk_libexecdir="$BUILD/hostdocbook" dtdcbk_libdir="$TREE/programs/dtdocbook" \
 	dtdcbk_datarootdir="$TREE/programs/dtdocbook" \
 	make CPPFLAGS="$(sed -n 's/^CPPFLAGS = //p' Makefile) -include $AMIX_GCC14_DECLS" \
 		TT_TYPE_COMP="$BUILD/hosttt/tt_type_comp" DTHELP_HTAG2="$BUILD/hosthelp/dthelp_htag2" \
+		DTCODEGEN="sh $CHERE/dtcodegen/replay.sh" \
+		MRESOURCELIB=-lMrm \
 		DTDOCBOOK="$TREE/programs/dtdocbook/dtdocbook2sdl -u" "$@"
 }
 
@@ -307,7 +312,7 @@ build() {
 		./configure --host=\"\$AMIX_HOST_TRIPLET\" --build=\"\$\(./config.guess\)\" \
 			--x-includes=\"\$XROOT/include\" --x-libraries=\"\$CDE_XLIBDIR\" \
 			$CDE_LIBKIND \
-			--disable-dtinfo --disable-dtdocbook --disable-dtksh --disable-dtappbuilder
+			--disable-dtinfo --disable-dtdocbook --disable-dtksh
 	} > "$BUILD/configure.log" 2>&1 || { tail -30 "$BUILD/configure.log" >&2; echo "[FAIL] configure" >&2; exit 1; }
 	for v in "CPP_PROGRAM = /usr/ccs/lib/cpp" "KSH = /usr/bin/ksh" \
 		"XRDB = /opt/amix/X11R6/bin/xrdb" "SESSREG = /opt/amix/X11R6/bin/sessreg"; do
@@ -434,6 +439,28 @@ stage() {
 		rmdir -- "$m/man$s"
 	done
 	amix_man "$CHERE/man/cde-rpc.1m" 1m
+	# upstream's ttsnoop.6 is the page of the TeleUse ttsnoop this one replaced (its
+	# one option, -t, is not this ttsnoop's); ttsnoop(1) is ours
+	rm -f -- "${m:?}/man6/ttsnoop.6"
+	rmdir -- "$m/man6"
+	# pages upstream has but does not install, and ours for the programs it
+	# has none for (README, Manual pages); one page for dtopen's five names
+	amix_man "$TREE/lib/tt/bin/ttauth/ttauth.man" 1 ttauth
+	for f in Xsession dtdbcache dtdspmsg dterror.ds dtlpsetup dtopen dtsrclean dtsrdelete; do
+		amix_man "$CHERE/man/$f.1" 1
+	done
+	amix_man "$CHERE/man/dtprintegrate.1m" 1m
+	# App Builder: upstream's page for dtbuilder, ours for its code generator and ttsnoop
+	amix_man "$TREE/programs/dtappbuilder/src/ab/dtbuilder.1" 1
+	amix_man "$CHERE/man/dtcodegen.1" 1
+	amix_man "$CHERE/man/ttsnoop.1" 1
+	for f in dtopen_image dtopen_pdf dtopen_ps dtopen_video; do
+		amix_man_alias $f 1 dtopen
+	done
+	# the scripts installed under a suffixed name, by their pages' names
+	amix_man_alias dthelpgen.dtsh 1 dthelpgen
+	amix_man_alias dthelpprint.sh 1 dthelpprint
+	amix_man_alias rpc.ttdbserver 1m ttdbserver
 	amix_man_whatis
 	find "$m" -type f -exec chmod 0644 {} +
 	# the boot script of the RPC servers, off unless rc.conf turns them on

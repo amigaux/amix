@@ -1,0 +1,98 @@
+--- a/ttsnoop.c
++++ b/ttsnoop.c
+@@ -17,12 +17,12 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
++#include <stdint.h>
+ #include <unistd.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <sys/param.h>
+ #include <sys/types.h>
+-#include <sys/types.h>
+ #include <sys/stat.h>
+ #include <X11/Intrinsic.h>
+ #include <Xm/Xm.h>
+@@ -31,9 +31,7 @@
+ #include <Dt/Help.h>
+ #include <Dt/HelpQuickD.h>
+ #include <Dt/HelpDialog.h>
+-#include <unistd.h>
+ #include <Dt/Session.h>
+-#include <Dt/Term.h>
+ #include "ttsnoop_ui.h"
+ #include "apiTracer_ui.h"
+ #include "ttChooser_ui.h"
+@@ -343,11 +341,16 @@
+ int
+ main(int argc, char **argv)
+ {
+-    Widget		toplevel = NULL;
+-    Display		*display = NULL;
+-    XtAppContext	app;
+-    Atom		save_yourself_atom;
+-
++    Widget		toplevel = (Widget)NULL;
++    Display		*display = (Display*)NULL;
++    XtAppContext	app = (XtAppContext)NULL;
++    String		*fallback_resources = (String*)NULL;
++    ArgList		init_args = (ArgList)NULL;
++    Cardinal		num_init_args = (Cardinal)0;
++    ArgList		get_resources_args = (ArgList)NULL;
++    Cardinal		num_get_resources_args = (Cardinal)0;
++    Atom		save_yourself_atom = (Atom)NULL;
++    
+     Pixmap	icon_pixmap = 0;
+     Pixmap	icon_mask_pixmap = 0;
+     
+@@ -371,10 +374,11 @@
+      ***
+      **************************************************************************/
+     
+-    toplevel = XtVaAppInitialize(&app, "Ttsnoop",
++
++    toplevel = XtAppInitialize(&app, "Ttsnoop",
+         optionDescList, XtNumber(optionDescList),
+-        &argc, argv, (String *)NULL,
+-        (ArgList) NULL, 0);
++        &argc, argv, fallback_resources,
++        init_args, num_init_args);
+ 
+     /*
+      * Get display and verify initialization was successful.
+@@ -400,7 +404,8 @@
+     dtb_save_command(argv[0]);
+     
+     XtGetApplicationResources(toplevel, (XtPointer)&dtb_app_resource_rec,
+-    	resources, XtNumber(resources), (Arg *)NULL, 0);
++        resources, XtNumber(resources),
++        get_resources_args, num_get_resources_args);
+     
+     
+     /**************************************************************************
+@@ -622,6 +627,7 @@
+      * Set up the application's root window.
+      */
+     dtb_ttsnoop_ttsnoop_win.ttsnoopWin = toplevel;
++
+     dtb_cvt_image_file_to_pixmap(dtb_ttsnoop_ttsnoop_win.ttsnoopWin,
+         "DtTtsnp.l", &icon_pixmap);
+     dtb_cvt_image_file_to_pixmap(dtb_ttsnoop_ttsnoop_win.ttsnoopWin,
+@@ -631,6 +637,7 @@
+         XmNtitle, "ttsnoop",
+         XmNiconMask, icon_mask_pixmap,
+         XmNiconPixmap, icon_pixmap,
++        XmNinitialState, NormalState,
+         XmNbackground, dtb_cvt_string_to_pixel(dtb_ttsnoop_ttsnoop_win.ttsnoopWin, "white"),
+         NULL);
+     
+@@ -794,7 +801,7 @@
+      * Enter event loop
+      */
+     XtAppMainLoop(app);
+-    exit(0);
++    return 0;
+ }
+ 
+ 

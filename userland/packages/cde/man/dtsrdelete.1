@@ -1,0 +1,79 @@
+.TH DTSRDELETE 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+dtsrdelete \- delete records from DtSearch databases
+.SH SYNOPSIS
+.B dtsrdelete
+.B B
+|
+.B D
+.RB [ \-i\c
+.IR file ]
+.RB [ \-o\c
+.IR file ]
+.RB [ \-t\c
+.IR N ]
+.RB [ \-n\c
+.IR N ]
+.RB [ \-y ]
+.RB [ \-d [ v ]]
+.SH DESCRIPTION
+.B dtsrdelete
+deletes records from DtSearch databases in two steps, named by its first
+argument.
+.TP 6
+.B B
+(browse) reads a list of records to delete, shows each and asks whether
+it goes; the records confirmed are written to
+.I todscrd.lst
+(or the file
+.B \-o
+names), in the same form.
+Browsing only reads the databases and can be run at any time.
+The list read is
+.I shdscrd.lst
+unless
+.B \-i
+names another.
+.TP
+.B D
+(delete) deletes the records of a list,
+.I todscrd.lst
+unless
+.B \-i
+names another, after asking for confirmation.
+It changes the databases, so it must run when no one is searching them.
+.PP
+A list has one record a line: the database name, the record's identifier
+and a user name, separated by white space; the rest of the line is a
+comment.
+A word may be quoted with double quotes to hold blanks.
+.TP 12
+.BI \-i file
+the list to read (the file name follows the option directly)
+.TP
+.BI \-o file
+the list
+.B B
+writes
+.TP
+.BI \-t N
+stop after about
+.I N
+seconds; an interrupt also stops it at the next record
+.TP
+.BI \-n N
+delete in batches of
+.I N
+records (default 2000)
+.TP
+.B \-y
+answer yes to the confirmation of
+.B D
+.TP
+.BR \-d [ v ]
+print debugging messages;
+.B \-dv
+a message for each record
+.SH SEE ALSO
+.BR dtsrclean (1),
+.BR dtsrload (1)

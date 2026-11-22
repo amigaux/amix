@@ -1,0 +1,114 @@
+.TH TTSNOOP 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+ttsnoop \- watch and send ToolTalk messages
+.SH SYNOPSIS
+.B ttsnoop
+.RI [ options ]
+.RB [ \-F
+.IR scopefile ]
+.RB [ \-\e<
+.IR procid ]
+.RB [ \-v
+.IR media ]
+.RB [ \-m
+.IR op ]
+.br
+.B ttsnoop
+.RI [ options ]
+.BR \-n | \-N
+.br
+.B ttsnoop
+.RI [ options ]
+.RB [ \-e
+.IR script ]
+.I command
+.RI [ argument " ...]"
+.SH DESCRIPTION
+.B ttsnoop
+is a window onto a ToolTalk session.
+It joins the session, registers a pattern that matches every message
+(narrowed by the options below), and shows each message it sees in a
+terminal pane, with its operation, class, scope, state, sender and
+arguments.
+Its menus build and send messages and patterns, show the session's
+ptypes and otypes, and turn on
+.BR tttrace (1)
+tracing; from a message shown it can make the
+.I TT_MSG
+action that would send it.
+.PP
+Given a
+.IR command ,
+it runs it under
+.BR tttrace (1)
+and shows the ToolTalk calls the command makes.
+.SS The initial pattern
+.TP 16
+.BI \-F " scopefile"
+also match messages scoped to
+.I scopefile
+.TP
+.BI \-\e< " procid"
+only messages from
+.I procid
+.TP
+.BI \-v " media"
+only messages for media type
+.I media
+.TP
+.BI \-m " op"
+only messages with operation
+.I op
+.TP
+.B \-n
+register no initial pattern
+.TP
+.B \-N
+register none and do not join the session at start-up either
+.SS Options
+.TP 16
+.B \-T
+trace ttsnoop's own ToolTalk calls, from the start
+.TP
+.B \-u
+de-iconify the window when a message arrives
+.TP
+.BI \-S " session"
+the session to join (default: the one in
+.BR TT_SESSION ,
+or the display's)
+.TP
+.B \-X
+join the X display's session
+.TP
+.BI \-w " n"
+time out calls after
+.I n
+seconds (default 20)
+.TP
+.BI \-l " n"
+keep
+.I n
+lines of output in the pane (default 5000)
+.TP
+.BI \-o " file"
+also write the messages seen to
+.I file
+.TP
+.BI \-O " file"
+also write the call trace to
+.I file
+.TP
+.BI \-e " script"
+the
+.BR tttrace (1)
+setting for
+.IR command ,
+as
+.BR tttracefile (4)
+describes
+.SH EXIT STATUS
+2 for a usage error.
+.SH SEE ALSO
+.BR ttsession (1),
+.BR tttrace (1)

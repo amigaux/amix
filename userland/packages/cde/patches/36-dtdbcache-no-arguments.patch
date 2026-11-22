@@ -1,0 +1,18 @@
+dtdbcache started with no arguments.
+
+ToolTalk starts dtdbcache with no arguments (its ptype's start string is
+"dtdbcache"), and main() compared argv[1] with "-init" without looking at
+argc, reading through the null pointer that ends argv.  It now looks at
+argv[1] only when there is one.
+
+--- a/programs/dtdbcache/Main.c
++++ b/programs/dtdbcache/Main.c
+@@ -68,7 +68,7 @@
+         }
+         _DtEnvControl(DT_ENV_SET);
+ 
+-	if(strcmp(argv[1], "-init") == 0)
++	if(argc > 1 && strcmp(argv[1], "-init") == 0)
+ 	{
+ 		init_flag = 1;
+ 	}

@@ -1,0 +1,70 @@
+.TH XSESSION 1 "2026-11-22" "Amiga UNIX add-on" "CDE"
+.SH NAME
+Xsession \- start a user's desktop session
+.SH SYNOPSIS
+.B /usr/dt/bin/Xsession
+.RB [ \-session
+.IR name ]
+.SH DESCRIPTION
+.BR dtlogin (1)
+runs
+.B Xsession
+as the user who logged in.
+It sets up the session's environment and starts the session: CDE's
+session manager,
+.BR dtsession (1),
+or, when the user chose it at the login screen, the user's own
+.I \&.xsession
+or
+.I \&.xinitrc
+(each only if executable); with none of these it starts a window manager
+and a terminal.
+.B \-session
+names the session to start, as chosen at the login screen.
+.PP
+The environment comes from, in this order:
+the user's
+.IR \&.dtprofile ,
+which the first login copies from
+.I sys.dtprofile
+.RI ( /etc/dt/config
+before
+.IR /usr/dt/config ),
+sourced only when
+.B ksh \-n
+finds no error in it (otherwise the error goes to the start-up log);
+the user's
+.I \&.profile
+or
+.I \&.login
+when
+.I \&.dtprofile
+sets
+.BR DTSOURCEPROFILE=true ;
+and every executable file in the
+.I Xsession.d
+directories
+.RI ( /etc/dt/config/Xsession.d
+before
+.IR /usr/dt/config/Xsession.d ).
+.SH FILES
+.TP 30
+.I $HOME/.dt/startlog
+the session's start-up log
+.TP
+.I $HOME/.dt/errorlog
+error messages of the session's programs
+.TP
+.I /etc/dt/config/Xsession.d
+the administrator's start-up scripts
+.SH NOTES
+Do not edit
+.IR /usr/dt/bin/Xsession ;
+an update replaces it.
+Local changes go in
+.I /etc/dt/config/Xsession.d
+or the user's
+.IR \&.dtprofile .
+.SH SEE ALSO
+.BR dtlogin (1),
+.BR dtsession (1)
