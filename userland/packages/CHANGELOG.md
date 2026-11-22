@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — cde 2.5.3-2: App Builder, ttsnoop, a manual page for every program (b7b8fc6e)
+
+CDE's App Builder (dtbuilder, with its code generator dtcodegen) and ToolTalk's message viewer ttsnoop are built. dtcodegen runs on the target, so the user-interface code it writes for them is replayed in the build from a recorded run on Amix, with the scripts to record it again. ttsnoop shows the session's messages in its panes and log: libtt no longer prints strings through printf's %C, and the panes run tail in the SVR4 form. Every program now has a manual page (89 in /opt/amix/man). dtdbcache starts when ToolTalk runs it with no arguments. The manual pages, help volumes and help compilers take their date from SOURCE_DATE_EPOCH, so a rebuild gives the same bytes. dtksh, dtinfo and dtdocbook are still to come.
+
 ## 2026-11-22 — x11contrib 6.0-1: xeyes and xedit (a1f7fa52)
 
 New package: xeyes and xedit from the X11R6 contrib distribution, which X11R6.3 left out of its core tree, under /opt/amix/X11R6, statically linked with X11R6.3's libraries. xload is not included: Amix cannot give it a true load average (README).
