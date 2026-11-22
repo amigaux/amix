@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — cde 2.5.3-1 and libjpeg 9f-1: CDE built from upstream, static (80bad70a)
+
+CDE 2.5.3 (cdesktopenv) built from the upstream release against X11R6.3 and Motif 2.3.8, its programs linked statically, for measurement and testing: dtlogin and dtsession, dtwm with the front panel, dtterm, dtfile, dtpad, dtcalc, dtcm, dtmail and the other desktop programs, ToolTalk and its types database (compiled to the bytes the box's own tt_type_comp writes), dtterm's terminfo entry (the box's own tic output), help volumes and manual pages. Under /opt/amix/dt with /usr/dt a link to it; a line "start dtlogin" in /etc/display starts the graphical login. The RPC servers rpc.ttdbserver and rpc.cmsd are off unless /etc/rc.conf turns them on (cde-rpc(1M)); dtspcd gets documented lines only. dtksh, dtinfo, dtappbuilder, ttsnoop and dtdocbook are not built yet; the README lists them as the work before CDE ships. libjpeg 9f (IJG), which CDE's help viewer links, ships its static library and libjpeg.so.9.
+
 ## 2026-11-20 — dropbear 2026.94-6, libzz9k 2.9.1-4: the gcc14 9d13dcd rebuild
 
 The two remaining packages whose bytes change with gcc14-cross-amix 9d13dcd: dropbear (libtommath's multiplication routines and cli-runopts) and libzz9k (zz9k_host, and the zlib zz9k-test links); correct folds no longer made, nothing wrong as shipped.
