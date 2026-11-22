@@ -1,15 +1,16 @@
 PKG=xsurf30
-NAME=xsurf-k30 1.0.0-4 - X-Surf and X-Surf-100 ethernet driver module, k30 line
+NAME=xsurf-k30 1.0.0-5 - X-Surf and X-Surf-100 ethernet driver module, k30 line
 ARCH=Amiga
-VERSION=1.0.0-4
+VERSION=1.0.0-5
 CATEGORY=system
 CLASSES=none xsurf
 VENDOR=amix
-PSTAMP=amix-xsurf30-1.0.0-4
+PSTAMP=amix-xsurf30-1.0.0-5
 # Kernel space (amix-dlm C2-2, C3-5 sec 1): a role=module entry of the
 # #ext kpkg block (line=k30), never an ordinary entry.  Catalog name
 # xsurf-k30, pkginst xsurf30.  The module's release is
-# kernel/drivers/xsurf/module/VERSION (1.0.0-4), the same on both lines.
+# kernel/drivers/xsurf/module/VERSION (1.0.0-4), the same on both lines;
+# 1.0.0-5 is a package revision of it.
 # The nodes are in class xsurf (C3-5 sec 1.2).
 # The lowest kbootset whose registry knows c 56 xsurf (amix-dlm C2-2 v7):
 # the catalog row's kbootset=.

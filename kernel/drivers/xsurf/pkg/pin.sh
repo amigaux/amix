@@ -33,11 +33,15 @@
 # self-test at load, the windows, else the data port (parameter data).
 # New: /usr/sbin/xsf, xsurf(7), xsf(1M).  Built in amix-toolchain:dist
 # against the kit of amix 1a3e7797.
+# 1.0.0-5 (2026-11-22): module 1.0.0-4 unchanged; /usr/sbin/xsf linked by
+# gcc14-cross-amix d5a43a7, whose programs export environ and _environ:
+# the same code at shifted addresses (15088 bytes, was 15068).
 
 KM_NAME=xsurf
 KM_SHORT=xsurf
 KM_REPO=kernel/drivers/xsurf
 KM_VERSION=1.0.0-4
+KM_PKG_VERSION=1.0.0-5
 
 KM_K30_SHA=e8e7cd7a84993a286685065ffbf4bf6f8081e66996158a08fa60fa10c0b5eb1a
 KM_K46_SHA=b4e8316b9b2727af5cb670ef9eb04520126c02cd66aaa157fe903e3785b365df
@@ -56,7 +60,7 @@ kernel/drivers/xsurf/NOTICE 61cdaa4de14fcb16e351c24244c7637c5b78d45da69a71975aec
 _xs=out/build/xsurf-tools/out
 KM_FILES_COMMON="\
 /etc/inet/link.d/xsurf kernel/drivers/xsurf/link.d/xsurf b4b62296d468f10c4c847d41f6d54a92791d98be710600a91ad84578a1a3e0d3 0444
-/usr/sbin/xsf $_xs/bin/xsf 38a3bd9938fe803667e9fc0c4eee8f08b5fa6a68bc659851449cbb5f9c8e8ca8 0755
+/usr/sbin/xsf $_xs/bin/xsf a1c0485bca9c5cf0224783eda9e97be707818f52526cdd5b7ccdd9ee022c530b 0755
 /opt/amix/man/7/xsurf kernel/drivers/xsurf/man/xsurf.7 b8bb8d804450777b28ded0141ac191b1962864c10a6315d5c7d952c9a53de646 0644
 /opt/amix/man/whatis.d/@PKG@ kernel/drivers/xsurf/pkg/xsurf.whatis cba113c6abf27b42e240d6c16158e79056255812bc7ea64183d5e55c070efffd 0644
 /opt/amix/man/1m/xsf kernel/drivers/xsurf/man/xsf.1m 3143e44f07929eca6715239bb5922c07a2145c437989736c0a66b0727f394bb3 0644"
@@ -68,4 +72,4 @@ kdrv_prepare() {
 		sh "$AMIX_REPO_ROOT/kernel/drivers/xsurf/pkg/tools.sh"
 }
 
-KM_SOURCE_EPOCH=1794700800	# 2026-11-15 00:00 UTC
+KM_SOURCE_EPOCH=1795305600	# 2026-11-22 00:00 UTC
