@@ -3,7 +3,8 @@
 The POSIX regular expression calls, `regcomp`, `regexec`, `regerror` and `regfree`, which Amix's
 libc does not have (it has the older `regcmp` and `regex` in `libgen`), as Henry Spencer's library:
 the one 4.4BSD took. Under `/opt/amix`:
-- `lib/libregex.a` and `include/regex.h`;
+- `lib/libregex.a`, the shared `lib/libregex.so.1` (soname `libregex.so.1`, with the link
+  `libregex.so`) and `include/regex.h`;
 - the manual pages `regex(3)` (the four calls, with an alias page for each name) and `regex(7)`
   (the expression syntax).
 
@@ -15,10 +16,15 @@ The stock system documents other regular expression calls under the same names: 
 names this one.
 
 Package: `regex`, category `library`, set `extra`. Built with GCC 14 (`-m68020-60 -mno-strict-align
--O2`). A program links it with `-I/opt/amix/include -L/opt/amix/lib -lregex`. CDE does.
+-O2`). A program links it with `-I/opt/amix/include -L/opt/amix/lib -lregex`, which takes the shared
+library (it then NEEDs `libregex.so.1` at run time, with `/opt/amix/lib` in its run-time path);
+`-Wl,-Bstatic -lregex -Wl,-Bdynamic` takes the archive. The static CDE links the archive, the
+shared Motif and CDE the shared library.
 
-**This revision is the static build**; a shared `libregex` follows when the add-on libraries go
-shared. Nothing in the build ties it to one or the other.
+**The shared library** is the same four routines compiled position-independent (`-fPIC`) and
+linked by the driver's `-shared`. Its gates: no `sym+N@GOT` in the PIC objects
+(`check-got-addend.py`), its names first in `.dynstr` (`check-dynstr-order.py`), no text
+relocations. Since 3.8-2; the archive's bytes are 3.8-1's.
 
 ## Source and licence
 

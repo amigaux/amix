@@ -28,17 +28,34 @@ build() {
 		rm -f libregex.a
 		$AR rc libregex.a $(for o in $LIBOBJS; do echo "$o.o"; done) || exit 1
 		$RANLIB libregex.a || exit 1
+		# the shared library beside it: the same four routines, position-independent
+		mkdir -p pic
+		for o in $LIBOBJS; do
+			$CC $REGEX_DEFS -fPIC $AMIX_CFLAGS -c "$o.c" -o "pic/$o.o" || exit 1
+		done
+		$CC -shared -Wl,-h,libregex.so.1 -o libregex.so.1 $(for o in $LIBOBJS; do echo "pic/$o.o"; done) || exit 1
 		$CC $AMIX_CFLAGS -o re main.o split.o debug.o -L. -lregex || exit 1
 	} > "$BUILD/make.log" 2>&1 || { tail -30 "$BUILD/make.log" >&2; echo "[FAIL] build" >&2; exit 1; }
 	grep -q '^extern int regcomp(regex_t \*, const char \*, int);$' regex.h || {
 		echo "[FAIL] regex.h does not declare regcomp as upstream's mkh writes it" >&2; exit 1; }
 	echo "  AR   libregex.a ($LIBOBJS); re, upstream's tester (not shipped)"
+	# the shared library's gates (gcc14-cross-amix tools): no sym+N@GOT in its PIC
+	# objects, and its names first in .dynstr
+	_t=$AMIX_GCC14_PREFIX/../../tools
+	python3 -I "$_t/check-got-addend.py" pic/*.o > "$BUILD/got-addend.log" 2>&1 &&
+	python3 -I "$_t/check-dynstr-order.py" libregex.so.1 > "$BUILD/dynstr.log" 2>&1 &&
+	! "$READELF" -d libregex.so.1 | grep TEXTREL || {
+		cat "$BUILD/got-addend.log" "$BUILD/dynstr.log" >&2; echo "[FAIL] shared library gates" >&2; exit 1; }
+	echo "  SO   libregex.so.1: check-got-addend and check-dynstr-order clean"
 }
 
 stage() {
 	mkdir -p "$DEST$PREFIX/lib" "$DEST$PREFIX/include" "$DEST$PREFIX/man/man3" \
 		"$DEST$PREFIX/man/man7" "$DEST$PREFIX/doc/regex"
 	cp libregex.a "$DEST$PREFIX/lib/libregex.a"
+	cp libregex.so.1 "$DEST$PREFIX/lib/libregex.so.1"
+	chmod 0755 "$DEST$PREFIX/lib/libregex.so.1"
+	ln -s "$PREFIX/lib/libregex.so.1" "$DEST$PREFIX/lib/libregex.so"
 	cp regex.h "$DEST$PREFIX/include/regex.h"
 	cp regex.3 "$DEST$PREFIX/man/man3/regex.3"
 	cp regex.7 "$DEST$PREFIX/man/man7/regex.7"

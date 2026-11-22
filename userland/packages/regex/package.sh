@@ -2,7 +2,7 @@
 NAME=regex
 PKG=regex
 VERSION=3.8
-PKGREV=1
+PKGREV=2   # -2: libregex.so.1 beside libregex.a (the shared builds)
 SOURCE_EPOCH=1795046400   # 2026-11-19 00:00 UTC
 SUMMARY="regex 3.8 - Henry Spencer's POSIX regular expression library"
 DESC="Henry Spencer's regular expression library (release alpha3.8, the 4.4BSD regex), unaltered, under /opt/amix: libregex.a and regex.h, the POSIX regcomp, regexec, regerror and regfree calls that Amix's libc lacks (it has regcmp and regex in libgen), with the manual pages regex(3) and regex(7). CDE links it."
