@@ -1,6 +1,6 @@
-# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 6
+# C3-2 — the exported-symbol block, the allowlist and DDI v1, version 7
 
-- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4). Version 5 (2026-11-13): minor 5, a kernel whose core takes a `zorro` match key with product 00 (§3). Version 6 (2026-11-15): minor 6 on k46, `fb_register`, and a weak reference is not an import (§2, §3).
+- **Status:** agreed 2026-10-26, version 1. Other repositories build against this text; a change from here is a contract change with a version bump. The DDI list (§3) is reviewed by the 040/060 port's author (OQ-20.4); names that review adds or removes before the kit freezes change the minor, not this version. Version 2 (2026-10-28, from the Paula module, amix-paula): a kernel lists the names of its own minor (§2), a module's tag comes from what it imports (§2), and minor 3 (§3). Version 3 (2026-10-31): minor 4, a kernel whose core loads a demand-class filesystem module at its first mount (§3). Version 4 (2026-11-03): the core tier holds the COMMONs stock kmem readers name (§4). Version 5 (2026-11-13): minor 5, a kernel whose core takes a `zorro` match key with product 00 (§3). Version 6 (2026-11-15): minor 6 on k46, `fb_register`, and a weak reference is not an import (§2, §3). Version 7 (2026-11-23): minor 6 on k30 and minor 7 on k46, `sd_limits` (§3).
 - **Implements:** `docs/spec/20-module-format-and-abi.md` §1.2, §3.1, §4;
   `30-module-core.md` §2 patch 5
 - **Produced by:**
@@ -207,6 +207,17 @@ and a k30 kit stays at 1.5. A module that calls `fb_register` by name
 is tagged k46.1.6; one that uses the kit's `DDI_FB_REGISTER` holds a
 weak reference (§2) and keeps the minor its other names give it. Every
 module of minor 5 or below still fits a minor-6 kernel.
+
+**k30.1.6 and k46.1.7: a disk controller's limits** (version 7). One new
+name on each line, `sd_limits(queuefn, c, l)` (func), the core's
+(core patch 0059), with which a controller attaches its limits to its
+`sd_register` registration and receives larger commands with segment
+lists (contract C4-7, header `sys/sdseg.h`). The fingerprint texts equal
+the minor before (C4-7 §7). A cut claims the minor only with core patch
+0059. A module that calls `sd_limits` by name carries the minor; one
+that uses `DDI_SD_LIMITS` holds a weak reference (§2) and keeps the
+minor its other names give it. Every module of an earlier minor still
+fits.
 
 The two exclusion flags stay data names, and are not replaced by a
 `paula_claim()`/`paula_release()` pair (2026-10-28). No rule here

@@ -174,6 +174,11 @@ has it in full):
   `_load` for its window (not the registers), so its pages are not
   serialised; `ENOSYS` on k30 and on a kernel before k46.1.6 means
   nothing to do (ddi.md, "The framebuffer cache class").
+- A disk controller that can take more than a page per command declares
+  its limits after `sd_register`, through `DDI_SD_LIMITS` (`sys/sdseg.h`,
+  k30.1.6, k46.1.7), and gets larger commands through a second queue
+  entry; without it, or on an older kernel, it gets today's (ddi.md,
+  `sd_limits`; contract C4-7).
 - `_unload` undoes everything: hooks, handlers, timeouts, mappings,
   registrations with other modules.
 - `_halt` (void) stops a board that can interrupt or write memory.

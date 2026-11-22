@@ -13,8 +13,8 @@
 #                        changes under kernel/; from an archive of amix,
 #                        the environment's KIT_REV, else unknown),
 #                        MONSW_REV, on k46 PORT_REV
-#   include/sys/         mod.h, moddefs.h, ksym.h (the module core's, after
-#                        core/series), amixddi.h (abi/include), and the
+#   include/sys/         mod.h, moddefs.h, ksym.h, sdseg.h (the module
+#                        core's, after core/series), amixddi.h (abi/include), and the
 #                        generic modules' interfaces from kernel/modules
 #                        (MODHDRS: monsw.h, zz9kbus.h)
 #   sysroot/usr/include/ the stock headers of the pinned sysroot, which the
@@ -56,8 +56,8 @@ set -e
 export LC_ALL=C
 LINE=$1 OUT=$2
 case "$LINE" in
-k30) KABI=k30.1.5 KABI_MIN=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
-k46) KABI=k46.1.6 KABI_MIN=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
+k30) KABI=k30.1.6 KABI_MIN=k30.1.2 CPUFLAG=-m68020 DEFCPU=68030 ;;
+k46) KABI=k46.1.7 KABI_MIN=k46.1.2 CPUFLAG=-m68040 DEFCPU=68040 ;;
 *) echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2 ;;
 esac
 [ -n "$OUT" ] || { echo "usage: mkkit.sh k30|k46 OUTDIR" >&2; exit 2; }
@@ -112,7 +112,7 @@ while read p; do
 	case "$p" in \#*|"") continue ;; esac
 	patch -p1 -s -d "$S" < "$R/core/patches/$p"
 done < "$R/core/series"
-cp "$S/include/sys/mod.h" "$S/include/sys/moddefs.h" "$S/include/sys/ksym.h" "$OUT/include/sys/"
+cp "$S/include/sys/mod.h" "$S/include/sys/moddefs.h" "$S/include/sys/ksym.h" "$S/include/sys/sdseg.h" "$OUT/include/sys/"
 cp "$R/abi/include/sys/amixddi.h" "$OUT/include/sys/"
 LINEMACRO=DDI_LINE_$(echo "$LINE" | tr a-z A-Z)
 printf '%s\n' \

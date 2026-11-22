@@ -82,6 +82,7 @@ putq func 0
 qreply func 0
 ramdisk_image func 2
 root_defer func 2
+sd_limits func 6
 sd_register func 1
 sdopen func 2
 sdqueue func 2

@@ -1,4 +1,4 @@
-# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2, stage 5 in minor 3, k46.1.6 `fb_register`: each name's minor is its `ddi.list` line)
+# DDI v1 — the kernel interface of an Amix module (k30.1.0, k46.1.0; stage 4 adds names in minors 1 and 2, stage 5 in minor 3, k46.1.6 `fb_register`, k30.1.6 and k46.1.7 `sd_limits`: each name's minor is its `ddi.list` line)
 
 These are the names a module may use from the kernel. The list of record
 is the ABI kit's `ddi.list` (`abi/<line>/ddi.list` here). The kernel's
@@ -169,13 +169,14 @@ self-test passes (C3-6 §1.3). A level-6 handler acknowledges and masks its
 board and records what happened. The work runs at level 4 or below, in a
 level-2 handler raised through PORTS or in the poll.
 
-## Disk controllers and the RAM disk (stage 4: `sd_register` 1.1; `root_defer` k46.1.1, k30.1.2; `iodone`, `ramdisk_image` 1.2)
+## Disk controllers and the RAM disk (stage 4: `sd_register` 1.1; `root_defer` k46.1.1, k30.1.2; `iodone`, `ramdisk_image` 1.2; `sd_limits` k30.1.6, k46.1.7)
 
 | Name | Form | Context | Provider | Contract |
 |---|---|---|---|---|
 | `iodone` | `iodone(bp)` | any but level 6 | stock | Ends a block request: a block driver's `strategy` calls it when the transfer of `bp` (a `struct buf *`, `<sys/buf.h>`) is done or has failed, with `b_flags`, `b_error` and `b_resid` set first, as a static driver does |
 | `ramdisk_image` | `int ramdisk_image(paddr, size)` | any | core | The physical address and size of the RAM-disk image boot2 placed (contract C4-3 §4), from the loader record. 0; `ENOENT` (no image) |
 | `root_defer` | `int root_defer(fn, arg)` | root | core | `fn(arg)` runs once at the first `sysinit` entry, in process context at level 0, before any boot-class module loads, in safe mode too: where a root-class driver attaches its interrupt and runs its self-test (contract C4-2 §3). 0; `EINVAL` (not in a root-class `_load`, or no `fn`); `ENOSPC` (8 already). `fn`'s nonzero return is printed; the module stays linked |
+| `sd_limits` | `int sd_limits(queuefn, c, l)` (`struct sdlim *l`, `<sys/sdseg.h>`) | root | core | Attaches a controller's limits to the registration `sd_register(queuefn, c, …)` made in the same `_load` (contract C4-7 §3): bytes and segments per command, segment alignment and length, the engine's reach, and `l->sl_queue`, which then gets the larger `struct sdcomx` commands while `queuefn` keeps the stock ones. `l` is the module's storage for the kernel's life. 0; `EBUSY` (sd's first open has closed registration); `ENOENT` (no such registration of this module); `EINVAL` (a field out of range). A refusal leaves today's commands, with one console line. Through `DDI_SD_LIMITS` (`<sys/sdseg.h>`) the reference is weak: the module keeps its minor and, on an older kernel, gets `ENOSYS` and today's commands |
 | `sd_register` | `int sd_register(queuefn, c, base, name, rank)` | root | core | Registers one board with sd (contract C4-1 §3). `queuefn(c, cp)` gets sd's requests for it; `base` is what `sdcardbase()` returns; `name` (the module's storage) what `sdhardwarename()` returns; `rank` the class the module declares in `.moddata` (1 `z3660`, 2 `zorro`, 3 `mobo`, 4 `ide`). 0; `EINVAL` (another class, no `queuefn` or `name`, or outside a module's `_load`); `ENOSPC` (four registered); `EBUSY` (sd's first open has closed registration). Allocates nothing; a failed `_load`'s registrations are removed |
 
 ## Filesystems and the disk layer (k30.1.2, k46.1.2)

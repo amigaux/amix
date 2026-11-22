@@ -120,11 +120,11 @@ for l in k30 k46; do
 	else
 		fail "$l: the probe's offsets differ from abi.txt"; diff "$W/offs-$l.got" "$W/offs-$l.want"; cat "$W/offs-$l.log"
 	fi
-	# sys/sdseg.h (C4-7, a draft the kit does not ship yet): its layouts
-	# after the stock struct sdcom, whose size is abi.txt's, and the weak
-	# sd_limits reference of DDI_SD_LIMITS
+	# the kit's sys/sdseg.h (C4-7): its layouts after the stock struct
+	# sdcom, whose size is abi.txt's, and the weak sd_limits reference of
+	# DDI_SD_LIMITS
 	sz=$(awk '$2 == "ABI_SDCOM_SZ" {print $3}' "$K/abi.txt")
-	if AMIX_SYSROOT=$K/sysroot m68k-cbm-sysv4-gcc $CF -I"$R/abi/include" -DSDCOM_SZ="$sz" \
+	if AMIX_SYSROOT=$K/sysroot m68k-cbm-sysv4-gcc $CF -DSDCOM_SZ="$sz" \
 		-c "$R/tests/kit/sdseg.c" -o "$W/sdseg-$l.o" > "$W/sdseg-$l.log" 2>&1 &&
 	   m68k-cbm-sysv4-objdump -t "$W/sdseg-$l.o" | grep -q ' w .*UND.* sd_limits$'; then
 		pass "$l: sys/sdseg.h: sdcomx after the stock $sz-byte sdcom, sdseg, sdlim as C4-7; sd_limits weak"
@@ -331,6 +331,13 @@ for l in k30 k46; do
 			pass "$l: a module tagged $l.1.5 passes the $KABI kit"
 		else fail "$l: a 1.5-tagged module on the 1.6 kit"; cat "$W/prev5.out"; fi
 	fi
+	# a module tagged the minor before the kit's passes it as it is: k30.1.6
+	# and k46.1.7 add sd_limits only (C4-7)
+	pm=$l.1.$((${KABI##*.} - 1))
+	[ "$pm" != $l.1.5 ] && KABI_OVERRIDE=$pm mkbad $l prevm "$WRAP"'MOD_MISC_WRAPPER(prevm, l, u, "x");\n' "$M0"'prevm\tprevm\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-prevm/out/mod.d/prevm" > "$W/prevm.out" 2>&1; then
+			pass "$l: a module tagged $pm passes the $KABI kit"
+		else fail "$l: a $pm-tagged module on the $KABI kit"; cat "$W/prevm.out"; fi
 	# VSECT1 and phystokv on both lines (ddi.md "Memory"), with
 	# <sys/amixddi.h> before and after <sys/immu.h>, and no warning
 	for o in pre post; do
@@ -472,6 +479,54 @@ if (cd "$d" && make KIT="$B/kit/k46" > make46.log 2>&1) &&
 else
 	fail "fb_register by name"; cat "$d"/make*.log
 fi
+# sd_limits (k30.1.6, k46.1.7, C4-7): one source through the make
+# fragment.  DDI_SD_LIMITS keeps the module at 1.2 on both lines with a
+# weak sd_limits, which a kernel before the minor leaves 0 (the call gives
+# ENOSYS); called by name the module carries the new minor, and an older
+# kernel's block refuses it
+d=$W/sdlimw
+mkdir -p "$d"
+printf '%b' '#include "sys/types.h"\n#include "sys/errno.h"\n#include "sys/moddefs.h"\n#include "amiga/alien/rico.h"\n#include "amiga/alien/sd.h"\n#include "sys/sdseg.h"\nDDI_SD_LIMITS_DECL;\nint sdlimw_e;\nstatic bool q() { return 1; }\nstatic bool qx() { return 1; }\nstatic struct sdlim lim = { SDLIM_VER, 0, 65536, 1, 1, 1, 0, 0xFFFFFFFF, qx };\nstatic int l(p) char *p; { sdlimw_e = DDI_SD_LIMITS(q, 0, &lim); return 0; }\nstatic int u() { return 0; }\nMOD_MISC_WRAPPER(sdlimw, l, u, "x");\n' > "$d/sdlimw.c"
+printf '%b' '$modtype misc\n$class boot\n$match always\nsdlimw\tsdlimw\n' > "$d/Master"
+printf 'MODULE = sdlimw\nOBJS = sdlimw.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: sdlimw: ok (k30.1.2, boot," "$d/make30.log" &&
+   grep -q "modcheck: sdlimw: ok (k46.1.2, boot," "$d/make46.log" &&
+   m68k-elf-nm "$d/build/k30/src/Driver.o" | grep -q " w sd_limits$" &&
+   m68k-elf-nm "$d/build/k46/src/Driver.o" | grep -q " w sd_limits$"; then
+	pass "DDI_SD_LIMITS: one source, k30.1.2 and k46.1.2, a weak sd_limits on both"
+else
+	fail "DDI_SD_LIMITS"; cat "$d"/make*.log
+fi
+d=$W/sdlimn
+mkdir -p "$d"
+sed -e 's/DDI_SD_LIMITS_DECL;//' -e 's/DDI_SD_LIMITS(/sd_limits(/' -e 's/sdlimw/sdlimn/g' "$W/sdlimw/sdlimw.c" > "$d/sdlimn.c"
+sed 's/sdlimw/sdlimn/g' "$W/sdlimw/Master" > "$d/Master"
+printf 'MODULE = sdlimn\nOBJS = sdlimn.o\ninclude $(KIT)/mk/module.mk\n' > "$d/Makefile"
+if (cd "$d" && make KIT="$B/kit/k30" > make30.log 2>&1 && make KIT="$B/kit/k46" > make46.log 2>&1) &&
+   grep -q "modcheck: sdlimn: ok (k30.1.6, boot," "$d/make30.log" &&
+   grep -q "modcheck: sdlimn: ok (k46.1.7, boot," "$d/make46.log"; then
+	pass "sd_limits by name: k30.1.6 and k46.1.7"
+else
+	fail "sd_limits by name"; cat "$d"/make*.log
+fi
+# against a module kernel from before the minor: the weak form loads (its
+# sd_limits 0), the named form is refused
+for l in k30 k46; do
+	KERN=$([ $l = k46 ] && echo "$K46" || echo "$K30")
+	if [ -x "$B/core/test-bin/reloc" ] && [ -f "$KERN" ] && [ -f "$W/ksym-$l.bin" ]; then
+		if "$B/core/test-bin/reloc" -k "$W/ksym-$l.bin" -b 0x300000 "$W/sdlimw/build/$l/mod.d/sdlimw" 2>&1 | grep -q '^OK' &&
+		   ! "$B/core/test-bin/reloc" -k "$W/ksym-$l.bin" -b 0x300000 "$W/sdlimn/build/$l/mod.d/sdlimn" 2>&1 | grep -q '^OK'; then
+			pass "$l: against an older kernel's block, DDI_SD_LIMITS loads (sd_limits 0, ENOSYS) and sd_limits by name is refused"
+		else
+			fail "$l: the sd_limits modules against an older kernel's block"
+			"$B/core/test-bin/reloc" -k "$W/ksym-$l.bin" -b 0x300000 "$W/sdlimw/build/$l/mod.d/sdlimw"
+			"$B/core/test-bin/reloc" -k "$W/ksym-$l.bin" -b 0x300000 "$W/sdlimn/build/$l/mod.d/sdlimn"
+		fi
+	else
+		echo "SKIP $l: no host loader (make core) or no module kernel: the sd_limits modules against an older block"
+	fi
+done
 # the root-context probe builds and checks on both lines; on k46 it
 # also calls dev_kvmap (tests/bench/README.md, the root context)
 d=$W/rprobe

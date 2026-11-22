@@ -1,5 +1,5 @@
 /*
- * amixddi.h -- DDI v1 (k30.1.0, k46.1.0; later names by minor, the last k46.1.6): the names a module may use from the
+ * amixddi.h -- DDI v1 (k30.1.0, k46.1.0; later names by minor, the last k30.1.6 and k46.1.7): the names a module may use from the
  * kernel, and the declarations of those the module core provides.
  *
  * The list of record is the kit's ddi.list; the contract of each name
@@ -65,7 +65,9 @@ extern int	intr_detach();		/* (int, int (*)(), char *) */
  * sd_register(queuefn, c, base, name, rank) from the module's _load:
  * queuefn(c, cp) gets sd's requests for the board, rank is the class the
  * module's .moddata declares (1 z3660, 2 zorro, 3 mobo, 4 ide).  0,
- * EINVAL, ENOSPC (four), EBUSY (after sd's first open).
+ * EINVAL, ENOSPC (four), EBUSY (after sd's first open).  Its limits and
+ * larger commands (k30.1.6 / k46.1.7, sd_limits, DDI_SD_LIMITS; contract
+ * C4-7) are declared by <sys/sdseg.h>.
  */
 extern int	sd_register();		/* (int (*)(), unsigned, char *, char *, unsigned) */
 

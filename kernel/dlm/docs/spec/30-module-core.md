@@ -218,13 +218,13 @@ alone have one controller, card 0, as in 1.0.
 The sd layer is a stock binary on the 040/060 line, patched in place, and
 generated source on the 030 line (`amix-kerntools/templates/sd.c.in`); the four-card change is a merge request to the 040/060 port.
 
-### 5.4 Larger disk commands (draft)
+### 5.4 Larger disk commands
 
 `struct sdcom` carries one physical address and one length, so every
 disk command is physically contiguous, and every path cuts at the page:
 the raw path stages through one page-sized buffer (`amiga_dma_pageio`),
 the block path sends one command per page (`gen_strategy`,
-`buf_breakup`). Contract C4-7 (draft) adds a command with a segment list
+`buf_breakup`). Contract C4-7 adds a command with a segment list
 and a residual, `struct sdcomx`, which begins with an unchanged
 `struct sdcom`, and a controller's limits, `sd_limits` after
 `sd_register`: bytes and segments per command, alignment, reach.
@@ -233,9 +233,9 @@ and a residual, `struct sdcomx`, which begins with an unchanged
 |---|---|
 | Stock drivers | declare nothing and get today's commands through their `sd_register` queue function; `struct sdcom` keeps its 40 bytes and the fingerprint its offsets |
 | Declaring controllers | get `sdcomx` commands through `sl_queue`, and keep the stock entry for the tape driver, the `GSIO` ioctl and a filesystem module's own `sdqueue` |
-| dd | builds the commands from the card's limits: first through a 64 KiB `dma_alloc` bounce per controller, later straight from the request's frames; `D_NOBRKUP` with its own page lists |
+| dd | builds the commands from the card's limits (`sd_lim`, `sdqueuex`, core patch 0059): first through a 64 KiB `dma_alloc` bounce per controller, shared by its units in turn, later straight from the request's frames; `D_NOBRKUP` for all its cards, with its own per-page path for a card without limits |
 | DMA | the calls of minor 2 per segment, one `dma_rec` per segment in flight; direct reads into copyback frames on k46 keep the 16-byte line rule |
-| Minor | each line's next (k30.1.6, k46.1.7 as the kits stand), taken when the kernel side can consume it; a module that declares limits through `DDI_SD_LIMITS` keeps its minor and loads on older kernels |
+| Minor | k30.1.6 and k46.1.7, `sd_limits`; a module that declares limits through `DDI_SD_LIMITS` keeps its minor and loads on older kernels |
 
 ## 6. Filesystems as modules
 

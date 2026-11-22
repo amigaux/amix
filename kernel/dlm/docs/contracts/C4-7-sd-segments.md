@@ -1,19 +1,18 @@
-# C4-7 — disk commands with segment lists, draft
+# C4-7 — disk commands with segment lists, version 1
 
-- **Status:** draft (2026-11-22). The names, layouts and rules below are
-  meant for review by their three consumers before any kernel takes
-  them. Nothing here is in a kit yet: the header is
-  `abi/include/sys/sdseg.h` and `make kit` does not copy it, `ddi.list`
-  does not list `sd_limits`, and no `abi-<tag>.txt` describes the new
-  layouts. They enter the kit together, with each line's next minor
-  (§7), once the kernel side can consume them. Until then a change here
-  needs no version bump; from then on it is a contract change, as for
-  every C-text.
+- **Status:** accepted 2026-11-23, version 1, after review by the 030
+  kernel's dd: §3.1's dd path for a card with no limits, §5's shared
+  bounce, `sdqueuex` without a result, the `dma_alloc` fallback,
+  `sd_reach` and the k30 direct form. The core side is core patch 0059;
+  the kits carry it as k30.1.6 and k46.1.7 (§7). Other repositories build
+  against this text; a change from here is a contract change with a
+  version bump.
 - **Extends:** C4-1 (`sd_register`, `sdqueue`, the completion's level)
   and C4-5 (the DMA calls of minor 2), which stand unchanged
 - **Written by:** kernel/dlm (`sd_limits`, `sd_lim`, `sdqueuex` in the
-  module core; the header); the 030 kernel (dd's request builder, from
-  source); the 040/060 port (the same for k46)
+  module core, core patch 0059; the header, the core's
+  `include/sys/sdseg.h`, which the kit ships); the 030 kernel (dd's
+  request builder, from source); the 040/060 port (the same for k46)
 - **Read by:** the disk controller modules (A4091/A4092 and the A4000T
   53C710, z3660scsi, the IDE controllers), the 030 kernel's dd and the
   port's
@@ -158,7 +157,7 @@ int sd_limits(bool (*queuefn)(), uint c, struct sdlim *l);
 | `sl_gran` | 12 | 1 for any length; 2, 4, … 512. The last segment's length too |
 | `sl_pad` | 14 | 0 |
 | `sl_reach` | 16 | inclusive: `0xFFFFFFFF` for a 32-bit engine, `0x00FFFFFF` for a Zorro II one |
-| `sl_queue` | 20 | the controller's queue function for `sdcomx` commands, called as `queuefn` is (C4-1 §1) with the board index `c` and a `struct sdcomx *` |
+| `sl_queue` | 20 | the controller's queue function for `sdcomx` commands, called as `queuefn` is (C4-1 §1) with the board index `c` and a `struct sdcomx *`. Its result is ignored, as sd ignores `queuefn`'s: a controller that cannot run a command completes it, `okay` false and `sx_resid` `nbyte` |
 | size | 24 | |
 
 `sd_limits` names a registration made by `sd_register` (C4-1 §3) by its
@@ -244,52 +243,89 @@ The DMA calls are unchanged; a segment is what they call a segment.
 
 ## 5. The kernel's request builder (dd)
 
-For the 030 kernel's dd and the port's. The core provides two names to
-them; neither is in the DDI:
+For the 030 kernel's dd and the port's. The core provides these names
+to them; none is in the DDI:
 
 ```c
-struct sdlim *sd_lim(uint card);	/* the card's limits, or 0 */
-bool sdqueuex(struct sdcomx *cpx);	/* sl_queue of cpx->sx_com.card */
+struct sdlim *sd_lim(uint card);		/* the card's limits, or 0 */
+void sdqueuex(struct sdcomx *cpx);		/* to sl_queue of cpx->sx_com.card */
+bool sd_reach(uint card, ulong pa, ulong len);	/* the direct form's reach test (later) */
 ```
 
-`sd_lim` answers after registration has closed (sd's first open) and
-never changes after; `sdqueuex` is called as `sdqueue` is, at any level
-but 6, and the completion comes as C4-1 §3.2 says.
+- **`sd_lim`** answers from sd's first open on, and never changes after;
+  before it, 0. dd asks only about a card `sdopen` took. The core keeps
+  no card numbers: sd ranks the controllers after it has taken the
+  registrations, and the core finds a card's registration by what sd's
+  own `sdcardbase(card)` and `sdhardwarename(card)` return, which are the
+  registration's `base` and `name` (C4-1 §3). Registrations alike in both
+  get no limits. Every kernel with `sd_register` has the four-card sd
+  and its `sdcardbase` (k30: `sd.c.in`; k46: the port's
+  `sdcardbase040.s`).
+- **`sdqueuex`** is called as `sdqueue` is, at any level but 6, and
+  returns nothing, as `sdqueue` does: the completion always comes, as
+  C4-1 §3.2 says, possibly before `sdqueuex` returns. For a card with no
+  limits the core completes the command itself, `okay` false and
+  `sx_resid` `nbyte`.
+- **`sd_reach`** is true when the card's engine reaches `[pa, pa+len)`
+  directly: within `sl_reach`, and either `SDL_ALLRAM` or memory a Zorro
+  bus master reaches (§3.2). Only the direct form needs it; the core
+  provides it with that form, and until then a builder makes no direct
+  command.
 
 Per request, by the card's limits:
 
-1. **No limits:** today's path: `amiga_dma_pageio`, `gen_strategy` and
-   `buf_breakup` as the stock kernel has them.
+1. **No limits:** one segment of at most a page per command, as the
+   stock kernel cuts them. dd declares `D_NOBRKUP` for all its cards,
+   because `fix_swtbls` reads a block row's flag once at boot, before any
+   card's limits are known; so dd does the cutting itself: page lists
+   one command per page, a buffer larger than a page without one a piece
+   per page, as `gen_strategy` and `buf_breakup` did. The raw path for
+   such a card stays `amiga_dma_pageio`.
 2. **Limits:** the builder makes `sdcomx` commands of up to
    `sl_maxbytes` each.
    - **Through the bounce (the first form):** each command's data goes
      through a contiguous bounce region of the controller's own,
      `min(sl_maxbytes, 64 KiB)` from `dma_alloc`, taken at the card's
-     first open, one per controller so that no lock is shared: one
-     segment, a copy per command instead of per page. This form needs
-     no segment support and serves every controller that declares
-     limits.
+     first open: one segment, a copy per command instead of per page.
+     Up to eight units share a controller's region, so dd serializes the
+     controller's bounce commands: one holder and a FIFO of the units
+     waiting, fill, queue, completion, copy out, release, next, with no
+     sleep at interrupt level. This form needs no segment support and
+     serves every controller that declares limits.
+   - **When the region cannot be had** (`dma_alloc` returns 0 at the
+     first open), or `sl_maxbytes` is below a page, the card is treated
+     as having no limits (1.), with one console line; the open does not
+     fail.
    - **Direct (a later form):** the segments are the request's own
      frames: from the soft-locked user pages on the raw path, from the
      page list on the block path; adjacent frames merged; a command cut
      where `sl_maxbytes` or `sl_maxseg` would be passed. A frame that
-     fails `sl_align`, `sl_gran` or the reach of §3.2 sends its command
-     through the bounce.
-   - dd declares `D_NOBRKUP` and handles its own page lists, so
-     `gen_strategy` no longer cuts them; `buf_breakup` leaves the path
-     for such a card.
-3. **The line rule for direct reads on k46.** The CPU caches lines of
-   16 bytes. A direct `DMA_FROM_DEVICE` segment in memory the CPU uses
-   must start and end on a line: `dma_complete` invalidates whole lines,
-   and a line shared with live data would lose it. A read whose buffer
-   does not start and end on a line goes through the bounce whole (the
-   first direct form), or with its partial edge lines as segments of
-   their own in the bounce region (allowed later).
-4. **Direct DMA into copyback frames on k46** comes after metal cells
-   have shown coherence on the controller: every segment through
+     fails `sl_align`, `sl_gran` or `sd_reach` sends its command through
+     the bounce.
+3. **k46: the line rule for direct reads.** The 68040 and 68060 cache
+   lines of 16 bytes, copyback. A direct `DMA_FROM_DEVICE` segment in
+   memory the CPU uses must start and end on a line: `dma_complete`
+   invalidates whole lines, and a line shared with live data would lose
+   it. A read whose buffer does not start and end on a line goes through
+   the bounce whole (the first direct form), or with its partial edge
+   lines as segments of their own in the bounce region (allowed later).
+4. **k46: direct DMA into copyback frames** comes after metal cells have
+   shown coherence on the controller: every segment through
    `dma_prepare`/`dma_complete`, the line rule above. Today raw I/O is
    coherent with the DMA seam off only because the staging buffer is
    write-through heap; a copyback user frame has no such net.
+5. **k30: the direct form may come sooner.** The 68030's data cache is
+   write-through and small, so a frame never holds a dirty line, and the
+   invalidation after a device read loses nothing: no edge bounce is
+   needed. Block-path frames are whole pages, so `sl_align` and
+   `sl_gran` hold. The k30 builder may take the direct form on the block
+   path as soon as `sd_reach` exists; the bounce form there copies at
+   interrupt level for asynchronous page reads, which is acceptable
+   first, not lasting.
+6. **dd's own commands:** its REQUEST SENSE buffer is aligned to 16 bytes
+   per unit and goes through `sdqueuex` as a one-segment `sdcomx`
+   without `SDX_SEG` for a card with limits; dd fills `b_resid` from
+   `sx_resid`.
 
 The first kernels take the bounce form only; the direct form is allowed
 by this text and is enabled per controller later.
@@ -327,20 +363,24 @@ static struct sdlim mylim = {
 ## 7. The minor
 
 This is not minor 1.4: that minor is taken (the demand class, C3-2
-§3), and k46 is at 1.6. The interface takes each
-line's next minor when the kit takes it: k30.1.6 and k46.1.7 as the
-kits stand today. That kit change:
+§3). The interface is each line's next minor: **k30.1.6** and
+**k46.1.7**. The kit change:
 - lists `sd_limits` in both lines' `ddi.list` at that minor;
-- copies `sys/sdseg.h` into the kit's `include/sys/`;
-- adds the new layouts to the probe (`dlmoffs.c`) and so to the
-  fingerprint text, additive lines only (`offs ABI_SDCOMX_*`,
-  `ABI_SDSEG_*`, `ABI_SDLIM_*`): the core reads an `sdlim` in a module's
-  memory (C3-3 §4);
-- adds a row to `ddi.md`.
+- ships `sys/sdseg.h`, the core's, in the kit's `include/sys/`;
+- adds a row to `ddi.md`;
+- adds no fingerprint line, so `abi-k30.1.6.txt` and `abi-k46.1.7.txt`
+  equal the texts before them. `sys/sdseg.h` is the core's own header,
+  the same file in the kernel and in the kit, and its one dependency on
+  the kernel's headers, `struct sdcom`, is already in the fingerprint
+  (`ABI_SDCOM_*`); the kit test measures its layouts on both lines
+  against that size. So a kernel built with this core may still claim an
+  earlier minor: its block then leaves `sd_limits` out, and a module's
+  weak reference stays 0.
 
-A module built for an earlier minor loads unchanged on such a kernel:
-`struct sdcom`, `sdqueue` and `sd_register` keep their form, and its
-controller, having declared nothing, gets today's commands.
+A cut claims the new minor only with core patch 0059. A module built
+for an earlier minor loads unchanged on such a kernel: `struct sdcom`,
+`sdqueue` and `sd_register` keep their form, and its controller, having
+declared nothing, gets today's commands.
 
 ## 8. Not in this contract
 
@@ -350,3 +390,4 @@ controller, having declared nothing, gets today's commands.
 - Per-page completion of a partial command (§2.2).
 - `sdqueuex` for modules: a filesystem module's own commands stay in the
   stock form.
+- `sd_reach`'s implementation, which comes with the direct form (§5).
