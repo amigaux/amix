@@ -794,6 +794,16 @@ stage() {
         rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN="  SONAME      libx.so.1", **elf_env)
         check("UNDEF: a shared object that NEEDs nothing takes its symbols from libc.so.1, the interpreter",
               rc == 0 and "found: libc.so.1 (the interpreter)" in out, out)
+        for sym in ("environ", "_environ"):
+            rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN=libc.strip(), STUB_UNDEF=sym, **elf_env)
+            check("UNDEF: a shared object takes %s from the program, which exports it" % sym,
+                  rc == 0 and "UNDEF ok  out.elf" in out, out)
+        rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN=libc.strip(), STUB_UNDEF="nosuch", **elf_env)
+        check("UNDEF: a shared object's symbol nothing defines is still refused",
+              rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+        rc, out = build("elfy", STUB_UNDEF="environ", **elf_env)
+        check("UNDEF: an executable's environ is not taken from a program",
+              rc == 1 and "undefined symbols no NEEDED library defines: environ" in out, out)
         rc, out = build("prebuilt", STUB_PINS="x " + "0" * 64, STUB_DYN=libc.strip(), **elf_env)
         check("PREBUILT: a file no gcc14 pin names is refused",
               rc == 1 and "is in PREBUILT, but no file gcc14-pin.sh pins has its sha256" in out, out)

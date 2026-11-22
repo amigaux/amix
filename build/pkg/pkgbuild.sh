@@ -513,13 +513,20 @@ for b in $BINS; do
 	done
 	# a shared object takes from libc.so.1 without naming it: the interpreter
 	# is in every process (libamixrt.so.1 NEEDs nothing)
-	if [ "$(od -An -tx1 -j16 -N2 "$b" | tr -d ' ')" = 0003 ] && [ -f "$AMIX_SYSROOT/usr/lib/libc.so.1" ]; then
+	dyn=no
+	[ "$(od -An -tx1 -j16 -N2 "$b" | tr -d ' ')" = 0003 ] && dyn=yes
+	if [ $dyn = yes ] && [ -f "$AMIX_SYSROOT/usr/lib/libc.so.1" ]; then
 		case " $files " in
 		*" $AMIX_SYSROOT/usr/lib/libc.so.1 "*) ;;
 		*) files="$files $AMIX_SYSROOT/usr/lib/libc.so.1" found="$found libc.so.1 (the interpreter)" ;;
 		esac
 	fi
-	for l in $files; do dso_syms "$l"; done | LC_ALL=C sort -u > "$BUILD/needed.syms"
+	# and environ from the program: every program the gcc14 specs link
+	# defines and exports environ and _environ
+	{
+		for l in $files; do dso_syms "$l"; done
+		[ $dyn = no ] || printf '%s\n' environ _environ
+	} | LC_ALL=C sort -u > "$BUILD/needed.syms"
 	# strong references only: a weak one (w) may stay unresolved, as libamixrt's
 	# __amix_dso_batch does in a program that does not define it
 	missing=$("$NM" -u "$b" | awk '$1 == "U" {print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
