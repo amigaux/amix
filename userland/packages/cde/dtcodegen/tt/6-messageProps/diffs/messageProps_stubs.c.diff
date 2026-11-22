@@ -1,0 +1,28 @@
+--- a/messageProps_stubs.c
++++ b/messageProps_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: messageProps_stubs.C.src /main/4 1996/03/18 15:04:37 barstow $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -663,11 +658,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbMessagePropsMessagePropsInfo	instance = (DtbMessagePropsMessagePropsInfo)clientData;
++    DtbMessagePropsMessagePropsInfo	dtbTarget = (DtbMessagePropsMessagePropsInfo)clientData;
++    DtbMessagePropsMessagePropsInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_message_props_message_props_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_message_props_message_props_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->messageProps_shellform);
+     

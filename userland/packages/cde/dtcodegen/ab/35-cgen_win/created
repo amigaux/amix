@@ -1,0 +1,3 @@
+./cgen_win.res
+./cgen_win_ui.c
+./cgen_win_ui.h

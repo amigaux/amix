@@ -1,0 +1,28 @@
+--- a/ttChooser_stubs.c
++++ b/ttChooser_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: ttChooser_stubs.C.src /main/3 1995/11/06 17:14:10 rswiston $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -241,11 +236,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbTtChooserChooserInfo	instance = (DtbTtChooserChooserInfo)clientData;
++    DtbTtChooserChooserInfo	dtbTarget = (DtbTtChooserChooserInfo)clientData;
++    DtbTtChooserChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_tt_chooser_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_tt_chooser_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->chooser_shellform);
+     

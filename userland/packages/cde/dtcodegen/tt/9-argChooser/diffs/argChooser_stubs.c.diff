@@ -1,0 +1,172 @@
+--- a/argChooser_stubs.c
++++ b/argChooser_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: argChooser_stubs.C.src /main/3 1995/11/06 17:12:12 rswiston $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -21,6 +16,7 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
++#include <stdint.h>
+ #include <stdio.h>
+ #include <Xm/Xm.h>
+ #include "dtb_utils.h"
+@@ -193,14 +189,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argIvalBox, False);
++    XtSetSensitive(instance->argIvalBox_rowcolumn, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -217,14 +214,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argIvalBox, False);
++    XtSetSensitive(instance->argIvalBox_rowcolumn, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -241,14 +239,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argIvalBox, True);
++    XtSetSensitive(instance->argIvalBox_rowcolumn, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -265,11 +264,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->argChooser_shellform);
+     
+@@ -288,11 +288,12 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+     XtUnmanageChild(instance->argChooser_shellform);
+     
+@@ -311,14 +312,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argValText, False);
++    XtSetSensitive(instance->argValText_scrolledwin, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -335,14 +337,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argValText, False);
++    XtSetSensitive(instance->argValText_scrolledwin, False);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/
+@@ -359,14 +362,15 @@
+     /*** DTB_USER_CODE_START vvv Add C variables and code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C variables and code above ^^^ ***/
+     
+-    DtbArgChooserArgChooserInfo	instance = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	dtbTarget = (DtbArgChooserArgChooserInfo)clientData;
++    DtbArgChooserArgChooserInfo	instance = dtbTarget;	/* obsolete */
+     
+-    if (!(instance->initialized))
++    if (!(dtbTarget->initialized))
+     {
+-        dtb_arg_chooser_arg_chooser_initialize(instance, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
++        dtb_arg_chooser_arg_chooser_initialize(dtbTarget, dtb_ttsnoop_ttsnoop_win.ttsnoopWin);
+     }
+ 
+-    XtSetSensitive(instance->argValText, True);
++    XtSetSensitive(instance->argValText_scrolledwin, True);
+     
+     /*** DTB_USER_CODE_START vvv Add C code below vvv ***/
+     /*** DTB_USER_CODE_END   ^^^ Add C code above ^^^ ***/

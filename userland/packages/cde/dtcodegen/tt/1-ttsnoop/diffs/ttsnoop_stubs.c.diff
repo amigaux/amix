@@ -1,0 +1,20 @@
+--- a/ttsnoop_stubs.c
++++ b/ttsnoop_stubs.c
+@@ -1,9 +1,4 @@
+ /*** DTB_USER_CODE_START vvv Add file header below vvv ***/
+-//%%  (c) Copyright 1993, 1994 Hewlett-Packard Company
+-//%%  (c) Copyright 1993, 1994 International Business Machines Corp.
+-//%%  (c) Copyright 1993, 1994 Sun Microsystems, Inc.
+-//%%  (c) Copyright 1993, 1994 Novell, Inc.
+-//%%  $XConsortium: ttsnoop_stubs.C.src /main/3 1995/11/06 17:14:48 rswiston $
+ /*** DTB_USER_CODE_END   ^^^ Add file header above ^^^ ***/
+ 
+ /*
+@@ -21,6 +16,7 @@
+  *  ** DELETE THE GENERATED COMMENTS!                                 **
+  */
+ 
++#include <stdint.h>
+ #include <stdio.h>
+ #include <Xm/Xm.h>
+ #include "dtb_utils.h"
