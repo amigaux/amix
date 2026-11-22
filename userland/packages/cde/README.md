@@ -171,9 +171,12 @@ cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
 
 ## Build notes
 
-- **libjpeg and regex are linked from their archives**: both packages also ship a shared
-  library, so the build puts a directory holding only `libjpeg.a` and `libregex.a` first on the
-  link path, and fails if any program NEEDs a shared `libjpeg` or `libregex`.
+- **libjpeg, regex and the C++ runtime are linked from their archives**: both packages also
+  ship a shared library, and GCC 14 has `libstdc++.so.6` since gcc14-cross-amix 276ef49, so the
+  build puts a directory holding only `libjpeg.a`, `libregex.a` and `libstdc++.a` first on the
+  link path, and fails if any program NEEDs a shared `libjpeg`, `libregex` or `libstdc++`.
+  `-lstdc++` ends every link: ToolTalk's `libtt` is C++, and libtool records no runtime for the
+  static library now that its C++ probe finds the shared one.
 - **The shared variant's hooks are here, switched off**: the recipe `cde-shared` sources these
   hooks with `CDE_VARIANT=shared` (CDE's libraries shared, against the shared X11R6.3 and Motif);
   this build does not use them. Its README section comes with that recipe.
