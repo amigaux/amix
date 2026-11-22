@@ -983,12 +983,14 @@ int	card;
  * interrupt (level 2, the INT2 line of the A4091/A4092 and of the A4000T's
  * onboard chip), or polled.
  *
- * Polled (the boot and root mount, param intr=0, a failed self-test, or after
- * a fallback): a4091queue arms the chip and spins on ISTAT to the end, the
- * static driver's path.
+ * Polled (the boot and root mount, param intr=0, intr=-1 (auto, the default)
+ * without accepted limits, a failed self-test, or after a fallback):
+ * a4091queue arms the chip and spins on ISTAT to the end, the static
+ * driver's path.
  *
- * Interrupt (once the deferred call's self-test passes, C4-2 section 3, C3-6
- * section 1.3): a4091queue puts the command on one FIFO for the whole module
+ * Interrupt (intr=1, or auto when every board's C4-7 limits were accepted;
+ * once the deferred call's self-test passes, C4-2 section 3, C3-6 section
+ * 1.3): a4091queue puts the command on one FIFO for the whole module
  * and returns.  The chip runs one command at a time across every board (one
  * dma_alloc area, one DSA table), started by a4091queue when idle and by the
  * level-2 handler when one ends; the handler completes it, so cp->intr runs
@@ -1018,6 +1020,7 @@ extern int	intr_attach(), intr_detach(), root_defer();
 extern int	timeout(), sleep();
 extern void	wakeup(), untimeout();
 extern long	lbolt;
+extern int	a4091_nboards;
 
 /*
  * The interrupt path's counters, kmem-readable, magic first ("A4IN").  mode
@@ -1026,7 +1029,7 @@ extern long	lbolt;
 struct a4091_iq {
 	ulong	magic;			/* 0x4134494e "A4IN"                        */
 	ulong	mode;			/* 1 interrupt, 0 polled                    */
-	long	param;			/* intr= as _load took it (default 1)       */
+	long	param;			/* intr= as _load took it: -1 auto (default) */
 	ulong	selftest;		/* boards whose self-test interrupt came    */
 	ulong	intrs;			/* handler calls (every level-2 interrupt)  */
 	ulong	claimed;		/* calls that found a board's SIP or DIP    */
@@ -1037,7 +1040,7 @@ struct a4091_iq {
 	ulong	qmax;			/* the FIFO's high-water length              */
 	ulong	fallback;		/* 1: back to polled after lost interrupts  */
 };
-struct a4091_iq	a4091_iq = { 0x4134494e, 0, 1 };
+struct a4091_iq	a4091_iq = { 0x4134494e, 0, -1 };
 
 /* The command in flight (one at a time, module-wide); cp 0 = the chip idle. */
 static struct a4091_fl {
@@ -1644,7 +1647,7 @@ char	*params, *key;
 long	dflt;
 {
 	char	*p;
-	int	i;
+	int	i, neg;
 	long	v;
 
 	if (params == 0)
@@ -1654,10 +1657,13 @@ long	dflt;
 			;
 		if (key[i] == 0) {
 			p += i;
+			neg = (*p == '-');
+			if (neg)
+				++p;
 			v = 0;
 			while (*p >= '0' && *p <= '9')
 				v = v * 10 + (*p++ - '0');
-			return v;
+			return neg ? -v : v;
 		}
 		while (*p && *p != ' ')
 			++p;
@@ -1667,16 +1673,30 @@ long	dflt;
 	return dflt;
 }
 
-/* From _load, after the registrations: the deferred self-test, unless intr=0. */
+/*
+ * From _load, after the registrations and their limits: the deferred
+ * self-test, for intr=1, or for intr=-1 (auto, the default) when every
+ * board's limits were accepted.  Measured on an A4000D (k46, A4092): with
+ * the stock 2 KiB raw commands the interrupt costs about 0.4 ms of sleep
+ * and wakeup per command, a quarter to a third of raw throughput, and the
+ * CPU it frees comes in gaps too short to use; with the limits the kernel
+ * sends commands of up to 64 KiB, and the interrupt pays.  If short
+ * commands still cost too much there, a short spin before the sleep
+ * (complete inline when the chip is done) is the next step.
+ */
 static void
 a4091_intrsetup( params)
 char	*params;
 {
-	int	e;
+	int	e, k;
 
-	a4091_iq.param = a4091_param( params, "intr=", 1L);
+	a4091_iq.param = a4091_param( params, "intr=", -1L);
 	if (a4091_iq.param == 0)
 		return;
+	if (a4091_iq.param < 0)
+		for (k = 0; k < a4091_nboards; ++k)
+			if (a4091_xs.rc[k] != 0)
+				return;
 	e = root_defer( a4091_defer, (char *)0);
 	if (e)
 		printf( "%s: no deferred call (errno %d): polled\n", A4091_NAME, e);

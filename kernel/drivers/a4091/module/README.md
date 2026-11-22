@@ -49,11 +49,11 @@ unchanged:
 | Wrapper | `MOD_HDRV_WRAPPER(a4091, a4091_load, 0, a4091_halt, …)`: no switch-table slot, no `_unload` |
 | `_load` | Takes one `dma_alloc` area and copies the SCRIPTS into it. Then, for every board `autocon()` finds (four at most): maps it, fills its D42 record, calls `sd_register(a4091queue, k, base, name, 2)` and declares its limits. See [Limits](#limits-c4-7) |
 | `_halt` | On every mapped board, the init path's abort and soft reset: SCRIPTS stopped, SIEN/DIEN 0 |
-| Interrupts | Completion on the 53C710's interrupt, level 2, once a self-test passes; polled before that and with `param intr=0`. See [Completion](#completion-interrupt-or-polled) |
+| Interrupts | `param intr`: -1 (auto, the default) completes on the 53C710's interrupt, level 2, when every board's C4-7 limits were accepted, and polls otherwise; 1 always the interrupt, 0 always polled. The interrupt waits for a self-test. See [Completion](#completion-interrupt-or-polled) |
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (the force-bounce status bug, below) |
 | Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, a command over 60 ticks on the interrupt path, the poll bound or the watchdog's bound (rc -2), a phase error (rc -3) or a short-read recovery; its `t=` field is the command's ticks. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
-| Version | `VERSION` (`1.0.0-9`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals; 1.0.0-7 completed every command polled; 1.0.0-8 declared no limits |
+| Version | `VERSION` (`1.0.0-10`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals; 1.0.0-7 completed every command polled; 1.0.0-8 declared no limits; 1.0.0-9 completed on the interrupt by default, whatever the command size |
 
 ### The `dma_alloc` area
 
@@ -105,8 +105,34 @@ The module completes a command in one of two ways.
 **Polled.** `a4091queue` arms the chip and spins on ISTAT until it stops,
 then completes the command before returning, as the static driver does. This
 is the path through the root pass and the root mount (level 7, no clock), and
-the path for good with `param intr=0`, after a failed self-test, or after a
-fallback.
+the path for good with `param intr=0`, with the default `intr=-1` (auto) when
+the limits were not accepted, after a failed self-test, or after a fallback.
+
+**Which.** `param intr=-1` (auto, the default) takes the interrupt only when
+`sd_limits` accepted every board's limits ([Limits](#limits-c4-7)), so the
+kernel sends commands of up to 64 KiB; on a kernel before the segment minor
+the module polls. `intr=1` takes the interrupt anyway, `intr=0` never. The
+reason is measured. On an A4000D (k46, A4092 and a ZuluSCSI at id 2), where
+raw commands reach the driver at 2 KiB and ufs ones at 4 KiB, 64 MiB cells,
+kB/s polled → interrupt:
+
+| Cell | Polled | Interrupt |
+|---|---|---|
+| raw read, 64 KiB requests | 1721 | 1172 |
+| raw write, 64 KiB requests | 1292 | 987 |
+| ufs file write | 903 | 1075 |
+| ufs file read | 1488 | 1499 |
+
+A polled 2 KiB read takes 1.25 ms: 844 µs in `a4091queue`, of which 573 µs
+is the chip, and the rest in the kernel. The interrupt adds about 0.4 ms of
+interrupt, sleep and wakeup to every command, in series with the next, and
+the chip time it frees comes in 0.6 ms gaps: a CPU-bound process kept 4-10%
+of its own speed beside a raw transfer. ufs writes behind gain, because the
+writer runs on while the chip works. With commands of 64 KiB the same 0.4
+ms is paid once per 64 KiB instead of 32 times. Should short commands still
+cost too much there, the next step is a short spin before the sleep: wait
+up to about a millisecond after the launch, complete inline when the chip
+is done, and leave only longer commands to the interrupt.
 
 **Interrupt.** `_load` calls `root_defer` (C4-2 §3). At the first `sysinit`
 entry the deferred call attaches a handler with `intr_attach(2, …)` and
@@ -173,6 +199,8 @@ driver, `GSIO`, a filesystem module's own `sdqueue`).
 - The reference is weak: on a kernel before the segment minor the call
   gives `ENOSYS`, the module keeps its `kabi`, and the board gets the stock
   commands. `param limits=0` declares nothing.
+- The default `intr=-1` reads the result: interrupt completion only when
+  every board's call returned 0.
 
 `a4091_xs` (kmem-readable, magic "A4XS") holds `param`, `rc` per board
 (the call's result, -1 with `limits=0`), `cmds` and `refused`.
@@ -255,8 +283,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 41/41 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 41/41 cases |
+| H1 | k30 (`sptalloc` arm) | 45/45 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 45/45 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
@@ -305,7 +333,7 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Chip | `$DD0000`, registers at +0x40 written directly, DCNTL `0x20` (EA), host ID from the DIP bank at +0x3000, SIEN/DIEN 0 at attach; one controller, c 0 |
 | sd | `sd_register(a4091queue, 0, 0xDD0000, "A4000T onboard SCSI", 3)` |
 | Everything else | the A4091 module's: the queue path, the `dma_alloc` area, C4-5, the bounce, the bus reset, `_halt` |
-| Version | `module/a4kt710/VERSION` (`1.0.0-6`): 1.0.0-5 completes commands on the interrupt after its self-test, as the a4091 module does; 1.0.0-6 declares the C4-7 limits, as the a4091 module does |
+| Version | `module/a4kt710/VERSION` (`1.0.0-7`): 1.0.0-5 completes commands on the interrupt after its self-test, as the a4091 module does; 1.0.0-6 declares the C4-7 limits; 1.0.0-7 takes the interrupt by default only with the limits accepted (`intr` auto), as the a4091 module does |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
 **Metal (2026-10-28, k46):** the A4000T with a Z3660 (060) roots on the onboard bus through `a4kt710`, 3/3 cold boots, with

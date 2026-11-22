@@ -974,6 +974,48 @@ t_lim_queuex_intr(void)
 	CHECK(mock_isr((char *)0) == 1 && intr_calls == 2 && qcp[0].okay, "then the stock one");
 }
 
+static void
+t_auto_nolimits(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	mock_lim_errno = 89;		/* ENOSYS: a kernel before the segment minor */
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK((long)a4091_iq[IQ_PARAM] == -1 && mock_defer_fn == 0 && a4091_iq[IQ_MODE] == 0,
+	    "intr auto without limits: no deferred call, polled");
+	CHECK(run_queue(0, 0, 1, qbuf[0], 512, 0x28) && intr_calls == 1,
+	    "a READ completes inside the queue call");
+}
+
+static void
+t_auto_limits0(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	CHECK(a4091_load("limits=0") == 0, "load returns 0");
+	CHECK(mock_defer_fn == 0 && a4091_iq[IQ_MODE] == 0, "intr auto with limits=0: polled");
+}
+
+static void
+t_auto_limits(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK((long)a4091_iq[IQ_PARAM] == -1 && mock_defer_fn != 0,
+	    "intr auto with the limits accepted: the deferred call asked");
+}
+
+static void
+t_intr1_nolimits(void)
+{
+	setup();
+	mock_add(P_A4091, 0x40000000);
+	mock_lim_errno = 89;
+	CHECK(a4091_load("intr=1") == 0, "load returns 0");
+	CHECK(a4091_iq[IQ_PARAM] == 1 && mock_defer_fn != 0, "intr=1 without limits: the deferred call asked");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "one A4091", t_one_a4091 },
 	{ "A4092 identity", t_a4092 },
@@ -1016,6 +1058,10 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "limits: sd_limits refuses", t_lim_refused },
 	{ "limits: sdcomx commands, polled", t_lim_queuex },
 	{ "limits: sdcomx command on the interrupt", t_lim_queuex_intr },
+	{ "intr auto: no limits, polled", t_auto_nolimits },
+	{ "intr auto: limits=0, polled", t_auto_limits0 },
+	{ "intr auto: limits accepted, interrupt", t_auto_limits },
+	{ "intr=1: interrupt without limits", t_intr1_nolimits },
 };
 
 int

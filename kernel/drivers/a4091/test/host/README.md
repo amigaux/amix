@@ -54,11 +54,15 @@ make -C test/host clean
 | limits: `sd_limits` refuses | `ENOSYS` kept in rc; the load still returns 0 |
 | limits: sdcomx commands, polled | A 64 KiB READ is one block move and one segment through prepare/addr/complete, okay with `sx_resid` 0; a WRITE out of reach fails with `sx_resid` 65536; a list of two is refused, a list of one runs; a stock READ through the first entry still completes |
 | limits: sdcomx command on the interrupt | `sx_resid` stays 65536 until the handler completes the command, then 0; a stock command queued behind it completes next |
+| intr auto: no limits, polled | With `sd_limits` refusing (`ENOSYS`), the default `intr=-1` asks for no deferred call and a READ completes inside the queue call |
+| intr auto: `limits=0`, polled | No limits declared: polled |
+| intr auto: limits accepted, interrupt | The deferred call is asked for (the interrupt cases above run this way, the mock's `sd_limits` accepting) |
+| `intr=1`: interrupt without limits | `intr=1` asks for the deferred call even with `sd_limits` refusing |
 
 ## The a4kt710 arms
 
 `modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
-a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 19/19 cases each:
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 20/20 cases each:
 
 | Case | What it shows |
 |---|---|
@@ -72,7 +76,8 @@ a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`
 | no chip / the fingerprint fails | `ENXIO`, the area given back (and the pages unmapped) |
 | host ID and halt | host ID 5 from the DIP bank; `_halt` writes DCNTL `0x20` and SCID `1 << 5` directly |
 | module: no U77, no dma_off | The static arm's knobs and last-command globals are absent (weak references); the record's `off` is 0; on k46 the attach line is `a4kt710: board 0 at 0xdd0000` |
-| interrupt: self-test and a command | The deferred self-test passes (`a4kt710: completion on the interrupt (level 2)`); a READ is armed with DIEN 0x35 and SIEN 0xaf written directly and completes from the handler |
+| interrupt: self-test and a command | With the limits accepted, the deferred self-test passes (`a4kt710: completion on the interrupt (level 2)`); a READ is armed with DIEN 0x35 and SIEN 0xaf written directly and completes from the handler |
+| intr auto: no limits, polled | With `sd_limits` refusing, no deferred call: polled |
 
 The queue path is not repeated: it is the A4091's. This chip's direct writes land where the mock's reads are,
 so a launch's longword writes would overwrite the mock's "command done" state.

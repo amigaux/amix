@@ -30,15 +30,18 @@
 # 1.0.0-12 (2026-11-22): module 1.0.0-9: declares the C4-7 limits after
 # sd_register (one segment of up to 64 KiB through a4091queuex) on a kernel
 # with the segment minor; param limits (1 default, 0 none).
+# 1.0.0-13 (2026-11-23): module 1.0.0-10: param intr -1 (auto, the default) takes the
+# interrupt only when the limits were accepted, else polls; on an A4000D the
+# interrupt cost 2 KiB raw commands a quarter to a third of their speed.
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-9
-KM_PKG_VERSION=1.0.0-12
+KM_VERSION=1.0.0-10
+KM_PKG_VERSION=1.0.0-13
 
-KM_K30_SHA=a72a434dd0078976743b48cd168c0ace12b02dbcffb596ec06c129c6417b2bb4
-KM_K46_SHA=524e86f21ac16e1b8e1daab4eb6a1dd9a84667cc1e9870d4cbf298c65aa54223
+KM_K30_SHA=7fd65908fc827f6b31347c450e796df8df5f99f33a01ef6f116cc8559743937c
+KM_K46_SHA=0ff1cc83049690f2d6c2cc4a4e0ecb40fa216925277cfb46f3ef820ec414486e
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -48,12 +51,14 @@ KM_LICENCES="\
 kernel/drivers/a4091/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 kernel/drivers/a4091/NOTICE f37c3ca7dba3c5b572e961a2ce1bd67e13ecf2eed9f341221866dfafc8ca3f21"
 
-KM_EXTRA_NOTE="Commands complete on the 53C710's interrupt (level 2) once a self-test
-after the root mount passes; until then, with param intr=0 in
-/etc/conf/modreg.local.d/a4091, or after interrupts stop, the module polls.
-On a kernel with the segment minor (k30.1.6, k46.1.7) the module declares
+KM_EXTRA_NOTE="On a kernel with the segment minor (k30.1.6, k46.1.7) the module declares
 its limits after sd_register: the kernel may then send one segment of up
-to 64 KiB a command; param limits=0 declares none.
+to 64 KiB a command; param limits=0 declares none.  Commands complete on
+the 53C710's interrupt (level 2) when those limits were accepted (param
+intr=-1, the default) and a self-test after the root mount passes; on a
+kernel before that minor, with param intr=0 in
+/etc/conf/modreg.local.d/a4091, or after interrupts stop, the module polls.
+param intr=1 takes the interrupt whatever the command size.
 On the 68030 line (a4091-k30) the module's DMA goes through the module
 core's 030 DMA provider: a bounce pool in fast memory below 0x08000000,
 which needs the boot loader of amix 1.1 or later.
