@@ -1,7 +1,7 @@
 # gcc14-pin.sh -- the gcc14-cross-amix identity: the pinned commit, the
-# sha256 of its cc1, libgcc.a, libamixc99.a, specs, amix_init.o, amix_initS.o
-# and libamixrt.so.1, the return-value ABI self-check, and the check that
-# fold-mem-offsets stays off.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
+# sha256 of its cc1, libgcc.a, libamixc99.a, specs, amix_init.o, amix_initS.o,
+# libamixrt.so.1 and libstdc++.so.6, the return-value ABI self-check, and
+# the check that fold-mem-offsets stays off.  Sourced, never executed: by gcc14-env.sh (TOOLCHAIN=gcc14
 # recipes) and by dlm-src.sh before it builds amix-dlm's box binaries
 # (kbootset, modadmin), which amix-dlm's Makefile links with the toolchain
 # prefix directly.  One pin for both: a new toolchain is a re-pin HERE (and a
@@ -81,7 +81,8 @@ m68k-elf/lib/libamixc99.a 2b91d5062d35f4a6f324ee831b9979b301645f8eceafb0d5dbac51
 lib/gcc/m68k-elf/14.2.0/specs 5f61d48351b44038352d51949a5f1a03212942fa203d5badeb0472b32aa44cc4
 m68k-elf/lib/amix_init.o 79c2de7fcd7fa7f8f9eb1dcbf5716558f81f3c8edeb5db554000217a69f8789e
 m68k-elf/lib/amix_initS.o 22bfff2dd56bc7c2abe63e56ce9235731a6e5abddf54f0d8a79a0a6b1bc8fd26
-m68k-elf/lib/amixrt/libamixrt.so.1 216fdce003219b30f43697af548fb30c86680f657d4170908dad5b43c5e73a29"
+m68k-elf/lib/amixrt/libamixrt.so.1 216fdce003219b30f43697af548fb30c86680f657d4170908dad5b43c5e73a29
+m68k-elf/lib/cxxrt/libstdc++.so.6 625304574344860bdd9ebf87826b0ad72317b6e9ee55ac247470ba8654eae619"
 
 # amix_g14_pincheck <prefix> -- every pinned file of <prefix> by sha256.
 amix_g14_pincheck() {
