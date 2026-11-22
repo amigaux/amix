@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — cxxrt 1.0-1 (new) (8e1ab748)
+
+/usr/lib/libstdc++.so.6 from gcc14-cross-amix 276ef49 (62530457, 1796012 bytes), the shared C++ runtime for programs linked with g++ -shared-libgcc or against a g++ -shared library, so exceptions cross between them. Set base, needs amixrt. Proven on k30 and k46 with an exception thrown in a shared library and caught in the program.
+
+## 2026-11-22 — amixrt 1.0-5 (cf538e64)
+
+libamixrt.so.1 from gcc14-cross-amix 276ef49 (216fdce0, 30948 bytes). More of libc for shared libraries: fpsetround/fpsetsticky, getmntent/getmntany, the getutx* utmpx functions, siglongjmp, sysinfo, syslog (openlog, vsyslog, setlogmask, closelog), vfork. A failing call stores errno through the GOT (1.0-4 and earlier left _cerror's address in errno on the first failure).
+
 ## 2026-11-20 — dhcp-client 1.0-10: the gcc14 9d13dcd rebuild (2075df7b, bdea30cc)
 
 dhcpc rebuilt with gcc14-cross-amix 9d13dcd (fold-mem-offsets off by default): dhcpparse, dlopen_if, dlsend and udpsend lose correct offset folds. No fold the patched pass refuses and no bset/bclr rewrite; the shipped 1.0-9 had the same code, so 1.1.x was not exposed.
