@@ -120,6 +120,17 @@ for l in k30 k46; do
 	else
 		fail "$l: the probe's offsets differ from abi.txt"; diff "$W/offs-$l.got" "$W/offs-$l.want"; cat "$W/offs-$l.log"
 	fi
+	# sys/sdseg.h (C4-7, a draft the kit does not ship yet): its layouts
+	# after the stock struct sdcom, whose size is abi.txt's, and the weak
+	# sd_limits reference of DDI_SD_LIMITS
+	sz=$(awk '$2 == "ABI_SDCOM_SZ" {print $3}' "$K/abi.txt")
+	if AMIX_SYSROOT=$K/sysroot m68k-cbm-sysv4-gcc $CF -I"$R/abi/include" -DSDCOM_SZ="$sz" \
+		-c "$R/tests/kit/sdseg.c" -o "$W/sdseg-$l.o" > "$W/sdseg-$l.log" 2>&1 &&
+	   m68k-cbm-sysv4-objdump -t "$W/sdseg-$l.o" | grep -q ' w .*UND.* sd_limits$'; then
+		pass "$l: sys/sdseg.h: sdcomx after the stock $sz-byte sdcom, sdseg, sdlim as C4-7; sd_limits weak"
+	else
+		fail "$l: sys/sdseg.h layout or its weak reference"; cat "$W/sdseg-$l.log"
+	fi
 	# a font-drawing module: the kit's Sun font linked in, builtinfont local
 	d=$W/$l-font
 	mkdir -p "$d"
