@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — src/kernel-patches/ removed (4596555e)
+
+The dd.c order fix (start the next request before iodone(), so a b_iodone that re-enters ddstrategy cannot double-issue dp->com) now lives in kernel/k30's dd.c patch for every k30 build; with both present the patch dry-run gate stopped. README updated.
+
 ## 2026-11-06 — module 1.0.0-6, packages 1.0.0-9 (78bf011, f740a20)
 
 A READ/WRITE whose 32-bit LBA plus count wraps past zero is refused like any other past the end (it reached the firmware as LBA 0xFFFFFFFF). test/host check-m68k runs the harness as m68k under qemu-m68k, where the wrap is real (4 failures before, 234/0 after; host 234/0, DIAG 264/0, module 46/0). Objects k30 152e1d8e, k46 751d52a5; zscsi30 7a93488e, zscsi46 32b435a2.
