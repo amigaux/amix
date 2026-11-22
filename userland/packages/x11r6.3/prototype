@@ -26,9 +26,11 @@ d none /opt/amix/X11R6/bin 0755 root sys
 f none /opt/amix/X11R6/bin/Xrtg 0755 root bin
 l none /opt/amix/X11R6/bin/Xzz9000=/opt/amix/X11R6/bin/Xrtg
 l none /opt/amix/X11R6/bin/X=/opt/amix/X11R6/bin/Xrtg
+f none /opt/amix/X11R6/bin/Xmark 0755 root bin
 f none /opt/amix/X11R6/bin/bdftopcf 0755 root bin
 f none /opt/amix/X11R6/bin/iceauth 0755 root bin
 f none /opt/amix/X11R6/bin/mkfontdir 0755 root bin
+f none /opt/amix/X11R6/bin/oclock 0755 root bin
 f none /opt/amix/X11R6/bin/resize 0755 root bin
 f none /opt/amix/X11R6/bin/rstart 0755 root bin
 f none /opt/amix/X11R6/bin/rstartd 0755 root bin
@@ -36,6 +38,8 @@ f none /opt/amix/X11R6/bin/sessreg 0755 root bin
 f none /opt/amix/X11R6/bin/smproxy 0755 root bin
 f none /opt/amix/X11R6/bin/startx 0755 root bin
 f none /opt/amix/X11R6/bin/twm 0755 root bin
+f none /opt/amix/X11R6/bin/x11perf 0755 root bin
+f none /opt/amix/X11R6/bin/x11perfcomp 0755 root bin
 f none /opt/amix/X11R6/bin/xauth 0755 root bin
 f none /opt/amix/X11R6/bin/xclock 0755 root bin
 f none /opt/amix/X11R6/bin/xdm 0755 root bin
@@ -356,6 +360,7 @@ f none /opt/amix/X11R6/lib/X11/XKeysymDB 0644 root bin
 f none /opt/amix/X11R6/lib/X11/rgb.txt 0644 root bin
 d none /opt/amix/X11R6/lib/X11/app-defaults 0755 root sys
 f none /opt/amix/X11R6/lib/X11/app-defaults/Chooser 0644 root bin
+f none /opt/amix/X11R6/lib/X11/app-defaults/Clock-color 0644 root bin
 f none /opt/amix/X11R6/lib/X11/app-defaults/XClock 0644 root bin
 f none /opt/amix/X11R6/lib/X11/app-defaults/XTerm 0644 root bin
 d none /opt/amix/X11R6/lib/X11/fonts 0755 root sys
@@ -925,6 +930,10 @@ f none /opt/amix/X11R6/lib/X11/xdm/chooser 0755 root bin
 f none /opt/amix/X11R6/lib/X11/xdm/xdm-config 0644 root bin
 d none /opt/amix/X11R6/lib/X11/xinit 0755 root sys
 f none /opt/amix/X11R6/lib/X11/xinit/xinitrc 0644 root bin
+d none /opt/amix/X11R6/lib/X11/x11perfcomp 0755 root sys
+f none /opt/amix/X11R6/lib/X11/x11perfcomp/fillblnk 0755 root bin
+f none /opt/amix/X11R6/lib/X11/x11perfcomp/perfboth 0755 root bin
+f none /opt/amix/X11R6/lib/X11/x11perfcomp/perfratio 0755 root bin
 d none /opt/amix/X11R6/lib/X11/xkb 0755 root sys
 f none /opt/amix/X11R6/lib/X11/xkb/compat.dir 0644 root bin
 f none /opt/amix/X11R6/lib/X11/xkb/geometry.dir 0644 root bin
@@ -1100,6 +1109,7 @@ f none /opt/amix/man/1/Xzz9000 0644 root bin
 f none /opt/amix/man/1/bdftopcf 0644 root bin
 f none /opt/amix/man/1/iceauth 0644 root bin
 f none /opt/amix/man/1/mkfontdir 0644 root bin
+f none /opt/amix/man/1/oclock 0644 root bin
 f none /opt/amix/man/1/resize 0644 root bin
 f none /opt/amix/man/1/rstart 0644 root bin
 f none /opt/amix/man/1/rstartd 0644 root bin
@@ -1107,6 +1117,8 @@ f none /opt/amix/man/1/sessreg 0644 root bin
 f none /opt/amix/man/1/smproxy 0644 root bin
 f none /opt/amix/man/1/startx 0644 root bin
 f none /opt/amix/man/1/twm 0644 root bin
+f none /opt/amix/man/1/x11perf 0644 root bin
+f none /opt/amix/man/1/x11perfcomp 0644 root bin
 f none /opt/amix/man/1/xauth 0644 root bin
 f none /opt/amix/man/1/xclock 0644 root bin
 f none /opt/amix/man/1/xdm 0644 root bin

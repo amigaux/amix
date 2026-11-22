@@ -14,7 +14,7 @@ AMIX_USR_AMIGA=${AMIX_USR_AMIGA:-$AMIX_SYSROOT/usr}
 # the clients built and shipped, beside the libraries and the server
 XCLIENTS="xinit xdm twm xterm xclock xdpyinfo xwd xwud xset xsetroot xmodmap xrdb
 	xlsfonts xhost xauth iceauth xprop xkill xlsclients xwininfo xkbcomp mkfontdir bdftopcf
-	smproxy rstart"
+	smproxy rstart x11perf oclock"
 
 # compiled with -fno-jump-tables, these files only: a GCC 14 switch table in each that
 # scan060-g14 (the D4 gate) cannot size, though the code bounds it
