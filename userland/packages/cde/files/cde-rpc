@@ -1,0 +1,90 @@
+#!/sbin/sh
+#
+# /etc/init.d/cde-rpc -- start and stop CDE's RPC servers.
+# Linked as /etc/rc2.d/S78cde-rpc and /etc/rc0.d, /etc/rc1.d K38cde-rpc.
+#
+# Both are off unless /etc/rc.conf turns them on (rc.conf(4)):
+#   ttdbserver=yes       rpc.ttdbserver, ToolTalk's database server (RPC
+#                        program 100083), for ToolTalk objects and files
+#                        shared between machines
+#   cmsd=yes             rpc.cmsd, the calendar server (RPC program 100068),
+#                        which dtcm needs to open any calendar
+#   cde_rpc_wait=120     seconds to wait for rpcbind at boot
+# Each runs standalone and registers itself with rpcbind, which the stock
+# S75rpc starts in the background; so the servers are started in a
+# background run (rc_bg) once rpcinfo answers, and the boot goes on.
+# See cde-rpc(1M).
+#
+# The system's /bin/sh of 1992: backticks, no $(...), no `local', no `!'.
+
+RC_SUBR=${RC_SUBR:-/usr/lib/amix/rc.subr}
+DT=${DT:-/usr/dt/bin}
+if [ -z "$RPCINFO" ]; then
+	for RPCINFO in /usr/bin/rpcinfo /usr/sbin/rpcinfo; do
+		[ -x "$RPCINFO" ] && break
+	done
+fi
+SELF=${SELF:-/etc/init.d/cde-rpc}
+umask 022
+
+# pids <command name as ps -e shows it>: the processes of that name
+pids() {
+	ps -e | awk 'NR > 1 && $NF == n {print $1}' n="$1"
+}
+
+# serve <key> <program> <ps name>: start the server when rc.conf turns it on
+# and it is not running
+serve() {
+	rc_enabled $1 no || return 0
+	if [ ! -x "$DT/$2" ]; then
+		rc_log cde-rpc "no $DT/$2; $1 not started"
+		return 0
+	fi
+	if [ -n "`pids $3`" ]; then
+		return 0
+	fi
+	( trap '' 1; exec "$DT/$2" ) < /dev/null > /dev/null 2>&1 &
+	rc_log cde-rpc "started $2 ($1=yes)"
+}
+
+case "$1" in
+start|run)
+	if [ ! -f "$RC_SUBR" ]; then
+		echo "cde-rpc: no $RC_SUBR (amix-base); not started" >&2
+		exit 0
+	fi
+	. "$RC_SUBR"
+	if rc_enabled ttdbserver no || rc_enabled cmsd no; then :; else
+		exit 0
+	fi
+	if [ "$1" = run ]; then
+		# the background run: rpcbind first, then the servers
+		bound=`rc_conf cde_rpc wait 120`
+		i=0
+		until "$RPCINFO" -p > /dev/null 2>&1; do
+			i=`expr $i + 2`
+			if [ $i -gt $bound ]; then
+				rc_log cde-rpc "rpcbind did not answer in $bound s; not started"
+				exit 1
+			fi
+			sleep 2
+		done
+		serve ttdbserver rpc.ttdbserver rpc.ttdb
+		serve cmsd rpc.cmsd rpc.cmsd
+		exit 0
+	fi
+	trap '' 1
+	rc_bg `expr \`rc_conf cde_rpc wait 120\` + 30` cde-rpc /sbin/sh "$SELF" run
+	;;
+stop)
+	for n in rpc.ttdb rpc.cmsd; do
+		p=`pids $n`
+		[ -n "$p" ] && kill $p 2> /dev/null
+	done
+	;;
+*)
+	echo "usage: $0 start | stop" >&2
+	exit 1
+	;;
+esac
+exit 0

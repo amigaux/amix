@@ -1,0 +1,46 @@
+dtpad.msg: leave out the usage message over the catalogue limit.
+
+Set 7 message 9 is dtpad's usage text (1150 bytes). A System V catalogue message holds at most 1024 bytes (NL_TEXTMAX), and
+gencat refuses the whole file for one longer message. The C catalogue
+leaves it out, with a comment; catgets then returns the program's
+built-in text, which is the same text. A translated catalogue
+cannot carry it while the limit stands.
+
+--- a/programs/dtpad/dtpad.msg	2026-11-20 12:03:13
++++ b/programs/dtpad/dtpad.msg	2026-11-20 12:03:13
+@@ -277,34 +277,7 @@
+ $ for dtpad. Don't translate the '-OPTION' just the text explaining the
+ $ option.
+ $ 
+-9 '%s' is a bad option.\n\
+-Usage: %s...\n\
+-   -saveOnClose\n\
+-\tDtpad automatically and silently saves the current text when there\n\
+-\tare unsaved changes and the Text Editor is closed.\n\n\
+-   -missingFileWarning\n\
+-\tPosts a warning dialog whenever a file name is specified and\n\
+-\tthe file dones not exist or cannot be accessed.\n\n\
+-   -noReadOnlyWarning\n\
+-\tDisables the warning dialog posted whenever a file is\n\
+-\tspecified for which the user does not have write permission.\n\n\
+-   -noNameChange\n\
+-\tIndicates that the default file name associated with the\n\
+-\tcurrent text is not to change when the text is saved under a\n\
+-\tname different than what it was read in under.\n\n\
+-   -viewOnly\n\
+-\tDisallows editing of text in the edit window, essentially\n\
+-\tturning the Text Editor into a Text Viewer.\n\n\
+-   -statusLine\n\
+-\tDisplays a status line at the bottom of the edit window.  The\n\
+-\tstatus line shows the line number of the line where the text\n\
+-\tcursor is currently positioned.\n\n\
+-   -wrapToFit\n\
+-\tInitially turns on wrap-to-fit mode.\n\n\
+-   -workspaceList WorkspaceList\n\
+-\tDisplays the edit window for the current invocation of the\n\
+-\tText Editor in the specified workspace or workspaces.\n\n\
+-   -session SessionFile\n
++$ message 9 of set 7 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
+ 
+ 10 \tRestores the Text Editor to all text editing windows and\n\
+ \tsettings that were in effect at a previous CDE shutdown.  All\n\

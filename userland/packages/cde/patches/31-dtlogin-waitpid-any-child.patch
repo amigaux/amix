@@ -1,0 +1,25 @@
+dtlogin: wait for any child after the server's SIGUSR1, on SVR4 too.
+
+Once the X server has signalled that it is ready (SIGUSR1), serverPause
+checks that it is still alive with a non-blocking wait. Elsewhere that is
+wait3, any child; on SVR4 it was waitpid(0, ...), which looks only at
+children in dtlogin's own process group. An X server that puts itself in
+a process group of its own, as X11R6.3's does, is then no such child:
+waitpid fails with ECHILD, which serverPause takes as "server dead", so
+dtlogin reports the running server as dead, starts another (which cannot
+listen: the first holds the display) and gives up on the display.
+waitpid(-1, ...) waits for any child, as wait3 does.
+
+--- a/programs/dtlogin/server.c	2026-11-20 12:03:13
++++ b/programs/dtlogin/server.c	2026-11-20 12:03:13
+@@ -272,7 +272,9 @@
+ #  ifdef	SVR4
+                 {
+ 		    int dummy;
+-		pid = waitpid ((pid_t) 0,&dummy,WNOHANG);
++		/* any child, as wait3 below: the server may have left our
++		 * process group, and pid 0 would then find none (ECHILD) */
++		pid = waitpid ((pid_t) -1,&dummy,WNOHANG);
+                 }
+ #  else
+ 		pid = wait3 ((waitType *) 0, WNOHANG,

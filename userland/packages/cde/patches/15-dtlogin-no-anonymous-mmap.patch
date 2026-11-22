@@ -1,0 +1,40 @@
+dtlogin: map /dev/zero where there is no MAP_ANONYMOUS.
+
+NewDisplay keeps each display's language in a shared anonymous mapping,
+so the per-display child can update it. SVR4 has no MAP_ANONYMOUS; the
+same shared, zero-filled page comes from mapping /dev/zero, which is used
+when MAP_ANONYMOUS is not defined.
+
+--- a/programs/dtlogin/dpylist.c	2026-11-20 12:03:13
++++ b/programs/dtlogin/dpylist.c	2026-11-20 12:03:13
+@@ -52,6 +52,8 @@
+  */
+ 
+ # include <sys/mman.h>
++# include <fcntl.h>
++# include <unistd.h>
+ # include "dm.h"
+ # include "vgmsg.h"
+ 
+@@ -220,8 +222,21 @@
+     char *language;
+     struct display	*d;
+ 
++#ifdef MAP_ANONYMOUS
+     language = mmap (NULL, LANGUAGESIZE + 1, PROT_READ | PROT_WRITE,
+ 		    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
++#else
++    {
++	/* no anonymous mappings (SVR4): /dev/zero, shared across fork too */
++	int zfd = open ("/dev/zero", O_RDWR);
++
++	language = (zfd < 0) ? MAP_FAILED :
++	    mmap (NULL, LANGUAGESIZE + 1, PROT_READ | PROT_WRITE,
++		  MAP_SHARED, zfd, 0);
++	if (zfd >= 0)
++	    close (zfd);
++    }
++#endif
+ 
+     if (language == MAP_FAILED) {
+ 	LogOutOfMem (ReadCatalog(MC_LOG_SET,MC_LOG_NEW_DPY,MC_DEF_LOG_NEW_DPY));

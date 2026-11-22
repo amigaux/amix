@@ -1,0 +1,90 @@
+dttypes: POSIX regcomp/regexec on SVR4.
+
+dttypes matches with <regex.h> on Linux and the BSDs and with the old
+<regexp.h> compile/step macros elsewhere. SVR4's <regexp.h> is K&R code
+that a modern compiler rejects. Take the POSIX branch on SVR4: the build
+links a POSIX regex library there.
+
+--- a/programs/util/dttypes/dttypes.c	2026-11-20 12:03:13
++++ b/programs/util/dttypes/dttypes.c	2026-11-20 12:03:13
+@@ -41,7 +41,7 @@
+ #define RETURN(c)     return(c)
+ #define ERROR(c)      {rexp_errno = c; return((char *)0);}
+ static	int	rexp_errno = 0;
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ #include	<regex.h>
+ #else
+ #include	<regexp.h>
+@@ -162,7 +162,7 @@
+ 	DtDtsMMField	*fld_ptr;
+ 	DtDtsMMField	*fld_ptr_list;
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 	regex_t		regex_rn;
+ 	regex_t		regex_fn;
+ 	regex_t		regex_fv;
+@@ -179,7 +179,7 @@
+ 	memset(expbuf_df, '\0', sizeof(expbuf_df));
+ #endif
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 	if(regcomp(&regex_rn, l->rec_name?l->rec_name:"^.*", 0) != 0)
+ #else
+ 	if((compile(l->rec_name?l->rec_name:"^.*",
+@@ -193,7 +193,7 @@
+ 		exit(1);
+ 	}
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 	if(regcomp(&regex_fn, l->fld_name?l->fld_name:"^.*", 0) != 0)
+ #else
+ 	if((compile(l->fld_name?l->fld_name:"^.*",
+@@ -207,7 +207,7 @@
+ 		exit(1);
+ 	}
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 	if(regcomp(&regex_fv, l->fld_value?l->fld_value:"^.*", 0) != 0)
+ #else
+ 	if((compile(l->fld_value?l->fld_value:"^.*",
+@@ -221,7 +221,7 @@
+ 		exit(1);
+ 	}
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 	if(regcomp(&regex_df, l->display_fld?l->display_fld:"^.*", 0) != 0)
+ #else
+ 	if((compile(l->display_fld?l->display_fld:"^.*",
+@@ -241,7 +241,7 @@
+ 	{
+ 		rec_ptr = &rec_ptr_list[rec];
+ 		fld_ptr_list = _DtDtsMMGetPtr(rec_ptr->fieldList);
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 		if(regexec(&regex_rn,
+ 			  (char *)_DtDtsMMBosonToString(rec_ptr->recordName),
+ 			  0, NULL, 0) == 0)
+@@ -259,7 +259,7 @@
+ 				fn = _DtDtsMMExpandValue(_DtDtsMMBosonToString(fld_ptr->fieldName));
+ 				fv = _DtDtsMMExpandValue(_DtDtsMMBosonToString(fld_ptr->fieldValue));
+ 
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 				if((regexec(&regex_fn, fn, 0, NULL, 0) == 0) &&
+ 				   ((fld_ptr->fieldValue==0?
+ 					regexec(&regex_fv,
+@@ -322,7 +322,7 @@
+ 
+ 			if(l->display_fld)
+ 			{
+-#if defined(CSRG_BASED) || defined(__linux__)
++#if defined(CSRG_BASED) || defined(__linux__) || defined(SVR4)
+ 				if(regexec(&regex_df, fn, 0, NULL, 0) == 0)
+ #else
+ 				if(advance(fn, expbuf_df) !=0)

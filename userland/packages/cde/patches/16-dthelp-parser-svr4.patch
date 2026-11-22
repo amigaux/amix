@@ -1,0 +1,40 @@
+dthelp parsers: a char buffer for the diagnostics on SVR4.
+
+The three HelpTag parsers format their diagnostics with sprintf into
+buffer, which is char on AIX, Sun and Linux (pass2: AIX and Sun) and
+M_WCHAR (wchar_t) elsewhere, where GCC 14 refuses the pointer. Use the char
+buffer on SVR4 too.
+
+--- a/programs/dthelp/parser/canon1/parser/parser.c	2026-11-20 12:03:13
++++ b/programs/dthelp/parser/canon1/parser/parser.c	2026-11-20 12:03:13
+@@ -90,7 +90,7 @@
+ static char name[] = "m_name = '%s'\n" ;
+ static char literal[] = "m_literal = '%s'\n" ;
+ 
+-#if defined(_AIX) || defined(sun) || defined(__linux__)
++#if defined(_AIX) || defined(sun) || defined(__linux__) || defined(SVR4)
+ char buffer[M_LITLEN + 80] ;
+ #else
+ #define max4(a,b,c,d) (a>b&&a>c&&a>d) ? a : ((b>c&&b>d) ? b : (c>d ? c : d))
+--- a/programs/dthelp/parser/pass1/parser/parser.c	2026-11-20 12:03:13
++++ b/programs/dthelp/parser/pass1/parser/parser.c	2026-11-20 12:03:13
+@@ -43,7 +43,7 @@
+       "prevcon=%d,token=%d,curcon=%d,scanval='%c'(%d),line=%d,netlevel=%d\n" ;
+     static char name[] = "m_name = '%s'\n" ;
+     static char literal[] = "m_literal = '%s'\n" ;
+-#if defined(_AIX) || defined(sun) || defined(__linux__)
++#if defined(_AIX) || defined(sun) || defined(__linux__) || defined(SVR4)
+     char buffer[M_LITLEN + 80] ;
+ #else
+ #define max4(a,b,c,d) (a>b&&a>c&&a>d) ? a : ((b>c&&b>d) ? b : (c>d ? c : d))
+--- a/programs/dthelp/parser/pass2/parser/parser.c	2026-11-20 12:03:13
++++ b/programs/dthelp/parser/pass2/parser/parser.c	2026-11-20 12:03:13
+@@ -43,7 +43,7 @@
+       "prevcon=%d,token=%d,curcon=%d,scanval='%c'(%d),line=%d,netlevel=%d\n" ;
+     static char name[] = "m_name = '%s'\n" ;
+     static char literal[] = "m_literal = '%s'\n" ;
+-#if defined(_AIX) || defined(sun)
++#if defined(_AIX) || defined(sun) || defined(SVR4)
+     char buffer[M_LITLEN + 80] ;
+ #else
+ #define max4(a,b,c,d) (a>b&&a>c&&a>d) ? a : ((b>c&&b>d) ? b : (c>d ? c : d))

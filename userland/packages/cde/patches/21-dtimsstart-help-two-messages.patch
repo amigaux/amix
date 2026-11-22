@@ -1,0 +1,33 @@
+Dtimsstart: the selection help in two messages.
+
+Message 33 of Dtimsstart.tmsg, the input method selection help, is over
+the 1024 bytes a System V catalogue message may hold (NL_TEXTMAX), and
+gencat refuses the file. The text is now messages 33 and 35, and the
+resource line names both; the merged app-defaults file is byte-identical
+to before.
+
+--- a/programs/dtimsstart/Dtimsstart	2026-11-20 12:03:13
++++ b/programs/dtimsstart/Dtimsstart	2026-11-20 12:03:13
+@@ -51,7 +51,7 @@
+ Dtimsstart*Mode*cmd_rc.marginWidth:	%|nls-32-#20#|
+ 
+ ! help message
+-Dtimsstart.selectionHelpMsg:	%|nls-33-#Input method selection help#|
++Dtimsstart.selectionHelpMsg:	%|nls-33-#Input method selection help#|%|nls-35-##|
+ 
+ Dtimsstart.modeHelpMsg:	%|nls-34-#IM Selection mode help#|
+ 
+--- a/programs/localized/C/app-defaults/Dtimsstart.tmsg	2026-11-20 12:03:13
++++ b/programs/localized/C/app-defaults/Dtimsstart.tmsg	2026-11-20 12:03:13
+@@ -136,8 +136,9 @@
+ \\n \
+       [Cancel]:    discards the selection and closes the window.\\n \
+ \\n \
+-      [Help]:      shows this message.\\n \
+-\\n \\n \
++      [Help]:      shows this message.\\n
++$ the rest of message 33: one message over 1024 bytes is refused
++35  \\n \\n \
+        NOTE:  input methods not installed on the system will be listed\\n \
+               with netted, and cannot be selected.\\n \
+ \\n \

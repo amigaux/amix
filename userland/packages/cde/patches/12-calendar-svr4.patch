@@ -1,0 +1,31 @@
+Calendar: build for SVR4.
+
+- lib/csa/cmxdr.c: _xdr_time_t is chosen by size (the 4- or 8-byte XDR
+  routine); where time_t is long and int is as wide, the pointer type does
+  not match it, so pass it through void *.
+- dtcm/server/svcmain.c: SVR4's socket-compatible svcudp_create takes the
+  one argument, as on Linux, AIX and the BSDs.
+
+--- a/lib/csa/cmxdr.c	2026-11-20 12:03:13
++++ b/lib/csa/cmxdr.c	2026-11-20 12:03:13
+@@ -61,7 +61,8 @@
+ bool_t
+ xdr_time_t(XDR *xdrs, time_t *objp)
+ {
+-	if (!_xdr_time_t(xdrs, objp))
++	/* the routine chosen by size: time_t may be long where int is as wide */
++	if (!_xdr_time_t(xdrs, (void *)objp))
+ 		return (FALSE);
+ 	return (TRUE);
+ }
+--- a/programs/dtcm/server/svcmain.c	2026-11-20 12:03:13
++++ b/programs/dtcm/server/svcmain.c	2026-11-20 12:03:13
+@@ -693,7 +693,7 @@
+ 
+ 		if (udp_transp == (SVCXPRT *)-1) {
+ 			udp_transp = svcudp_create(standalone ? RPC_ANYSOCK : 0
+-#if defined(_AIX) || defined(__linux__) || defined(CSRG_BASED)
++#if defined(_AIX) || defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ 					);
+ #else
+ 					,0,0);

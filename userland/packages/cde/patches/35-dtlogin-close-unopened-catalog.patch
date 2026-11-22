@@ -1,0 +1,32 @@
+dtlogin: close the greeter's message catalogue only when it was opened.
+
+dtgreet opens its catalogue only when a language is set, and its
+descriptor starts as 0; CloseCatalog closed it all the same, so a greeter
+with no language passed catclose a null descriptor, which reads address 0.
+The descriptor now starts as (nl_catd)-1, the value util.c uses for "not
+open", and only an open catalogue is closed.
+
+--- a/programs/dtlogin/vgutil.c	2026-11-20 12:03:13
++++ b/programs/dtlogin/vgutil.c	2026-11-20 12:03:13
+@@ -94,7 +94,7 @@
+  *  Global variables
+  *
+  ***************************************************************************/
+-static nl_catd	nl_fd;	/* message catalog file descriptor */
++static nl_catd	nl_fd = (nl_catd)-1;	/* message catalog file descriptor */
+ 
+ /***************************************************************************
+  *
+@@ -735,7 +735,11 @@
+ void
+ CloseCatalog(void)
+ {
+-    CATCLOSE(nl_fd);
++    if (0 <= (long) nl_fd)
++    {
++        CATCLOSE(nl_fd);
++        nl_fd = (nl_catd)-1;
++    }
+ }
+ 
+ /***************************************************************************

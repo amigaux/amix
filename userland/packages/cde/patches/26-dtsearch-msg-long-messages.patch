@@ -1,0 +1,76 @@
+dtsearch.msg: leave out two long messages over the catalogue limit.
+
+Set 26 message 1 is dtsrclean's usage text (about 1400 bytes; the
+built-in text has %s where the catalogue has %1$s); set 12 message 3 is
+named by no program. A System V catalogue message holds at most 1024 bytes (NL_TEXTMAX), and
+gencat refuses the whole file for one longer message. The C catalogue
+leaves them out, with a comment; catgets then returns the program's
+built-in text, which is the same text. A translated catalogue
+cannot carry them while the limit stands.
+
+--- a/lib/DtSearch/dtsearch.msg	2026-11-20 12:03:13
++++ b/lib/DtSearch/dtsearch.msg	2026-11-20 12:03:13
+@@ -451,31 +451,7 @@
+ $set 12
+ 
+ $ Msg 3 should not translate "dtsearch.dbd."
+-3 "\n\
+-USAGE: %1$s [options] <dbname>\n\
+-       Creates and initializes DtSearch/AusText database files.\n\
+-  -q       Do not print information messages.\n\
+-  -o       Ok to overwrite preexisting database.\n\
+-  -a<N>    Set maximum abstract size to <N> (default per flavor).\n\
+-  -d<dir>  Where to find dtsearch.dbd file if not in <dbname> directory.\n\
+-  -wn<N>   Change minimum word size to <N>.  Default %2$d.\n\
+-  -wx<N>   Change maximum word size to <N>.  Default per language.\n\
+-  ---------- Database Flavor ----------\n\
+-  -fd      DtSearch flavor.  No documents, only document references\n\
+-           in abstracts (default).\n\
+-  -fa      AusText flavor.  Documents stored in central server repository.\n\
+-  ------------ Supported Languages ------------\n\
+-  -l<N>    Set language number to <N>.  Default is 0.  Supported values:\n\
+-           0 English-ASCII\n\
+-           1 English-Latin1\n\
+-           2 Spanish\n\
+-           3 French\n\
+-           4 Italian\n\
+-           5 German\n\
+-           6 Japanese-autoknj\n\
+-           7 Japanese-knjlist\n\
+-  <dbname> Optional path prefix, then 1 - 8 character\n\
+-           database name.  Do not specify 'austext' or 'dtsearch'.\n"
++$ message 3 of set 12 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
+ 
+ 5 "DTSRCREATE Minimum word size %1$d greater than maximum word size %2$d.\n"
+ 6 "DTSRCREATE Adjusted minimum word size to %1$d.\n"
+@@ -947,29 +923,7 @@
+ $ set MS_dtsrclean is set 26.  5/21/96.  dtsrclean.c
+ $set 26
+ 
+-1 "\n\
+-USAGE: %1$s [options] <dbname> <newpath>\n\
+-       Compresses unused d99 space and validates d00-d99 links.\n\
+-  -p<N>     Progress dots printed every <N> records (default %lu).\n\
+-            Complete progress message printed every %d dots.\n\
+-  -oy       Authorizes overlaying preexisting d99/d2<N> files in newpath.\n\
+-  -on       Forces exit if preexisting d99/d2<N> files in newpath.\n\
+-  -v        Validates d99 and d00 links, uncorrupts d99 file, and ensures\n\
+-            accurate record count.  Also use -c0 to uncorrupt entire database.\n\
+-  -v<fname> Same as -v but also writes all d00 recs unreferenced by d99\n\
+-            to fname in format suitable to extract into .fzk file format.\n\
+-  -c<N>     Exits if more than <N> corrupted/incomplete links (default %d).\n\
+-            Corruption limit turned off by -c0.\n\
+-  <dbname>  1 - 8 char database name = the old d99/d2<N> files to be updated.\n\
+-            Files found in local directory.\n\
+-  <newpath> Specifies where the new d99/d2<N> files will be placed.\n\
+-            If first char is not slash, path is relative to local directory.\n\
+-EXIT CODES:\n\
+-  0: Complete success.  1: Warning.  2: Job never started.\n\
+-  3-49: Job ended prematurely, old files ok, new files unusable.\n\
+-  50-99: Fatal Error, even old database may be corrupted.\n\
+-  100+: Ctrl-C, kill, and all other signal interrupts cause premature\n\
+-     end, new files may be unusable.  Signal = exit code - 100.\n"
++$ message 1 of set 26 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
+ 2 "%1$s: %2$s Compression %3$d%% (about %4$lu KB) in %5$ld:%6$02ld min:sec.\n"
+ $ Msg 3 should not translate "d99."  "WORDS" should be translated.
+ 3 "%1$s: Counted %2$ld WORDS in %3$s.d99.\n"

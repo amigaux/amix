@@ -1,0 +1,36 @@
+SUNW_TOOLTALK.msg: leave out the usage message over the catalogue limit.
+
+Set 4 message 2 is tt_type_comp's usage text (about 1240 bytes). A System V catalogue message holds at most 1024 bytes (NL_TEXTMAX), and
+gencat refuses the whole file for one longer message. The C catalogue
+leaves it out, with a comment; catgets then returns the program's
+built-in text, which is the same text. A translated catalogue
+cannot carry it while the limit stands.
+
+--- a/lib/tt/SUNW_TOOLTALK.msg	2026-11-20 12:03:13
++++ b/lib/tt/SUNW_TOOLTALK.msg	2026-11-20 12:03:13
+@@ -96,24 +96,7 @@
+ USR2 ttsession_pid	re-read static types"
+ 20	"exiting"
+ $set 4
+-2	"Usage:\ntt_type_comp [-s] [-d db] [-mM] source_file\ntt_type_comp [-s\
+-] [-d db] -r type ...\n-M	merge source types into specified database, no\
+-t updating existing types\n-m	merge, but update existing types.  Default\
+-.\n-r	remove source types from the specified database\n-d db	database to\
+- operate on. One of: user, system, or network. Default: user\n-G	perform\
+- garbage collection on the ToolTalk database server.\n\ntt_type_comp [-s\
+-E] -p|O|P [-d db]\ntt_type_comp [-s]  -p|O|P compiled_file\n-O	enumerate\
+- on stdout the names of all otypes read\n-P	enumerate on stdout the name\
+-s of all ptypes read\n-p	pretty-print on stdout all the ToolTalk types r\
+-ead\n-E	use the Classing Engine database(s) instead of the XDR database(\
+-s)\n-d db	database to read from. One of: user, system, or network. Defau\
+-lt: all\n\ntt_type_comp [-s] -x [-o compiled_file] source_file\n-x	compi\
+-le types from source_file (or stdin, if file is \"-\")\n-o	write compile\
+-d types to compiled_file (or stdout, if file is \"-\")\n	Default: source\
+-_file.xdr, or \"types.xdr\" if source is stdin\n\ntt_type_comp [-hv]\n-v\
+-	print out version number\n-h	print out this message\n-s	do not print ou\
+-t any status messages.\n\nThese cpp options will be passed through:\n   \
+-     -undef -Dname -Idirectory -Uname -Ydirectory"
++$ message 2 of set 4 left out: over the 1024 bytes Amix catgets allows; the program prints its built-in text
+ 3	"Semantic error in types file"
+ 4	"Not a valid ToolTalk types file"
+ 5	"Cannot read any ToolTalk types from Classing Engine database"

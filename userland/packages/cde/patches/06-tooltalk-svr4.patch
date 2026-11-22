@@ -1,0 +1,145 @@
+ToolTalk: build for SVR4.
+
+- tt_options.h: an SVR4 block, as Amiga UNIX (Amix) is: TI-RPC over TLI,
+  sysinfo(), the SVR4 mount table read with getmntent and locked with
+  lockf; single-threaded.
+- tt_file_system.C: MNTTYPE_NFS, which not every SVR4 <sys/mntent.h> has.
+- tt_xdr_utils.C, mover.C, remover.C: take the existing branches the other
+  systems with the same headers use (SunOS 4's xdr casts, <unistd.h>).
+- tt_gettext.C: catgets's (char *) cast for SVR4 too.
+- mp_rpc_client.C, tt_port.C: struct sigaction's sa_handler is
+  void (*)() in an SVR4.0 header; compare and assign through its own type.
+- tt_port.C: an SVR4 libc has no vsyslog; format with vsnprintf and
+  syslog the result.
+- ttsession and ttdbserverd Makefile.am: libstt.a before libtt, which uses
+  it, as a static link needs.
+
+--- a/lib/tt/bin/shell/mover.C	2026-11-20 12:03:13
++++ b/lib/tt/bin/shell/mover.C	2026-11-20 12:03:13
+@@ -35,7 +35,7 @@
+ #include "tt_options.h"
+ #include <errno.h>
+ #include <string.h>
+-#if defined(__linux__) || defined(CSRG_BASED)
++#if defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ #include <unistd.h>
+ #else
+ #if !defined(sun)
+--- a/lib/tt/bin/shell/remover.C	2026-11-20 12:03:13
++++ b/lib/tt/bin/shell/remover.C	2026-11-20 12:03:13
+@@ -35,7 +35,7 @@
+ #include "tt_options.h"
+ #include <errno.h>
+ #include <string.h>
+-#if defined(__linux__) || defined(CSRG_BASED)
++#if defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ #include <unistd.h>
+ #else
+ #if !defined(sun)
+--- a/lib/tt/bin/ttdbserverd/Makefile.am	2026-11-20 12:03:13
++++ b/lib/tt/bin/ttdbserverd/Makefile.am	2026-11-20 12:03:13
+@@ -8,7 +8,7 @@
+ rpc_ttdbserver_CXXFLAGS = -I../../slib -I../../lib -I../../mini_isam \
+ 			$(TIRPC_DEFINES) $(TT_VERSION_DEFINE)
+ 
+-rpc_ttdbserver_LDADD = $(LIBTT) ${TIRPCLIB} $(X_LIBS) ../../slib/libstt.a \
++rpc_ttdbserver_LDADD = ../../slib/libstt.a $(LIBTT) ${TIRPCLIB} $(X_LIBS) \
+ 		       ../../mini_isam/libisam.a
+ 
+ if LINUX
+--- a/lib/tt/bin/ttsession/Makefile.am	2026-11-20 12:03:13
++++ b/lib/tt/bin/ttsession/Makefile.am	2026-11-20 12:03:13
+@@ -7,7 +7,7 @@
+ 
+ ttsession_CXXFLAGS = -I../../slib -I../../lib $(TT_VERSION_DEFINE)
+ 
+-ttsession_LDADD = $(LIBTT) $(X_LIBS) ../../slib/libstt.a
++ttsession_LDADD = ../../slib/libstt.a $(LIBTT) $(X_LIBS)
+ 
+ if LINUX
+ ttsession_LDADD += $(TIRPCLIB) $(XTOOLLIB)
+--- a/lib/tt/lib/mp/mp_rpc_client.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/mp/mp_rpc_client.C	2026-11-20 12:03:13
+@@ -307,7 +307,7 @@
+ #if defined(OPT_BUG_SUNOS_5)
+ 	if ((SIG_TYP)curr_action.sa_handler == SIG_DFL)
+ #else
+-	if (curr_action.sa_handler == SIG_DFL)
++	if ((void (*)(int))curr_action.sa_handler == SIG_DFL)
+ #endif
+ 	{
+ 		need2reset_sigpipe = 1;
+--- a/lib/tt/lib/tt_options.h	2026-11-20 12:03:13
++++ b/lib/tt/lib/tt_options.h	2026-11-20 12:03:13
+@@ -229,6 +229,14 @@
+ #  define OPT_GARBAGE_IN_PARALLEL	0	/* used as a const */
+ # endif
+ 
++#elif defined(SVR4)
++/* Amiga UNIX (Amix) and other System V Release 4 systems: TI-RPC over TLI,
++ * the SVR4 mount table, single-threaded */
++# define OPT_TLI
++# define OPT_SYSINFO
++# define OPT_SVR4_GETMNTENT
++# define OPT_LOCKF_MNTENT
++
+ #elif defined(__linux__)
+ # define OPT_CONST_CORRECT
+ 
+--- a/lib/tt/lib/util/tt_file_system.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/util/tt_file_system.C	2026-11-20 12:03:13
+@@ -61,6 +61,9 @@
+ #if defined(OPT_SVR4_GETMNTENT)
+ #	include <sys/mnttab.h>
+ #	include <sys/mntent.h>
++#	ifndef MNTTYPE_NFS
++#	define MNTTYPE_NFS		"nfs"	/* not in every SVR4's sys/mntent.h */
++#	endif
+ #	define TtMntTab			MNTTAB
+ #	define TtMntEntry		struct mnttab
+ #	define ttOpenMntTbl(path,mode)	fopen(path,mode)
+--- a/lib/tt/lib/util/tt_gettext.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/util/tt_gettext.C	2026-11-20 12:03:13
+@@ -122,7 +122,7 @@
+ 		return default_string;
+ 	}
+ 	return catgets( catalog, set_num, msg_num,
+-#if defined(OPT_BUG_SUNOS_5) || defined(OPT_BUG_AIX)
++#if defined(OPT_BUG_SUNOS_5) || defined(OPT_BUG_AIX) || defined(SVR4)
+ 				(char *)
+ #endif
+ 			default_string );
+--- a/lib/tt/lib/util/tt_port.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/util/tt_port.C	2026-11-20 12:03:13
+@@ -240,7 +240,7 @@
+ #if defined(OPT_BUG_SUNOS_5)	
+ 	act.sa_sigaction = (void (*)(int, siginfo_t *, void *)) handler;
+ #else
+-        act.sa_handler = handler;
++        act.sa_handler = (decltype(act.sa_handler))handler;
+ #endif	
+ 	sigemptyset(&act.sa_mask);
+ 	act.sa_flags = 0;
+@@ -359,6 +359,11 @@
+ 	char buf[5000];
+ 	vsprintf( buf, _format, args );
+ 	syslog( priority, buf );
++#elif defined(SVR4)
++	/* no vsyslog in an SVR4 libc.so */
++	char buf[5000];
++	vsnprintf( buf, sizeof buf, _format, args );
++	syslog( priority, "%s", buf );
+ #else
+ 	vsyslog( priority, _format, args );
+ #endif
+--- a/lib/tt/lib/util/tt_xdr_utils.C	2026-11-20 12:03:13
++++ b/lib/tt/lib/util/tt_xdr_utils.C	2026-11-20 12:03:13
+@@ -113,7 +113,7 @@
+ _Tt_xdr_size_stream::
+ _Tt_xdr_size_stream() {
+ 	memset (&ops, 0, sizeof ops);
+-#if defined(OPT_BUG_SUNOS_4)
++#if defined(OPT_BUG_SUNOS_4) || defined(SVR4)
+ 	ops.x_putlong = (int (*)(...))tt_x_putlong;
+ 	ops.x_putbytes = (int (*)(...))tt_x_putbytes;
+ 	ops.x_inline = (long *(*)(...))tt_x_inline;

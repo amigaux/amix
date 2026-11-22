@@ -1,0 +1,88 @@
+dtmail: build for SVR4.
+
+- RoamApp.C, DtMailServer.C, RFCMailBox.C, RFCTransport.C: struct
+  sigaction's sa_handler is void (*)() in an SVR4.0 header; assign through
+  the member's own type.
+- RFCMailBox.C: an SVR4 signal handler takes int, as on AIX and Linux.
+- DtMailRc.C: the system mailrc is /usr/share/lib/mailx/mailx.rc, SVR4
+  mailx's.
+- dmx.hh: SVR4's <sys/types.h> defines boolean_t.
+
+--- a/programs/dtmail/dtmail/RoamApp.C	2026-11-20 12:03:13
++++ b/programs/dtmail/dtmail/RoamApp.C	2026-11-20 12:03:13
+@@ -957,7 +957,8 @@
+ 
+ nl_catd DT_catd = (nl_catd) -1;    // catgets file descriptor
+ 
+-#define SA_HANDLER_TYPE void (*)(int)
++/* the handler member's own type: void (*)(int), or void (*)() in SVR4's struct sigaction */
++#define SA_HANDLER_TYPE decltype(((struct sigaction *)0)->sa_handler)
+ 
+ void RoamApp::initialize(int *argcp, char **argv)
+ {
+--- a/programs/dtmail/dtmailpr/dmx.hh	2026-11-20 12:03:13
++++ b/programs/dtmail/dtmailpr/dmx.hh	2026-11-20 12:03:13
+@@ -96,7 +96,7 @@
+ };
+ 
+ // This is undoubtedly illegal, unethical, and immoral.  So sue me.
+-#if !defined(SunOS) && !defined(_AIX)
++#if !defined(SunOS) && !defined(_AIX) && !defined(SVR4)	/* SVR4: sys/types.h has it */
+ #undef boolean_t
+ typedef enum { B_FALSE, B_TRUE } boolean_t;
+ #endif // SunOS
+--- a/programs/dtmail/libDtMail/Common/DtMailRc.C	2026-11-20 12:03:13
++++ b/programs/dtmail/libDtMail/Common/DtMailRc.C	2026-11-20 12:03:13
+@@ -149,6 +149,8 @@
+ #define SYSTEM_MAILRC	"/usr/share/lib/Mail.rc"
+ #elif defined(CSRG_BASED)
+ #define SYSTEM_MAILRC	"/etc/mail.rc"
++#elif defined(SVR4)
++#define SYSTEM_MAILRC	"/usr/share/lib/mailx/mailx.rc"	/* SVR4 mailx's */
+ #endif
+ 
+ // constructor
+--- a/programs/dtmail/libDtMail/Common/DtMailServer.C	2026-11-20 12:03:13
++++ b/programs/dtmail/libDtMail/Common/DtMailServer.C	2026-11-20 12:03:13
+@@ -160,7 +160,8 @@
+ //
+ //	len	- Length of message.
+ //
+-#define SA_HANDLER_TYPE void (*)(int)
++/* the handler member's own type: void (*)(int), or void (*)() in SVR4's struct sigaction */
++#define SA_HANDLER_TYPE decltype(((struct sigaction *)0)->sa_handler)
+ 
+ DTMailError_t
+ DtMailServer::ptrans_retrieve_readandappend(
+--- a/programs/dtmail/libDtMail/RFC/RFCMailBox.C	2026-11-20 12:03:13
++++ b/programs/dtmail/libDtMail/RFC/RFCMailBox.C	2026-11-20 12:03:13
+@@ -95,7 +95,7 @@
+ 
+ #if defined(sun)
+ #define	LCL_SIG_HANDLER_SIGNATURE	
+-#elif defined(__aix) || defined(__linux__) || defined(CSRG_BASED)
++#elif defined(__aix) || defined(__linux__) || defined(CSRG_BASED) || defined(SVR4)
+ #define	LCL_SIG_HANDLER_SIGNATURE	int
+ #endif
+ 
+@@ -4502,7 +4502,8 @@
+ 	_session->removeEventRoutine(error, PollEntry, this);
+ }
+ 
+-#define SA_HANDLER_TYPE void (*)(int)
++/* the handler member's own type: void (*)(int), or void (*)() in SVR4's struct sigaction */
++#define SA_HANDLER_TYPE decltype(((struct sigaction *)0)->sa_handler)
+ 
+ void
+ RFCMailBox::dumpMaps(const char *str)
+--- a/programs/dtmail/libDtMail/RFC/RFCTransport.C	2026-11-20 12:03:13
++++ b/programs/dtmail/libDtMail/RFC/RFCTransport.C	2026-11-20 12:03:13
+@@ -975,7 +975,7 @@
+     if (initialized) return;
+     initialized = 1;
+ 
+-    act.sa_handler = (void (*)(int))&RFCTransport::childHandler;
++    act.sa_handler = (decltype(act.sa_handler))&RFCTransport::childHandler;
+     sigemptyset(&act.sa_mask);
+     sigaddset(&act.sa_mask, SIGCHLD);
+     act.sa_flags = 0;

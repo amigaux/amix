@@ -1,0 +1,19 @@
+docbook-to-man.ts: "name \- text" on the manual pages' NAME lines.
+
+The DocBook-to-man transform separates a page's names from its purpose
+with \(em. The NAME line of a manual page is "name \- text" by the -man
+convention, which whatis and man -k read: catman and the whatis tools
+take the text after " - " as the description. The separator is now \-.
+Only that line of every page changes.
+
+--- a/programs/dtdocbook/tpt/docbook-to-man.ts	2026-11-20 12:03:13
++++ b/programs/dtdocbook/tpt/docbook-to-man.ts	2026-11-20 12:03:13
+@@ -98,7 +98,7 @@
+ -
+ #
+ GI:		REFPURPOSE
+-StartText:	\s\\(em\s
++StartText:	\s\\-\s
+ EndText:	^
+ -
+ #

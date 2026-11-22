@@ -1,0 +1,125 @@
+dtksh, dtappbuilder and ttsnoop optional.
+
+Three programs cannot be built where the build machine is not the target:
+- dtksh embeds CDE's ksh93, which AST's own build system (bin/package)
+  makes by compiling and running hundreds of feature probes on the build
+  machine;
+- dtappbuilder and ttsnoop have their user interface code written at build
+  time by dtcodegen, a program built in the same tree for the target.
+configure.ac gets --disable-dtksh and --disable-dtappbuilder (the latter
+covers ttsnoop); both default to enabled. programs/Makefile.am builds each
+only when enabled, and the C locale's catalogues (dtksh, dtbuilder,
+dtcodegen), app-defaults (Dtbuilder) and action types (dtbuilder.dt) are
+made only with their programs. With both enabled nothing changes but the
+order: the three are made after the other programs.
+
+--- a/configure.ac	2026-11-20 12:03:13
++++ b/configure.ac	2026-11-20 12:03:13
+@@ -252,6 +252,20 @@
+ AM_CONDITIONAL([BUILD_DTINFO], [test "x$enable_dtinfo" = xyes])
+ AM_CONDITIONAL([BUILD_DTDOCBOOK], [test "x$enable_dtdocbook" = xyes])
+ AM_CONDITIONAL([BUILD_MMDB], [test "x$enable_dtinfo" = xyes || test "x$enable_dtdocbook" = xyes])
++
++dnl dtksh: its ksh93 is built by AST's own build system, which runs its
++dnl feature probes on the build host
++AC_ARG_ENABLE([dtksh],
++        AS_HELP_STRING([--disable-dtksh], [Do not build dtksh (default=build it)]),
++        [], [enable_dtksh=yes])
++AM_CONDITIONAL([BUILD_DTKSH], [test "x$enable_dtksh" = xyes])
++
++dnl dtappbuilder and ttsnoop: dtcodegen, built in the same tree, writes
++dnl their user interface code at build time
++AC_ARG_ENABLE([dtappbuilder],
++        AS_HELP_STRING([--disable-dtappbuilder], [Do not build dtappbuilder and ttsnoop (default=build them)]),
++        [], [enable_dtappbuilder=yes])
++AM_CONDITIONAL([BUILD_DTAPPBUILDER], [test "x$enable_dtappbuilder" = xyes])
+ 
+ dnl Xrender usage
+ AC_ARG_ENABLE([xrender],
+--- a/programs/Makefile.am	2026-11-20 12:03:13
++++ b/programs/Makefile.am	2026-11-20 12:03:13
+@@ -2,11 +2,19 @@
+ 
+ SUBDIRS = backdrops icons dsdm dtmail dtpad dtfile dtwm dtlogin		\
+         dtsession dthello dtstyle dtexec dtdbcache dticon dtterm	\
+-        dtcalc dtaction dtspcd dtscreen dtksh dtcm dtsearchpath		\
+-        dtappbuilder palettes dtappintegrate dtprintegrate dtconfig	\
+-        dtcreate dtprintinfo fontaliases dtdspmsg ttsnoop dtimsstart	\
++        dtcalc dtaction dtspcd dtscreen dtcm dtsearchpath		\
++        palettes dtappintegrate dtprintegrate dtconfig		\
++        dtcreate dtprintinfo fontaliases dtdspmsg dtimsstart	\
+         dtpdm dtsr dtpdmd types tttypes util dtopen localized	\
+         dthelp
++
++if BUILD_DTKSH
++SUBDIRS += dtksh
++endif
++
++if BUILD_DTAPPBUILDER
++SUBDIRS += dtappbuilder ttsnoop
++endif
+ 
+ if BUILD_DTINFO
+ SUBDIRS += dtinfo
+--- a/programs/localized/templates/app-defaults.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/app-defaults.am	2026-11-20 12:03:13
+@@ -4,7 +4,10 @@
+ 
+ BUILT_SOURCES = Dthelpview Dtimsstart Dtlogin Dthello Dtsession		\
+ 	Dtscreen Dtwm Dtfile Dtstyle Dtpad Dticon Dtcreate Dtcalc	\
+-	Dtcm Dtterm Dtmail Dtbuilder Dtudcfonted Dt
++	Dtcm Dtterm Dtmail Dtudcfonted Dt
++if BUILD_DTAPPBUILDER
++BUILT_SOURCES += Dtbuilder
++endif
+ if BUILD_DTINFO
+ BUILT_SOURCES += Dtinfo
+ endif
+--- a/programs/localized/templates/msg.C.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/msg.C.am	2026-11-20 12:03:13
+@@ -4,16 +4,22 @@
+ 
+ BUILT_SOURCES = Xm.cat Mrm.cat Uil.cat DtHelp.cat DtMail.cat		\
+       DtPrint.cat DtWidget.cat MotifApp.cat SUNW_TOOLTALK.cat dt.cat	\
+-      dtact.cat dtbuilder.cat dtcalc.cat dtcm.cat dtcodegen.cat		\
++      dtact.cat dtcalc.cat dtcm.cat					\
+       dtconfig.cat dtcopy.cat dtcreate.cat dtfile.cat dthello.cat	\
+       dthelpgen.cat dthelpprint.cat dticon.cat dtimsstart.cat		\
+-      dtksh.cat dtlogin.cat dtlp.cat dtmailopts.cat dtpad.cat		\
++      dtlogin.cat dtlp.cat dtmailopts.cat dtpad.cat			\
+       dtpdm.cat dtpdmd.cat dtprintinfo.cat dtscreen.cat dtsearch.cat	\
+       dtsession.cat dtstyle.cat dtterm.cat dttypes.cat dtwm.cat		\
+       dtudcexch.cat dtudcfonted.cat libdtcm.cat libDtMail.cat
+ if BUILD_DTINFO
+ BUILT_SOURCES += dtinfo.cat dtinfo_start.cat
+ endif
++if BUILD_DTKSH
++BUILT_SOURCES += dtksh.cat
++endif
++if BUILD_DTAPPBUILDER
++BUILT_SOURCES += dtbuilder.cat dtcodegen.cat
++endif
+ 
+ CLEANFILES = $(BUILT_SOURCES)
+ 
+--- a/programs/localized/templates/types.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/types.am	2026-11-20 12:03:13
+@@ -4,7 +4,7 @@
+ 	datatypes.dt dtappman.dt dtfile.dt dtims.dt			\
+ 	dtpad.dt xclients.dt dthelp.dt dthelpprint.dt print.dt		\
+ 	dthelptag.dt dtmail.dt dtwm.fp dtscreen.dt dtcm.dt		\
+-	dtbuilder.dt miscActions.dt miscImages.dt IconBrowse.dt		\
++	miscActions.dt miscImages.dt IconBrowse.dt		\
+ 	DisplayImage.dt DisplayPDF.dt DisplayVideo.dt DisplayPS.dt	\
+ 	videoTypes.dt Education.dt gcompris.dt geogebra.dt		\
+ 	stellarium.dt tuxpaint.dt dreamchess.dt eboard.dt Games.dt	\
+@@ -24,6 +24,9 @@
+ if BUILD_DTINFO
+ DTTYPES += dtinfo.dt
+ endif
++if BUILD_DTAPPBUILDER
++DTTYPES += dtbuilder.dt
++endif
+ 
+ BUILT_SOURCES = $(DTTYPES) action
+ CLEANFILES = $(BUILT_SOURCES)

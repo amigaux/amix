@@ -1,0 +1,171 @@
+dtinfo and the DocBook tools optional, with their LMDB and Tcl checks.
+
+configure stops without liblmdb and without Tcl's tclConfig.sh, but only two
+parts of CDE use them: dtinfo, the information-library browser (LMDB, through
+DtMmdb), and programs/dtdocbook, the DocBook tools (LMDB, and Tcl in
+instant). Amix has neither library: LMDB 0.9 needs process-shared POSIX
+mutexes or POSIX semaphores, and nothing on the box needs Tcl. So:
+- configure.ac: --disable-dtinfo and --disable-dtdocbook (both default to
+  enabled, as before); liblmdb is checked only when either is built, Tcl
+  only when dtdocbook is; BUILD_MMDB when either is;
+- lib/Makefile.am: DtMmdb, the database library only those two use, joins
+  SUBDIRS only with BUILD_MMDB;
+- programs/Makefile.am: dtinfo and dtdocbook join SUBDIRS only when built;
+- the C locale's app-defaults (Dtinfo), message catalogues (dtinfo,
+  dtinfo_start) and action types (dtinfo.dt), and the ToolTalk types
+  (dtinfo, dtinfo_start), are made only when dtinfo is.
+With both enabled nothing changes. dtdocbook2man and dtdocbook2sdl are
+still configured, so a build can run them through tools built for the
+build host to make the manual pages and help volumes.
+
+--- a/configure.ac	2026-11-20 12:03:13
++++ b/configure.ac	2026-11-20 12:03:13
+@@ -234,6 +234,18 @@
+ )
+ AM_CONDITIONAL([BUILD_DOCS], [test -z "$disable_docs"])
+ 
++dnl dtinfo (needs liblmdb) and the DocBook tools in programs/dtdocbook (need
++dnl liblmdb and Tcl) are optional; their libraries are checked only for them
++AC_ARG_ENABLE([dtinfo],
++        AS_HELP_STRING([--disable-dtinfo], [Do not build dtinfo (default=no)]),
++        [], [enable_dtinfo=yes])
++AC_ARG_ENABLE([dtdocbook],
++        AS_HELP_STRING([--disable-dtdocbook], [Do not build the DocBook tools (default=no)]),
++        [], [enable_dtdocbook=yes])
++AM_CONDITIONAL([BUILD_DTINFO], [test "x$enable_dtinfo" = xyes])
++AM_CONDITIONAL([BUILD_DTDOCBOOK], [test "x$enable_dtdocbook" = xyes])
++AM_CONDITIONAL([BUILD_MMDB], [test "x$enable_dtinfo" = xyes || test "x$enable_dtdocbook" = xyes])
++
+ dnl Xrender usage
+ AC_ARG_ENABLE([xrender],
+         AS_HELP_STRING([--disable-xrender], [Disable use of the Xrender extension (default=auto)]),
+@@ -499,10 +511,13 @@
+              [${EXTRA_INCS} ${EXTRA_LIBS}])
+ AC_SUBST(JPEGLIB)
+ 
+-dnl lmdb
++dnl lmdb, for dtinfo and the DocBook tools only
++LMDBLIB=""
++if test "x$enable_dtinfo" = xyes || test "x$enable_dtdocbook" = xyes; then
+ AC_CHECK_LIB(lmdb, mdb_version, [LMDBLIB="-llmdb"],
+              [AC_MSG_ERROR([liblmdb not found, please install it])],
+              [${EXTRA_INCS} ${EXTRA_LIBS}])
++fi
+ AC_SUBST(LMDBLIB)
+ 
+ dnl Setup XTOOLLIB - we do it in this specific order to avoid ordering
+@@ -564,10 +579,12 @@
+ 
+ AM_CONDITIONAL([HAS_UTEMPTER_LIBRARY], [test "x$ac_cv_lib_utempter_utempter_add_record" = "xyes"])
+ 
+-dnl Figure out TCL
+-
++dnl Figure out TCL, for the DocBook tools only
++
++AS_IF([test "x$enable_dtdocbook" = xyes], [
+ SC_PATH_TCLCONFIG
+ SC_LOAD_TCLCONFIG
++])
+ 
+ dnl check MISSING_PROGS - error out here if there's stuff in it.
+ 
+--- a/lib/Makefile.am	2026-11-20 12:03:13
++++ b/lib/Makefile.am	2026-11-20 12:03:13
+@@ -1,4 +1,9 @@
+ MAINTAINERCLEANFILES = Makefile.in
+ 
+ SUBDIRS = DtXinerama tt DtSvc DtSearch DtWidget DtHelp DtPrint DtTerm \
+-          DtMrm csa DtMmdb
++          DtMrm csa
++
++# the information-library database, for dtinfo and the DocBook tools only
++if BUILD_MMDB
++SUBDIRS += DtMmdb
++endif
+--- a/programs/Makefile.am	2026-11-20 12:03:13
++++ b/programs/Makefile.am	2026-11-20 12:03:13
+@@ -5,8 +5,16 @@
+         dtcalc dtaction dtspcd dtscreen dtksh dtcm dtsearchpath		\
+         dtappbuilder palettes dtappintegrate dtprintegrate dtconfig	\
+         dtcreate dtprintinfo fontaliases dtdspmsg ttsnoop dtimsstart	\
+-        dtpdm dtsr dtpdmd dtinfo types tttypes util dtopen localized	\
+-        dthelp dtdocbook
++        dtpdm dtsr dtpdmd types tttypes util dtopen localized	\
++        dthelp
++
++if BUILD_DTINFO
++SUBDIRS += dtinfo
++endif
++
++if BUILD_DTDOCBOOK
++SUBDIRS += dtdocbook
++endif
+ 
+ install-data-hook:
+ 	-if [ $(CDE_INSTALLATION_TOP)/bin != $(bindir) ];then \
+--- a/programs/localized/templates/app-defaults.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/app-defaults.am	2026-11-20 12:03:13
+@@ -4,7 +4,10 @@
+ 
+ BUILT_SOURCES = Dthelpview Dtimsstart Dtlogin Dthello Dtsession		\
+ 	Dtscreen Dtwm Dtfile Dtstyle Dtpad Dticon Dtcreate Dtcalc	\
+-	Dtcm Dtterm Dtmail Dtbuilder Dtudcfonted Dt Dtinfo
++	Dtcm Dtterm Dtmail Dtbuilder Dtudcfonted Dt
++if BUILD_DTINFO
++BUILT_SOURCES += Dtinfo
++endif
+ 
+ CLEANFILES = $(BUILT_SOURCES)
+ 
+--- a/programs/localized/templates/msg.C.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/msg.C.am	2026-11-20 12:03:13
+@@ -10,8 +10,10 @@
+       dtksh.cat dtlogin.cat dtlp.cat dtmailopts.cat dtpad.cat		\
+       dtpdm.cat dtpdmd.cat dtprintinfo.cat dtscreen.cat dtsearch.cat	\
+       dtsession.cat dtstyle.cat dtterm.cat dttypes.cat dtwm.cat		\
+-      dtudcexch.cat dtudcfonted.cat libdtcm.cat libDtMail.cat		\
+-      dtinfo.cat dtinfo_start.cat
++      dtudcexch.cat dtudcfonted.cat libdtcm.cat libDtMail.cat
++if BUILD_DTINFO
++BUILT_SOURCES += dtinfo.cat dtinfo_start.cat
++endif
+ 
+ CLEANFILES = $(BUILT_SOURCES)
+ 
+--- a/programs/localized/templates/types.am	2026-11-20 12:03:13
++++ b/programs/localized/templates/types.am	2026-11-20 12:03:13
+@@ -1,7 +1,7 @@
+ # process the types files...
+ 
+ DTTYPES = autoStart.dt user-prefs.dt uxstd.dt dt.dt develop.dt		\
+-	datatypes.dt dtappman.dt dtfile.dt dtims.dt dtinfo.dt		\
++	datatypes.dt dtappman.dt dtfile.dt dtims.dt			\
+ 	dtpad.dt xclients.dt dthelp.dt dthelpprint.dt print.dt		\
+ 	dthelptag.dt dtmail.dt dtwm.fp dtscreen.dt dtcm.dt		\
+ 	dtbuilder.dt miscActions.dt miscImages.dt IconBrowse.dt		\
+@@ -21,6 +21,9 @@
+ 	pgadmin.dt synaptic.dt System.dt virtualbox.dt wicd.dt		\
+ 	acroread.dt emacs.dt gv.dt kile.dt mgv.dt TeX.dt xdvi.dt	\
+ 	xournal.dt xpdf.dt
++if BUILD_DTINFO
++DTTYPES += dtinfo.dt
++endif
+ 
+ BUILT_SOURCES = $(DTTYPES) action
+ CLEANFILES = $(BUILT_SOURCES)
+--- a/programs/tttypes/Makefile.am	2026-11-20 12:03:13
++++ b/programs/tttypes/Makefile.am	2026-11-20 12:03:13
+@@ -15,9 +15,10 @@
+         dtcm.done \
+         dtmail.done \
+         dtdbcache.done \
+-        dtterm.done \
+-        dtinfo.done \
+-        dtinfo_start.done
++        dtterm.done
++if BUILD_DTINFO
++LOCALDEPFILES += dtinfo.done dtinfo_start.done
++endif
+ 
+ BUILT_SOURCES = types.xdr
+ CLEANFILES = *.done types.xdr .tt_lock
