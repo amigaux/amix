@@ -2,9 +2,14 @@
 NAME=motif
 PKG=motif
 VERSION=2.3.8
-PKGREV=2   # -2: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
+PKGREV=3   # -3: gcc14-cross-amix 276ef49 (every program exports environ, so the bytes move; the code is 2.3.8-2's), and the shared variant 2.3.8-3.s; -2: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
 SOURCE_EPOCH=1795046400   # 2026-11-19 00:00 UTC
 SUMMARY="Motif 2.3.8 - the Motif toolkit (Xm, Mrm, Uil), mwm, uil and xmbind"
+# the shared variant (VARIANT=shared, prototype.shared): against X11R6.3's shared
+# variant, for the RAM measurement against the static build
+SHARED_PKGREV=3.s
+SHARED_SUMMARY="Motif 2.3.8 with shared libraries - the Motif toolkit (Xm, Mrm, Uil), mwm, uil and xmbind"
+SHARED_DESC="Motif 2.3.8, the Open Group's LGPL release, built from the upstream source against X11R6.3 under /opt/amix/X11R6: the libXm, libMrm and libUil libraries, shared (with the static archives), with their headers, the mwm window manager, the uil compiler, xmbind, the bindings and the manual pages. Xft, Xprint, PNG and JPEG are off (X11R6.3 has none of them); Motif's own XPM reader is in libXm."
 DESC="Motif 2.3.8, the Open Group's LGPL release, built from the upstream source against X11R6.3 under /opt/amix/X11R6: the libXm, libMrm and libUil libraries with their headers, the mwm window manager, the uil compiler, xmbind, the bindings and the manual pages. Xft, Xprint, PNG and JPEG are off (X11R6.3 has none of them); Motif's own XPM reader is in libXm."
 CATEGORY=x11
 SET=extra
@@ -19,3 +24,6 @@ TOOLCHAIN=gcc14
 PREFIX=/opt/amix/X11R6
 DEPENDS="x11r6.3"
 BUILD_DEPENDS="x11r6.3"
+# libregex.so.1 for POSIX regcomp (Amix libc has none; libgen's regcmp is static-only)
+SHARED_DEPENDS="x11r6.3 regex amixrt"
+SHARED_BUILD_DEPENDS="x11r6.3 regex"

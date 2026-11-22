@@ -60,6 +60,33 @@ Motif uses floating point, so it needs an FPU or the kernel's FP emulation, as X
 - `doc/motif`: `COPYING`, `README`, `RELNOTES`, and X11R6.3's `LABEL` and X Consortium notice, as
   `mwm`, `uil` and `xmbind` contain X11R6.3's libraries.
 
+## The shared variant
+
+`VARIANT=shared` builds Motif with shared libraries, version `2.3.8-<PKGREV>.s` (`SHARED_PKGREV`),
+from `prototype.shared`, against X11R6.3's shared variant (its build tree `x11r6.3-shared`) and
+the regex package's `libregex.so.1`, to compare memory use with the static build. It is the same
+package (`motif`), so a machine has one variant or the other. The hooks take the variant from
+`$VARIANT`; with `VARIANT=static`, the default, the build and its bytes are as before.
+
+- `libXm.so.4`, `libMrm.so.4` and `libUil.so.4` in `/opt/amix/X11R6/lib`, each the file its
+  soname names with a `lib*.so` link beside it (libtool's `libfoo.so.4.0.4` name goes), and `mwm`,
+  `uil` and `xmbind` linked against them, with `DT_RPATH /opt/amix/X11R6/lib:/opt/amix/lib`.
+- **libtool's answers**: its SVR4 table does not know the host vendor `cbm`, so it would drop
+  every library a library depends on; `lt_cv_deplibs_check_method=pass_all`, its answer for the
+  vendors it knows, keeps them (`libXm.so.4` records `libXt`, `libX11` and the rest). Its own
+  `-lc` would link the static-only parts of Amix's libc into the libraries; it is turned off
+  (`lt_cv_archive_cmds_need_lc=no`), as the driver's `-shared` brings `libamixrt` for those.
+- **POSIX `regcomp`** from the regex package's `libregex.so.1`: the fallback upstream takes on
+  Amix, `libgen`'s `regcmp`, exists only static and non-PIC and would put text relocations into
+  `libXm.so.4`.
+- `DragICC.c` and `Container.c` are compiled without jump tables in this variant only: there a
+  switch's bound is compared in memory and its index reloaded before the jump, a form the 68060
+  gate cannot size.
+- Every program links its own `_XtInherit` from X11R6.3's shared variant's `libXtInherit.a` (its
+  README, *The shared variant*).
+- **Gates**: `check-got-addend.py` on the PIC objects, `check-dynstr-order.py` and no `DT_TEXTREL`
+  on every library and program.
+
 ## Patches
 
 | Patch | What |
