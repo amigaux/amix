@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — pkgbuild reads a shared object's undefined symbols from .dynsym too (214a657b)
+
+The UNDEF gate reads a shared object's undefined symbols from its dynamic symbol table as well as its full one, so a stripped prebuilt is checked (libstdc++.so.6: 89, all defined by libamixrt.so.1 and libc.so.1; nm -u alone saw none), and refuses one nm reads no symbol from.
+
+## 2026-11-22 — scan060-g14 sizes a PIC switch table whose base comes from the GOT (164bc608)
+
+scan060-g14.py takes `moveal %a5@(d),%aN' as the table base of the bound-past-a-blt form when %a5 was set to the GOT by the function's lea and the slot GOT+d is an R_68K_RELATIVE to the table after the jmp (libstdc++.so.6's ctype<char>::is, six sites); libstdc++.so.6 now scans clean, 50 tables sized, and the 585 ELFs re-scanned give the same outputs.
+
 ## 2026-11-22 — gcc14-pin.sh pins libstdc++.so.6 (1a8817a0)
 
 gcc14-pin.sh pins the shared C++ runtime, m68k-elf/lib/cxxrt/libstdc++.so.6 (625304574344, 1796012 bytes, NEEDED libamixrt.so.1; the same bytes in 276ef49 and next's d5a43a7), so a package ships it as PREBUILT.

@@ -361,10 +361,24 @@ stage() {
         sysroot = os.path.join(tmp, "sysroot")
         write(os.path.join(sysroot, "usr", "lib", "libc.so.1"), "stub libc\n")
         tools = os.path.join(tmp, "tools")
+        # STUB_STRIPPED: the payload's out.elf is stripped, its full table
+        # gone ("no symbols"); STUB_DYNSYM: its dynamic table holds the
+        # undefined STUB_UNDEF, which nm -D reads
         write(os.path.join(tools, "nm"), """\
 #!/bin/sh
+for f; do :; done
+stripped=
+case ${STUB_STRIPPED:-}:$f in ?*:*out.elf) stripped=1 ;; esac
 case $1 in
--D) echo "nm: $2: Invalid operation" >&2; exit 1 ;;
+-D)
+	if [ -n "$stripped" ] && [ -n "${STUB_DYNSYM:-}" ]; then
+		if [ "$2" = -u ]; then echo "         U ${STUB_UNDEF:-exit}"; else echo "00001000 T swp"; fi
+		exit 0
+	fi
+	echo "nm: $f: Invalid operation" >&2; exit 1 ;;
+esac
+[ -z "$stripped" ] || { echo "nm: $f: no symbols" >&2; exit 0; }
+case $1 in
 -u) echo "         U printf"; echo "         U ${STUB_UNDEF:-exit}"; echo "         w ${STUB_WEAK:-weak_hook}" ;;
 *) echo "00018cac T printf"; echo "00001000 T exit" ;;
 esac
@@ -834,6 +848,16 @@ stage() {
         rc, out = build("elfy", STUB_UNDEF="environ", **elf_env)
         check("UNDEF: an executable's environ is not taken from a program",
               rc == 1 and "undefined symbols no NEEDED library defines: environ" in out, out)
+        strip_env = dict(elf_env, STUB_PINS=pins, STUB_DYN=libc.strip(), STUB_STRIPPED="1", STUB_DYNSYM="1")
+        rc, out = build("prebuilt", STUB_UNDEF="nosuch", **strip_env)
+        check("UNDEF: a stripped shared object's undefined symbols are read from its dynamic table: refused",
+              rc == 1 and "undefined symbols no NEEDED library defines: nosuch" in out, out)
+        rc, out = build("prebuilt", STUB_UNDEF="printf", **strip_env)
+        check("UNDEF: a stripped shared object whose dynamic undefineds libc defines passes",
+              rc == 0 and "UNDEF ok  out.elf" in out, out)
+        rc, out = build("prebuilt", **dict(strip_env, STUB_DYNSYM=None))
+        check("UNDEF: a shared object nm reads no symbol from is refused, not passed",
+              rc == 1 and "out.elf: nm reads no symbol from it, dynamic or not" in out, out)
         rc, out = build("prebuilt", STUB_PINS="x " + "0" * 64, STUB_DYN=libc.strip(), **elf_env)
         check("PREBUILT: a file no gcc14 pin names is refused",
               rc == 1 and "is in PREBUILT, but no file gcc14-pin.sh pins has its sha256" in out, out)

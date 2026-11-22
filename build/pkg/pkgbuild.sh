@@ -567,7 +567,19 @@ for b in $BINS; do
 	} | LC_ALL=C sort -u > "$BUILD/needed.syms"
 	# strong references only: a weak one (w) may stay unresolved, as libamixrt's
 	# __amix_dso_batch does in a program that does not define it
-	missing=$("$NM" -u "$b" | awk '$1 == "U" {print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
+	# a shared object's are in its dynamic symbol table too, the only one a
+	# stripped one has (a prebuilt): both tables, as dso_syms reads a
+	# library; one neither table can be read from is refused, not passed
+	if [ $dyn = yes ]; then
+		[ -n "$({ "$NM" -D "$b" || :; "$NM" "$b" || :; } 2>/dev/null | head -1)" ] || {
+			echo "[FAIL] $(basename "$b"): nm reads no symbol from it, dynamic or not; the undefined-symbol gate would check nothing" >&2
+			exit 1
+		}
+		undef=$({ "$NM" -D -u "$b" || :; "$NM" -u "$b" || :; } 2>/dev/null)
+	else
+		undef=$("$NM" -u "$b")
+	fi
+	missing=$(echo "$undef" | awk '$1 == "U" {print $NF}' | LC_ALL=C sort -u | LC_ALL=C comm -23 - "$BUILD/needed.syms" | tr '\n' ' ')
 	[ -z "$missing" ] || { echo "[FAIL] $(basename "$b"): undefined symbols no NEEDED library defines: $missing" >&2; exit 1; }
 	echo "  UNDEF ok  $(basename "$b"): every undefined symbol is defined by its NEEDED: $libs"
 	echo "            found:$found"
