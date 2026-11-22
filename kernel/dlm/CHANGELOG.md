@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — C4-7 (draft): disk commands with segment lists (06a0ca2f)
+
+struct sdcomx, a stock sdcom followed by a segment list, a flag and a residual, and sd_limits, a controller's limits declared after sd_register through a weak reference. Header sys/sdseg.h; not in the kit or ddi.list until a kernel takes it. kit-test checks the layouts on both lines.
+
 ## 2026-11-20 — writing-a-module.md names the DMA calls (bc6d19f3)
 
 §4 no longer says DDI has no DMA interface: it names the DMA calls of minor 2 (k30.1.2, k46.1.2: dma_alloc, dma_prepare/dma_complete, dma_addr) and points to ddi.md and C4-5. The kits' docs/guide.md changes with it at the next kit rebuild.
