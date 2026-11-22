@@ -353,6 +353,83 @@ def word_at(data, secs, a):
     return None
 
 
+def got_context(data):
+    """For a file with a dynamic section: (the GOT's address, DT_PLTGOT, the
+    value %a5 holds in PIC code; {slot address: addend} of its
+    R_68K_RELATIVE relocations, a slot with more than one relocation left
+    out); else None.  Read from the section headers."""
+    shoff = struct.unpack(">I", data[32:36])[0]
+    shentsize, shnum = struct.unpack(">HH", data[46:50])
+    got, slots, seen = None, {}, set()
+    for i in range(shnum):
+        sh = data[shoff + i * shentsize: shoff + (i + 1) * shentsize]
+        _n, typ, _f, _a, off, size, _l, _i, _al, ent = struct.unpack(">IIIIIIIIII", sh[:40])
+        if typ == 6:                                    # SHT_DYNAMIC
+            for k in range(0, size - 7, 8):
+                tag, val = struct.unpack(">II", data[off + k: off + k + 8])
+                if tag == 3:                            # DT_PLTGOT
+                    got = val
+        elif typ == 4 and ent == 12:                    # SHT_RELA
+            for k in range(0, size - 11, 12):
+                r_off, info, add = struct.unpack(">IIi", data[off + k: off + k + 12])
+                if r_off in seen:
+                    slots.pop(r_off, None)
+                    continue
+                seen.add(r_off)
+                if info & 0xff == 22:                   # R_68K_RELATIVE
+                    slots[r_off] = add & 0xffffffff
+    return (got, slots) if got is not None else None
+
+
+def uword_at(data, secs, a):
+    w = word_at(data, secs, a)
+    return None if w is None else w & 0xffff
+
+
+def got_load(data, secs, a):
+    """(N, displacement) of the `moveal %a5@(d),%aN' at a, read from its
+    words (objdump prints a d16 in decimal and a full-format base
+    displacement in hex, on a line of its own): mode 5, or mode 6 in the
+    full format with no index and no memory indirection, its base
+    displacement a word or a long; else None."""
+    op = uword_at(data, secs, a)
+    if op is None or op & 0xf1ff not in (0x206d, 0x2075):
+        return None
+    n = (op >> 9) & 7
+    if op & 0x38 == 0x28:
+        d = word_at(data, secs, a + 2)
+        return None if d is None else (n, d)
+    ext = uword_at(data, secs, a + 2)
+    if ext is None or ext & 0x1ff not in (0x160, 0x170):
+        return None
+    hi = word_at(data, secs, a + 4)
+    if hi is None:
+        return None
+    if ext & 0x1ff == 0x160:
+        return n, hi
+    lo = uword_at(data, secs, a + 6)
+    return None if lo is None else (n, (hi << 16) | lo)
+
+
+def a5_is_got(insns, p, got, fstart):
+    """Whether %a5 holds the GOT at insns[p]: the last write to it before
+    p, within the function, is `lea %pc@(G),%a5' with G the GOT; a restore
+    just before an rts (a return path laid out in between) aside."""
+    for q in range(p - 1, max(0, p - 1024) - 1, -1):
+        a, _w, mn, ops = insns[q]
+        if a < fstart:
+            return False
+        if mn == "lea":
+            m = re.match(r"^%pc@\(([0-9a-f]+)\b[^)]*\),%a5$", ops)
+            if m:
+                return int(m.group(1), 16) == got
+        if writes_reg(mn, ops, "a5"):
+            if q + 1 < p and insns[q + 1][2] == "rts" and (mn.startswith("moveml") or ops == "%sp@+,%a5"):
+                continue
+            return False
+    return False
+
+
 def moveq_value(insns, j, reg):
     """The constant in %reg at insns[j], if the last write to it before j is a
     moveq #N,%reg within a few instructions; else None.  A compare or test
@@ -393,7 +470,7 @@ def bound_of(insns, j, br):
     return None
 
 
-def bound_for(insns, idx):
+def bound_for(insns, idx, got=None):
     """Entry count (N+1) from the unsigned bound check before the dispatch at
     insns[idx].  The forms met in GCC 14 output and in the stock archive
     members it links (libgen's regcmp/advance):
@@ -416,7 +493,11 @@ def bound_for(insns, idx):
         moveq #64,%d0 ; cmpl %d1,%d0 ; bltw out ; bcsw out ; addl %d1,%d1 ;
         movew %a2@(0,%d1:l),%d0 ; jmp %pc@(T,%d0:w)
     accepted only when the compared operand is the dispatch's index register
-    and the table load's base is T (interleaved_ok).  And a mask bounding the
+    and the table load's base is T (interleaved_ok).  In a shared object
+    (libstdc++.so.6, 276ef49, 2026-11-22) the base comes from the GOT,
+    `lea %pc@(GOT),%a5 ; ... ; moveal %a5@(d),%a2', its slot GOT+d an
+    R_68K_RELATIVE to T (got: got_context, and the function's start).
+    And a mask bounding the
     index gives way to a smaller bound on the ways into the dispatch block
     (masked_entry_bound: d_special_name, libiberty's demangler in
     libstdc++.a, `cmpib #53,%d0 ; bls block', block `andil #255,%d0').
@@ -438,7 +519,7 @@ def bound_for(insns, idx):
         while COND_BRANCH.match(insns[k][2]) and k + 1 < idx and COND_BRANCH.match(insns[k + 1][2]):
             k += 1
             r = bound_of(insns, j, insns[k][2])
-            if r is not None and interleaved_ok(insns, k, idx, r[1], r[0]):
+            if r is not None and interleaved_ok(insns, k, idx, r[1], r[0], got):
                 return r[0]
         m = re.match(r"^%(d[0-7]),%(d[0-7])$", ops)
         if m and br.startswith("bhi"):
@@ -539,12 +620,15 @@ def reglist(text):
     return out
 
 
-def interleaved_ok(insns, k, idx, ea, n):
+def interleaved_ok(insns, k, idx, ea, n, got=None):
     """For a bound branch at insns[k] that follows other conditional
     branches: the compared operand is the dispatch's index register %dI,
     nothing writes it between the branch and the dispatch but its doubling,
     and a table loaded through %aN reads T itself: `moveal #T,%aN' within
-    LOOKBACK, no branch from before it into the code that reaches the
+    LOOKBACK, or in a shared object `moveal %a5@(d),%aN' with %a5 the GOT
+    (a5_is_got) and the slot GOT+d an R_68K_RELATIVE to T (got: data,
+    sections, got_context and the function's start), no branch from before
+    it into the code that reaches the
     dispatch from it, and nothing in that code writing %aN (the restore
     before an rts aside, and the table's own words)."""
     li = load_index(insns, idx)
@@ -564,6 +648,14 @@ def interleaved_ok(insns, k, idx, ea, n):
         mn, ops = insns[p][2], insns[p][3]
         if mn == "moveal" and re.match(r"^#(-?\d+),%" + base + "$", ops):
             if int(ops[1:ops.index(",")]) & 0xffffffff != t:
+                return False
+            mv = p
+            break
+        if mn == "moveal" and ops.startswith("%a5@(") and ops.endswith(",%" + base) and got is not None:
+            data, secs, (gaddr, slots), fstart = got
+            gl = got_load(data, secs, insns[p][0])
+            if gl is None or "a%d" % gl[0] != base or slots.get((gaddr + gl[1]) & 0xffffffff) != t \
+                    or not a5_is_got(insns, p, gaddr, fstart):
                 return False
             mv = p
             break
@@ -841,8 +933,8 @@ def entry_bound(insns, start, idx):
     return found.pop() if len(found) == 1 else None
 
 
-def find_tables(insns, labels, data, secs, pts):
-    """-> ({(start, end)}, [problems], [notes])"""
+def find_tables(insns, labels, data, secs, pts, gotc=None):
+    """-> ({(start, end)}, [problems], [notes]); gotc: got_context"""
     tables, problems, notes = set(), [], []
     for idx, (a, words, mn, ops) in enumerate(insns):
         if mn != "jmp" or not words or words[0] != "4efb":
@@ -865,7 +957,7 @@ def find_tables(insns, labels, data, secs, pts):
                 problems.append("dispatch at 0x%08x: offsets loaded from 0x%08x, not the table at 0x%08x "
                                 "after the jmp (a two-level dispatch)" % (a, int(m.group(1), 16) & 0xffffffff, t))
                 continue
-        n = bound_for(insns, idx)
+        n = bound_for(insns, idx, (data, secs, gotc, enclosing(pts, a)[0] or 0) if gotc else None)
         k = constant_index(insns, idx) if n is None else None
         if k is not None and k >= 0:
             fstart, fend = enclosing(pts, a)
@@ -969,7 +1061,8 @@ def scan(tool, path):
     known = set(known) | set(objs)
     knotes += ["data object in .text at 0x%08x: %s, %d bytes" % (s, objs[(s, e)], e - s)
                for s, e in sorted(objs)]
-    skip, problems, notes = find_tables(insns, labels, data, secs, pts)
+    gotc = got_context(data)
+    skip, problems, notes = find_tables(insns, labels, data, secs, pts, gotc)
     skip |= known
     problems += kproblems
     for _round in range(6):
@@ -977,7 +1070,7 @@ def scan(tool, path):
             break
         listing = resync_listing(tool, path, secs, names, skip)
         insns, _l = parse(listing)
-        new, more, more_notes = find_tables(insns, labels, data, secs, pts)
+        new, more, more_notes = find_tables(insns, labels, data, secs, pts, gotc)
         problems = sorted(set(problems) | set(more))
         notes = sorted(set(notes) | set(more_notes))
         if not (new - skip):
