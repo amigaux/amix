@@ -91,13 +91,14 @@
 #                         becomes (idx >> 3) & 3, sd.c.in's rank column and ranked insert (rank class,
 #                         then base: 1 z3660, 2 zorro, 3 mobo, 4 ide), and every alien object that
 #                         includes sd.h is compiled fresh.  2 (the default) is today's kernel, byte for byte.
-#     --kabi k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5  (with --dlm) the module kernel's kabi: kinfo's tag, the core's DLM_KABI and
+#     --kabi k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5|k30.1.6  (with --dlm) the module kernel's kabi: kinfo's tag, the core's DLM_KABI and
 #                         the abi-<kabi>.txt mkabi checks against; k30.1.1 is stage 4's (kernel/dlm core 0031, the
 #                         bdevsw layout; k30.1.2 from dlm 42411c4: root_defer, iodone, ramdisk_image,
 #                         vfs_register; k30.1.3 from dlm e45b061, C3-2 v2: AllocMem, FreeMem, displaytype and the
 #                         audio exclusion pair, so it needs --audio-paula; k30.1.4 from dlm 74405ce, core 0048: a
 #                         filesystem module loads at its first mount, no new name; k30.1.5 from dlm 16a25b51,
-#                         core 0055: a zorro match key may name product 00, no new name). The block generator, the libgcc
+#                         core 0055: a zorro match key may name product 00, no new name; k30.1.6 from dlm 17cc5692,
+#                         core 0059: sd_limits, C4-7). The block generator, the libgcc
 #                         export loop and the core.list gate take only the list lines whose minor is at most the
 #                         claim's (C3-2 v2 section 2). Default k30.1.0.
 #     --bempty-ram        (kernel/dlm core 0031) bdevsw row 20, the stock ramdisk, becomes an empty row (every
@@ -348,7 +349,7 @@ while [ "$#" -gt 0 ]; do
     --config)   CONFIG="${2:?--config needs a value}"; shift 2 ;;
     --probe-sole) PROBE_SOLE="${2:?--probe-sole needs a value}"; shift 2 ;;
     --sd-cards) SD_CARDS="${2:?--sd-cards needs 2 or 4}"; shift 2 ;;
-    --kabi)     KABI="${2:?--kabi needs k30.1.0, k30.1.1, k30.1.2, k30.1.3, k30.1.4 or k30.1.5}"; shift 2 ;;
+    --kabi)     KABI="${2:?--kabi needs k30.1.0, k30.1.1, k30.1.2, k30.1.3, k30.1.4, k30.1.5 or k30.1.6}"; shift 2 ;;
     --audio-paula) AUDIO_PAULA="${2:?--audio-paula needs the amix-paula directory}"; shift 2 ;;
     --bempty-ram) BEMPTY_RAM=1; shift ;;
     --config=*) CONFIG="${1#--config=}"; shift ;;
@@ -437,7 +438,7 @@ case "$AUDIO_REPLIES" in 0|1) ;; *) echo "AUDIO_REPLIES='$AUDIO_REPLIES' (want 0
   || { echo "--ufs-hole-fix needs the rwip fix (UFS_RWIP=1): without it rwip creates the window's leading pages unread" >&2; exit 2; }
 case "$SD_CARDS" in 2|4) ;; *) echo "unknown --sd-cards '$SD_CARDS' (want: 2|4)" >&2; exit 2 ;; esac
 KABI="${KABI:-k30.1.0}"
-case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5)" >&2; exit 2 ;; esac
+case "$KABI" in k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5|k30.1.6) ;; *) echo "unknown --kabi '$KABI' (want: k30.1.0|k30.1.1|k30.1.2|k30.1.3|k30.1.4|k30.1.5|k30.1.6)" >&2; exit 2 ;; esac
 KABI_MINOR="${KABI##*.}"   # the claim's minor: list lines whose since is above it are not this kernel's (C3-2 v2)
 # k30.1.3 lists paula_busy and audio_nopen, which only the patched audio.c defines: refuse the claim without the patch
 # here, before a long build, rather than at ksymgate
@@ -707,8 +708,8 @@ PATCH_N=0
 # expresses.  See tools/kpatch-lib.sh :: kpatch_repo_dir.
 PATCH_SRC=()
 # PATCH_DIRS (env, space-separated): repos whose src/kernel-patches join the glob WITHOUT being in
-# the build -- a stock-layer fix another driver carries (the z3660scsi driver's dd.c ordering patch)
-# applied to a family that does not link that driver (K030-IDE). Logged per patch.
+# the build -- a stock-layer fix another driver carries, applied to a family that does not link that
+# driver. Logged per patch.
 for d in "$KT" "${DIRS[@]}" ${PATCH_DIRS:-}; do
   pdir="$d/src/kernel-patches"
   [ -d "$pdir" ] || continue                       # driver ships no kernel-patches: skip
