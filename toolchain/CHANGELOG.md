@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-22 — image.ref names the build images published from 3b3c8801 (eafaf23c)
+
+dist @sha256:d71226a5…, media @sha256:0e3c2627… (gcc-cross-amix 33ebadc, gcc14-cross-amix 276ef49, amix-system 988b0f8); make tools takes them by digest, and they compare equal to the images built here, every file alike (image-manifest). On 276ef49 every dynamically linked program re-rolls with environ and _environ exported, so packages re-rolled on it differ from bytes recorded under 9d13dcd; the VARIANT knob's unchanged-bytes check holds on the same toolchain.
+
 ## 2026-11-22 — gcc14 pinned to release-1.1 276ef49 (790fa636)
 
 gcc14-cross-amix release-1.1 276ef49: the shared C++ runtime (libstdc++.so.6, for g++ -shared), more of libc in libamixrt, errno set through the GOT, environ and _environ exported from every program. Tree e27bb5e0; the specs and libamixrt.so.1 (216fdce0, 30948 bytes) change; cc1, libgcc.a, libamixc99.a and the init objects do not.
