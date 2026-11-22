@@ -606,7 +606,12 @@ step_kspace() {
 	# under either spelling; a recipe with an older pin fetches its own
 	git -C "$AMIX_PORT_REPO" cat-file -e "$_pc^{commit}" 2>/dev/null ||
 		git -C "$AMIX_PORT_REPO" fetch -q --depth 1 "$AMIX_PORT_URL" "$_pc"
-	export AMIX_PORT_URL AMIX_PORT_REPO
+	# amix-paula likewise, for the kernel recipes, which fetch a commit it
+	# lacks by hash from paula.pin's URL: under out/cache, so it outlives
+	# this step's own out/build/kspace and is fetched once
+	AMIX_PAULA_REPO=$out/cache/paula-repo
+	[ -d "$AMIX_PAULA_REPO/.git" ] || git init -q "$AMIX_PAULA_REPO"
+	export AMIX_PORT_URL AMIX_PORT_REPO AMIX_PAULA_REPO
 	missing= waiting=
 	kdirs=$(kspace_dirs) || exit 1
 	for d in $kdirs; do
