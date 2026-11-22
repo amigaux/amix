@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — a recipe's shared variant, VARIANT (7b51a824)
+
+A recipe with prototype.shared builds, with VARIANT=shared, the same package at VERSION-SHARED_PKGREV (PKGREV.word, 14.s: apkg's vercmp orders it right at any width) with the SHARED_ summary, description and dependencies, in <name>-shared. make dist VARIANT=shared picks it for the userland build and its catalog; static is the default and its bytes are unchanged (x11r6.3 6.3-14, motif 2.3.8-2). A recipe without prototype.shared builds static and says so.
+
+## 2026-11-22 — gcc14-pin.sh for 276ef49; a shared object's environ (790fa636, b46e131f)
+
+gcc14-pin.sh pins 276ef49's specs and libamixrt.so.1. The UNDEF gate takes environ and _environ as defined for a shared object, since every program now exports them; an executable's, and any other symbol, still fail.
+
 ## 2026-11-22 — scan060-g14 --explain reads hit addresses of any width (764aa717)
 
 scan060-g14.py --explain reads scan060.py's hit addresses at any width, so a shared object's (linked at 0) are explained, and refuses a hit file whose hit lines do not match its HITS count; libXaw.so.6.1 now passes D4, no other verdict changed over 585 ELFs.
