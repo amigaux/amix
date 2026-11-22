@@ -40,6 +40,15 @@ fail() { echo "repro-selftest: FAIL -- $*" >&2; exit 1; }
 n=0
 ok() { n=$((n + 1)); echo "  ok $n  $*"; }
 
+# the shared host tools, built once from this checkout (build/hosttools, its
+# X distfile fetched into out/cache) and used by both builds: a copy of
+# build/ has neither toolchain/fetch-distfile nor that cache
+if [ -z "${AMIX_HOSTTOOLS_BIN:-}" ]; then
+	AMIX_HOSTTOOLS_BIN=$(sh "$AMIX_TOP/build/hosttools/build.sh") ||
+		fail "the shared host tools did not build (build/hosttools/build.sh)"
+fi
+export AMIX_HOSTTOOLS_BIN
+
 # two checkouts: build/ and the pins, at different paths
 checkout() {
 	mkdir -p "$1/toolchain" "$1/userland/packages"
