@@ -4,6 +4,10 @@
 
 libstdc++.so.6 in m68k-elf/lib/cxxrt for g++ -shared and -shared-libgcc (one runtime per process, exceptions across libraries), environ and _environ exported from every program, and more of libc in libamixrt for CDE's shared libraries. gcc14-cross-amix.tree is 23591a40; among the pinned files only the specs and libamixrt.so.1 (216fdce0) change; cc1, libgcc.a, libamixc99.a and the init objects stay. image.ref still names the d0082c9 images until a new pair is published.
 
+## 2026-11-22 — gcc14 pinned to release-1.1 276ef49 (790fa636)
+
+gcc14-cross-amix release-1.1 276ef49: the shared C++ runtime (libstdc++.so.6, for g++ -shared), more of libc in libamixrt, errno set through the GOT, environ and _environ exported from every program. Tree e27bb5e0; the specs and libamixrt.so.1 (216fdce0, 30948 bytes) change; cc1, libgcc.a, libamixc99.a and the init objects do not.
+
 ## 2026-11-20 — gcc14 pinned to release-1.1 9d13dcd: fold-mem-offsets off (15a66acd)
 
 gcc14-cross-amix release-1.1 9d13dcd: fold-mem-offsets off in the specs (a GCC 14.2 m68k -O2 miscompile: a store one element too far) and the PR 126121 bset/bclr fixes. Tree 78ce903e; cc1, libgcc.a, libamixc99.a, the specs and libamixrt.so.1 (f18b7635) change; the init objects do not.
