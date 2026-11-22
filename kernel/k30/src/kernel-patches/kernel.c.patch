@@ -1,0 +1,19 @@
+--- master.d/kernel.c.orig
++++ master.d/kernel.c
+@@ -259,6 +259,7 @@
+ 	hdstrategy(),hdprint(),hdsize();
+ extern ddopen(),ddclose(),ddread(),ddwrite(),ddioctl(),
+ 	ddstrategy(),ddprint(),ddsize();
++extern int ddflag;	/* D_NOBRKUP: dd cuts its own requests (amiga/alien/dd.c) */
+ extern dumopen(),dumclose(),dumstrategy(),dumprint(),dumsize();
+ extern ramopen(),ramclose(),ramstrategy(),ramprint(),ramsize();
+ extern miread();
+@@ -302,7 +303,7 @@
+ ND,ND,ND,ND,ND,ND,ND,nullflag,	/*15*/
+ fdopen, fdclose, fdstrategy, fdprint, fdsize, ND, ND, nullflag,	/*16 = fd*/
+ hdopen, hdclose, hdstrategy, hdprint, hdsize, ND, ND, nullflag,	/*17 = hd*/
+-ddopen, ddclose, ddstrategy, ddprint, ddsize, ND, ND, nullflag,	/*18 = dd*/
++ddopen, ddclose, ddstrategy, ddprint, ddsize, ND, ND, &ddflag,	/*18 = dd*/
+ dumopen, dumclose, dumstrategy, dumprint, dumsize, ND, ND, nullflag, /*19 = dummydisk*/
+ ramopen, ramclose, ramstrategy, ramprint, ramsize, ND, ND, nullflag, /*20 = ramdisk*/
+ ND,ND,ND,ND,ND,ND,ND,nullflag,	/*21*/
