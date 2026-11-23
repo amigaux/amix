@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — a4091, a4kt710: synchronous transfers behind param sync=1 (689e3657, c73a837e)
+
+`param sync=1` negotiates synchronous transfers (SDTR 100 ns, offset 8) once per target. A reject, no answer or an untimeable period stays asynchronous (an untimeable answer fails its command). A parity error or phase mismatch on a synchronous transfer, or a parity error in the negotiation, drops that target to asynchronous for good, with a console line; the polled path reads the SSTAT0 parity latch for this. A bus reset renegotiates. Default 0. On metal, the A4092 and the A4000T's onboard 53C710 agree 100 ns offset 8 with a ZuluSCSI, renegotiate after a bus reset, and verify clean; rates equal sync=0 while the polled path is CPU-bound. Modules 1.0.0-12/1.0.0-9, packages 1.0.0-15/1.0.0-13.
+
 ## 2026-11-23 — a4091 1.0.0-14, a4kt710 1.0.0-12: spin before the interrupt; auto waits for long commands (565bda24)
 
 param spin=<us> (0 by default, at most 1000) finishes a command that stops within that time inline on the interrupt path, so short commands skip the interrupt, sleep and wakeup; only process-context queue calls spin. The default intr=-1 now turns the interrupt on only at the first command over 4 KiB, not as soon as the kernel accepts the limits: k46 -69 accepts them but still sends 4 KiB commands, where polling is faster for raw transfers (A4000T: raw read 2002 kB/s polled, 1717 on the interrupt). Packages a4091-k30/-k46 1.0.0-14 (module 1.0.0-11), a4kt710-k30/-k46 1.0.0-12 (module 1.0.0-8).
