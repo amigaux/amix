@@ -52,6 +52,22 @@
 # 2026-10-28 ride this cut (a new version); -20 is never re-rolled -- one
 # version, one set of bytes (recipes/README.md).
 
+# -79 against -78 (2026-11-23): the cut 68030-261123-79 (amix kernel/k30/cuts/
+# 68030-261123-79), -78's recipe from amix c7b59dda: the module core carries
+# dlm core 0059 (sd_limits, sd_lim, sdqueuex: a disk driver may declare its
+# DMA limits and take whole commands) and the kernel claims kabi k30.1.6 (the
+# new names are functions: abi= 18c0a1c9 as before); dd cuts its own block
+# requests (dd.c.patch, kernel.c.patch: ddflag D_NOBRKUP, so gen_strategy no
+# longer cuts them first), carries the completion order z3660scsi's dd.c.patch
+# used to, and with -DDD_SDLIM sends a declaring controller whole requests
+# through a dma_alloc bounce region of up to 64 KiB per card; the soft data
+# and vmem limits are the stock 16 MiB again (no --proc-limits; the cut checks
+# pkginfo against the built table with --rlimits-text).  Against -78: unix (dd.o,
+# kernel.o, the rlimits table, the core, the build id) and so unix.brel,
+# unix.sym and kabi, and the build id of the two modules; audio.c 3f434f35 as
+# before; modules kabi k30.1.2.  z3660scsi supplies no stock-file patch any
+# more.  Core and kit amix c7b59dda, port 59e1b77, paula 1b2736d.
+#
 # -78 against -77 (2026-11-15): the cut 68030-261115-78 (amix kernel/k30/cuts/
 # 68030-261115-78), -77's recipe from amix 215a64ba with three guards: a user
 # bus error on a valid translation at a physical address at or above
@@ -235,49 +251,49 @@
 # pinned until the move) both make the shipped brel from the ET_REL.
 
 # the cut's output: kernel/k30/cuts/build.sh (make kernel-k30) writes it
-# there, from cuts/68030-261115-78/cut.sh (gitignored)
-K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261115-78}"
-K30M_SYSDIR=cut-68030-261115-78/usr/sys   # the cut's kernel tree under K30M_SRC
-K30M_SUMS=SHA256SUMS-68030-261115-78      # under K30M_SRC; names relative to K30M_SYSDIR
-K30M_CARVE=cut-68030-261115-78/carve      # the carve sources of ufs and s5 (R2)
-K30M_AMIX_COMMIT=215a64ba   # amix, the cut's commit: elf2brel and the in-amix licences
+# there, from cuts/68030-261123-79/cut.sh (gitignored)
+K30M_SRC="${K30M_SRC:-$AMIX_TOP/kernel/k30/build/cuts/68030-261123-79}"
+K30M_SYSDIR=cut-68030-261123-79/usr/sys   # the cut's kernel tree under K30M_SRC
+K30M_SUMS=SHA256SUMS-68030-261123-79      # under K30M_SRC; names relative to K30M_SYSDIR
+K30M_CARVE=cut-68030-261123-79/carve      # the carve sources of ufs and s5 (R2)
+K30M_AMIX_COMMIT=c7b59dda   # amix, the cut's commit: elf2brel and the in-amix licences
 K30M_ELF2BREL=kernel/k30/tools/elf2brel.py
 K30M_ELF2BREL_SHA=0026fb59d5bd58468786e0af6b4178667260e77944758c91d834e8adaf4b42f5
-K30M_DLM_COMMIT=215a64ba    # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
-K30M_KIT_COMMIT=215a64ba    # amix (kernel/dlm), the kit the modules are checked and rebuilt with
+K30M_DLM_COMMIT=c7b59dda    # amix (kernel/dlm), the cut's core: axrel, ksymgate.py, abi/k30 (lists, reference)
+K30M_KIT_COMMIT=c7b59dda    # amix (kernel/dlm), the kit the modules are checked and rebuilt with
 K30M_KIT_PORT=59e1b77       # amix-040-060-port, the kit's headers (k46 half of `make kit`)
 K30M_PORT_COMMIT=59e1b778fd8ab55d9883b55e65577cae4bfaa3a5    # K30M_KIT_PORT in full, fetched by hash
 K30M_PAULA_COMMIT=1b2736d9bb291af77bd1e8995d15f3e60d0627ff   # amix-paula, the audio patchers
 
 K30M_CATALOG_NAME=kernel-k30-m
 K30M_PKG=kern30m
-K30M_BUILDID=68030-261115-78
-K30M_KABI=k30.1.5
+K30M_BUILDID=68030-261123-79
+K30M_KABI=k30.1.6
 K30M_FSKABI=k30.1.2       # the .moddata kabi of ufs and s5 (the minor they import)
-K30M_VERSION=k30.1.5.261115-78
+K30M_VERSION=k30.1.6.261123-79
 
-K30M_BREL_SHA=b46708a98f9c1c2a93fa10e1ac01b7badff798674c6ebf3447bd5ead0ec017d5
-K30M_BREL_SIZE=1545004
-K30M_BSS=350780
-K30M_KABI_SHA=5e54e610ae46d9cf7f8b1b204c8e7cff5fb34861a5435fc1db734a0b57324230
-K30M_SYM_SHA=ea0d7ff4123c88f113525a59a96674458c9164a34a138300061900acb8c42ba1
-K30M_SYM_SIZE=182436
-K30M_ETREL_SHA=ae956f07a41fc42dc368da2cec208c6ce96354eeb58c3df5cff93a5a394c1135
+K30M_BREL_SHA=d56183161bb2ade3cf6c32af010b9f027addc40a98f26589235481033d43d072
+K30M_BREL_SIZE=1549840
+K30M_BSS=352284
+K30M_KABI_SHA=eedf378105be53ef0e4ad1311f705bfeaacebfff9450af6665c71a47114eed49
+K30M_SYM_SHA=f85183610a40183d03c1d80eff176ac450a92e51aabb108697a1aff4f2bec0db
+K30M_SYM_SIZE=182872
+K30M_ETREL_SHA=77289799057a1c1d73c1fdaa91340a306118b254c13586a4cb860d5c14cefcdd
 # the cut's patched audio driver source (SHA256SUMS names it; the three
 # amix-paula patchers, 1b2736d's (548d258's bytes), on the stock audio.c, then
 # from -77 tools/patch_audio_replies.py)
 K30M_AUDIO_SHA=3f434f3507e1044ca794706a2de3a05c99ddefbcda6cd8e1b9abc6e60bc24fef
 # the sidecar's other fields, for the record (build.sh checks ident/arena/
 # ksym are present once and abi= against amix-dlm's reference):
-#   ident=0x000e34e8  arena=0x000e3530 0x00060000  ksym=0x000e1bb4 0x00001930
-#   abi=18c0a1c98b2c9284fb10a6b6386403ed5e13193e3ec7aa4f113ff2a174285378 (= abi-k30.1.5.txt, = 1.4's and 1.3's)
+#   ident=0x000e442c  arena=0x000e4470 0x00060000  ksym=0x000e2ad8 0x00001950
+#   abi=18c0a1c98b2c9284fb10a6b6386403ed5e13193e3ec7aa4f113ff2a174285378 (= abi-k30.1.6.txt, = 1.5's, 1.4's and 1.3's)
 #   root=mobo:a3000-wd,zorro:0202:01,zorro:0202:03, sdcards=4 and rth1=2
 #   passed through verbatim; no rootfs= (build.sh refuses one)
 
 # the filesystem modules: <fs> <sha256> <size>, at $K30M_SYSDIR/mod.d/<fs>
 K30M_FSMODS="\
-ufs f1e26ff09a14a1a0dc5d122be91fd3816296cb222ec068d619cebdc53e7f5b76 80261
-s5  4dd1a4892e1ea75386eabb5fdbb962b9ea34bffa511a0dad44fd01e609eb1672 58365"
+ufs 6792ce1fc6f5f21670a0059e043783673cd6bc2fb4bf7f695b2f2652e617f1f4 80261
+s5  bfd28070f1003e0a8418714a19c5cac28ad249057aaac98c8f053e8277df1198 58365"
 # the stock objects the carve wraps (the sysroot's, as the cut's carve/stock.sha256)
 K30M_FSSTOCK="\
 fs/ufs/exp a439e68f880d01450f156a0fd5886610c828d2a7cbdfdf3e8a28d93dd656273c
@@ -309,7 +325,6 @@ ufs hole/ufs.exp ec8fccf2f3b6c020333be68c041c61e063ba87c8ba971c1bed0bc998fb2ecb8
 K30M_LICENCES="\
 amix-a4091/LICENSE         20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4 amix:kernel/drivers/a4091/LICENSE
 amix-a4091/NOTICE          f37c3ca7dba3c5b572e961a2ce1bd67e13ecf2eed9f341221866dfafc8ca3f21 amix:kernel/drivers/a4091/NOTICE
-amix-z3660scsi/LICENSE     20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4 amix:kernel/drivers/z3660scsi/LICENSE
 amix-040-060-port/LICENSE  ceec1a0761d69087a733d3b04716c29baa0c0243f2c0def26456516f73ad8ca6 port:LICENSE
 amix-kerntools/LICENSE     20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4 amix:kernel/k30/LICENSE
 amix-paula/LICENSE         4e0b5700f025f487cff0c46858b1e70cdf27bf99544ddac930a6421f62319f42 paula:LICENSE"
