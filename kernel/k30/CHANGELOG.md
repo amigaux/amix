@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — dd bounce form for controllers that declare limits (a228ff7c)
+
+For a controller that declares limits (C4-7 §5), dd takes sd_lim at the first open, holds a dma_alloc bounce region of up to 64 KiB per card and sends whole requests through sdqueuex, one unit at a time per card, with b_resid from sx_resid. A card without limits, or a region dma_alloc refuses or that lies out of reach, keeps page commands, and dd prints why on the console. Compiled in with -DDD_SDLIM, which the cross build sets for a module-core kernel at kabi minor 6 or later. In the emulator, raw 64 KiB reads went from 13.5 to 29–35 MB/s and writes from 7.8 to 11.5–14.7 MB/s on an A4091 build that declares limits; without one, command sequences are unchanged.
+
 ## 2026-11-22 — dd cuts its own block requests (D_NOBRKUP); kabi k30.1.6 (5f391130, 4ca99da0)
 
 dd's block row says D_NOBRKUP, so gen_strategy no longer sits in front of it: dd makes the same pieces itself (a page list one command per page; any other buffer over a page to the page boundary, then a page at a time) without allocating or sleeping. The next request starts before iodone (the order fix z3660scsi's dd patch used to carry), and REQUEST SENSE data sits on a 16-byte boundary per unit. Command shapes are unchanged on the A2091, the A3000 SCSI and the A4091. build-cross-kernel.sh and kabi-sidecar030.py take kabi k30.1.6 (dlm core 0059).
