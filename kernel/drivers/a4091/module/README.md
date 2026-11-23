@@ -53,12 +53,12 @@ unchanged:
 | DMA | Through C4-5 v5: `dma_prepare`, then `ds.data1buf = dma_addr(r, pa)`, then the DSP write; `dma_complete` before the sd callback. One site: the 53C710 takes the data address only from the DSA table. When `dma_addr` gives 0 (k30: out of reach, no bounce), the chip is not armed, the command fails (status 0xff) and `a4091_kstat.noreach` counts it. `dma_complete` still runs: with no PREPARED record the provider only counts `cmpl_noprep`, on both lines, so `drv_prep == drv_cmpl` |
 | Status | After a WRITE or a TUR, whose data complete clears no cache, a FROM_DEVICE prepare and complete over the area's clear line before the status byte is read (C4-5 v5 §5.4); counted in `a4091_kstat.stsync`. The clear line is one nobody writes, so a bounced complete's copy-back can never land on the status the chip wrote (the force-bounce status bug, below) |
 | Console | The `A4091 slow:` trace is printed for a poll past `a4091_slow_poll`, a command over 60 ticks on the interrupt path, the poll bound or the watchdog's bound (rc -2), a phase error (rc -3) or a short-read recovery; its `t=` field is the command's ticks. A selection timeout (rc -1) is an absent id answering a bus scan: silent, counted in `a4091_kstat.seltimeout` (the static driver still traces it) |
-| Version | `VERSION` (`1.0.0-11`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals; 1.0.0-7 completed every command polled; 1.0.0-8 declared no limits; 1.0.0-9 completed on the interrupt by default, whatever the command size; 1.0.0-10 had no spin |
+| Version | `VERSION` (`1.0.0-12`), the module version. 1.0.0-1 had no refused arm and no status sync; 1.0.0-2 numbered its k46 attach lines `card` by the module's board index; 1.0.0-3 synced the status line itself; 1.0.0-4 traced every selection timeout (the installer's scans filled the console); 1.0.0-5 timed the bus reset by counter changes (a minute under Amiberry at `cpu_speed=max`); 1.0.0-6 still had the U77 probe check on every k46 command, the `a4091_dma_off` knob and the last-command globals; 1.0.0-7 completed every command polled; 1.0.0-8 declared no limits; 1.0.0-9 completed on the interrupt by default, whatever the command size; 1.0.0-10 had no spin; 1.0.0-11 no synchronous transfers |
 
 ### The `dma_alloc` area
 
 Everything the chip reads or writes besides the caller's buffer is in one
-area of 1348 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
+area of 1508 bytes, never in the module's own `.data`. C3-6 §1.5 forbids
 handing a board the module's own memory, and on k30 the arena is out of a
 Zorro master's reach.
 
@@ -66,10 +66,11 @@ Zorro master's reach.
 |---|---|
 | 0x000 | the status line: the status byte (0) and the message bytes (4–11), a 16-byte line holding nothing the CPU writes during a command |
 | 0x010 | the clear line: 16 bytes nobody writes; the cache-clearing sync's segment |
-| 0x020 | the SCRIPTS, 184 bytes, copied from the template |
-| 0x0d8 | the DSA table, 76 bytes |
-| 0x124 | the IDENTIFY and CDB buffers, 16 bytes |
-| 0x134 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
+| 0x020 | the SCRIPTS, 328 bytes, copied from the template (`reference/scripts/inq-wr.ss`, assembled) |
+| 0x168 | the DSA table, 76 bytes |
+| 0x1b4 | the IDENTIFY and CDB buffers, 16 bytes |
+| 0x1c4 | the misaligned-read bounce, 1040 bytes (D42 "Bounce"; the driver rounds its start up to a 16-byte line) |
+| 0x5d4 | the negotiation's MESSAGE OUT: IDENTIFY and SDTR, 6 of 16 bytes |
 
 **The force-bounce status bug (2026-10-27).** 1.0.0-3 ran the sync over the status line itself. With
 the k30 provider's `dma_forcebounce` hook on, that segment was bounced too.
@@ -215,6 +216,35 @@ the enables.
 interrupt) and `holdmax` (beam lines); then `armed` (auto: 1 ready and still
 polled, 2 switched on by a long command).
 
+## Synchronous transfers
+
+`param sync=1` negotiates synchronous transfers; 0, the default, keeps every
+target asynchronous, as before. Each target (per board) negotiates on its
+first command: IDENTIFY and an SDTR go out in one MESSAGE OUT, offering
+100 ns and offset 8, the 53C710's limits at its 50 MHz SCLK on the A4091 and
+the A4000T. The target's answer decides:
+- an SDTR answer with a nonzero offset: synchronous at that period (rounded
+  up to what the chip can time: (TP + 4) clocks of 20, 30 or 40 ns, SBCL SSCF
+  1, 2, 3) and offset (8 at most). SXFER is set for the rest of the command
+  and loaded at every later selection; the console says `a4091: board N id T
+  synchronous, period P ns, offset O`;
+- offset 0, MESSAGE REJECT, another message, or no answer (the target goes
+  straight to COMMAND): asynchronous;
+- a period the chip cannot time: asynchronous for good, said on the console.
+
+A parity error or a phase mismatch on a synchronous transfer turns the target
+asynchronous for good, with the console line `board N id T: parity error on
+a synchronous transfer: asynchronous from now on` (or `phase mismatch`), and
+the bus is reset before the board's next command, so the target forgets the
+agreement. Every bus reset sends the other targets back to negotiate again.
+The SCRIPTS stop for the answer (INT 0xff20, 0xff21, 0xff22) and the driver
+continues them; `a4091_sy` (magic "A4SY") counts `negs`, `syncs`, `asyncs`,
+`rejects`, `others` and `offs`, and `a4091_sst[board][target]` holds each
+state (0 unknown, 1 pending, 2 synchronous, 3 asynchronous, 4 off for good).
+The emulator's 53C710 ignores SDTR, so it shows only the no-answer path; the
+answer, the reject and the fallback are host-tested, and their rates need
+metal.
+
 ## Limits (C4-7)
 
 After each `sd_register` the module calls `DDI_SD_LIMITS(a4091queue, k,
@@ -320,8 +350,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 54/54 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 54/54 cases |
+| H1 | k30 (`sptalloc` arm) | 61/61 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 61/61 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the
@@ -370,7 +400,7 @@ The design is `docs/A4000T-ONBOARD-710.md` §10.
 | Chip | `$DD0000`, registers at +0x40 written directly, DCNTL `0x20` (EA), host ID from the DIP bank at +0x3000, SIEN/DIEN 0 at attach; one controller, c 0 |
 | sd | `sd_register(a4091queue, 0, 0xDD0000, "A4000T onboard SCSI", 3)` |
 | Everything else | the A4091 module's: the queue path, the `dma_alloc` area, C4-5, the bounce, the bus reset, `_halt` |
-| Version | `module/a4kt710/VERSION` (`1.0.0-8`): 1.0.0-5 completes commands on the interrupt after its self-test, as the a4091 module does; 1.0.0-6 declares the C4-7 limits; 1.0.0-7 takes the interrupt by default only with the limits accepted (`intr` auto), as the a4091 module does; 1.0.0-8 adds `param spin` |
+| Version | `module/a4kt710/VERSION` (`1.0.0-9`): 1.0.0-5 completes commands on the interrupt after its self-test, as the a4091 module does; 1.0.0-6 declares the C4-7 limits; 1.0.0-7 takes the interrupt by default only with the limits accepted (`intr` auto), as the a4091 module does; 1.0.0-8 adds `param spin`; 1.0.0-9 `param sync` |
 | Package | `a4kt710-k30` / `a4kt710-k46`, pkginst `a4kt71030` / `a4kt71046` |
 
 **Metal (2026-10-28, k46):** the A4000T with a Z3660 (060) roots on the onboard bus through `a4kt710`, 3/3 cold boots, with

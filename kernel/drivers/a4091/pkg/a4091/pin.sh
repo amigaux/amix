@@ -38,15 +38,18 @@
 # and finishes a command that stopped there inline; param spinrd.  Auto turns
 # the interrupt on only at the first command over 4 KiB (k46 -69 accepts the
 # limits but still sends 4 KiB).
+# 1.0.0-15 (2026-11-23): module 1.0.0-12: param sync (0 default): SDTR per
+# target (100 ns, offset 8), asynchronous for good after a parity error or
+# phase mismatch on a synchronous transfer.
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-11
-KM_PKG_VERSION=1.0.0-14
+KM_VERSION=1.0.0-12
+KM_PKG_VERSION=1.0.0-15
 
-KM_K30_SHA=65fdfd0a24cba88ca430405a9dc22a8ec342b542977372ea687fba8e4b119dc4
-KM_K46_SHA=b763fcf1e8288f7e2c824b595432b565bba6e96e9e8350e80e973eb537c8341d
+KM_K30_SHA=5426a5a5588cb6944deaa55ac90f9ed9d1f11a0ae01fba5ff105cb5d0e7bd617
+KM_K46_SHA=df0a1a214f3acbd9a7578c9c66ccbd150426cc06f2de90626323a4ddd10e354a
 KM_K30_DEPS=
 KM_K46_DEPS=
 
