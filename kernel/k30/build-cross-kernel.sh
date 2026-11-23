@@ -938,6 +938,18 @@ for inc in "$BUILD/amiga/inc"/*.h; do
 done
 [ "${#SHADOW_HDRS[@]}" -gt 0 ] \
   && echo "  include-shadow guard: staged amiga/inc -> amiga/alien for the compile of: ${SHADOW_HDRS[*]}"
+# dd's bounce form (kernel/dlm C4-7 section 5: sd_lim, sdqueuex, dma_alloc): a kernel with the module core
+# at kabi minor 6 or later and the four-card sd compiles dd.c with -DDD_SDLIM, beside a copy of the kit's
+# sys/sdseg.h (found by the current-directory search, as the shadow copies are; removed after the loop).
+# Any other kernel compiles dd.c without it: page commands only, the core's names never referenced.
+DD_SDLIM=""
+case " $FRESH_OBJ " in *" dd.o "*)
+  if [ -n "$DLM_CORE" ] && [ "$DLM_STUB" != 1 ] && [ "$SD_CARDS" = 4 ] && [ "$KABI_MINOR" -ge 6 ] \
+     && [ -f "$DLM_CORE/build/kit/k30/include/sys/sdseg.h" ]; then
+    cp "$DLM_CORE/build/kit/k30/include/sys/sdseg.h" "$ALIEN/sdseg.h"; DD_SDLIM="-DDD_SDLIM"
+    echo "  dd.o: the bounce form (-DDD_SDLIM, sdseg.h from the kit)"
+  fi ;;
+esac
 
 ( cd "$ALIEN"
   rm -f $FRESH_OBJ exp                              # no dep tracking: force these fresh
@@ -948,6 +960,7 @@ done
     # `#if (__STDC__ - 0 == 0)`, the same knob 4b/7b apply): stock sdpart.c, first compiled fresh by
     # the sddevsize kernel patch.  Every other alien source compiles exactly as before.
     knob=""; grep -q '"sys/user.h"' "$c" && knob="-D__STDC__=0"
+    [ "$o" = dd.o ] && knob="$knob $DD_SDLIM"
     "$CC" -c -O $CFLAGS_K $knob -I../.. -I../inc "$c" -o "$o"
   done
   for o in $ALIEN_OBJ; do
@@ -958,6 +971,7 @@ done
 # retract the shadow copies: their job (winning the current-dir quote search) is done,
 # and leaving stdlib-basename files in amiga/alien/ could confuse a later relink/inspection.
 for h in "${SHADOW_HDRS[@]:-}"; do [ -n "$h" ] && rm -f "$ALIEN/$h"; done
+[ -z "$DD_SDLIM" ] || rm -f "$ALIEN/sdseg.h"
 echo "  amiga/alien/exp: $(file "$ALIEN/exp" | sed 's/^[^:]*: //')"
 echo "  (fresh cross-compiled:$FRESH_OBJ ; staged native: the rest of: $ALIEN_OBJ)"
 

@@ -1,6 +1,6 @@
 --- amiga/alien/dd.c.orig
 +++ amiga/alien/dd.c
-@@ -7,6 +7,8 @@
+@@ -7,23 +7,59 @@
  #include	"sys/types.h"
  #include	"sys/param.h"
  #include	"sys/buf.h"
@@ -9,7 +9,20 @@
  #include	"sys/uio.h"
  #include	"sys/inline.h"
  #include	"sys/errno.h"
-@@ -17,13 +19,31 @@
+ #include	"rico.h"
+ #include	"sd.h"
++#ifdef DD_SDLIM
++#include	"sys/immu.h"
++#include	"sdseg.h"
++#endif
+ 
+ extern paddr_t vtop();
++#ifdef DD_SDLIM
++extern struct sdlim	*sd_lim();
++extern void		sdqueuex();
++extern char		*dma_alloc();
++extern void		dma_free();
++#endif
  
  #define BSIZE 512
  
@@ -31,24 +44,75 @@
  	uint		state;
  	struct buf	*bhead,
  			*btail;
++#ifdef DD_SDLIM
++	struct sdcomx	comx;		/* its head is the stock command */
++#define	com	comx.sx_com
++	struct dd	*qnext;		/* the next unit waiting for the card's bounce region */
++	bool		waiting;	/* this unit is in that queue */
++#else
  	struct sdcom	com;
 -	uchar		sense[16];
++#endif
 +	uint		off,		/* bytes of bhead done */
 +			boff,		/* blocks of bhead done */
 +			len;		/* bytes in the command */
 +	struct page	*pp;		/* the command's page, for a page list */
-+	bool		inq,		/* in sdqueue( ) */
-+			again;		/* a command was set up meanwhile */
++	bool		again;		/* a command is set up, for kick( ) to queue */
  };
  /* dd.state
   */
-@@ -33,13 +53,17 @@
+@@ -33,13 +69,62 @@
  
  
  static struct dd	ddtab[SDCARDS][SDUNITS];
++static bool		ddinq[SDCARDS];	/* kick( ) is queueing the card's commands */
 +/* REQUEST SENSE data: 16 bytes per unit, on a 16-byte boundary */
 +static uchar		ddsensebuf[SDCARDS*SDUNITS*16 + 15];
 +#define	ddsense( dp)	((uchar *)(((uint)ddsensebuf + 15) & ~15) + 16*((dp) - &ddtab[0][0]))
++
++#ifdef DD_SDLIM
++/*
++ * A card whose controller declared limits (C4-7) gets commands of up to its region's size through
++ * a bounce region of its own, taken at dd's first open (ddprobeall).  The region serves one command at a
++ * time: the unit holding it fills it, queues the command, copies the data out at completion and
++ * passes the region on to the next unit waiting, in the order they asked, so no unit's data
++ * overwrites another's.  Nothing sleeps at interrupt level.  A card without limits, or whose region
++ * cannot be had, gets the page commands above.
++ */
++struct ddcard {
++	uint		state;
++	struct sdlim	*lim;
++	caddr_t		va;		/* the region: its address, physical address and size */
++	ulong		pa;
++	uint		size;
++	caddr_t		sva;		/* REQUEST SENSE data, 16 bytes per unit, the controller can reach */
++	ulong		spa;
++	struct dd	*owner,		/* the unit holding the region */
++			*qhead,		/* the units waiting for it */
++			*qtail;
++};
++#define	DC_NEW		0
++#define	DC_PROBING	1
++#define	DC_PAGES	2		/* page commands */
++#define	DC_BOUNCE	3		/* commands through the region */
++
++static struct ddcard	ddcard[SDCARDS];
++int	ddx_maxbytes = 65536;		/* the region's cap: the most one dma_alloc gives */
++struct ddxstat {
++	uint	cmd,			/* commands through a region */
++		wait,			/* a unit queued for its card's region */
++		err,			/* such commands failed */
++		fallback;		/* cards with limits that got page commands */
++} ddxstat;
++
++#define	ddcardof( dp)	(&ddcard[((dp) - &ddtab[0][0]) / SDUNITS])
++#define	BOUNCED( dp)	(ddcardof( dp)->state == DC_BOUNCE)
++#define	dsense( dp)	(BOUNCED( dp) ? (uchar *)ddcardof( dp)->sva + 16*(((dp) - &ddtab[0][0]) % SDUNITS) : ddsense( dp))
++static void	ddprobeall( ), ddprobe( ), bstart( ), bnext( );
++static int	ddcopy( );
++#else
++#define	dsense( dp)	ddsense( dp)
++#endif
  
  void	ddstrategy( ),
  	ddprint( );
@@ -61,7 +125,18 @@
  
  
  ddopen( devp, mode, type, cr)
-@@ -78,6 +102,9 @@
+@@ -52,6 +137,10 @@
+ 
+ 	if (error = sdopen( sdcard( *devp)))
+ 		return error;
++#ifdef DD_SDLIM
++	ddprobeall( );
++	ddprobe( sdcard( *devp));
++#endif
+ 	if (error = sdpartition( *devp, ddstrategy))
+ 		return error;
+ 
+@@ -78,6 +167,9 @@
  
  	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
  		return 0;
@@ -71,7 +146,7 @@
  	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
  		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
  	return uiophysio( breakup, (struct buf *)0, dev, B_READ, uiop);
-@@ -92,6 +119,9 @@
+@@ -92,6 +184,9 @@
  
  	if (uiop->uio_offset == sddevsize( dev)*BSIZE)
  		return 0;
@@ -81,7 +156,21 @@
  	if (uiop->uio_offset + uiop->uio_resid > sddevsize( dev)*BSIZE)
  		uiop->uio_resid = sddevsize( dev)*BSIZE - uiop->uio_offset;
  	return uiophysio( breakup, (struct buf *)0, dev, B_WRITE, uiop);
-@@ -190,11 +220,13 @@
+@@ -134,6 +229,13 @@
+ struct buf	*bp;
+ {
+ 
++#ifdef DD_SDLIM
++	/* physio has locked the pages, so a card with a region takes the request whole */
++	if (ddcard[sdcard( bp->b_edev)].state == DC_BOUNCE) {
++		ddstrategy( bp);
++		return;
++	}
++#endif
+ 	amiga_dma_pageio( ddstrategy, bp);
+ }
+ 
+@@ -190,11 +292,13 @@
  {
  	struct dd	*dp;
  	struct buf	*bp;
@@ -96,13 +185,13 @@
  	else
  		switch (dp->state) {
  		case FIRST:
-@@ -208,19 +240,44 @@
+@@ -208,19 +312,50 @@
  				printf( "%s: disk c%dd%ds%d: ",
  				        sdhardwarename( cp->card),
  				        cp->card*8+cp->unit, 0, sdpart( bp->b_edev));
 -				printf( "blk%d 0x%x 0x%x\n", sdblkno( bp), dp->sense[2], dp->sense[12]);
 +				printf( "blk%d 0x%x 0x%x\n", sdblkno( bp) + dp->boff,
-+				        ddsense( dp)[2], ddsense( dp)[12]);
++				        dsense( dp)[2], dsense( dp)[12]);
  				startio( RETRY, dp);
  				return;
  			}
@@ -113,7 +202,13 @@
  			if (cp->status != 0)
 -				bp->b_flags |= B_ERROR;
 +				bad = TRUE;
-+		}
+ 		}
++#ifdef DD_SDLIM
++	if (BOUNCED( dp)) {
++		bnext( dp, bp, bad);
++		return;
++	}
++#endif
 +	if (bad)
 +		bp->b_flags |= B_ERROR;
 +	dp->off += dp->len;
@@ -124,7 +219,7 @@
 +				startio( FIRST, dp);
 +				return;
 +			}
- 		}
++		}
 +		else if ((dp->pp = dp->pp->p_next) != bp->b_pages) {
 +			startio( FIRST, dp);
 +			return;
@@ -145,7 +240,7 @@
  }
  
  
-@@ -230,14 +287,35 @@
+@@ -230,14 +365,41 @@
  {
  	struct buf	*bp;
  	uint		bn;
@@ -155,6 +250,12 @@
  	if (not bp)
  		return;
 -	bn = sdblkno( bp);
++#ifdef DD_SDLIM
++	if (BOUNCED( dp)) {
++		bstart( s, dp, bp);
++		return;
++	}
++#endif
 +	if (bp->b_bcount <= PAGESIZE)
 +		dp->len = bp->b_bcount;
 +	else if (bp->b_flags & B_PAGEIO) {
@@ -183,7 +284,7 @@
  	if (bp->b_flags & B_READ) {
  		dp->com.reading = TRUE;
  		dp->com.cdb[0] = 0x28;
-@@ -252,13 +330,13 @@
+@@ -252,13 +414,13 @@
  	dp->com.cdb[4] = byte1( bn);
  	dp->com.cdb[5] = byte0( bn);
  	dp->com.cdb[6] = 0;
@@ -201,11 +302,16 @@
  }
  
  
-@@ -269,15 +347,38 @@
+@@ -269,15 +431,314 @@
  	struct buf	*bp;
  
  	bp = dp->bhead;
 -	dp->com.addr = vtop( dp->sense, (struct proc *)0);
++#ifdef DD_SDLIM
++	if (BOUNCED( dp))
++		dp->com.addr = (caddr_t)(ddcardof( dp)->spa + 16*dp->com.unit);
++	else
++#endif
 +	dp->com.addr = (caddr_t)vtop( ddsense( dp), (struct proc *)0);
  	dp->com.reading = TRUE;
  	dp->com.cdb[0] = 0x03;
@@ -224,23 +330,294 @@
 +
 +
 +/*
-+ * Queue dp's command.  A controller that completes it inside sdqueue( ) calls ihandle, which
-+ * sets up the next command; that one is queued here when sdqueue( ) returns, so a request of
-+ * many pieces does not nest a call per piece on the stack.
++ * Queue dp's command.  A controller may complete a command inside the queue call (a polled one
++ * does), and the completion sets up the next command of that unit or, passing a bounce region on,
++ * of another unit of the card.  While a call for the card is running those are only marked, and
++ * the outermost call queues them in turn when it returns: no queue call ever runs inside another
++ * for the same card, and a request of many pieces does not nest a call per piece on the stack.
 + */
 +static void
 +kick( dp)
 +struct dd	*dp;
 +{
++	struct dd	*q,
++			*u0;
++	bool		more;
++	uint		c;
 +
-+	if (dp->inq) {
-+		dp->again = TRUE;
++	dp->again = TRUE;
++	c = (dp - &ddtab[0][0]) / SDUNITS;
++	if (ddinq[c])
++		return;
++	ddinq[c] = TRUE;
++	u0 = &ddtab[c][0];
++	do {
++		more = FALSE;
++		for (q = u0; q < u0 + SDUNITS; q++)
++			if (q->again) {
++				q->again = FALSE;
++				more = TRUE;
++#ifdef DD_SDLIM
++				if (BOUNCED( q))
++					sdqueuex( &q->comx);
++				else
++#endif
++				sdqueue( &q->com);
++			}
++	} while (more);
++	ddinq[c] = FALSE;
+ }
++
++
++#ifdef DD_SDLIM
++/*
++ * At dd's first open (the root's, early in boot): every card sd took is probed, while the memory
++ * dma_alloc draws on is least broken up; a card first opened later would seldom find 64 KiB in
++ * one piece in a fragmented heap.
++ */
++static void
++ddprobeall( )
++{
++	static bool	done;
++	uint		c;
++
++	if (done)
++		return;
++	done = TRUE;
++	for (c = 0; c < SDCARDS; c++)
++		if (sdopen( c) == 0)
++			ddprobe( c);
++}
++
++
++/*
++ * One card's probe (at dd's first open, or else at the card's own): its limits, and if it has
++ * some, its bounce region and sense area from dma_alloc.  A region below a page, one dma_alloc
++ * cannot give, or one out of the controller's reach leaves the card on page commands, with one
++ * console line; the open goes on either way.
++ */
++static void
++ddprobe( card)
++uint	card;
++{
++	struct ddcard	*dc;
++	struct sdlim	*l;
++	char		*why;
++	int		x;
++
++	dc = &ddcard[card];
++	x = sdspl( );
++	while (dc->state == DC_PROBING)
++		sleep( (caddr_t)dc, PRIBIO);
++	if (dc->state != DC_NEW) {
++		splx( x);
 +		return;
 +	}
-+	do {
-+		dp->again = FALSE;
-+		dp->inq = TRUE;
-+		sdqueue( &dp->com);
-+		dp->inq = FALSE;
-+	} while (dp->again);
- }
++	dc->state = DC_PROBING;
++	splx( x);
++	why = 0;
++	if (not (l = sd_lim( card)))
++		;
++	else if ((dc->size = min( l->sl_maxbytes, ddx_maxbytes) & ~(BSIZE-1)) < PAGESIZE)
++		why = "limits below a page";
++	else if (not (dc->va = dma_alloc( dc->size, &dc->pa))
++	      or not (dc->sva = dma_alloc( 16*SDUNITS, &dc->spa)))
++		why = "no bounce region";
++	else if (dc->pa + dc->size - 1 > l->sl_reach or dc->spa + 16*SDUNITS - 1 > l->sl_reach)
++		why = "bounce region out of reach";
++	if (why) {
++		if (dc->va)
++			dma_free( dc->va, dc->size);
++		if (dc->sva)
++			dma_free( dc->sva, 16*SDUNITS);
++		dc->va = dc->sva = 0;
++		ddxstat.fallback++;
++		printf( "dd: %s: %s, page commands\n", sdhardwarename( card), why);
++	}
++	else if (l)
++		printf( "dd: %s: commands of up to %d bytes through a bounce region\n",
++		        sdhardwarename( card), dc->size);
++	x = sdspl( );
++	if (l and not why) {
++		dc->lim = l;
++		dc->state = DC_BOUNCE;
++	}
++	else
++		dc->state = DC_PAGES;
++	wakeup( (caddr_t)dc);
++	splx( x);
++}
++
++
++/*
++ * Start dp's command on a card with a region: for the next piece (FIRST) take the region or wait
++ * for it, and for a write fill it; a RETRY reissues the piece in the region dp still holds.
++ */
++static void
++bstart( s, dp, bp)
++struct dd	*dp;
++struct buf	*bp;
++{
++	struct ddcard	*dc;
++	uint		bn;
++
++	dc = ddcardof( dp);
++	if (s == FIRST) {
++		if (dc->owner and dc->owner != dp) {
++			unless (dp->waiting) {
++				dp->waiting = TRUE;
++				dp->qnext = 0;
++				if (dc->qtail)
++					dc->qtail->qnext = dp;
++				else
++					dc->qhead = dp;
++				dc->qtail = dp;
++				ddxstat.wait++;
++			}
++			return;
++		}
++		dc->owner = dp;
++		dp->len = min( bp->b_bcount - dp->off, dc->size);
++		if (not (bp->b_flags & B_READ) and ddcopy( dp, bp, TRUE)) {
++			bnext( dp, bp, TRUE);		/* a page that cannot be reached: fail, no command */
++			return;
++		}
++	}
++	bn = sdblkno( bp) + dp->boff;
++	dp->com.card = sdcard( bp->b_edev);
++	dp->com.unit = sdunit( bp->b_edev);
++	dp->com.addr = (caddr_t)dc->pa;
++	dp->com.reading = (bp->b_flags & B_READ) ? TRUE : FALSE;
++	dp->com.cdb[0] = (bp->b_flags & B_READ) ? 0x28 : 0x2A;
++	dp->com.cdb[1] = 0;
++	dp->com.cdb[2] = byte3( bn);
++	dp->com.cdb[3] = byte2( bn);
++	dp->com.cdb[4] = byte1( bn);
++	dp->com.cdb[5] = byte0( bn);
++	dp->com.cdb[6] = 0;
++	dp->com.cdb[7] = byte1( dp->len/BSIZE);
++	dp->com.cdb[8] = byte0( dp->len/BSIZE);
++	dp->com.cdb[9] = 0;
++	dp->com.nbyte = dp->len;
++	dp->com.intr = ihandle;
++	dp->comx.sx_flags = 0;			/* one segment: the region */
++	dp->comx.sx_nseg = 0;
++	dp->comx.sx_seg = 0;
++	dp->comx.sx_resid = 0;
++	dp->state = s;
++	ddxstat.cmd++;
++	kick( dp);
++}
++
++
++/*
++ * A command through the region is done: a read's data copied out, the region passed to the next
++ * unit waiting, then dp's next piece or its next request.  A failed or short command fails the
++ * request from that piece on (b_resid counts it and the rest), as the first kernels treat a command
++ * whose data did not all land.
++ */
++static void
++bnext( dp, bp, bad)
++struct dd	*dp;
++struct buf	*bp;
++bool		bad;
++{
++	struct ddcard	*dc;
++	struct dd	*n;
++
++	dc = ddcardof( dp);
++	if (not bad and dp->comx.sx_resid)
++		bad = TRUE;
++	if (not bad and (bp->b_flags & B_READ) and ddcopy( dp, bp, FALSE))
++		bad = TRUE;
++	if (n = dc->qhead) {
++		if (not (dc->qhead = n->qnext))
++			dc->qtail = 0;
++		n->waiting = FALSE;
++	}
++	dc->owner = n;
++	if (bad) {
++		bp->b_flags |= B_ERROR;
++		bp->b_resid = bp->b_bcount - dp->off;
++		ddxstat.err++;
++	}
++	dp->off += dp->len;
++	dp->boff += (dp->len + BSIZE-1)/BSIZE;
++	if (bad or dp->off >= bp->b_bcount) {
++		dp->off = 0;
++		dp->boff = 0;
++		dp->bhead = bp->av_forw;
++		startio( FIRST, dp);			/* the next request before iodone, as above */
++		iodone( bp);
++	}
++	else
++		startio( FIRST, dp);
++	if (n)
++		startio( FIRST, n);
++}
++
++
++/*
++ * Copy dp's piece, dp->len bytes from byte dp->off of the request, into the region (in) or out of
++ * it.  k30 maps all RAM at its own address (phystokv), so a frame or a locked page of a process is
++ * reached at any level.  1 when a page cannot be reached.
++ */
++static int
++ddcopy( dp, bp, in)
++struct dd	*dp;
++struct buf	*bp;
++bool		in;
++{
++	caddr_t		b, d;
++	uint		o, n, c;
++	struct page	*pp;
++	paddr_t		pa;
++
++	b = ddcardof( dp)->va;
++	n = dp->len;
++	if (bp->b_flags & B_PAGEIO) {
++		/* the page list's bytes, from b_addr's offset for a request of at most a page (as gen_strategy) */
++		o = dp->off + (bp->b_bcount <= PAGESIZE ? (uint)bp->b_un.b_addr : 0);
++		pp = bp->b_pages;
++		for (c = o / PAGESIZE; c; c--)
++			if ((pp = pp->p_next) == bp->b_pages)
++				return 1;
++		o &= PAGEOFFSET;
++		while (n) {
++			c = min( n, PAGESIZE - o);
++			d = (caddr_t)phystokv( ptob( pages_base + (pp - pages))) + o;
++			if (in)
++				bcopy( d, b, c);
++			else
++				bcopy( b, d, c);
++			b += c;
++			n -= c;
++			o = 0;
++			if ((pp = pp->p_next) == bp->b_pages and n)
++				return 1;
++		}
++		return 0;
++	}
++	d = bp->b_un.b_addr + dp->off;
++	if (not bp->b_proc) {
++		if (in)
++			bcopy( d, b, n);
++		else
++			bcopy( b, d, n);
++		return 0;
++	}
++	while (n) {				/* a process's buffer physio locked: page by page */
++		c = min( n, PAGESIZE - ((uint)d & PAGEOFFSET));
++		if (not (pa = vtop( d, bp->b_proc)))
++			return 1;
++		if (in)
++			bcopy( (caddr_t)phystokv( pa), b, c);
++		else
++			bcopy( b, (caddr_t)phystokv( pa), c);
++		b += c;
++		d += c;
++		n -= c;
++	}
++	return 0;
++}
++#endif
