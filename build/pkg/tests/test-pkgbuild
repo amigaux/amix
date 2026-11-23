@@ -408,6 +408,20 @@ stage() {
 	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
 }
 """)
+        # a binary that needs libstdc++.so.6, with and without DEPENDS on cxxrt,
+        # and the cxxrt package itself; the library is only in the gcc14 prefix
+        for nm, dep in (("elfcx", 'DEPENDS="amix-base cxxrt"\n'), ("elfnocx", 'DEPENDS="amix-base"\n'),
+                        ("cxxrt", 'DEPENDS="amixrt"\n')):
+            d = package(pkgs, nm, "hooks", dep, build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+            write(os.path.join(d, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
+            write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
+stage() {
+	mkdir -p "$DEST/opt/amix/share"
+	printf '\\177ELF\\1\\2\\1\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\2' > "$DEST/opt/amix/share/out.elf"
+}
+""")
+        g14prefix = os.path.join(tmp, "g14prefix")
+        write(os.path.join(g14prefix, "m68k-elf", "lib", "cxxrt", "libstdc++.so.6"), "stub libstdc++\n")
         write(os.path.join(sysroot, "usr", "lib", "libamixrt.so.1"), "stub libamixrt\n")
         # a package that ships a prebuilt file of the gcc14 prefix
         pre = package(pkgs, "prebuilt", "hooks", 'TOOLCHAIN=gcc14\nPREBUILT="/opt/amix/share/out.elf"\n',
@@ -830,6 +844,20 @@ stage() {
         rc, out = build("elfnort", STUB_DYN=rt, **elf_env)
         check("UNDEF: without amixrt in DEPENDS it is refused",
               rc == 1 and "NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" in out, out)
+        cx = libc + "  NEEDED      libstdc++.so.6\n  RPATH       /opt/amix/lib"
+        rc, out = build("elfcx", STUB_DYN=cx, AMIX_GCC14_PREFIX=g14prefix, **elf_env)
+        check("UNDEF: a binary that NEEDs libstdc++.so.6 rolls when DEPENDS names cxxrt; "
+              "the library is the gcc14 prefix's, the cxxrt package's /usr/lib one",
+              rc == 0 and "libstdc++.so.6 (gcc14 cxxrt, the cxxrt package's /usr/lib)" in out, out)
+        rc, out = build("elfnocx", STUB_DYN=cx, AMIX_GCC14_PREFIX=g14prefix, **elf_env)
+        check("UNDEF: without cxxrt in DEPENDS it is refused",
+              rc == 1 and "NEEDs libstdc++.so.6: package.sh DEPENDS must name cxxrt" in out, out)
+        rc, out = build("cxxrt", STUB_DYN=cx, AMIX_GCC14_PREFIX=g14prefix, **elf_env)
+        check("UNDEF: the cxxrt package itself needs no DEPENDS on cxxrt",
+              rc == 0 and "UNDEF ok  out.elf" in out, out)
+        rc, out = build("elfcx", STUB_DYN=cx, AMIX_GCC14_PREFIX=None, **elf_env)
+        check("UNDEF: without the gcc14 prefix libstdc++.so.6 is found nowhere and refused",
+              rc == 1 and "NEEDED libstdc++.so.6 is not in its RPATH (/opt/amix/lib)" in out, out)
         pins = "m68k-elf/lib/amixrt/libamixrt.so.1 " + pre_sha
         rc, out = build("prebuilt", STUB_PINS=pins, STUB_DYN=libc.strip(), **elf_env)
         check("PREBUILT: a pinned gcc14 file ships as it is; nothing compiled, so the flags gate is not run",
