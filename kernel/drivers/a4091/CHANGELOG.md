@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — a4091 1.0.0-13, a4kt710 1.0.0-11: interrupt completion, C4-7 limits (a23ed0c0, 2ac680cd, f3b86c1f, 76a1fc7f)
+
+Commands can complete on the 53C710 interrupt (param intr: -1 auto, the default; 1 interrupt; 0 polled). The modules declare the C4-7 limits (64 KiB, one segment, 16-byte alignment; param limits) and take sdcomx commands. Auto takes the interrupt only when the kernel accepted the boards' limits; on kernels before the segment minor it polls, as before. Measured on an A4000D with 2 KiB commands: polled raw read 1601 kB/s against 1243 with the interrupt, and a CPU-bound process keeps 47-56% of its speed beside a polled transfer against 4-10% beside an interrupt one. Packages a4091-k30/-k46 1.0.0-13 (modules 1.0.0-10), a4kt710-k30/-k46 1.0.0-11 (modules 1.0.0-7).
+
 ## 2026-11-11 — README links the grimoire at amigaux/grimoire (90d267b7)
 
 The grimoire moved to github.com/amigaux/grimoire; the "moving to" wording is dropped.
