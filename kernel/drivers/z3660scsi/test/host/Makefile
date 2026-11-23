@@ -20,6 +20,9 @@ DRV      := ../../src/z3660.c
 # `check` runs the default build, then the DIAG build in build-diag.
 DIAG     :=
 CFLAGS   += $(if $(DIAG),-DZ3660_DIAG)
+# PROBE=1 compiles the measurement build (-DZ3660_PROBE) and its lean test
+PROBE    :=
+CFLAGS   += $(if $(PROBE),-DZ3660_PROBE)
 
 HOST_OBJS := $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_test.o
 OBJS      := $(BUILD)/z3660.o $(HOST_OBJS)
@@ -28,7 +31,7 @@ BIN       := $(BUILD)/z3660_test
 MOD_OBJS  := $(BUILD)/z3660_mod.o $(BUILD)/mock_piscsi.o $(BUILD)/kstubs.o $(BUILD)/z3660_modtest.o
 MOD_BIN   := $(BUILD)/z3660_modtest
 
-.PHONY: all check check-default check-diag check-m68k clean
+.PHONY: all check check-default check-diag check-m68k check-probe clean
 all: $(BIN) $(MOD_BIN)
 
 # The driver: kernel include world + register seam + HOST_TEST.
@@ -61,6 +64,9 @@ check: check-default
 check-diag:
 	$(MAKE) --no-print-directory BUILD=build-diag DIAG=1 check-default
 
+check-probe:
+	$(MAKE) --no-print-directory BUILD=build-probe PROBE=1 check-default
+
 check-default: $(BIN) $(MOD_BIN)
 	./$(BIN)
 	./$(MOD_BIN)
@@ -77,4 +83,4 @@ check-m68k:
 	QEMU_LD_PREFIX=$(M68K_ROOT) $(M68K_QEMU) build-m68k/z3660_modtest
 
 clean:
-	rm -rf build build-diag build-m68k
+	rm -rf build build-diag build-m68k build-probe

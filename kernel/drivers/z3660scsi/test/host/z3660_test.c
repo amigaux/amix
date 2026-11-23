@@ -2052,6 +2052,64 @@ static void test_zs05_capture()
 	       "ZS-05 read-back: the next request runs normally");
 }
 
+
+#ifdef	Z3660_PROBE
+/*
+ * PROBE build only (make check-probe): the z3660_lean measurement switch.
+ * 0 is today's path (15 / 13 trips); bit 0 drops the DRVNUMX select (13 /
+ * 11); bit 1 checks a cell this driver latched since attach with an armed
+ * read instead of rewriting it, so a READ with the same length and buffer
+ * as the last one costs 11 with both bits.  The data stays right, a changed
+ * length or buffer is written, and a latch that moved underneath is
+ * rewritten (the check compares the cell, not only the driver's memory).
+ */
+extern unsigned long	z3660_lean, z3660_lean_skip;
+extern void		mock_poke(unsigned long off, unsigned long v);
+
+static void test_probe_lean()
+{
+	uchar		cdb[10], buf[2048], buf2[2048], src[512];
+	unsigned char	*back = mock_backing( U_DISK);
+	unsigned long	t[6];
+	int		i;
+
+	printf("\n=== PROBE: the z3660_lean trip cuts ===\n");
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x28; cdb[5] = 8; cdb[8] = 4;
+
+	z3660_lean = 0;
+	run_cmd( U_DISK, cdb, 10, buf, 2048);		/* latch len + buf */
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, buf, 2048); t[0] = mock_trips;
+	z3660_lean = 1;
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, buf, 2048); t[1] = mock_trips;
+	CHECK( t[0] == 15 && t[1] == 13 && mock_trips_drvnumx == 0 && g_okay
+	       && memcmp( buf, back + 8 * 512, 2048) == 0,
+	       "lean 1: READ 2 KiB 15 -> 13 trips, no DRVNUMX, data right");
+	z3660_lean = 3; z3660_lean_skip = 0;
+	cdb[5] = 12;
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, buf, 2048); t[2] = mock_trips;
+	CHECK( t[2] == 11 && z3660_lean_skip == 2 && g_okay && memcmp( buf, back + 12 * 512, 2048) == 0,
+	       "lean 3: the next READ, same length and buffer: 11 trips, two cells checked, data right");
+	cdb[5] = 16;
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, buf2, 2048); t[3] = mock_trips;
+	CHECK( t[3] == 12 && g_okay && memcmp( buf2, back + 16 * 512, 2048) == 0,
+	       "lean 3: a new LBA and buffer are written, the length checked (12 trips), the data lands there");
+	mock_poke( 0x24, 512);				/* the length latch moves underneath */
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, buf2, 2048); t[4] = mock_trips;
+	CHECK( g_okay && memcmp( buf2, back + 16 * 512, 2048) == 0 && t[4] == 13,
+	       "lean 3: a latch that changed is rewritten (check, then write: 13), the data right");
+
+	for (i = 0; i < 512; i++) src[i] = (uchar)(0x50 + (i & 7));
+	memset( cdb, 0, sizeof cdb); cdb[0] = 0x2A; cdb[5] = 20; cdb[8] = 1;
+	z3660_lean = 0; run_cmd( U_DISK, cdb, 10, src, 512);
+	z3660_lean = 3; cdb[5] = 21;
+	mock_trips_reset(); run_cmd( U_DISK, cdb, 10, src, 512); t[5] = mock_trips;
+	CHECK( t[5] == 9 && g_okay && memcmp( back + 21 * 512, src, 512) == 0,
+	       "lean 3: the next WRITE, same length and buffer: 13 -> 9 trips, the data on the disk");
+	printf("       trips: read %lu, %lu, %lu, %lu, %lu; write %lu\n", t[0], t[1], t[2], t[3], t[4], t[5]);
+	z3660_lean = 0;
+}
+#endif
+
 int main()
 {
 	mock_reset();
@@ -2079,6 +2137,9 @@ int main()
 	test_inquiry_unit_types();
 
 	test_hotpath_trip_budget();
+#ifdef	Z3660_PROBE
+	test_probe_lean();
+#endif
 	test_unmapped_unit_not_cached();
 	test_stock_fw_bad_geometry();
 

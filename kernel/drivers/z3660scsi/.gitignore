@@ -7,6 +7,7 @@ assets/
 build/
 build-diag/
 build-m68k/
+build-probe/
 core
 *~
 .DS_Store

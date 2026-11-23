@@ -16,6 +16,7 @@ make -C module k30             # one line (or k46)
 make -C module static          # the static object compiled against each kit, and its sha256
 make -C module clean
 make -C module DIAG=1          # a diagnostic build (-DZ3660_DIAG): also the page-cross ring and the fault knob
+make -C module PROBE=1         # a measurement build (-DZ3660_PROBE): per-request counters and beam-line times
 ```
 
 The kits are kernel/dlm's ABI kits (`DLM=…/kernel/dlm`, default this amix
@@ -23,7 +24,9 @@ checkout's `kernel/dlm/build/kit/<line>`), or name them with `KIT_k30=` / `KIT_k
 Build against kabi `k30.1.1` / `k46.1.1` or later (KIT_REV 96205b6 or
 later; 1.0.0-2 was built with KIT_REV 230a1e8, which stamps `k30.1.2` /
 `k46.1.2`). Every name the module imports (`autocon`, `bcopy`, `cputype`,
-`mod_miscops`, `printf`, `sd_register`, `sptalloc`) is a kabi 1.0 name. The
+`mod_miscops`, `printf`, `sd_register`, `sptalloc`) is a kabi 1.0 name, and
+`sd_limits` (C4-7) is referenced weakly, so the stamp stays the lowest
+kabi and the object loads on a kernel before the segment minor. The
 pinned cross tools (`m68k-cbm-sysv4-*`) and `python3` must be on `PATH`.
 
 `make static`'s k30 sum is the static object's (`4ef07475…`, module 1.0.0-6
@@ -35,13 +38,13 @@ compile is not that object; its pin (`b43e36e7…`) is checked by that relink.
 
 | Item | Content |
 |---|---|
-| `.moddata` | `name=z3660scsi`, `class=root`, `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`, `unload=never`, `param=cache:int:-1:-1:60`, `cpu=68030` / `68040`, `kabi` the kit's; no `majors` (sd owns the disk majors) |
+| `.moddata` | `name=z3660scsi`, `class=root`, `match=zorro:144b:01,mobo:z3660-window`, `rank=z3660`, `unload=never`, `param=cache:int:-1:-1:60`, `param=limits:int:1:0:1`, `cpu=68030` / `68040`, `kabi` the kit's; no `majors` (sd owns the disk majors) |
 | Wrapper | `MOD_HDRV_WRAPPER(z3660scsi, z3660scsi_load, 0, z3660scsi_halt, …)`: no switch-table slot, no `_unload` |
-| `_load` | the cache arm (below), then `z3660map()` polled (autocon first, the fixed base `0x10000000` only on AGA, the ZS-02 signature, the unit sweep), then `sd_register(z3660queue, 0, base, "Z3660 SCSI", 1)` |
+| `_load` | the cache arm (below), then `z3660map()` polled (autocon first, the fixed base `0x10000000` only on AGA, the ZS-02 signature, the unit sweep), then `sd_register(z3660queue, 0, base, "Z3660 SCSI", 1)`, then the C4-7 limits (below) |
 | `_halt` | touches no register: the mailbox is idle between transactions; records `z3660_halted` |
 | Interrupts | none: the piscsi mailbox is synchronous; `root_defer` is not called |
 | DMA | none through the module's memory: the firmware moves data to the caller's buffer as the static driver's requests do |
-| Version | `VERSION` (`1.0.0-6`: a READ/WRITE whose 32-bit LBA plus count wraps past zero is refused like any other past the end; `1.0.0-5`: the DI-1 diagnostics only with `-DZ3660_DIAG`, the empty units on one console line; `1.0.0-4`: an unmapped unit answers INQUIRY as no device; `1.0.0-3`: the fixed window's gate; `1.0.0-2`: the cache arm), the package version |
+| Version | `VERSION` (`1.0.0-7`: the C4-7 limits, 64 KiB commands through `z3660queuex`; `1.0.0-6`: a READ/WRITE whose 32-bit LBA plus count wraps past zero is refused like any other past the end; `1.0.0-5`: the DI-1 diagnostics only with `-DZ3660_DIAG`, the empty units on one console line; `1.0.0-4`: an unmapped unit answers INQUIRY as no device; `1.0.0-3`: the fixed window's gate; `1.0.0-2`: the cache arm), the package version |
 
 ## What `_load` does in the root pass
 
@@ -107,6 +110,47 @@ the piscsi mailbox (the Z3660 is the CPU card).
 `/dev/kmem` that `z3660_cache` = `0x3c` (60), `z3660_push_n` > 0 and
 `z3660_ci_ok` = 1. The host harness gates the same three on its 060 cell
 (`test/host/z3660_modtest.c`, `test_zs06_arm()`).
+
+## The C4-7 limits
+
+After a successful `sd_register` the module declares the controller's
+limits (kernel/dlm C4-7 §3, §6) with `DDI_SD_LIMITS(z3660queue, 0, &lim)`:
+one segment a command of up to 64 KiB (`MAXXFER`), 16-byte aligned, a
+multiple of 512, `SDL_ALLRAM` with reach `0x0FFFFFFF`. The firmware moves up
+to 64 KiB in one request from any physically contiguous buffer it reaches;
+the reach keeps every buffer at or below the DDR window, so the write
+staging rule above still covers anything the firmware would bounce. On a
+kernel with the segment minor (k30.1.6, k46.1.7) dd then sends 64 KiB
+commands through its bounce region to `z3660queuex`, which runs them through
+the same path as `z3660queue` and sets `sx_resid` at completion (0 when the
+data moved, `nbyte` otherwise). A command with `SDX_SEG` set is refused
+(one segment only). The page-cross census does not count these commands:
+their buffer is contiguous by contract.
+
+`param limits=0` in `/etc/conf/modreg.local.d/z3660scsi` declares none.
+kmem witnesses: `z3660_limits` (the parameter) and `z3660_lim_rc` (-1 not
+called, else `sd_limits`' result: 0 accepted, 89 `ENOSYS` on a kernel
+before the segment minor, where nothing changes), `z3660_xseg` (segment
+lists refused).
+
+Where one request's time goes on the A4000T's 68060 (k46 -66, no segment
+minor, so every command is 2 KiB; µs per request, firmware from its
+`PSTATR` totals, driver from beam-line times in a `PROBE=1` build):
+
+| Row | Wall | Firmware/SD | Doorbell handshake | Driver | Above the driver |
+|---|---:|---:|---:|---:|---:|
+| raw write, 2 KiB | 3487 | 2034 | 19 | 213 | 1221 |
+| raw read, 2 KiB | 1809 | 534 | 17 | 268 | 990 |
+| raw read, 64 KiB | 1186 | 440 | 9 | 245 | 492 |
+| ufs write, 64 KiB | 3536 | 1128 | 20 | 268 | 2120 |
+
+The firmware's cost is per request (a 2 KiB write costs the card about
+2 ms, a 4 KiB write about 1.1 ms), and so is everything above the driver;
+the driver's own share, about 15 mailbox accesses and the cache line work,
+is a tenth or less. 64 KiB commands divide both large parts by up to 32.
+Removing the per-command drive-select write and skipping unchanged
+descriptor cells saved about 15–20 µs a request (1–2%), within the noise,
+and is not in the shipped object.
 
 ## What it cannot do there, and does not
 

@@ -7,8 +7,9 @@
 # out/modules/<line>/z3660scsi, kdrv's default KM_K30_OBJ / KM_K46_OBJ.
 #
 # Root class (match=zorro:144b:01,mobo:z3660-window, rank=z3660,
-# unload=never, param=cache:int:-1:-1:60), no majors (sd owns the disk
-# majors), no depend=, kabi k30.1.2 / k46.1.2: loaded by the core's root
+# unload=never, param=cache:int:-1:-1:60, param=limits:int:1:0:1), no
+# majors (sd owns the disk majors), no depend=, kabi k30.1.2 / k46.1.2
+# (sd_limits is a weak reference): loaded by the core's root
 # pass (marc_root) before the root is mounted; kbootset composes it as a
 # root record.
 # 1.0.0-2 (2026-10-27): the module arms its data cache from cputype at _load
@@ -29,22 +30,25 @@
 # fault knob only with -DZ3660_DIAG; the empty units on one console line.
 # 1.0.0-9 (2026-11-06): the module's 1.0.0-6, a READ/WRITE whose 32-bit
 # LBA range wraps past zero is refused.
+# 1.0.0-10 (2026-11-23): the module's 1.0.0-7, declares the C4-7 limits
+# after sd_register (one segment of up to 64 KiB through z3660queuex) on a
+# kernel with the segment minor; param limits (1 default, 0 none).
 
 KM_NAME=z3660scsi
 KM_SHORT=zscsi
 KM_REPO=kernel/drivers/z3660scsi
-KM_VERSION=1.0.0-6
-KM_PKG_VERSION=1.0.0-9
+KM_VERSION=1.0.0-7
+KM_PKG_VERSION=1.0.0-10
 
-KM_K30_SHA=152e1d8ea90a37e07a75a071d810e5f2bfed9d49dae47e84f214dd93cbe4b07c
-KM_K46_SHA=751d52a53ca1066e93aaeddad5e60d113ed505b5e99c3794f9acf937c0fcb812
+KM_K30_SHA=9052892a109f353201b08cef35146badd5133124bf39e61eaa273774cef14250
+KM_K46_SHA=0ec78cc241bb13a7c255e3aa3bfc680046880c3d923ff12a833476bb603d033b
 KM_K30_DEPS=
 KM_K46_DEPS=
 
-KM_KIT_COMMIT=78bf011ff00c1dc8dbf0cce6419f81d5ec603774
+KM_KIT_COMMIT=17cc569212927c9bfd6a01ec71f5e6a2f759ff7e
 
 KM_LICENCES="\
 kernel/drivers/z3660scsi/LICENSE 20e6022dcc8109f79734098db83e2e3d22b72b342a628da822d4fbec44af74b4
 kernel/drivers/z3660scsi/NOTICE 54f12c73d44fbb45c3e6da53006b58463633711add15f9ba4ea162d91c459cc2"
 
-KM_SOURCE_EPOCH=1793923200	# 2026-11-06 00:00 UTC
+KM_SOURCE_EPOCH=1795392000	# 2026-11-23 00:00 UTC
