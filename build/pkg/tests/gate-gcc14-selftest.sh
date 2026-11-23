@@ -41,6 +41,9 @@
 #   - the D4 gate explains a scan060.py hit inside an instruction of the
 #     re-synced listing as a decode out of sync, not one at an instruction
 #     start;
+#   - the awk scanner drops a hit inside scan060-g14.py's data ranges (a
+#     cas2 in libelf.a's xlate.o pointer table), and the D4 gate still fails
+#     a real cas2 and 64-bit mulsl in code;
 #   - scan060-g14.py takes a data object in .text as data and catches a real
 #     64-bit mulsl after it, where objdump -d's hex dump would hide it, and
 #     decodes only the executable sections of an unstripped shared library
@@ -269,6 +272,7 @@ xl() {	# xl <pad bytes>
 	$CC $AMIX_CFLAGS -o "$T/xl" "$T/xl.c" -L"$AMIX_SYSROOT/usr/ccs/lib" -lelf 2>"$T/xl.log" || { cat "$T/xl.log" >&2; fail "the libelf probe did not link"; }
 }
 xl 0
+cp "$T/xl" "$T/xl.unpadded"
 x32=$("$NM" "$T/xl" | awk '$2 == "t" && $3 == "x32" { print $1 }')
 [ -n "$x32" ] || fail "the libelf probe has no x32 (xlate.o not linked?)"
 pad=$(python3 - "$T/xl" "$x32" <<'PY'
@@ -293,6 +297,56 @@ out=$(python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/x
 echo "$out" | grep 'NOTE known stock data at .*libelf.a(xlate.o) x32 fmsize mtype' >/dev/null ||
 	fail "scan060-g14.py gave no known-data NOTE for xlate.o: $out"
 ok "scan060-g14.py takes xlate.o's tables in a stripped libelf program as data by the member's sha256 (a NOTE), finds the movep without the sysroot (pad $pad)"
+
+# The awk scanner (scanner 1) drops hits inside scan060-g14.py's data ranges:
+# the same probe, padded until a pointer's low word is 0x0cfc or 0x0efc
+# (cas2) at an instruction start of objdump -d's listing.
+pads=$(python3 - "$T/xl.unpadded" "$x32" <<'PY'
+import struct, sys
+d = open(sys.argv[1], "rb").read(); x = int(sys.argv[2], 16)
+shoff, = struct.unpack(">I", d[32:36]); ent, num = struct.unpack(">HH", d[46:50])
+for i in range(num):
+    _n, t, _f, a, o, sz = struct.unpack(">IIIIII", d[shoff + i * ent: shoff + i * ent + 24])
+    if t == 1 and a <= x < a + sz:
+        v = [struct.unpack(">I", d[o + x - a + 4 * k: o + x - a + 4 * k + 4])[0] for k in range(52)]
+print(" ".join(str(p) for p in sorted({(c - w) & 0xffff for w in v if w % 4 == 0 for c in (0x0cfc, 0x0efc)})[:8]))
+PY
+)
+cpad=
+for p in $pads; do
+	xl "$p"
+	"$STRIP" "$T/xl"
+	lo=$((0x$x32 + p)); hi=$((lo + 0xd0))
+	if amix_d4_scan "$T/xl" | awk -F'\t' -v lo=$lo -v hi=$hi '
+		$1 ~ /^BAD / && $3 ~ /^cas2/ { a = $1; sub(/^BAD */, "", a); sub(/:$/, "", a)
+			v = 0; for (i = 1; i <= length(a); i++) v = v * 16 + index("0123456789abcdef", substr(a, i, 1)) - 1
+			if (v >= lo && v < hi) f = 1 }
+		END { exit !f }'; then
+		cpad=$p; break
+	fi
+done
+[ -n "$cpad" ] || fail "no pad of $pads puts a cas2 of xlate.o's x32 in the awk scanner's listing"
+sum=$(amix_d4_scan "$T/xl" | sed -n 's/^SUMMARY //p')
+[ "$sum" = "0 0 1" ] || fail "the awk scanner without data ranges on the cas2 libelf probe: want '0 0 1', got '$sum'"
+r=$(amix_g14_ranges "$T/xl")
+[ -n "$r" ] && [ -s "$r" ] || fail "amix_g14_ranges gave no data ranges for the libelf probe"
+out=$(amix_d4_scan "$T/xl" "$r"); rm -f "$r"
+echo "$out" | grep '^SUMMARY 0 0 0$' >/dev/null && echo "$out" | grep '^DATA .*cas2' >/dev/null ||
+	fail "the awk scanner with scan060-g14.py's data ranges on the cas2 libelf probe: $out"
+out=$(amix_gate_d4 "$T/xl" 2>&1) || fail "the D4 gate refused the cas2 libelf probe: $out"
+# a real cas2 and a real 64-bit mulsl in code still count, ranges or not
+printf '%s\n' '__asm__(".text\n.globl bad2\n.type bad2,@function\nbad2:\n\t.word 0x0cfc,0x8080,0x90c1\n\t.word 0x4c01,0x0c02\n\trts\n.size bad2,.-bad2\n");' \
+	'extern unsigned elf_version(unsigned); void bad2(void);' \
+	'int main(int c, char **v) { if (c > 9) bad2(); return elf_version(1) == 0; }' > "$T/xlbad.c"
+$CC $AMIX_CFLAGS -o "$T/xlbad" "$T/xlbad.c" -L"$AMIX_SYSROOT/usr/ccs/lib" -lelf 2>"$T/xl.log" || { cat "$T/xl.log" >&2; fail "the real cas2 probe did not link"; }
+"$STRIP" "$T/xlbad"
+r=$(amix_g14_ranges "$T/xlbad")
+[ -n "$r" ] && [ -s "$r" ] || fail "amix_g14_ranges gave no data ranges for the real cas2 probe"
+sum=$(amix_d4_scan "$T/xlbad" "$r" | sed -n 's/^SUMMARY //p'); rm -f "$r"
+[ "$sum" = "1 0 1" ] || fail "the awk scanner with data ranges on the real cas2 + mulsl probe: want '1 0 1', got '$sum'"
+if out=$(amix_gate_d4 "$T/xlbad" 2>&1); then fail "the D4 gate passed a real cas2 and mulsl: $out"; fi
+echo "$out" | grep 'D4 FAIL .*xlbad -- 64-bit mul/div/other: 1 0 1' >/dev/null || fail "the D4 gate on the real cas2 probe: $out"
+ok "the awk scanner drops a cas2 in xlate.o's x32 (pad $cpad) by scan060-g14.py's data ranges, counts it without them; the D4 gate passes it, still fails a real cas2 and mulsl in code"
 
 # ll printf: libc printf prints ll as l.
 printf '#include <stdio.h>\nint main(int c, char **v) { printf("%%lld\\n", (long long)c); return 0; }\n' > "$T/ll.c"

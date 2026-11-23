@@ -72,6 +72,13 @@ sync, either way).  Exit 1 if
 any hit is unexplained.  This is how the gcc14 gate keeps scan060.py as an
 independent decoder instead of dropping it.
 
+--data-ranges: print, one line each as "START END" in hex (END exclusive),
+the ranges of executable sections this tool takes as data -- the sized
+switch tables, the known stock data and the data objects -- and nothing
+else.  The gate's awk scanner (amix_d4_scan) drops its hits inside them.  A
+listing found untrustworthy prints no range and exits 3, so the awk scanner
+then keeps every hit.
+
 MIT, amix-packages.
 """
 import bisect
@@ -1157,21 +1164,33 @@ def explain(tables, hitfile, starts):
 
 def main(argv):
     tool = os.environ.get("OBJDUMP") or "m68k-elf-objdump"
-    hitfile = None
+    hitfile, ranges_only = None, False
     args = argv[1:]
     while args and args[0].startswith("--"):
         if args[0] == "--objdump" and len(args) > 1:
             tool, args = args[1], args[2:]
         elif args[0] == "--explain" and len(args) > 1:
             hitfile, args = args[1], args[2:]
+        elif args[0] == "--data-ranges":
+            ranges_only, args = True, args[1:]
         else:
-            die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE] <elf>...")
-    if not args:
-        die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE] <elf>...")
+            die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE | --data-ranges] <elf>...")
+    if not args or (ranges_only and hitfile is not None):
+        die("usage: scan060-g14.py [--objdump PATH] [--explain HITFILE | --data-ranges] <elf>...")
     # said once per run: without the sysroot's archives the stock data GCC 14
     # programs carry in .text (KNOWN_STOCK_DATA) reads as code, so hits in
     # such a run may be that data
     sysroot = os.environ.get("AMIX_SYSROOT", "")
+    if ranges_only:
+        rc = 0
+        for path in args:
+            r = scan(tool, path)
+            if r["problems"] or r["desync"]:
+                rc = 3
+                continue
+            for s, e in r["tables"]:
+                print("%08x %08x" % (s, e))
+        return rc
     if not sysroot or not os.path.isdir(os.path.join(sysroot, "usr", "lib")):
         print("  NOTE %s: known stock data in .text not applied (KNOWN_STOCK_DATA, "
               "e.g. libcrypt.a's des_crypt.o tables); set AMIX_SYSROOT=$(m68k-elf-gcc "
