@@ -42,8 +42,12 @@ esac
 #
 #   1. amix_d4_scan (awk, below): every MUL.L/DIV.L (opword 0x4c00-0x4c7f)
 #      whose extension word has bit 10 set, whatever the source; and the
-#      cmp2/chk2/cas2 mnemonics.  No switch-table awareness, so it does not
-#      look for movep (table words decode as movep).
+#      cmp2/chk2/cas2 mnemonics.  No switch-table awareness of its own, so
+#      it does not look for movep (table words decode as movep).  Under
+#      TOOLCHAIN=gcc14 a linked ELF's hits inside the data ranges
+#      scan060-g14.py --data-ranges prints (sized switch tables, known stock
+#      data such as libelf.a's xlate.o pointer table, data objects) are
+#      dropped; without them, every hit counts.
 #   2. the toolchain's $TARGET-scan060: the same encoding rule plus movep,
 #      decoding around gcc's switch tables.  ★ Run it with a modern m68k
 #      objdump (AMIX_SCAN060_OBJDUMP, default m68k-linux-gnu-objdump when
@@ -66,8 +70,24 @@ esac
 #
 # amix_gate_d4_selftest runs on the first amix_gate_d4 call of a build and
 # must see every scanner reject probes before any pass is trusted.
+#
+# amix_d4_scan <elf|archive> [ranges] -- RANGES, when given, holds "START
+# END" hex lines; a hit whose address lies in one is data, printed as DATA
+# and not counted.
 amix_d4_scan() {
-	"$OBJDUMP" -d "$1" 2>/dev/null | awk -F'\t' '
+	"$OBJDUMP" -d "$1" 2>/dev/null | awk -F'\t' -v rf="${2:-}" '
+		BEGIN {
+			nr = 0
+			if (rf != "")
+				while ((getline l < rf) > 0)
+					if (split(l, p, " ") == 2) { nr++; lo[nr] = hex(p[1]); hi[nr] = hex(p[2]) }
+		}
+		function indata(   a, i) {
+			a = $1; gsub(/[ :]/, "", a); a = hex(a)
+			for (i = 1; i <= nr; i++)
+				if (a >= lo[i] && a < hi[i]) return 1
+			return 0
+		}
 		function hex(s,   i, c, v) {
 			v = 0; s = tolower(s)
 			for (i = 1; i <= length(s); i++) {
@@ -84,13 +104,17 @@ amix_d4_scan() {
 				if (op >= 19456 && op <= 19583 && n >= 2 && length(w[2]) == 4) {
 					ext = hex(w[2])
 					if (int(ext / 1024) % 2 == 1) {
+						if (indata()) { print "DATA " $0; next }
 						if (op <= 19519) mul++
 						else div++
 						print "BAD " $0
 					}
 				}
 			}
-			if ($3 ~ /^(cmp2|chk2|cas2)/) { other++; print "BAD " $0 }
+			if ($3 ~ /^(cmp2|chk2|cas2)/) {
+				if (indata()) { print "DATA " $0; next }
+				other++; print "BAD " $0
+			}
 		}
 		END { printf "SUMMARY %d %d %d\n", mul + 0, div + 0, other + 0 }'
 }
@@ -182,7 +206,9 @@ amix_gate_d4() {
 		_g4_notes=	# scan060-g14.py's NOTEs (amix_g14_scan3), listed under the verdict
 		# scanner 1, per ELF/archive (a directory is walked for them)
 		for _g4_e in $(amix_gate_elfs "$_g4_f"); do
-			_g4_out=$(amix_d4_scan "$_g4_e")
+			_g4_r=$(amix_g14_ranges "$_g4_e")
+			_g4_out=$(amix_d4_scan "$_g4_e" "$_g4_r")
+			[ -z "$_g4_r" ] || rm -f "$_g4_r"
 			_g4_sum=$(echo "$_g4_out" | sed -n 's/^SUMMARY //p')
 			[ -n "$_g4_sum" ] || { echo "[FAIL] D4 gate: could not disassemble $_g4_e" >&2; return 1; }
 			if [ "$_g4_sum" != "0 0 0" ]; then
@@ -215,8 +241,29 @@ amix_gate_d4() {
 			echo "$_g4_notes" | sed 's/^/          /'
 		fi
 	done
-	unset _g4_f _g4_e _g4_out _g4_sum _g4_notes
+	unset _g4_f _g4_e _g4_r _g4_out _g4_sum _g4_notes
 	return $_g4_bad
+}
+
+# amix_g14_ranges <elf> -- under TOOLCHAIN=gcc14, for a linked executable or
+# shared object: a temporary file of the data ranges scan060-g14.py takes in
+# its executable sections, for amix_d4_scan (the caller removes it); prints
+# nothing otherwise (another toolchain, an object file or an archive, whose
+# addresses are per section), and nothing when scan060-g14.py finds the
+# listing untrustworthy, which fails the gate in scanner 3 anyway.
+amix_g14_ranges() {
+	[ "$AMIX_TOOLCHAIN" = gcc14 ] || return 0
+	case "$(od -An -tx1 -N2 "$1" | tr -d ' ')$(od -An -tx1 -j16 -N2 "$1" | tr -d ' ')" in
+	7f450002|7f450003) ;;
+	*) return 0 ;;
+	esac
+	_gr_f=$(mktemp "${TMPDIR:-/tmp}/amix-d4r.XXXXXX")
+	if OBJDUMP="$OBJDUMP" python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --data-ranges "$1" > "$_gr_f" 2>/dev/null; then
+		echo "$_gr_f"
+	else
+		rm -f "$_gr_f"
+	fi
+	unset _gr_f
 }
 
 # amix_gate_elfs <file|dir> -- the m68k ELF objects, executables and ar
