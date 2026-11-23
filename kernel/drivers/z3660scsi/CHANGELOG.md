@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — z3660scsi module 1.0.0-7, packages 1.0.0-10: the C4-7 limits (6a5cd175, 00a3db29)
+
+After sd_register the module declares one segment of up to 64 KiB a command (16-aligned, a multiple of 512, SDL_ALLRAM, reach 0x0FFFFFFF). z3660queuex takes dd's sdcomx commands and sets sx_resid. The reference is weak: before the segment minor sd_limits answers ENOSYS and nothing changes; param limits=0 declares none. With k30 -79 and dd's bounce region in emulation, raw 64 KiB reads go from 19661 to 28087 kB/s and writes from 9187 to 12767 kB/s. A PROBE=1 build (never shipped) times each request's driver, doorbell and completion parts; module/README.md has the A4000T split. Objects k30 9052892a, k46 0ec78cc2; the static object is unchanged.
+
 ## 2026-11-22 — src/kernel-patches/ removed (4596555e)
 
 The dd.c order fix (start the next request before iodone(), so a b_iodone that re-enters ddstrategy cannot double-issue dp->com) now lives in kernel/k30's dd.c patch for every k30 build; with both present the patch dry-run gate stopped. README updated.
