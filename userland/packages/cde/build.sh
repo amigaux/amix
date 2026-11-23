@@ -151,10 +151,14 @@ build_compat() {
 	$CC $AMIX_CFLAGS $CDE_PIC -Wall -I"$COMPAT" -include "$AMIX_GCC14_DECLS" \
 		-c -o "$COMPAT/lib/basename.o" "$COMPAT/lib/basename.c" || exit 1
 	_co="$COMPAT/lib/amix-compat.o $COMPAT/lib/basename.o"
-	# the shared variant: sysinfo too (sysinfo.S: libc.so.1 does not export it)
+	# the shared variant: sysinfo too (sysinfo.S: libc.so.1 does not export it),
+	# and a position-independent __fixdfdi ahead of libgcc.a's, whose absolute
+	# jsr to __fixunsdfdi is a text relocation (fixdfdi.c; it goes away when the
+	# toolchain's libgcc is position-independent)
 	if [ "$CDE_VARIANT" = shared ]; then
 		$CC $AMIX_CFLAGS -c -o "$COMPAT/lib/sysinfo.o" "$COMPAT/lib/sysinfo.S" || exit 1
-		_co="$_co $COMPAT/lib/sysinfo.o"
+		$CC $AMIX_CFLAGS $CDE_PIC -Wall -c -o "$COMPAT/lib/fixdfdi.o" "$COMPAT/lib/fixdfdi.c" || exit 1
+		_co="$_co $COMPAT/lib/sysinfo.o $COMPAT/lib/fixdfdi.o"
 	fi
 	$AR rc "$COMPAT/lib/libamixcompat-cde.a" $_co || exit 1
 	$RANLIB "$COMPAT/lib/libamixcompat-cde.a"

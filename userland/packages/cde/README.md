@@ -223,15 +223,16 @@ the default, the build and its bytes are as before.
   libtool keeps no `-lstdc++` among a library's own libraries, so the build names the runtime
   `libcxxrt.so`, a link to `libstdc++.so.6`; `NEEDED` names its soname.
 - libtool's answers as in Motif's shared variant (`pass_all`, no `-lc`). Compat's `basename` comes
-  ahead of `libgen`'s non-PIC one, and compat has a `sysinfo` (`sysinfo.S`) for the libraries, as
-  `libc.so.1` does not export it.
+  ahead of `libgen`'s non-PIC one, compat has a `sysinfo` (`sysinfo.S`) for the libraries, as
+  `libc.so.1` does not export it, and a position-independent `__fixdfdi` (`fixdfdi.c`) ahead of
+  `libgcc.a`'s, whose absolute call to `__fixunsdfdi` would be a text relocation in `libDtSvc` and
+  `libDtMrm`; it goes when the toolchain's `libgcc` is position-independent.
 - `_XtInherit` from X11R6.3's shared variant's `libXtInherit.a` is linked into every program (its
   README, *The shared variant*), and through the same link flags into each library; the program's
   is the one bound at run time.
-- **Text relocations in four libraries, named by the build** (`textrel-report.py`), from code
-  that exists on Amix only static and non-PIC: Amix's `libm` (`sin`, `cos`, `log` and their
-  helpers) in `libDtHelp.so.2` and `libDtSearch.so.2`, and GCC's `libgcc.a` conversion
-  `__fixdfdi` in `libDtSvc.so.2` and `libDtMrm.so.2`. Each costs, per process, the pages it
-  relocates. A text relocation from any other source fails the build.
+- **Text relocations in two libraries, named by the build** (`textrel-report.py`), from code
+  that exists on Amix only static and non-PIC: Amix's `libm` (`sin`, `cos`, `tan` in
+  `libDtHelp.so.2`; `log`, `log10`, `sqrt` in `libDtSearch.so.2`, with their helpers). Each costs,
+  per process, the pages it relocates. A text relocation from any other source fails the build.
 - **Gates**: `check-got-addend.py` on the PIC objects and compat, and `check-dynstr-order.py` on
   every library and program.
