@@ -25,8 +25,9 @@ statically, so they also contain X11R6.3's libraries (X Consortium licence), Mot
 `/usr/dt/COPYING`; the texts of the libraries linked in are in `/opt/amix/dt/doc`, one directory
 each (`x11r6.3`, `motif`, `libjpeg`, `regex`, `compat`).
 
-**This revision is the static build.** The shared build (CDE's libraries as plain shared libraries,
-against shared X11R6.3 and Motif) follows as a new revision.
+**Two variants.** The package is the static build; `VARIANT=shared` builds the shared variant,
+version `2.5.3-<PKGREV>.s`, with CDE's libraries shared (*The shared variant* below). A machine has
+one or the other.
 
 ## Layout
 
@@ -177,9 +178,6 @@ cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
   link path, and fails if any program NEEDs a shared `libjpeg`, `libregex` or `libstdc++`.
   `-lstdc++` ends every link: ToolTalk's `libtt` is C++, and libtool records no runtime for the
   static library now that its C++ probe finds the shared one.
-- **The shared variant's hooks are here, switched off**: the recipe `cde-shared` sources these
-  hooks with `CDE_VARIANT=shared` (CDE's libraries shared, against the shared X11R6.3 and Motif);
-  this build does not use them. Its README section comes with that recipe.
 - **dtbuilder links Motif's `libMrm`** after `libUil`, which calls it: the link line's
   `$(MRESOURCELIB)`, which configure never sets, is given as `-lMrm`.
 - **Manual pages for every program**: upstream's `dtbuilder.1` and ToolTalk's `ttauth.man`, which
@@ -201,3 +199,39 @@ cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
   `strnlen`, `round`), in `libamixcompat-cde.a`, linked into every program.
 - configure is answered for what a cross build cannot test (the static X and Motif libraries) and
   given the box's paths: `/usr/ccs/lib/cpp` for tt_type_comp, `/usr/bin/ksh` for the scripts.
+
+## The shared variant
+
+`VARIANT=shared` builds CDE with its libraries shared, version `2.5.3-<PKGREV>.s`
+(`SHARED_PKGREV`), from `prototype.shared` in the build tree `cde-shared`, against the shared
+variants of X11R6.3 and Motif (their build trees `x11r6.3-shared` and `motif-shared`) and the
+shared `libjpeg` and `regex`, to compare memory use with the static build. It is the same package
+(`cde`, the same paths and configuration files), so a machine has one variant or the other, with
+the shared X11R6.3 and Motif. The hooks take the variant from `$VARIANT`; with `VARIANT=static`,
+the default, the build and its bytes are as before.
+
+- **CDE's ten libraries** in `/opt/amix/dt/lib` in place of the archives, each the file its
+  soname names (`libDtSvc.so.2` and the rest) with a `lib*.so` link beside it, and the programs
+  linked against them with `DT_RPATH /opt/amix/dt/lib:/opt/amix/X11R6/lib:/opt/amix/lib`. The
+  build links through one directory of links to the shared X11R6.3, Motif, libjpeg and regex
+  libraries (`shlib`), so nothing static of theirs is linked in.
+- **Each library records the libraries it calls** (`DT_NEEDED`): upstream's `LIBADD`s name almost
+  none, as static programs link everything anyway, and the hooks give each library its own.
+- **The C++ runtime is shared** (`libstdc++.so.6`, package `cxxrt`): ToolTalk's `libtt` and part
+  of `libDtSvc` are C++. Every library linked with `libDtSvc` links the runtime too, or the
+  linker would copy the unwinder `libDtSvc` calls from GCC's static, non-PIC `libgcc.a` into it.
+  libtool keeps no `-lstdc++` among a library's own libraries, so the build names the runtime
+  `libcxxrt.so`, a link to `libstdc++.so.6`; `NEEDED` names its soname.
+- libtool's answers as in Motif's shared variant (`pass_all`, no `-lc`). Compat's `basename` comes
+  ahead of `libgen`'s non-PIC one, and compat has a `sysinfo` (`sysinfo.S`) for the libraries, as
+  `libc.so.1` does not export it.
+- `_XtInherit` from X11R6.3's shared variant's `libXtInherit.a` is linked into every program (its
+  README, *The shared variant*), and through the same link flags into each library; the program's
+  is the one bound at run time.
+- **Text relocations in four libraries, named by the build** (`textrel-report.py`), from code
+  that exists on Amix only static and non-PIC: Amix's `libm` (`sin`, `cos`, `log` and their
+  helpers) in `libDtHelp.so.2` and `libDtSearch.so.2`, and GCC's `libgcc.a` conversion
+  `__fixdfdi` in `libDtSvc.so.2` and `libDtMrm.so.2`. Each costs, per process, the pages it
+  relocates. A text relocation from any other source fails the build.
+- **Gates**: `check-got-addend.py` on the PIC objects and compat, and `check-dynstr-order.py` on
+  every library and program.

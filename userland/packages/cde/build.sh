@@ -4,10 +4,8 @@
 # the libraries CDE builds against, as their recipes built them
 # (BUILD_DEPENDS): X11R6.3 and Motif under /opt/amix/X11R6, libjpeg and
 # regex under /opt/amix
-# the recipe's own files; the shared variant (cde-shared) sets CHERE to this
-# directory and CDE_VARIANT=shared before it sources these hooks
-CHERE=${CHERE:-$HERE}
-CDE_VARIANT=${CDE_VARIANT:-static}
+# the variant pkgbuild builds: static, or shared (prototype.shared)
+CDE_VARIANT=${VARIANT:-static}
 G14TOOLS=${AMIX_GCC14_PREFIX:+$AMIX_GCC14_PREFIX/../../tools}
 XROOT="$AMIX_BUILD_ROOT/x11r6.3/dest/opt/amix/X11R6"
 MROOT="$AMIX_BUILD_ROOT/motif/dest/opt/amix/X11R6"
@@ -76,7 +74,14 @@ shlib_farm() {
 		b=$(basename "$f" .a)
 		ls "$XROOT/lib/$b".so.* > /dev/null 2>&1 || ln -sf "$f" "$SHLIB/$b.a"
 	done
-	for l in X11 Xt Xm Xext Xmu SM ICE Xp jpeg regex; do
+	# GCC 14's shared C++ runtime (package cxxrt), which the driver finds only
+	# for g++, as libcxxrt.so: for the libraries linked with libDtSvc (their
+	# LIBADD; NEEDED names its soname, libstdc++.so.6)
+	_cxs=$AMIX_GCC14_PREFIX/m68k-elf/lib/cxxrt/libstdc++.so.6
+	[ -f "$_cxs" ] || { echo "[FAIL] no $_cxs" >&2; exit 1; }
+	ln -sf "$_cxs" "$SHLIB/libstdc++.so.6"
+	ln -sf "$_cxs" "$SHLIB/libcxxrt.so"
+	for l in X11 Xt Xm Xext Xmu SM ICE Xp jpeg regex cxxrt; do
 		[ -e "$SHLIB/lib$l.so" ] || { echo "[FAIL] no shared lib$l for the shared variant" >&2; exit 1; }
 	done
 }
@@ -126,7 +131,7 @@ make_cde() {	# make_cde [make args]
 	dtdcbk_datarootdir="$TREE/programs/dtdocbook" \
 	make CPPFLAGS="$(sed -n 's/^CPPFLAGS = //p' Makefile) -include $AMIX_GCC14_DECLS" \
 		TT_TYPE_COMP="$BUILD/hosttt/tt_type_comp" DTHELP_HTAG2="$BUILD/hosthelp/dthelp_htag2" \
-		DTCODEGEN="sh $CHERE/dtcodegen/replay.sh" \
+		DTCODEGEN="sh $HERE/dtcodegen/replay.sh" \
 		MRESOURCELIB=-lMrm \
 		DTDOCBOOK="$TREE/programs/dtdocbook/dtdocbook2sdl -u" "$@"
 }
@@ -138,7 +143,7 @@ mvar() {	# mvar DIR VAR
 
 build_compat() {
 	rm -rf -- "${COMPAT:?}"
-	cp -R "$CHERE/compat" "$COMPAT"
+	cp -R "$HERE/compat" "$COMPAT"
 	$CC $AMIX_CFLAGS $CDE_PIC -Wall -I"$COMPAT" -include "$AMIX_GCC14_DECLS" -fno-builtin-round \
 		-c -o "$COMPAT/lib/amix-compat.o" "$COMPAT/lib/amix-compat.c" || exit 1
 	# basename in a member of its own: only a link that puts compat ahead of
@@ -246,7 +251,7 @@ host_tooltalk() {
 			case $f in *.h|*.hh) continue;; esac
 			o=$O/$d/$(echo "${f%.*}" | tr / _).o
 			src=$f
-			[ "$d/$f" = lib/mp/mp_desktop.C ] && src=$CHERE/host/mp_desktop_nox.C
+			[ "$d/$f" = lib/mp/mp_desktop.C ] && src=$HERE/host/mp_desktop_nox.C
 			case $f in
 			*.c) ( cd "$T/$d" && eval "$HOSTCC $common -I. $cc -c -o \"$o\" \"$src\"" ) || exit 1;;
 			*) ( cd "$T/$d" && eval "$HOSTCXX $common -I. $cx -c -o \"$o\" \"$src\"" ) || exit 1;;
@@ -334,16 +339,22 @@ build() {
 	# the shared variant: each CDE library records the libraries it calls
 	# (DT_NEEDED); upstream's LIBADDs name almost none, as static programs link
 	# them all anyway.  libtt first, as libDtSvc now NEEDs it; the additions are
-	# given to every make, each variable belonging to one library
+	# given to every make, each variable belonging to one library.  libtt and
+	# libDtSvc are partly C++, and each library linked with libDtSvc also links
+	# the shared C++ runtime (-lcxxrt), so the unwinder libDtSvc calls
+	# (_Unwind_Resume) comes from libstdc++.so.6, not as libgcc.a's non-PIC
+	# copy in that library: libtool hands a shared library's own libraries on
+	# to programs only
 	set --
 	if [ "$CDE_VARIANT" = shared ]; then
 		set -- libtt_la_LIBADD="$(mvar lib/tt/lib libtt_la_LIBADD) -lXt -lX11 -lsocket -lnsl" \
 			libDtSvc_la_LIBADD="$(mvar lib/DtSvc libDtSvc_la_LIBADD) ../tt/lib/libtt.la -lXm -lXt" \
-			libDtSearch_la_LIBADD="$(mvar lib/DtSearch libDtSearch_la_LIBADD) ../DtSvc/libDtSvc.la" \
-			libDtWidget_la_LIBADD="$(mvar lib/DtWidget libDtWidget_la_LIBADD) ../DtSvc/libDtSvc.la -lXm -lXt" \
-			libDtHelp_la_LIBADD="$(mvar lib/DtHelp libDtHelp_la_LIBADD) ../DtSvc/libDtSvc.la -lXm -lXt" \
-			libDtPrint_la_LIBADD="$(mvar lib/DtPrint libDtPrint_la_LIBADD) ../DtHelp/libDtHelp.la ../DtSvc/libDtSvc.la -lXm -lXt" \
-			libDtTerm_la_LIBADD="$(mvar lib/DtTerm libDtTerm_la_LIBADD) ../DtHelp/libDtHelp.la ../DtSvc/libDtSvc.la -lXm -lXt" \
+			libDtSearch_la_LIBADD="$(mvar lib/DtSearch libDtSearch_la_LIBADD) ../DtSvc/libDtSvc.la -lcxxrt" \
+			libDtWidget_la_LIBADD="$(mvar lib/DtWidget libDtWidget_la_LIBADD) ../DtSvc/libDtSvc.la -lXm -lXt -lcxxrt" \
+			libDtHelp_la_LIBADD="$(mvar lib/DtHelp libDtHelp_la_LIBADD) ../DtSvc/libDtSvc.la -lXm -lXt -lcxxrt" \
+			libDtPrint_la_LIBADD="$(mvar lib/DtPrint libDtPrint_la_LIBADD) ../DtHelp/libDtHelp.la ../DtSvc/libDtSvc.la -lXm -lXt -lcxxrt" \
+			libDtTerm_la_LIBADD="$(mvar lib/DtTerm libDtTerm_la_LIBADD) ../DtHelp/libDtHelp.la ../DtSvc/libDtSvc.la -lXm -lXt -lcxxrt" \
+			libcsa_la_LIBADD="$(mvar lib/csa libcsa_la_LIBADD) -lcxxrt" \
 			libDtMrm_la_LIBADD="$(mvar lib/DtMrm libDtMrm_la_LIBADD) ../DtTerm/libDtTerm.la ../DtWidget/libDtWidget.la ../DtHelp/libDtHelp.la ../DtPrint/libDtPrint.la -lMrm"
 		make_cde -C lib/tt/lib "$@" > "$BUILD/make-libtt.log" 2>&1 || {
 			tail -30 "$BUILD/make-libtt.log" >&2; echo "[FAIL] make lib/tt/lib" >&2; exit 1; }
@@ -418,7 +429,7 @@ stage() {
 		echo "  check-dynstr-order: $(echo "$_dy" | wc -l) dynamic objects clean"
 		# text relocations: named, not failed (GCC's static C++ runtime and Amix's
 		# static libm have no PIC form; README, Shared variant); anything else fails
-		python3 -I "$CHERE/textrel-report.py" "$READELF" "$NM" $_dy > "$BUILD/textrel.log" || exit 1
+		python3 -I "$HERE/textrel-report.py" "$READELF" "$NM" $_dy > "$BUILD/textrel.log" || exit 1
 		cat "$BUILD/textrel.log"
 		! grep -q "^    other:" "$BUILD/textrel.log" || {
 			echo "[FAIL] text relocations from an unexpected source (above)" >&2; exit 1; }
@@ -431,14 +442,14 @@ stage() {
 	cp "$MROOT/doc/motif/COPYING" "$dd/motif/"
 	cp "$JROOT/doc/libjpeg/README" "$dd/libjpeg/"
 	cp "$RROOT/doc/regex/COPYRIGHT" "$dd/regex/"
-	cp "$CHERE/../LICENSE" "$dd/compat/LICENSE"
+	cp "$HERE/../LICENSE" "$dd/compat/LICENSE"
 	chmod 0644 "$dd"/*/*
 	# manual pages (README): sections 1 and 1m into /opt/amix/man with
 	# whatis.d/cde (docs/man-pages.md); the reference sections 3, 4 and 5
 	# stay whole in CDE's tree, share/man, under upstream's names, where
 	# CDE's own link /usr/dt/man (its man directory for dtsearchpath) leads
 	m=$DEST$PREFIX/share/man
-	. "$CHERE/../tools/manpages.sh"
+	. "$HERE/../tools/manpages.sh"
 	for s in 1 1m; do
 		for f in "$m/man$s"/*; do
 			[ -f "$f" ] || continue
@@ -447,7 +458,7 @@ stage() {
 		done
 		rmdir -- "$m/man$s"
 	done
-	amix_man "$CHERE/man/cde-rpc.1m" 1m
+	amix_man "$HERE/man/cde-rpc.1m" 1m
 	# upstream's ttsnoop.6 is the page of the TeleUse ttsnoop this one replaced (its
 	# one option, -t, is not this ttsnoop's); ttsnoop(1) is ours
 	rm -f -- "${m:?}/man6/ttsnoop.6"
@@ -456,13 +467,13 @@ stage() {
 	# has none for (README, Manual pages); one page for dtopen's five names
 	amix_man "$TREE/lib/tt/bin/ttauth/ttauth.man" 1 ttauth
 	for f in Xsession dtdbcache dtdspmsg dterror.ds dtlpsetup dtopen dtsrclean dtsrdelete; do
-		amix_man "$CHERE/man/$f.1" 1
+		amix_man "$HERE/man/$f.1" 1
 	done
-	amix_man "$CHERE/man/dtprintegrate.1m" 1m
+	amix_man "$HERE/man/dtprintegrate.1m" 1m
 	# App Builder: upstream's page for dtbuilder, ours for its code generator and ttsnoop
 	amix_man "$TREE/programs/dtappbuilder/src/ab/dtbuilder.1" 1
-	amix_man "$CHERE/man/dtcodegen.1" 1
-	amix_man "$CHERE/man/ttsnoop.1" 1
+	amix_man "$HERE/man/dtcodegen.1" 1
+	amix_man "$HERE/man/ttsnoop.1" 1
 	for f in dtopen_image dtopen_pdf dtopen_ps dtopen_video; do
 		amix_man_alias $f 1 dtopen
 	done
@@ -475,7 +486,7 @@ stage() {
 	# the boot script of the RPC servers, off unless rc.conf turns them on
 	# (cde-rpc(1M)): one file under three names, as rc.subr(1M) wants
 	mkdir -p "$DEST/etc/init.d" "$DEST/etc/rc0.d" "$DEST/etc/rc1.d" "$DEST/etc/rc2.d"
-	cp "$CHERE/files/cde-rpc" "$DEST/etc/init.d/cde-rpc"
+	cp "$HERE/files/cde-rpc" "$DEST/etc/init.d/cde-rpc"
 	ln "$DEST/etc/init.d/cde-rpc" "$DEST/etc/rc2.d/S78cde-rpc"
 	ln "$DEST/etc/init.d/cde-rpc" "$DEST/etc/rc0.d/K38cde-rpc"
 	ln "$DEST/etc/init.d/cde-rpc" "$DEST/etc/rc1.d/K38cde-rpc"
@@ -488,6 +499,6 @@ stage() {
 		echo "[FAIL] dtterm.ti changed ($ti, terminfo/d/dtterm is for $DTTERM_TI_SHA256): compile it again with the box's tic" >&2
 		exit 1; }
 	mkdir -p "$DEST/usr/share/lib/terminfo/d"
-	cp "$CHERE/terminfo/d/dtterm" "$DEST/usr/share/lib/terminfo/d/dtterm"
+	cp "$HERE/terminfo/d/dtterm" "$DEST/usr/share/lib/terminfo/d/dtterm"
 	chmod 0644 "$DEST/usr/share/lib/terminfo/d/dtterm"
 }
