@@ -56,8 +56,10 @@ known about it, and what to do. Measurements are from emulation unless the entry
   When the kernel runs in the card's DDR, which a Zorro bus master cannot reach, `dma_alloc` hands out the top
   128 KiB of motherboard fast RAM; one 64 KiB region and its sense slot take just over half of it, so a second
   declaring controller keeps one command per 2 KiB page and the console says `dd: <card>: no bounce region, page
-  commands`. The region also leaves only the rest of those 128 KiB for the drivers' own bounces. Seen only in review
-  of the code: the rows ran with the kernel in motherboard RAM, where `dma_alloc` takes the heap.
+  commands`. The region also leaves only the rest of those 128 KiB for the drivers' own bounces. In emulation one
+  declaring Z3660 SCSI with the kernel in its DDR got its 64 KiB region from the pool and whole commands; the second
+  controller's fallback is seen only in review of the code. With no motherboard fast RAM at all there is no pool,
+  and every declaring controller keeps page commands (`dd: <card>: no bounce region, page commands`).
 - **A controller whose region cannot be had at all keeps page commands** (cut -79): the same console line with the
   reason (`limits below a page`, `no bounce region`, `bounce region out of reach`). Disk I/O works as before -79,
   only slower.
@@ -160,6 +162,14 @@ known about it, and what to do. Measurements are from emulation unless the entry
   from another machine times out (`RPC: Timed out`) while `ping` and `rpcinfo -u` to mountd and nfsd answer;
   restarting mountd, nfsd or all of NFS does not help. Give `/etc/inet/hosts` a line `<address> <nodename>` before NFS
   starts, then restart NFS. Seen on k30 and on the 040/060 kernel.
+- **A non-blocking writer waiting in poll can sleep until its poll timeout although the stream has room** (stock
+  strwsrv, both kernel lines; open in the shipped kernels). When the queue ahead of a stream head drains it wakes the
+  stream head's write service, which wakes the writers only if that queue is no longer full; if it filled again in
+  between, nothing is woken and nothing asks for the next wake, so the writer waits for its poll timeout. A writer
+  that sleeps in write is not affected. In emulation on -79 a TCP loopback pair with 2048-byte socket buffers on both
+  ends and 8192-byte non-blocking writes stalled in its first transfer every time; a pipe and an AF_UNIX pair did
+  not. A kernel built with `--strwsrv-guard` sets the wait again when the queue is still full (20 of 20 transfers in
+  20 s each, against two stalls). With the default socket buffers no stall was seen.
 - **A program that writes to a TCP connection and closes it without SO_LINGER can lose the last data it wrote**
   (stock `tcpclose`, both kernel lines; open). TCP's unsent data is its stream's own write queue, which output and
   acknowledgement both work on and which is freed when the close returns; the stock close keeps it only under

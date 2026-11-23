@@ -226,6 +226,12 @@
 #                freed queue for queuerun.  --check after the link and after the dlm splice (freeq named only from
 #                freeq_guarded; qdetach and strclose among its callers).  --no-freeq-guard is the kernel without it,
 #                byte for byte.
+#   --strwsrv-guard  (opt-in; STRWSRV_GUARD=1 does the same) src/strwsrvguard030.c joins the final link and
+#                tools/strwsrvguard-retarget.py retargets the one relocation naming strwsrv (stwdata's qi_srvp) to
+#                strwsrv_guarded: at splstr it calls the stock strwsrv, then sets QWANTW on the forward queue (QB_WANTW
+#                on its band) where the stream head was back-enabled and that queue is full again, so its next drain
+#                back-enables the stream head and a poll for POLLOUT is woken.  --check after the link and after the
+#                dlm splice.  --no-strwsrv-guard (the default) is the kernel without it, byte for byte.
 #   --no-hardbus-guard  build WITHOUT the user bus-error probe above 1 GiB (on by default; HARDBUS_GUARD=0 does the
 #                same).  By default src/hardbus030.c joins the final link and tools/hardbus-retarget.py retargets
 #                usrxmemflt's one call of hardbus to hardbus_z3: a user bus error on a valid translation whose physical
@@ -319,6 +325,7 @@ FPU_GATE="${FPU_GATE:-1}"         # --no-fpu-gate (FPU_GATE=0): sendsig's fpu_se
 UFS_HOLE_FIX="${UFS_HOLE_FIX:-1}"  # --no-ufs-hole-fix (UFS_HOLE_FIX=0): rwip's ufs_bmap allocates a hole alloc-only as stock
 GROWSDT_FIX="${GROWSDT_FIX:-1}"   # --no-growsdt-fix (GROWSDT_FIX=0): the stock hat_growsdt (tools/growsdt030.py)
 FREEQ_GUARD="${FREEQ_GUARD:-1}"   # --no-freeq-guard (FREEQ_GUARD=0): freeq unguarded, as stock (quirk 92)
+STRWSRV_GUARD="${STRWSRV_GUARD:-0}"  # --strwsrv-guard (STRWSRV_GUARD=1): the stream head write service re-arms a full forward queue
 HARDBUS_GUARD="${HARDBUS_GUARD:-1}"  # --no-hardbus-guard (HARDBUS_GUARD=0): the stock probe at every physical address
 SYNCG_S="${SYNCG_S:-}"            # --sync-guard <syncguard.s>: the port's sync guard, byte for byte
 BTW_S="${BTW_S:-}"                # --bt-walk <btwalk.s>: the port's backtrace frame test, byte for byte
@@ -377,6 +384,8 @@ while [ "$#" -gt 0 ]; do
     --no-fpu-gate) FPU_GATE=0; shift ;;
     --no-freeq-guard) FREEQ_GUARD=0; shift ;;
     --no-hardbus-guard) HARDBUS_GUARD=0; shift ;;
+    --strwsrv-guard) STRWSRV_GUARD=1; shift ;;
+    --no-strwsrv-guard) STRWSRV_GUARD=0; shift ;;
     --sync-guard) SYNCG_S="${2:?--sync-guard needs the path of syncguard.s}"; shift 2 ;;
     --bt-walk) BTW_S="${2:?--bt-walk needs the path of btwalk.s}"; shift 2 ;;
     --no-growsdt-fix) GROWSDT_FIX=0; shift ;;
@@ -415,6 +424,7 @@ case "$FPU_GATE" in 0|1) ;; *) echo "FPU_GATE='$FPU_GATE' (want 0 or 1)" >&2; ex
 case "$UFS_HOLE_FIX" in 0|1) ;; *) echo "UFS_HOLE_FIX='$UFS_HOLE_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$GROWSDT_FIX" in 0|1) ;; *) echo "GROWSDT_FIX='$GROWSDT_FIX' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$FREEQ_GUARD" in 0|1) ;; *) echo "FREEQ_GUARD='$FREEQ_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
+case "$STRWSRV_GUARD" in 0|1) ;; *) echo "STRWSRV_GUARD='$STRWSRV_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 case "$HARDBUS_GUARD" in 0|1) ;; *) echo "HARDBUS_GUARD='$HARDBUS_GUARD' (want 0 or 1)" >&2; exit 2 ;; esac
 [ -z "$SYNCG_S" ] || [ -f "$SYNCG_S" ] || { echo "--sync-guard: no file $SYNCG_S" >&2; exit 2; }
 [ -z "$BTW_S" ] || [ -f "$BTW_S" ] || { echo "--bt-walk: no file $BTW_S" >&2; exit 2; }
@@ -1682,6 +1692,22 @@ if [ "$FREEQ_GUARD" = 1 ]; then
 else
   echo "--- freeq guard: --no-freeq-guard -- freeq unguarded, as stock ---"
 fi
+STWG_OBJ=""
+if [ "$STRWSRV_GUARD" = 1 ]; then
+  # === 8g2. the stream head write service guard: src/strwsrvguard030.c; stwdata's qi_srvp is retargeted after the link ===
+  echo "--- strwsrv guard: compiling $KT/src/strwsrvguard030.c (strwsrv_guarded) ---"
+  ( cd "$BUILD/os" && "$CC" -c -O $CFLAGS_K "$KT/src/strwsrvguard030.c" -o "$BUILD/strwsrvguard030.o" ) \
+    || { echo "--strwsrv-guard: strwsrvguard030.c did not compile" >&2; exit 1; }
+  GOT="$("$NM" "$BUILD/strwsrvguard030.o" | awk '$1=="U"{print $2}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOT" = "splstr splx strwsrv" ] || { echo "--strwsrv-guard: strwsrvguard030.o imports '$GOT'" >&2; exit 1; }
+  GOTX="$("$NM" "$BUILD/strwsrvguard030.o" | awk '$2 ~ /^[TDB]$/{print $3}' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  [ "$GOTX" = "strwsrv_guarded swq_brearm swq_calls swq_last swq_magic swq_rearm" ] \
+    || { echo "--strwsrv-guard: strwsrvguard030.o exports '$GOTX'" >&2; exit 1; }
+  echo "  strwsrvguard030.o $(sha256sum "$BUILD/strwsrvguard030.o" | cut -c1-16): imports/exports exact"
+  STWG_OBJ="strwsrvguard030.o"
+else
+  echo "--- strwsrv guard: --no-strwsrv-guard -- the stock strwsrv ---"
+fi
 SWG_OBJ=""
 if [ "$SWAP_GUARD" = 1 ]; then
   # === 8h. the swapadd guard: src/swapguard030.c; the relocations are retargeted after the link ===
@@ -1806,7 +1832,7 @@ if [ -n "$CARVE_FS" ] && [ "$DLM_STUB" != 1 ]; then
   # The stock tools that read these through /dev/kmem and the namelist (sadc's inode, crash) find them in the kernel.
   # An empty set builds no object, so a kernel whose core.list names none of them links as before.
   echo "--- carve commons: core.list names that are COMMONs of the carved ${CARVE_FS} and nothing else in the link has ---"
-  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ ) 2>/dev/null \
+  ( cd "$BUILD"; "$NM" $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $STWG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ ) 2>/dev/null \
     | awk 'NF >= 2 && $(NF-1) != "U" {print $NF}' | LC_ALL=C sort -u > "$BUILD/carvecom.have"
   python3 - "$DLM_CORE/abi/k30/core.list" "$KABI_MINOR" "$BUILD/carvecom.s" "$BUILD/carvecom.have" \
     $(for f in ${CARVE_FS//,/ }; do echo "$BUILD/fs/$f/exp"; done) <<'PYC' || exit 1
@@ -1851,8 +1877,8 @@ PYC
     CCOM_OBJ="carvecom.o"
   fi
 fi
-echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${HBG_OBJ:+ $HBG_OBJ}${SYNCG_OBJ:+ $SYNCG_OBJ}${BTW_OBJ:+ $BTW_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
-( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
+echo "--- final link: ld -o unix -r${LGCC_U} $TOP_OBJS amiga/config/unix.o${RTH1_OBJ:+ $RTH1_OBJ}${KINFO_OBJ:+ $KINFO_OBJ}${KZERO_OBJ:+ $KZERO_OBJ}${FPUG_OBJ:+ $FPUG_OBJ}${FQG_OBJ:+ $FQG_OBJ}${STWG_OBJ:+ $STWG_OBJ}${SWG_OBJ:+ $SWG_OBJ}${A8M_OBJ:+ $A8M_OBJ}${SVP_OBJ:+ $SVP_OBJ}${HBG_OBJ:+ $HBG_OBJ}${SYNCG_OBJ:+ $SYNCG_OBJ}${BTW_OBJ:+ $BTW_OBJ}${CCOM_OBJ:+ $CCOM_OBJ}${FS_LGCC:+ $FS_LGCC} ---"
+( cd "$BUILD"; "$LD" -o unix -r $LGCC_U $TOP_OBJS amiga/config/unix.o $RTH1_OBJ $KINFO_OBJ $KZERO_OBJ $FPUG_OBJ $FQG_OBJ $STWG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ $FS_LGCC; chmod +r unix )
 # HARD CHECK (kzero): kzero ours, bzero the stock body, every caller through a relocation naming kzero.  The failure
 # modes are the quiet ones: a lost weaken leaves kzero = bzero and the quirk-90 panic in place.
 kzero_check() {
@@ -1924,6 +1950,12 @@ if [ "$FREEQ_GUARD" = 1 ]; then
   python3 "$KT/tools/freeqguard-retarget.py" "$BUILD/unix"
   python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"
 fi
+if [ "$STRWSRV_GUARD" = 1 ]; then
+  echo "--- strwsrv guard: stwdata's qi_srvp -> strwsrv_guarded (tools/strwsrvguard-retarget.py) ---"
+  python3 "$KT/tools/strwsrvguard-retarget.py" --stock "$BUILD/unix"
+  python3 "$KT/tools/strwsrvguard-retarget.py" "$BUILD/unix"
+  python3 "$KT/tools/strwsrvguard-retarget.py" --check "$BUILD/unix"
+fi
 if [ "$SWAP_GUARD" = 1 ]; then
   echo "--- swap guard: swapadd's callers -> swapadd_guarded, its anon kmem_zalloc -> swapguard_take (tools/swapguard-retarget.py) ---"
   python3 "$KT/tools/swapguard-retarget.py" "$BUILD/unix"
@@ -1977,7 +2009,7 @@ if [ "${#RL_TEXTS[@]}" -gt 0 ]; then
 fi
 if [ -n "$OBJ_BASELINE" ]; then
   echo "--- object gate: every object == $OBJ_BASELINE except exactly: ${OBJ_ALLOW:-(none)}; absent exactly: ${OBJ_ABSENT:-(none)} ---"
-  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ" <<'PYG' || exit 1
+  python3 - "$BUILD" "$OBJ_BASELINE" "$OBJ_ALLOW" "${RTH1_C:+rth1}" "${KINFO_C:+kinfo}" "$OBJ_ABSENT" "$KZERO_OBJ $FPUG_OBJ $FQG_OBJ $STWG_OBJ $SWG_OBJ $A8M_OBJ $SVP_OBJ $HBG_OBJ $SYNCG_OBJ $BTW_OBJ $CCOM_OBJ" <<'PYG' || exit 1
 import hashlib, os, sys
 build, base, allow, rth, kinfo = sys.argv[1], sys.argv[2], set(sys.argv[3].split()), sys.argv[4], sys.argv[5]
 absent = set(sys.argv[6].split())
@@ -2056,6 +2088,7 @@ if [ -n "$DLM_CORE" ]; then
   if [ "$KZERO" = 1 ]; then kzero_check "$BUILD/unix"; fi   # the splice weakens base names the core defines: not kzero
   if [ "$FPU_GATE" = 1 ]; then python3 "$KT/tools/fpugate-sendsig.py" --check "$BUILD/unix"; fi
   if [ "$FREEQ_GUARD" = 1 ]; then python3 "$KT/tools/freeqguard-retarget.py" --check "$BUILD/unix"; fi
+  if [ "$STRWSRV_GUARD" = 1 ]; then python3 "$KT/tools/strwsrvguard-retarget.py" --check "$BUILD/unix"; fi
   if [ -n "$SYNCG_S" ]; then sync_check "$BUILD/unix"; fi
   if [ -n "$BTW_S" ]; then python3 "$KT/tools/btwalk030.py" --check "$BUILD/unix" || exit 1; fi
   if [ "$HARDBUS_GUARD" = 1 ]; then python3 "$KT/tools/hardbus-retarget.py" --check "$BUILD/unix" || exit 1; fi
