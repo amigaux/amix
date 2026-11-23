@@ -49,6 +49,19 @@ known about it, and what to do. Measurements are from emulation unless the entry
 - **Memory for processes (malloc, stack, fork) is limited by swap, whatever the RAM** (stock). Anonymous memory is
   reserved against swap space; with little swap a large-RAM machine still refuses large processes. Add swap.
 
+## Disks
+
+- **With the kernel in a Z3660's memory, only the first controller that declares its DMA limits gets whole commands**
+  (cut -79). dd takes a bounce region of up to 64 KiB per declaring controller at the root's open, with `dma_alloc`.
+  When the kernel runs in the card's DDR, which a Zorro bus master cannot reach, `dma_alloc` hands out the top
+  128 KiB of motherboard fast RAM; one 64 KiB region and its sense slot take just over half of it, so a second
+  declaring controller keeps one command per 2 KiB page and the console says `dd: <card>: no bounce region, page
+  commands`. The region also leaves only the rest of those 128 KiB for the drivers' own bounces. Seen only in review
+  of the code: the rows ran with the kernel in motherboard RAM, where `dma_alloc` takes the heap.
+- **A controller whose region cannot be had at all keeps page commands** (cut -79): the same console line with the
+  reason (`limits below a page`, `no bounce region`, `bounce region out of reach`). Disk I/O works as before -79,
+  only slower.
+
 ## Files
 
 - **A write of whole pages that did not start at an 8 KiB boundary of the file could leave the pages before it in that
@@ -211,6 +224,10 @@ known about it, and what to do. Measurements are from emulation unless the entry
 
 ## Programs
 
+- **A process's data and virtual memory start limited to 16 MiB** (cut -79, stock). `ulimit -d` and `ulimit -v` say
+  16384; the hard limits are unlimited, so `ulimit -d unlimited` and `ulimit -v unlimited` raise them for a big job
+  (in that shell and what it starts). xstart raises them for a display card whose `limits` line asks for more. Cuts
+  -68 to -78 started them unlimited.
 - **A login shell hung up at the wrong moment can loop at PC 0 and grow its heap** (stock libc, both kernel lines).
   libc's `sigaction` stores the new handler before it tells the kernel; a signal in between calls address 0, and
   `sh`'s SIGSEGV handler returns to it. `tests/sigrace` shows it on stock 68030-261103-71 and on this kernel alike.
