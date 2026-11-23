@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — cde 2.5.3-3: dtterm's terminal works (842d24ce, 6a53e2ee)
+
+dtterm's pty now gets the terminal modules an SVR4 pty slave needs (ptem, ldterm), so the shell in it has a prompt, echo and output processing (patch 43). Built with gcc14-cross-amix 276ef49; the static build links the C++ runtime from its archive, and no program needs libstdc++, libjpeg or libregex at run time. The README counts 89 manual pages. cde-2.5.3-3.pkg sha256 c5c981f8.
+
 ## 2026-11-22 — x11r6.3 6.3-15, motif 2.3.8-3, regex 3.8-2: the shared variants (99a5f4e2, 2cd33e9d)
 
 X11R6.3 and Motif build their shared variant with VARIANT=shared: x11r6.3 6.3-15.s, the client libraries (libX11, libXt, libXaw, libXmu, libXext, libSM, libICE and the rest) as plain shared libraries, each recording the libraries it calls, with libXtInherit.a, which gives every program its own _XtInherit for the stock runtime linker; and motif 2.3.8-3.s, libXm, libMrm and libUil shared, against it and regex. regex 3.8-2 adds libregex.so.1 beside the unchanged archive. The static x11r6.3 6.3-15 and motif 2.3.8-3 change only through the toolchain: gcc14 276ef49 exports environ from every program.
