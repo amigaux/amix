@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — gates: the awk 060 scanner skips scan060-g14.py's data ranges (e9a389c6)
+
+Under TOOLCHAIN=gcc14 the 68060 gate's awk scanner drops hits inside the data ranges scan060-g14.py prints with its new --data-ranges mode: sized switch tables, known stock data and data objects in .text. Before, it read a pointer in libelf.a xlate.o's x32 as cas2w and failed cde's shared dtsession. Real cas2 and 64-bit mul/div in code still fail the gate; objects, archives and the period toolchain are unchanged. Package bytes unchanged.
+
 ## 2026-11-23 — scan060-g14: libelf.a's xlate.o tables are known stock data (8b31502a)
 
 scan060-g14.py takes libelf.a's xlate.o tables in .text (x32, fmsize, mtype) as known stock data, by the member's sha256 (1b0a1ad7); a pointer in x32 decoded as movep.l failed the D4 gate on cde's shared dtsession. The gcc14 gate selftest gains a stripped libelf probe that needs the sysroot to pass. Package bytes unchanged.
