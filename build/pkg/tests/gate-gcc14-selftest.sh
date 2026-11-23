@@ -261,6 +261,39 @@ echo "$out" | grep 'UNTRUSTWORTHY' >/dev/null && echo "$out" | grep 'known stock
 	fail "scan060-g14.py on a changed des_crypt.o: $out"
 ok "scan060-g14.py takes des_crypt.o's DES tables in a stripped program as data by the member's sha256 (a NOTE), finds the movep without the sysroot, refuses a member that is not the listed one"
 
+# libelf.a's xlate.o (elf_version) keeps x32, 52 function pointers, and two
+# more tables in .text. Whether a pointer's low word decodes as movep depends
+# on where the program puts it, so the probe is padded until one does.
+xl() {	# xl <pad bytes>
+	printf '__asm__(".text\\n.fill %d,2,0x4e71");\nextern unsigned elf_version(unsigned);\nint main(void) { return elf_version(1) == 0; }\n' $(($1 / 2)) > "$T/xl.c"
+	$CC $AMIX_CFLAGS -o "$T/xl" "$T/xl.c" -L"$AMIX_SYSROOT/usr/ccs/lib" -lelf 2>"$T/xl.log" || { cat "$T/xl.log" >&2; fail "the libelf probe did not link"; }
+}
+xl 0
+x32=$("$NM" "$T/xl" | awk '$2 == "t" && $3 == "x32" { print $1 }')
+[ -n "$x32" ] || fail "the libelf probe has no x32 (xlate.o not linked?)"
+pad=$(python3 - "$T/xl" "$x32" <<'PY'
+import struct, sys
+d = open(sys.argv[1], "rb").read(); x = int(sys.argv[2], 16)
+shoff, = struct.unpack(">I", d[32:36]); ent, num = struct.unpack(">HH", d[46:50])
+for i in range(num):
+    _n, t, _f, a, o, sz = struct.unpack(">IIIIII", d[shoff + i * ent: shoff + i * ent + 24])
+    if t == 1 and a <= x < a + sz:
+        v = [struct.unpack(">I", d[o + x - a + 4 * k: o + x - a + 4 * k + 4])[0] for k in range(52)]
+# the least pad, a multiple of 4, that makes a pointer's low word a movep
+print(min(p for p in range(0, 0x20000, 4) for w in v if (w + p) & 0xf138 == 0x0108))
+PY
+)
+xl "$pad"
+"$STRIP" "$T/xl"
+if out=$(env -u AMIX_SYSROOT python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/xl"); then
+	fail "scan060-g14.py passed the stripped libelf probe (pad $pad) without the known data: it tests nothing: $out"
+fi
+echo "$out" | grep 'movep' >/dev/null || fail "scan060-g14.py on the libelf probe without AMIX_SYSROOT: $out"
+out=$(python3 "$AMIX_PKG_COMMON/gcc14/scan060-g14.py" --objdump "$OBJDUMP" "$T/xl") || fail "scan060-g14.py refused the stripped libelf probe: $out"
+echo "$out" | grep 'NOTE known stock data at .*libelf.a(xlate.o) x32 fmsize mtype' >/dev/null ||
+	fail "scan060-g14.py gave no known-data NOTE for xlate.o: $out"
+ok "scan060-g14.py takes xlate.o's tables in a stripped libelf program as data by the member's sha256 (a NOTE), finds the movep without the sysroot (pad $pad)"
+
 # ll printf: libc printf prints ll as l.
 printf '#include <stdio.h>\nint main(int c, char **v) { printf("%%lld\\n", (long long)c); return 0; }\n' > "$T/ll.c"
 printf '#include <stdio.h>\nint main(int c, char **v) { char b[32]; snprintf(b, sizeof b, "%%lld", (long long)c); puts(b); return 0; }\n' > "$T/llsn.c"

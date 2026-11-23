@@ -48,7 +48,8 @@ instruction start in the final listing, or the verdict is "untrustworthy".
 
 Known stock data in .text: a few stock archive members that programs link
 keep tables in .text as local symbols (crypt(3)'s DES tables in libc's
-crypt.o and libcrypt.a's des_crypt.o).  KNOWN_STOCK_DATA names each member by
+crypt.o and libcrypt.a's des_crypt.o; libelf.a's xlate.o, whose x32 is 52
+function pointers).  KNOWN_STOCK_DATA names each member by
 its archive in the sysroot ($AMIX_SYSROOT), its sha256 and those symbols.  A
 member whose sha256 differs is a problem.  Otherwise its .text is looked for
 in the program, its relocated bytes masked, and where it is found exactly,
@@ -104,6 +105,9 @@ KNOWN_STOCK_DATA = (
     ("usr/lib/libcrypt.a", "des_crypt.o",
      "57ab906ac374ea2c78fb25a5b6814bf0f2da30499b33845a8f08cab45fd4c195",
      ("IP", "FP", "PC1_C", "PC1_D", "shifts", "PC2_C", "PC2_D", "e2", "S", "P")),
+    ("usr/ccs/lib/libelf.a", "xlate.o",
+     "1b0a1ad79581ed7556096138c0a457d0fafbc2dbef64dec8789756a6be6bd0ad",
+     ("x32", "fmsize", "mtype")),
 )
 
 
