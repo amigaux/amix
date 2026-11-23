@@ -318,8 +318,8 @@ t_intr(void)
 
 	setup(1, 0);
 	b = &mock_board[mock_add_a4kt()];
-	CHECK(a4kt710_load(NULL) == 0, "load returns 0");
-	CHECK(mock_defer_fn != 0, "intr auto, the limits accepted: load asked for the deferred call");
+	CHECK(a4kt710_load("intr=1") == 0, "load returns 0");
+	CHECK(mock_defer_fn != 0, "intr=1: load asked for the deferred call");
 	mock_selftest_irq = 1;
 	CHECK(mock_defer_fn((char *)0) == 0 && a4091_iq[1] == 1, "self-test passed: mode 1");
 	CHECK(!strcmp(mock_last_line, "a4kt710: completion on the interrupt (level 2)\n"),
@@ -332,6 +332,20 @@ t_intr(void)
 	CHECK(b->regs[0x3a] == 0x35 && b->regs[0x00] == 0xaf, "DIEN 0x35, SIEN 0xaf, written directly");
 	mock_chip_done(b);
 	CHECK(mock_isr((char *)0) == 1 && kt_calls == 1 && cp.okay, "completed from the handler");
+}
+
+static void
+t_intr_auto_armed(void)
+{
+	setup(1, 0);
+	mock_add_a4kt();
+	CHECK(a4kt710_load(NULL) == 0, "load returns 0");
+	CHECK(mock_defer_fn != 0, "intr auto, the limits accepted: load asked for the deferred call");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn((char *)0) == 0 && a4091_iq[1] == 0 && a4091_iq[17] == 1,
+	    "self-test passed: polled, armed until a long command");
+	CHECK(strstr(mock_last_line, "a4kt710: interrupt ready (level 2)") != NULL,
+	    "console: a4kt710: interrupt ready (level 2)");
 }
 
 static void
@@ -364,6 +378,7 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "host ID and halt", t_hostid_halt },
 	{ "module: no U77, no dma_off", t_module_lean },
 	{ "interrupt: self-test and a command", t_intr },
+	{ "interrupt: auto armed, polled until a long command", t_intr_auto_armed },
 	{ "intr auto: no limits, polled", t_intr_auto_nolimits },
 };
 

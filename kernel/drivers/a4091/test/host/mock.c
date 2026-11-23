@@ -78,6 +78,25 @@ mock_vpos8(void)
 	return (unsigned char)((mock_beam_start + mock_beam_line) % mock_beam_frame);
 }
 
+/* the spin's beam (V8..V0): mock_beam9_step lines on every read */
+unsigned long	mock_beam9_step;
+unsigned long	mock_beam9;
+
+unsigned long
+mock_vpos9(void)
+{
+	unsigned long v = mock_beam9;
+
+	mock_beam9 = (mock_beam9 + mock_beam9_step) % mock_beam_frame;
+	return v;
+}
+
+unsigned long
+mock_frame(void)
+{
+	return mock_beam_frame;
+}
+
 void
 mock_reset(void)
 {
@@ -109,6 +128,8 @@ mock_reset(void)
 	mock_beam_start = 0;
 	mock_beam_reads = 0;
 	mock_beam_line = 0;
+	mock_beam9_step = 0;
+	mock_beam9 = 0;
 	mock_isr = 0;
 	mock_isr_level = mock_isr_detached = mock_attach_errno = 0;
 	mock_defer_fn = 0;
@@ -124,6 +145,7 @@ mock_reset(void)
 	mock_selftest_irq = 0;
 	mock_isr_last = 0;
 	mock_last_line[0] = 0;
+	mock_nobeam_lines = 0;
 }
 
 int
@@ -325,6 +347,7 @@ long	lbolt;
 int	mock_selftest_irq;
 int	(*mock_isr_last)();
 char	mock_last_line[160];
+int	mock_nobeam_lines;
 
 int
 intr_attach(int level, int (*fn)(), char *arg, char *name)
@@ -534,6 +557,8 @@ mock_printf(const char *fmt, ...)
 	va_start(ap, fmt);
 	vsnprintf(mock_last_line, sizeof mock_last_line, fmt, ap);
 	va_end(ap);
+	if (strstr(fmt, "no beam to time the spin"))
+		mock_nobeam_lines++;
 	if (strstr(fmt, ": board %d at ")) {	/* the attach line, formatted */
 		va_start(ap, fmt);
 		vsnprintf(mock_attach_line, sizeof mock_attach_line, fmt, ap);

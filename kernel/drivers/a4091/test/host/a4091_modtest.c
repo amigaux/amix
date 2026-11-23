@@ -643,7 +643,7 @@ t_module_lean(void)
 
 /* ---- the interrupt path ---- */
 
-extern unsigned long	a4091_iq[];	/* 12 longs, magic first */
+extern unsigned long	a4091_iq[];	/* 18 longs, magic first */
 #define IQ_MODE		1
 #define IQ_PARAM	2
 #define IQ_SELFTEST	3
@@ -654,10 +654,16 @@ extern unsigned long	a4091_iq[];	/* 12 longs, magic first */
 #define IQ_QUEUED	9
 #define IQ_QMAX		10
 #define IQ_FALLBACK	11
+#define IQ_SPIN		12
+#define IQ_RDLINE	13
+#define IQ_INL		14
+#define IQ_SPINMISS	15
+#define IQ_HOLDMAX	16
+#define IQ_ARMED	17
 #define R_SIEN		0x00
 #define R_DIEN		0x3a
 
-/* one A4091 loaded and its deferred self-test run, the boards answering */
+/* one A4091 loaded with intr=1 and its deferred self-test run, the boards answering */
 static struct mock_board *
 intr_up(void)
 {
@@ -665,7 +671,7 @@ intr_up(void)
 
 	setup();
 	b = &mock_board[mock_add(P_A4091, 0x40000000)];
-	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	CHECK(a4091_load("intr=1") == 0, "load returns 0");
 	CHECK(mock_defer_fn != 0, "load asked for the deferred call");
 	CHECK(a4091_iq[0] == 0x4134494eUL && a4091_iq[IQ_MODE] == 0,
 	    "iq magic A4IN, polled until the self-test");
@@ -869,6 +875,7 @@ extern long		a4091_xs[];	/* magic, param, rc[4], cmds, refused */
 
 static char		xbuf[65536] __attribute__((aligned(16)));
 static struct sdcomx_m	xcp;
+static unsigned		xnbyte;		/* 0: the whole xbuf */
 
 static int
 xcmd(int reading, unsigned short flags, unsigned short nseg)
@@ -879,7 +886,7 @@ xcmd(int reading, unsigned short flags, unsigned short nseg)
 	xcp.sx_com.reading = reading;
 	xcp.sx_com.cdb[0] = reading ? 0x28 : 0x2a;
 	xcp.sx_com.addr = xbuf;
-	xcp.sx_com.nbyte = sizeof xbuf;
+	xcp.sx_com.nbyte = xnbyte ? xnbyte : sizeof xbuf;
 	xcp.sx_com.card = 1;
 	xcp.sx_com.unit = 6;
 	xcp.sx_com.intr = (void (*)())cb;
@@ -1007,6 +1014,39 @@ t_auto_limits(void)
 }
 
 static void
+t_auto_armed(void)
+{
+	struct mock_board *b;
+	int t0;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load(NULL) == 0, "load returns 0");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn != 0 && mock_defer_fn((char *)0) == 0, "the deferred call ran");
+	CHECK(a4091_iq[IQ_SELFTEST] == 1 && a4091_iq[IQ_MODE] == 0 && a4091_iq[IQ_ARMED] == 1,
+	    "auto: self-test passed, still polled, armed");
+	CHECK(strstr(mock_last_line, "interrupt ready (level 2), on at the first command over 4096 bytes") != NULL,
+	    "console: interrupt ready, on at the first command over 4096 bytes");
+	t0 = mock_timeouts;
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 1, "a stock 512-byte READ: polled, inside the call");
+	xnbyte = 4096;
+	CHECK(xcmd(1, 0, 0) && intr_calls == 2 && a4091_iq[IQ_ARMED] == 1 && a4091_iq[IQ_MODE] == 0,
+	    "a 4 KiB sdcomx: still polled");
+	xnbyte = 0;
+	mock_chip_idle(b);
+	CHECK(xcmd(1, 0, 0) && intr_calls == 2, "a 64 KiB sdcomx: queued on the interrupt path");
+	CHECK(a4091_iq[IQ_ARMED] == 2 && a4091_iq[IQ_MODE] == 1 && mock_timeouts == t0 + 1,
+	    "switched: mode 1, the watchdog armed (none before)");
+	CHECK(strstr(mock_last_line, "a command of 65536 bytes: completion on the interrupt (level 2)") != NULL,
+	    "console: a command of 65536 bytes: completion on the interrupt");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 3 && xcp.sx_com.okay, "the handler completed it");
+}
+
+static void
 t_intr1_nolimits(void)
 {
 	setup();
@@ -1014,6 +1054,156 @@ t_intr1_nolimits(void)
 	mock_lim_errno = 89;
 	CHECK(a4091_load("intr=1") == 0, "load returns 0");
 	CHECK(a4091_iq[IQ_PARAM] == 1 && mock_defer_fn != 0, "intr=1 without limits: the deferred call asked");
+}
+
+/* ---- the spin (spin=, spinrd=) ---- */
+
+/* one A4091 loaded with PARAMS, the beam STEP lines per read, self-test run */
+static struct mock_board *
+spin_up(char *params, unsigned long step)
+{
+	struct mock_board *b;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	mock_beam9_step = step;
+	CHECK(a4091_load(params) == 0, "load returns 0");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn != 0 && mock_defer_fn((char *)0) == 0, "the deferred call ran");
+	CHECK(a4091_iq[IQ_MODE] == 1, "mode 1");
+	return b;
+}
+
+static int	nest_n;
+static void
+nest_cb(struct sdcom *cp)
+{
+	(void)cp;
+	intr_calls++;
+	if (nest_n++ == 0)
+		qcmd(1, 5, 1, 0x28);	/* the next command, queued from the callback */
+}
+
+/* queue qcp[0] with nest_cb as its callback */
+static int
+qnest(void)
+{
+	memset(&qcp[0], 0, sizeof qcp[0]);
+	qcp[0].reading = 1;
+	qcp[0].cdb[0] = 0x28;
+	qcp[0].addr = qbuf[0];
+	qcp[0].nbyte = 512;
+	qcp[0].card = 1;
+	qcp[0].unit = 6;
+	qcp[0].intr = (void (*)())nest_cb;
+	nest_n = 0;
+	return mock_reg[0].fn(0, &qcp[0]);
+}
+
+static void
+t_spin_off(void)
+{
+	struct mock_board *b = intr_up();
+
+	CHECK(a4091_iq[IQ_SPIN] == 0, "spin 0 by default");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 0, "spin off: a stopped chip waits for the interrupt");
+	CHECK(a4091_iq[IQ_INL] == 0 && a4091_iq[IQ_SPINMISS] == 0 && a4091_iq[IQ_HOLDMAX] == 0,
+	    "no spin counted");
+}
+
+static void
+t_spin_cap(void)
+{
+	spin_up("intr=1 spin=5000", 20);
+	CHECK(a4091_iq[IQ_SPIN] == 1000, "spin=5000 capped at 1000 us");
+}
+
+static void
+t_spin_inline(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=500", 20);
+
+	CHECK(a4091_iq[IQ_SPIN] == 500, "spin 500 us");
+	CHECK(a4091_iq[IQ_RDLINE] == 12, "calibrated: 256 reads over 20 lines, 12 a line");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28), "queue accepts a READ");
+	CHECK(intr_calls == 1 && qcp[0].okay, "finished inside the queue call, okay");
+	CHECK(a4091_iq[IQ_INL] == 1 && a4091_iq[IQ_SPINMISS] == 0, "inline 1, missed 0");
+	CHECK(a4091_iq[IQ_HOLDMAX] == 20, "the hold read on the beam: 20 lines");
+	CHECK(mock_wr8(b, R_DIEN) == 0x35, "DIEN stays set through the spin");
+	mock_chip_idle(b);		/* DSTAT read: the line drops */
+	CHECK(mock_isr((char *)0) == 0, "the latched level 2 finds nothing");
+}
+
+static void
+t_spin_miss(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=500", 20);
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 0, "still running after the spin: left to the interrupt");
+	CHECK(a4091_iq[IQ_SPINMISS] == 1 && a4091_iq[IQ_INL] == 0, "missed 1, inline 0");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && qcp[0].okay, "the interrupt finished it");
+}
+
+static void
+t_spin_nobeam(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=500", 0);
+
+	CHECK(a4091_iq[IQ_RDLINE] == 0 && mock_nobeam_lines == 1,
+	    "console: board 0: no beam to time the spin: no spin");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 0, "no budget: left to the interrupt");
+	CHECK(a4091_iq[IQ_INL] == 0 && a4091_iq[IQ_SPINMISS] == 0, "no spin counted");
+}
+
+static void
+t_spin_rd(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=100 spinrd=7", 0);
+
+	CHECK(a4091_iq[IQ_RDLINE] == 0 && mock_nobeam_lines == 0, "spinrd=7: no calibration");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 1 && a4091_iq[IQ_INL] == 1,
+	    "spinrd's budget: finished inline");
+}
+
+static void
+t_spin_nested(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=500", 20);
+
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qnest(), "queue accepts a READ whose callback queues the next");
+	CHECK(intr_calls == 1 && a4091_iq[IQ_INL] == 1, "the first finished inline");
+	CHECK(a4091_iq[IQ_SPINMISS] == 0, "the nested queue call did not spin");
+	CHECK(ds_target(b) == (0x10000UL << 5), "the chip armed for the nested command, id 5");
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 2 && qcp[1].okay,
+	    "the nested command finished by the interrupt");
+}
+
+static void
+t_spin_from_isr(void)
+{
+	struct mock_board *b = spin_up("intr=1 spin=500", 20);
+
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qnest() && intr_calls == 0 && a4091_iq[IQ_SPINMISS] == 1, "the first left to the interrupt");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1, "the handler finished it");
+	CHECK(a4091_iq[IQ_INL] == 0 && a4091_iq[IQ_SPINMISS] == 1,
+	    "the queue call from the handler's callback did not spin");
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 2 && qcp[1].okay, "the second by the interrupt");
 }
 
 static const struct { const char *name; void (*fn)(void); } cases[] = {
@@ -1061,7 +1251,16 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "intr auto: no limits, polled", t_auto_nolimits },
 	{ "intr auto: limits=0, polled", t_auto_limits0 },
 	{ "intr auto: limits accepted, interrupt", t_auto_limits },
+	{ "intr auto: armed, on at the first long command", t_auto_armed },
 	{ "intr=1: interrupt without limits", t_intr1_nolimits },
+	{ "spin: off by default", t_spin_off },
+	{ "spin: capped at 1000 us", t_spin_cap },
+	{ "spin: a stopped chip finished inline", t_spin_inline },
+	{ "spin: still running, left to the interrupt", t_spin_miss },
+	{ "spin: no beam, no spin", t_spin_nobeam },
+	{ "spin: spinrd= instead of the beam", t_spin_rd },
+	{ "spin: none nested in a callback", t_spin_nested },
+	{ "spin: none from the handler", t_spin_from_isr },
 };
 
 int

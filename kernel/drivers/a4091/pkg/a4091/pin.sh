@@ -33,15 +33,20 @@
 # 1.0.0-13 (2026-11-23): module 1.0.0-10: param intr -1 (auto, the default) takes the
 # interrupt only when the limits were accepted, else polls; on an A4000D the
 # interrupt cost 2 KiB raw commands a quarter to a third of their speed.
+# 1.0.0-14 (2026-11-23): module 1.0.0-11: param spin (0 default, off): on the
+# interrupt path the queue reads the chip up to that many us after its launch
+# and finishes a command that stopped there inline; param spinrd.  Auto turns
+# the interrupt on only at the first command over 4 KiB (k46 -69 accepts the
+# limits but still sends 4 KiB).
 
 KM_NAME=a4091
 KM_SHORT=a4091
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-10
-KM_PKG_VERSION=1.0.0-13
+KM_VERSION=1.0.0-11
+KM_PKG_VERSION=1.0.0-14
 
-KM_K30_SHA=7fd65908fc827f6b31347c450e796df8df5f99f33a01ef6f116cc8559743937c
-KM_K46_SHA=0ff1cc83049690f2d6c2cc4a4e0ecb40fa216925277cfb46f3ef820ec414486e
+KM_K30_SHA=65fdfd0a24cba88ca430405a9dc22a8ec342b542977372ea687fba8e4b119dc4
+KM_K46_SHA=b763fcf1e8288f7e2c824b595432b565bba6e96e9e8350e80e973eb537c8341d
 KM_K30_DEPS=
 KM_K46_DEPS=
 

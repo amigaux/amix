@@ -8,11 +8,16 @@
 # (c0de:02, as driver.conf has it; untested on hardware).
 # $rank zorro: sd's class 2 (C4-1 section 4), the argument a4091_load passes
 # to sd_register.  No $majors: sd owns the disk majors.
-# $param intr: -1 (default, auto) completion on the 53C710's interrupt when
-# every board's C4-7 limits were accepted, else polled; 1 the interrupt
-# always; 0 polled always.  The interrupt waits for the deferred self-test.
+# $param intr: -1 (default, auto) completion on the 53C710's interrupt once
+# the kernel sends a command over 4 KiB through the C4-7 entry (the limits
+# accepted and the self-test passed: polled until then, and for good when
+# the limits were refused); 1 the interrupt always; 0 polled always.
 # $param limits: 1 (default) declare the C4-7 limits after sd_register (one
 # segment of up to 64 KiB), 0 declare nothing (the stock page commands).
+# $param spin: 0 (default) off; else, with the interrupt on, the queue reads
+# the chip for up to that many us after its launch and finishes a command
+# that stopped there inline (cap 1000).  spinrd: the spin's ISTAT reads per
+# command instead of the beam calibration (0, the default: calibrate).
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
 $modtype misc
 $class root
@@ -21,5 +26,7 @@ $rank zorro
 $unload never
 $param intr:int:-1:-1:1
 $param limits:int:1:0:1
+$param spin:int:0:0:1000
+$param spinrd:int:0:0:1048576
 $desc A4091/A4092/A4770 SCSI (NCR 53C710), root-class disk controller
 a4091	a4091
