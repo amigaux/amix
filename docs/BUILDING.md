@@ -102,6 +102,13 @@ before any step if those are not the checkout's (`toolchain/check-image`), so
 after a pin changes, run `make tools` again. `AMIX_IMAGE` and `AMIX_MEDIA_IMAGE`
 name other images.
 
+Which image a make dist step runs in: `AMIX_IMAGE` (the media step
+`AMIX_MEDIA_IMAGE`) when it is set; else the image `toolchain/image.ref` names,
+by digest, pulled and checked first if it is not here, so each branch builds
+with its own images whatever is tagged locally; the local
+`amix-toolchain:dist` and `:media` only without `image.ref` or with
+`TOOLS_FROM_SOURCE=1`.
+
 ## make dist
 
 Every step runs in the build container, as you, with this checkout at `/src`

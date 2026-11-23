@@ -304,12 +304,14 @@ for t in check-image extract-g14.sh container-media.sh; do
 	chmod 755 "$ip/toolchain/$t"
 done
 # docker: pull fails with PULL_RC; run prints the sum $ip/sums names for an
-# image and file; push says the digest the registry holds
+# image and file; push says the digest the registry holds; image inspect
+# finds only the images HERE names
 cat > "$ip/docker" <<DOCKER
 #!/bin/sh
 echo "docker \$*" >> "$ip/log"
 case \$1 in
 pull) exit \${PULL_RC:-0} ;;
+image) case " \${HERE:-} " in *" \$3 "*) exit 0 ;; esac; exit 1 ;;
 run) awk -v i="\$3" -v f="\$5" '\$1 == i && \$2 == f { print \$3 "  " f }' "$ip/sums" ;;
 push) echo "\${4#*:}: digest: sha256:$(printf '%064d' 0 | tr 0 c) size: 1" ;;
 esac
@@ -338,6 +340,30 @@ check "image-pull --compare: the same lists are equal" pull --compare "$ip/image
 sed -i "s|^l:media /opt/amix-media/TOOLS .*|l:media /opt/amix-media/TOOLS $(printf '%064d' 0 | tr 0 e)|" "$ip/sums"
 refused "image-pull --compare: a list that differs is named" "/opt/amix-media/TOOLS: l:media has eeee" \
 	pull --compare "$ip/image.ref" l:dist l:media
+# --use: the reference on stdout, alone; pulled and checked only when not here; no tag
+use() {	# use <dist|media> <images here> <want stdout> <want log lines...>
+	u=$1 h=$2 want=$3; shift 3
+	rm -f "$ip/log"
+	got=$(HERE=$h CONTAINER=$ip/docker sh "$ip/toolchain/image-pull" --use "$u" "$ip/image.ref" 2>/dev/null) &&
+		[ "$got" = "$want" ] && [ "$(cat "$ip/log")" = "$(printf '%s\n' "$@")" ]
+}
+check "image-pull --use dist: here already, its reference and nothing else" \
+	use dist "$dref" "$dref" "docker image inspect $dref"
+check "image-pull --use dist: not here, pulled and checked as built ones are, tagged nothing" \
+	use dist "" "$dref" "docker image inspect $dref" "docker pull $dref" "check-image $dref" \
+	"extract-g14.sh --check $dref"
+check "image-pull --use media: here already, its reference, the dist image not asked for" \
+	use media "$mref" "$mref" "docker image inspect $mref"
+check "image-pull --use media: neither here, both pulled, the dist checked, the media against it, tagged nothing" \
+	use media "" "$mref" "docker image inspect $mref" "docker image inspect $dref" "docker pull $dref" \
+	"check-image $dref" "extract-g14.sh --check $dref" "docker pull $mref" "container-media.sh --check $dref $mref"
+check "image-pull --use media: the dist image here, only the media one pulled and checked against it" \
+	use media "$dref" "$mref" "docker image inspect $mref" "docker image inspect $dref" "docker pull $mref" \
+	"container-media.sh --check $dref $mref"
+refused "image-pull --use dist: a check that fails prints no reference and tags nothing" "check-image" \
+	env CHECK_RC=1 sh -c "CONTAINER='$ip/docker' sh '$ip/toolchain/image-pull' --use dist '$ip/image.ref' > '$ip/use.out';
+		r=\$?; cat '$ip/log'; [ ! -s '$ip/use.out' ] && ! grep -q 'docker tag' '$ip/log' && exit \$r"
+refused "image-pull --use: dist or media" "usage: image-pull" pull --use frob "$ip/image.ref"
 rm -f "$ip/log"
 check "publish-image: checks, then pushes each by name and pins, and prints image.ref's lines" \
 	sh -c "CONTAINER='$ip/docker' AMIX_IMAGE=l:dist AMIX_MEDIA_IMAGE=l:media sh '$ip/toolchain/publish-image' r.example/t > '$ip/out' &&
