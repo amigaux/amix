@@ -114,20 +114,22 @@ kernel sends commands of up to 64 KiB; on a kernel before the segment minor
 the module polls. `intr=1` takes the interrupt anyway, `intr=0` never. The
 reason is measured. On an A4000D (k46, A4092 and a ZuluSCSI at id 2), where
 raw commands reach the driver at 2 KiB and ufs ones at 4 KiB, 64 MiB cells,
-kB/s polled → interrupt:
+kB/s polled → interrupt (the same build, runs 18 minutes apart: the box's
+rate drifted by up to 14% over a night, so only close runs compare):
 
 | Cell | Polled | Interrupt |
 |---|---|---|
-| raw read, 64 KiB requests | 1721 | 1172 |
-| raw write, 64 KiB requests | 1292 | 987 |
-| ufs file write | 903 | 1075 |
-| ufs file read | 1488 | 1499 |
+| raw read, 64 KiB requests | 1601 | 1243 |
+| raw write, 64 KiB requests | 1242 | 1018 |
+| ufs file write | 912 | 1065 |
+| ufs file read | 1446 | 1492 |
 
 A polled 2 KiB read takes 1.25 ms: 844 µs in `a4091queue`, of which 573 µs
 is the chip, and the rest in the kernel. The interrupt adds about 0.4 ms of
 interrupt, sleep and wakeup to every command, in series with the next, and
 the chip time it frees comes in 0.6 ms gaps: a CPU-bound process kept 4-10%
-of its own speed beside a raw transfer. ufs writes behind gain, because the
+of its own speed beside a raw 64 KiB transfer with the interrupt, and 47-56%
+polled, at the same transfer rate. ufs writes behind gain, because the
 writer runs on while the chip works. With commands of 64 KiB the same 0.4
 ms is paid once per 64 KiB instead of 32 times. Should short commands still
 cost too much there, the next step is a short spin before the sleep: wait
