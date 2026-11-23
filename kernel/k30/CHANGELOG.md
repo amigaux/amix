@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — opt-in guard for the stream head's write service (c276200e)
+
+An opt-in build switch, --strwsrv-guard, fixes a stall in the stream head's write service (stock, both kernel lines): when the queue ahead filled again right after waking the stream head, nothing woke a non-blocking writer waiting in poll and nothing asked for the next wake, so the writer slept until its poll timeout. The guard calls the stock strwsrv at splstr and sets QWANTW (QB_WANTW for a band) again on a forward queue that is still full. In emulation a TCP pair with 2048-byte buffers stalled in its first rep on -79 and ran 10 of 10 in 20 s with the guard. Off by default; no cut carries it yet. KNOWN-ISSUES: the stall, and the one-card DMA pool case now seen in emulation.
+
 ## 2026-11-23 — cut 68030-261123-79, kern30m k30.1.6.261123-79 (c7b59dda, 71f39195, ee268fb2)
 
 Cut from c7b59dda: dd cuts its own block requests and sends whole requests of up to 64 KiB through a bounce region to a controller that declares limits; dlm core 0059 (kabi k30.1.6, abi 18c0a1c9 unchanged); the stock 16 MiB soft data and vmem limits again, hard limits unlimited, checked against the package text. unix.brel d5618316; kern30m-k30.1.6.261123-79.pkg sha256 d6c35751, the same bytes from cut.sh, cuts/build.sh and make kernel-k30. KNOWN-ISSUES gains a Disks section (in pool mode only one controller gets a bounce region) and the 16 MiB starting limits.
