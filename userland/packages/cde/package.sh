@@ -2,7 +2,7 @@
 NAME=cde
 PKG=cde
 VERSION=2.5.3
-PKGREV=2   # -2: App Builder (dtbuilder, dtcodegen) and ttsnoop; manual pages for every program; dtdbcache started with no arguments; reproducible dates; ttsnoop shows its messages (libtt without %C, the SVR4 tail)
+PKGREV=3   # -3: dtterm's pty gets its terminal modules (ptem, ldterm); gcc14-cross-amix 276ef49; -2: App Builder (dtbuilder, dtcodegen) and ttsnoop; manual pages for every program; dtdbcache started with no arguments; reproducible dates; ttsnoop shows its messages (libtt without %C, the SVR4 tail)
 SOURCE_EPOCH=1795305600   # 2026-11-22 00:00 UTC
 SUMMARY="CDE 2.5.3 - the Common Desktop Environment"
 DESC="The Common Desktop Environment 2.5.3 (cdesktopenv), built from the upstream source against X11R6.3 and Motif 2.3.8, under /opt/amix/dt with /usr/dt a link to it: the login manager dtlogin, the session manager dtsession, the window manager dtwm with the front panel, dtterm, dtfile, dtpad, dtcalc, dtcm, dtmail, the help viewer, the App Builder dtbuilder with its code generator dtcodegen, ToolTalk with the message viewer ttsnoop, the action and data-type databases, the message catalogues, the manual pages and the help volumes. Configuration under /etc/dt. dtinfo, dtdocbook and dtksh are not built (README.md)."

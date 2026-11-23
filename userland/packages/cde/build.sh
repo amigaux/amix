@@ -24,8 +24,10 @@ RROOT="$AMIX_BUILD_ROOT/regex/dest/opt/amix"
 cde_vars() {
 	COMPAT="$BUILD/compat"
 	CDE_CPPFLAGS="-I$COMPAT -I$XROOT/include -I$MROOT/include -I$JROOT/include -I$RROOT/include"
-	# the static build links libjpeg and regex from their archives: a directory
-	# holding only those comes first, as their packages also ship shared libraries
+	# the static build links libjpeg, regex and the C++ runtime from their
+	# archives: a directory holding only those comes first, as libjpeg, regex and
+	# the toolchain (libstdc++.so.6, since gcc14-cross-amix 276ef49) also have
+	# shared ones
 	ALIB="$BUILD/alib"
 	CDE_LDFLAGS="-L$ALIB -L$XROOT/lib -L$MROOT/lib -L$JROOT/lib -L$RROOT/lib -L$COMPAT/lib"
 	# the shared variant: CDE's libraries shared too, linked against the shared X,
@@ -48,6 +50,11 @@ cde_vars() {
 		# compat ahead of libgen: its PIC basename, not libgen's non-PIC one
 		# (libtool keeps a repeated library's last place, so libgen moves to the end)
 		CDE_LIBS="$(echo "$CDE_LIBS" | sed 's/ -lgen / /') -lgen"
+	else
+		# libtt is C++, and the C programs that link it need its runtime
+		# (__gxx_personality_v0, the type_info vtables): libtool's C++ probe
+		# now finds the shared runtime and records nothing for a static libtt
+		CDE_LIBS="$CDE_LIBS -lstdc++ -lm"
 	fi
 }
 
@@ -299,7 +306,9 @@ build() {
 			[ -f "$f" ] || { echo "[FAIL] no $f (BUILD_DEPENDS)" >&2; exit 1; }
 		done
 		rm -rf -- "${ALIB:?}"; mkdir -p "$ALIB"
-		ln -s "$JROOT/lib/libjpeg.a" "$RROOT/lib/libregex.a" "$ALIB/"
+		_cxa=$($CXX -print-file-name=libstdc++.a)
+		[ -f "$_cxa" ] || { echo "[FAIL] no libstdc++.a ($_cxa)" >&2; exit 1; }
+		ln -s "$JROOT/lib/libjpeg.a" "$RROOT/lib/libregex.a" "$_cxa" "$ALIB/"
 	fi
 	command -v amix-xcpp > /dev/null || { echo "[FAIL] no amix-xcpp on PATH (build/hosttools)" >&2; exit 1; }
 	build_compat > "$BUILD/compat.log" 2>&1 || { cat "$BUILD/compat.log" >&2; echo "[FAIL] compat" >&2; exit 1; }
@@ -377,11 +386,11 @@ stage() {
 	mv -- "$DEST/usr/dt" "$DEST/opt/amix/dt"
 	ln -s /opt/amix/dt "$DEST/usr/dt"
 	find "$DEST" -name '*.la' -type f -exec rm -f -- {} +
-	# the static build: no program NEEDs a shared libjpeg or libregex
+	# the static build: no program NEEDs a shared libjpeg, libregex or libstdc++
 	if [ "$CDE_VARIANT" != shared ]; then
 		_dl=$(cd "$DEST" && find . -type f -perm -u+x | while read -r _f; do
-			"$READELF" -d "$DEST/$_f" 2>/dev/null | grep -q 'NEEDED.*lib\(jpeg\|regex\)' && echo "${_f#.}"; done || :)
-		[ -z "$_dl" ] || { echo "[FAIL] the static build NEEDs a shared libjpeg or libregex:" $_dl >&2; exit 1; }
+			"$READELF" -d "$DEST/$_f" 2>/dev/null | grep -q 'NEEDED.*lib\(jpeg\|regex\|stdc++\)' && echo "${_f#.}"; done || :)
+		[ -z "$_dl" ] || { echo "[FAIL] the static build NEEDs a shared libjpeg, libregex or libstdc++:" $_dl >&2; exit 1; }
 	fi
 	if [ "$CDE_VARIANT" = shared ]; then
 		_ld=$DEST$PREFIX/lib
