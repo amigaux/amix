@@ -3,9 +3,11 @@
 shared libraries, for the shared variant's build log and README: per library,
 the number of dynamic relocations that land in .text, and the functions they
 land in grouped by the static archive they come from, with those functions'
-bytes.  Each group's functions are named by the exported symbol at or before
-the relocation (a library keeps only its dynamic symbols).  Prints a report;
-exits 0 (the shared variant names its text relocations, it does not hide them).
+bytes.  Each group's functions are named by the symbol at or before the
+relocation: from the symbol table, or the dynamic symbols of a library
+stripped of it (local helpers, such as libgcc's, then go under the exported
+symbol before them).  Prints a report, nothing when there are none, and
+exits 0: the build fails on any text relocation, and this names its source.
 MIT licence, see LICENSE in userland/packages."""
 import bisect, re, subprocess, sys
 
@@ -13,9 +15,13 @@ READELF, NM = sys.argv[1:3]
 GROUPS = (
     ("GCC's C++ runtime (libsupc++, static, non-PIC)",
      re.compile(r"^(_Z.*(cxxabiv|__gnu_cxx|St[0-9]|_ZSt|_Zd|_Zn).*|_Z[dn].*|__cxa_.*|__gxx_.*)$")),
+    ("GCC's libgcc (static, non-PIC)",
+     re.compile(r"^(__fix(uns)?[sdxt]fdi|__floatun?di[sdxt]f)$")),
     ("Amix's libm (static only)",
      re.compile(r"^(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|exp|log|log10|pow|sqrt|"
-                r"floor|ceil|fmod|ldexp|frexp|modf|hypot|_reduce|round)$")),
+                r"floor|ceil|fmod|ldexp|frexp|modf|hypot|_reduce|round|"
+                # its local helpers (sin.o, reduce.o, log.o)
+                r"_sin|_cos|g|log_error)$")),
 )
 
 def run(*a):
@@ -29,10 +35,13 @@ def report(lib):
     i = text.index(".text")
     lo = int(text[i + 2], 16); hi = lo + int(text[i + 4], 16)
     syms = []
-    for l in run(NM, "-n", "-S", "-D", "--defined-only", lib).splitlines():
-        f = l.split()
-        if len(f) == 4 and f[2] in "tTwW":
-            syms.append((int(f[0], 16), int(f[1], 16), f[3]))
+    for opt in ([], ["-D"]):
+        for l in run(NM, "-n", "-S", *opt, "--defined-only", lib).splitlines():
+            f = l.split()
+            if len(f) == 4 and f[2] in "tTwW":
+                syms.append((int(f[0], 16), int(f[1], 16), f[3]))
+        if syms:
+            break
     keys = [s[0] for s in syms]
     funcs, n = {}, 0
     for l in run(READELF, "-r", "-W", lib).splitlines():

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — cde 2.5.3-3.s: the shared variant (0c787823, ff91ea75, 4be460a8, ee839398)
+
+CDE's shared variant, on x11r63 6.3-15.s and motif 2.3.8-3.s: its libraries are position-independent with no text relocations. libgcc's __fixdfdi comes as a PIC copy, and libDtHelp and libDtSearch reach Amix's static libm through the program, which exports sin, cos, tan, log, log10 and sqrt (without them the runtime linker stops the program at the first call). Every program carries its own _XtInherit, and the C++ programs use the shared C++ runtime. The build refuses a library or program that breaks any of these. cde-2.5.3-3.s.pkg md5 328f1c8e, 35429376 bytes; the static cde 2.5.3-3 is unchanged (af40aab1).
+
 ## 2026-11-23 — cde 2.5.3-3: dtterm's terminal works (842d24ce, 6a53e2ee)
 
 dtterm's pty now gets the terminal modules an SVR4 pty slave needs (ptem, ldterm), so the shell in it has a prompt, echo and output processing (patch 43). Built with gcc14-cross-amix 276ef49; the static build links the C++ runtime from its archive, and no program needs libstdc++, libjpeg or libregex at run time. The README counts 89 manual pages. cde-2.5.3-3.pkg sha256 c5c981f8.

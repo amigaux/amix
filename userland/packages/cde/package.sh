@@ -2,9 +2,15 @@
 NAME=cde
 PKG=cde
 VERSION=2.5.3
-PKGREV=3   # -3: dtterm's pty gets its terminal modules (ptem, ldterm); gcc14-cross-amix 276ef49; -2: App Builder (dtbuilder, dtcodegen) and ttsnoop; manual pages for every program; dtdbcache started with no arguments; reproducible dates; ttsnoop shows its messages (libtt without %C, the SVR4 tail)
+PKGREV=3   # -3: dtterm's pty gets its terminal modules (ptem, ldterm); gcc14-cross-amix 276ef49; the shared variant 2.5.3-3.s; -2: App Builder (dtbuilder, dtcodegen) and ttsnoop; manual pages for every program; dtdbcache started with no arguments; reproducible dates; ttsnoop shows its messages (libtt without %C, the SVR4 tail)
 SOURCE_EPOCH=1795305600   # 2026-11-22 00:00 UTC
 SUMMARY="CDE 2.5.3 - the Common Desktop Environment"
+# the shared variant (VARIANT=shared, prototype.shared): CDE's libraries shared,
+# against the shared variants of X11R6.3 and Motif, for the RAM measurement
+# against the static build
+SHARED_PKGREV=3.s
+SHARED_SUMMARY="CDE 2.5.3 with shared libraries - the Common Desktop Environment"
+SHARED_DESC="The Common Desktop Environment 2.5.3 (cdesktopenv), built from the upstream source against X11R6.3 and Motif 2.3.8, with CDE's libraries shared (libDtSvc, libDtWidget, libDtHelp, libDtPrint, libDtTerm, libDtMrm, libDtSearch, libDtXinerama, libcsa, libtt) and the programs linked against them and the shared X11R6.3, Motif, libjpeg and regex, under /opt/amix/dt with /usr/dt a link to it: the login manager dtlogin, the session manager dtsession, the window manager dtwm with the front panel, dtterm, dtfile, dtpad, dtcalc, dtcm, dtmail, the help viewer, the App Builder dtbuilder with its code generator dtcodegen, ToolTalk with the message viewer ttsnoop, the action and data-type databases, the message catalogues, the manual pages and the help volumes. Configuration under /etc/dt. dtinfo, dtdocbook and dtksh are not built (README.md)."
 DESC="The Common Desktop Environment 2.5.3 (cdesktopenv), built from the upstream source against X11R6.3 and Motif 2.3.8, under /opt/amix/dt with /usr/dt a link to it: the login manager dtlogin, the session manager dtsession, the window manager dtwm with the front panel, dtterm, dtfile, dtpad, dtcalc, dtcm, dtmail, the help viewer, the App Builder dtbuilder with its code generator dtcodegen, ToolTalk with the message viewer ttsnoop, the action and data-type databases, the message catalogues, the manual pages and the help volumes. Configuration under /etc/dt. dtinfo, dtdocbook and dtksh are not built (README.md)."
 CATEGORY=x11
 SET=extra
@@ -19,3 +25,6 @@ PREFIX=/opt/amix/dt
 SYSTEM_PATHS="/usr/dt /usr/share/lib/terminfo/d/dtterm"
 DEPENDS="amix-base x11r6.3"
 BUILD_DEPENDS="x11r6.3 motif libjpeg regex"
+# the shared variant: the C++ runtime for libtt (cxxrt), and amixrt
+SHARED_DEPENDS="amix-base x11r6.3 motif libjpeg regex amixrt cxxrt"
+SHARED_BUILD_DEPENDS="x11r6.3 motif libjpeg regex"
