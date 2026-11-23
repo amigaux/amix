@@ -196,6 +196,8 @@ t_found(void)
 	CHECK(a4091_dmarec[0].magic == DMA_REC_MAGIC && a4091_dmarec[0].ctlid == 3,
 	    "the D42 record, ctlid 3 (C2-1 a4000t-710)");
 	CHECK(a4kt_gate == 0, "a4kt_gate 0");
+	CHECK(mock_nlim == 1 && mock_lim_fn == mock_reg[0].fn && mock_lim_c == 0,
+	    "C4-7 limits declared for the registration");
 }
 
 static void
@@ -292,6 +294,56 @@ t_module_lean(void)
 #endif
 }
 
+
+/* the interrupt path on the onboard chip: the self-test, then a command
+ * completed from the level-2 handler (writes go to the registers directly) */
+struct sdcom {
+	volatile struct sdcom	*next;
+	char		reading, okay;
+	unsigned char	status, cdb[12];
+	char		*addr;
+	unsigned	nbyte, card, unit;
+	void		(*intr)();
+};
+extern unsigned long	a4091_iq[];
+static int kt_calls;
+static void kt_cb(struct sdcom *cp) { (void)cp; kt_calls++; }
+
+static void
+t_intr(void)
+{
+	static char buf[512] __attribute__((aligned(16)));
+	struct mock_board *b;
+	struct sdcom cp;
+
+	setup(1, 0);
+	b = &mock_board[mock_add_a4kt()];
+	CHECK(a4kt710_load(NULL) == 0, "load returns 0");
+	CHECK(mock_defer_fn != 0, "intr auto, the limits accepted: load asked for the deferred call");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn((char *)0) == 0 && a4091_iq[1] == 1, "self-test passed: mode 1");
+	CHECK(!strcmp(mock_last_line, "a4kt710: completion on the interrupt (level 2)\n"),
+	    "console: a4kt710: completion on the interrupt (level 2)");
+	mock_chip_idle(b);
+	memset(&cp, 0, sizeof cp);
+	cp.reading = 1; cp.cdb[0] = 0x28; cp.addr = buf; cp.nbyte = 512;
+	cp.unit = 2; cp.intr = (void (*)())kt_cb;
+	CHECK(mock_reg[0].fn(0, &cp) && kt_calls == 0, "queued, not completed in the call");
+	CHECK(b->regs[0x3a] == 0x35 && b->regs[0x00] == 0xaf, "DIEN 0x35, SIEN 0xaf, written directly");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && kt_calls == 1 && cp.okay, "completed from the handler");
+}
+
+static void
+t_intr_auto_nolimits(void)
+{
+	setup(1, 0);
+	mock_add_a4kt();
+	mock_lim_errno = 89;		/* ENOSYS: a kernel before the segment minor */
+	CHECK(a4kt710_load(NULL) == 0, "load returns 0");
+	CHECK(mock_defer_fn == 0 && a4091_iq[1] == 0, "intr auto without limits: polled");
+}
+
 static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "no NCR tag in the Kickstart", t_no_tag },
 	{ "tag without RTF_COLDSTART", t_tag_no_coldstart },
@@ -311,6 +363,8 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "tag found, fingerprint fails", t_fingerprint_fails },
 	{ "host ID and halt", t_hostid_halt },
 	{ "module: no U77, no dma_off", t_module_lean },
+	{ "interrupt: self-test and a command", t_intr },
+	{ "intr auto: no limits, polled", t_intr_auto_nolimits },
 };
 
 int

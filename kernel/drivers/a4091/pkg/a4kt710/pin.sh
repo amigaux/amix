@@ -32,16 +32,25 @@
 # declared=1 now reads the Kickstart once for that tag.
 # 1.0.0-8 (2026-11-04): the same module 1.0.0-4, objects unchanged: the
 # copyright note says what is known in plain words.
+# 1.0.0-9 (2026-11-22): module 1.0.0-5: commands complete on the 53C710's
+# interrupt (level 2) once a self-test after the root mount passes; param intr
+# (1 default, 0 always polled); a watchdog falls back to polled.
+# 1.0.0-10 (2026-11-22): module 1.0.0-6: declares the C4-7 limits after
+# sd_register (one segment of up to 64 KiB through a4091queuex) on a kernel
+# with the segment minor; param limits (1 default, 0 none).
+# 1.0.0-11 (2026-11-23): module 1.0.0-7: param intr -1 (auto, the default) takes the
+# interrupt only when the limits were accepted, else polls; on an A4000D the
+# interrupt cost 2 KiB raw commands a quarter to a third of their speed.
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
 KM_REPO=kernel/drivers/a4091
-KM_VERSION=1.0.0-4
-KM_PKG_VERSION=1.0.0-8
+KM_VERSION=1.0.0-7
+KM_PKG_VERSION=1.0.0-11
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=04ec15f0c083fec6bb8ad7221780745a0f958588ea92136d2623ff5aab9027b1
-KM_K46_SHA=a5546a47e9b80b7426dda79be2f7acaa474e0f446ce803920f81a7ad9c658eee
+KM_K30_SHA=a389fb0eefb030e0104641fcef51e0b0c5295456204704984847112004b808be
+KM_K46_SHA=562c73b83d76fdeac57f248c6039845671f904c53c87bd3b8450fcf69587a9df
 KM_K30_DEPS=
 KM_K46_DEPS=
 
@@ -66,10 +75,18 @@ only under emulation, never on a real machine.  On the 68040/68060 line
 (a4kt710-k46) the chip's DMA goes straight to memory, with no bounce pool.
 With module 1.0.0-1, an A4000T with a Z3660 booted with its root on the onboard
 bus, the DMA buffer in the Z3660's memory, and raw reads of 16 MiB through
-that bus matched the host's checksum of the disk.  The objects carry
+that bus matched the host's checksum of the disk.  On a kernel with the
+segment minor (k30.1.6, k46.1.7) the module declares its limits after
+sd_register: the kernel may then send one segment of up to 64 KiB a
+command; param limits=0 declares none.  Commands complete on the 53C710's
+interrupt (level 2) when those limits were accepted (param intr=-1, the
+default) and a self-test after the root mount passes; otherwise, with param
+intr=0, or after interrupts stop, the module polls.  param intr=1 takes the
+interrupt whatever the command size.
+The objects carry
 cc=gcc-2.7.2.3-33ebadc, so they load on kernel-k30-m -68 or later
 (a4kt710-k30) and kernel-k46-m -56 or later (a4kt710-k46).  The module is
 built from src/a4kt710.c and src/a4091-wr.c, part 1 of the NOTICE below
 (MIT); none of the NOTICE's other parts is in the object."
 
-KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
+KM_SOURCE_EPOCH=1795305600	# 2026-11-22 00:00 UTC

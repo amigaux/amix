@@ -5,7 +5,7 @@ source runs against `mock.c`, which stands in for the kernel names the
 module calls:
 - `autocon`;
 - the board pages (`sptalloc` on k30; `dev_kvmap` and `bprobe` on k46);
-- `sd_register`;
+- `sd_register` and `sd_limits` (C4-7);
 - the C4-5 DMA names.
 
 There are two binaries, one per line's map arm:
@@ -40,24 +40,44 @@ make -C test/host clean
 | module: no U77, no dma_off, no last-command globals | Weak references show that `a4091_bytewrite_probe`, `a4091_dma_off`, `a4091_dsps`, `a4091_resid`, `a4091_rc` and `a4091_stat` are not in the module. The record's `off` is 0 at attach and after a bounced read. The kstat keeps its layout: magic `A4K2`, `bounce_n` at long 18, `seltimeout` at long 22, `bw_*` (longs 8-17) 0. On k46 the attach line is `a4091: board 0 at 0x40000000` |
 | bus reset: stuck beam | Both waits stop at their 200000-read bound (`a4091_busreset_to` 2). The command still runs |
 | queue: out of reach | `dma_addr` gives 0 (C4-5 v5): no DSP write, the command fails (status 0xff, callback once), then `dma_complete` (the provider counts `cmpl_noprep`; `drv_prep == drv_cmpl`), and the next command runs |
+| interrupt: self-test passes | `_load` asks for the deferred call; run with the mock's boards answering INT 0xff10 after one tick, it attaches the handler on level 2, `a4091_iq.mode` becomes 1, the watchdog is armed, the console says `a4091: completion on the interrupt (level 2)`, and DIEN/SIEN are 0 again after the test |
+| interrupt: self-test fails | No interrupt in ten ticks: the handler comes off, mode stays 0, the console names the board. The detached handler leaves a pending ISTAT alone, and a READ completes polled inside the queue call |
+| interrupt: `intr=0` | No deferred call, polled |
+| interrupt: a command completes | The queue call returns with the command running (DIEN 0x35, SIEN 0xaf, the DSA for id 6); the handler ignores a running chip and completes the command when ISTAT shows DIP |
+| interrupt: two commands, one FIFO | The second waits (queued 1); the handler completes the first and arms the second (the DSA now for id 5), then completes it |
+| interrupt: spurious | A pending ISTAT with nothing in flight: claimed, counted, no completion |
+| interrupt: lost interrupts, fallback | Three commands finish with no interrupt; each watchdog pass completes one and counts it lost. After the third: mode 0, fallback 1, the console line, the enables off, and the next command runs polled |
+| interrupt: a command that never ends | Left alone at the first watchdog pass; past 600 ticks it fails (traced once, counted hung) and the module stays on interrupts |
+| interrupt: halt | `_halt` sets mode 0 and the enables are off |
+| limits: declared after `sd_register` | `sd_limits` gets the registration's queue function and c 0, and limits version 1: no lists, 64 KiB, one segment, align 16, gran 16, reach `0xFFFFFFFF`, with a queue function of its own; `a4091_xs` reads magic `A4XS` and rc 0 |
+| limits: `limits=0` | Nothing declared, rc -1; `intr=0` read from the same string |
+| limits: `sd_limits` refuses | `ENOSYS` kept in rc; the load still returns 0 |
+| limits: sdcomx commands, polled | A 64 KiB READ is one block move and one segment through prepare/addr/complete, okay with `sx_resid` 0; a WRITE out of reach fails with `sx_resid` 65536; a list of two is refused, a list of one runs; a stock READ through the first entry still completes |
+| limits: sdcomx command on the interrupt | `sx_resid` stays 65536 until the handler completes the command, then 0; a stock command queued behind it completes next |
+| intr auto: no limits, polled | With `sd_limits` refusing (`ENOSYS`), the default `intr=-1` asks for no deferred call and a READ completes inside the queue call |
+| intr auto: `limits=0`, polled | No limits declared: polled |
+| intr auto: limits accepted, interrupt | The deferred call is asked for (the interrupt cases above run this way, the mock's `sd_limits` accepting) |
+| `intr=1`: interrupt without limits | `intr=1` asks for the deferred call even with `sd_limits` refusing |
 
 ## The a4kt710 arms
 
 `modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
-a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 18/18 cases each:
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 20/20 cases each:
 
 | Case | What it shows |
 |---|---|
 | no NCR tag; a tag without `RTF_COLDSTART`, with a wrong name, with a wrong `rt_MatchTag`, with `rt_Name` outside the image | `ENXIO`, zero accesses under `$DD0000`, no DMA area, nothing registered |
 | `declared=0` | `ENXIO` with the tag present; the Kickstart is not even read |
 | not AGA | `ENXIO`, zero accesses (G0) |
-| the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3 |
+| the tag found | one registration (c 0, `$DD0000`, `A4000T onboard SCSI`, rank 3); SIEN and DIEN written 0 directly; host ID 7; the D42 record's ctlid 3; the C4-7 limits declared for the registration |
 | `declared=1` | registers without the NCR tag; the Kickstart is read once, for `card.resource` |
 | an A1200 Kickstart (`card.resource`), with the default, with `declared=1`, and together with the NCR tag | `ENXIO`, zero accesses under `$DD0000`, no DMA area, `a4kt_gate` 5, the tag's offset in `a4kt_cardoff`; the Kickstart mapped once and unmapped |
 | `card.resource` as a name only, or a tag whose `rt_MatchTag` is wrong | not a tag: the A4000T registers, `a4kt_cardoff` 0 |
 | no chip / the fingerprint fails | `ENXIO`, the area given back (and the pages unmapped) |
 | host ID and halt | host ID 5 from the DIP bank; `_halt` writes DCNTL `0x20` and SCID `1 << 5` directly |
 | module: no U77, no dma_off | The static arm's knobs and last-command globals are absent (weak references); the record's `off` is 0; on k46 the attach line is `a4kt710: board 0 at 0xdd0000` |
+| interrupt: self-test and a command | With the limits accepted, the deferred self-test passes (`a4kt710: completion on the interrupt (level 2)`); a READ is armed with DIEN 0x35 and SIEN 0xaf written directly and completes from the handler |
+| intr auto: no limits, polled | With `sd_limits` refusing, no deferred call: polled |
 
 The queue path is not repeated: it is the A4091's. This chip's direct writes land where the mock's reads are,
 so a launch's longword writes would overwrite the mock's "command done" state.
