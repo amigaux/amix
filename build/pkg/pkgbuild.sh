@@ -505,20 +505,24 @@ for b in $BINS; do
 	# path as itself (this package's, or the sysroot's); a bare name in each
 	# DT_RPATH directory -- in this package, then in its BUILD_DEPENDS
 	# packages' trees, then in the sysroot -- and then in the sysroot's
-	# /usr/lib.  A NEEDED found nowhere fails.
+	# /usr/lib, or for the shared C++ runtime, which the image's sysroot does
+	# not hold, in the pinned gcc14 prefix.  A NEEDED found nowhere fails.
 	libs=$("$OBJDUMP" -p "$b" | awk '$1 == "NEEDED" {print $2}' | tr '\n' ' ')
-	# a binary that needs the GCC 14 runtime library, libamixrt.so.1, needs
-	# the package that ships it: package.sh says so in DEPENDS (nothing adds
-	# it behind the recipe), except the amixrt package itself
-	case " $libs " in
-	*" libamixrt.so.1 "*)
-		case " $(echo "$DEPENDS" | tr ',' ' ') " in
-		*" amixrt "*) ;;
-		*) [ "$NAME" = amixrt ] || {
-			echo "[FAIL] $(basename "$b") NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" >&2
-			exit 1; } ;;
-		esac ;;
-	esac
+	# a binary that needs a GCC 14 runtime library, libamixrt.so.1 or the
+	# shared C++ runtime libstdc++.so.6, needs the package that ships it
+	# (amixrt, cxxrt): package.sh says so in DEPENDS (nothing adds it behind
+	# the recipe), except that package itself
+	for rt in libamixrt.so.1:amixrt libstdc++.so.6:cxxrt; do
+		case " $libs " in
+		*" ${rt%%:*} "*)
+			case " $(echo "$DEPENDS" | tr ',' ' ') " in
+			*" ${rt#*:} "*) ;;
+			*) [ "$NAME" = "${rt#*:}" ] || {
+				echo "[FAIL] $(basename "$b") NEEDs ${rt%%:*}: package.sh DEPENDS must name ${rt#*:}" >&2
+				exit 1; } ;;
+			esac ;;
+		esac
+	done
 	rpath=$("$OBJDUMP" -p "$b" | awk '$1 == "RPATH" {print $2}' | tr ':' ' ')
 	files="" found=""
 	for n in $libs; do
@@ -540,6 +544,13 @@ for b in $BINS; do
 			done
 			if [ -z "$l" ] && [ -f "$AMIX_SYSROOT/usr/lib/$n" ]; then
 				l=$AMIX_SYSROOT/usr/lib/$n w="sysroot /usr/lib"
+			fi
+			# libstdc++.so.6 is the cxxrt package's /usr/lib/libstdc++.so.6:
+			# the pinned file of the gcc14 prefix (gcc14-pin.sh), not in the
+			# sysroot
+			_cx=${AMIX_GCC14_PREFIX:-}/m68k-elf/lib/cxxrt/libstdc++.so.6
+			if [ -z "$l" ] && [ "$n" = libstdc++.so.6 ] && [ -n "${AMIX_GCC14_PREFIX:-}" ] && [ -f "$_cx" ]; then
+				l=$_cx w="gcc14 cxxrt, the cxxrt package's /usr/lib"
 			fi ;;
 		esac
 		[ -n "$l" ] || {
