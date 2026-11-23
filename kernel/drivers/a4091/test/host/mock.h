@@ -81,6 +81,10 @@ extern int		mock_beam_mode;
 extern unsigned long	mock_beam_frame, mock_beam_rpl, mock_beam_start;
 extern unsigned long	mock_beam_reads, mock_beam_line;
 unsigned char	mock_vpos8(void);	/* the reset's beam read (VHPOSR >> 8) */
+extern unsigned long	mock_beam9_step;	/* lines per mock_vpos9 call (0: stuck) */
+extern unsigned long	mock_beam9;		/* mock_vpos9's line */
+unsigned long	mock_vpos9(void);	/* the spin's beam read: V8..V0 */
+unsigned long	mock_frame(void);	/* lines per frame: mock_beam_frame */
 extern char		mock_attach_line[128];	/* the last "board N at 0x..." line */
 void	mock_chip_done(struct mock_board *b);	/* reads: DIP, SIR, DSPS 0xff00 */
 void	mock_chip_seltimeout(struct mock_board *b);	/* reads: SIP, SSTAT0 STO */
@@ -107,6 +111,7 @@ extern unsigned		mock_lim_c;
 extern struct sdlim	*mock_lim;
 extern int	mock_selftest_irq;
 extern int	(*mock_isr_last)();		/* intr_attach's handler, kept after a detach */
+extern int	mock_nobeam_lines;	/* "no beam to time the spin" lines */
 extern char	mock_last_line[160];		/* the last console line, formatted */		/* sleep(): the boards answer INT 0xff10 */
 void	mock_chip_idle(struct mock_board *b);	/* ISTAT 0: still running */
 

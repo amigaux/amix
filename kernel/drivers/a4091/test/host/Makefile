@@ -20,7 +20,8 @@ CFLAGS := $(CSTD) $(CWARN) -O0 -g
 BUILD  := build
 DRV    := ../../src/a4091-wr.c
 DRVF   := -DA4091_MODULE -Istubs -I../../src -Dprintf=mock_printf -Dbcopy=mock_bcopy \
-          -D'A4091_VPOS8()=((unsigned char)mock_vpos8())'
+          -D'A4091_VPOS8()=((unsigned char)mock_vpos8())' \
+          -D'A4091_VPOS9()=mock_vpos9()' -D'A4091_FRAME()=mock_frame()'
 STUBS  := $(wildcard stubs/*.h stubs/sys/*.h)
 
 .PHONY: all check clean

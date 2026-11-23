@@ -56,13 +56,22 @@ make -C test/host clean
 | limits: sdcomx command on the interrupt | `sx_resid` stays 65536 until the handler completes the command, then 0; a stock command queued behind it completes next |
 | intr auto: no limits, polled | With `sd_limits` refusing (`ENOSYS`), the default `intr=-1` asks for no deferred call and a READ completes inside the queue call |
 | intr auto: `limits=0`, polled | No limits declared: polled |
-| intr auto: limits accepted, interrupt | The deferred call is asked for (the interrupt cases above run this way, the mock's `sd_limits` accepting) |
+| intr auto: limits accepted, interrupt | The deferred call is asked for (the mock's `sd_limits` accepting); the interrupt cases above load `intr=1` |
+| intr auto: armed, on at the first long command | After the self-test auto stays polled (`armed` 1, the console's `interrupt ready` line, no watchdog); a 512-byte READ and a 4 KiB sdcomx complete inside the call; a 64 KiB sdcomx switches to the interrupt (`armed` 2, mode 1, the watchdog, the console line) and the handler completes it |
 | `intr=1`: interrupt without limits | `intr=1` asks for the deferred call even with `sd_limits` refusing |
+| spin: off by default | `spin` 0: a chip already stopped waits for the interrupt; no spin counted |
+| spin: capped at 1000 µs | `spin=5000` taken as 1000 |
+| spin: a stopped chip finished inline | `spin=500`, the beam 20 lines a read: 12 reads a line; the READ completes inside the queue call, `inl` 1, `holdmax` 20 lines, DIEN still set; the latched level 2 then finds nothing |
+| spin: still running, left to the interrupt | `spinmiss` 1; the handler completes it |
+| spin: no beam, no spin | The beam stuck: `rdline` 0, the console line, the command left to the interrupt, nothing counted |
+| spin: `spinrd=` instead of the beam | No calibration; the command finishes inline on `spinrd`'s budget |
+| spin: none nested in a callback | The callback of an inline-finished READ queues the next: it is launched, not spun, and the interrupt ends it |
+| spin: none from the handler | A queue call from the handler's callback does not spin |
 
 ## The a4kt710 arms
 
 `modtest-a4kt-k30` and `modtest-a4kt-k46` build the second target (`-DA4091_A4KT`, VPOSR from the mock) against
-a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 20/20 cases each:
+a mock onboard chip at `$DD0000` and a synthetic 512 KiB Kickstart at `0xF80000`. 21/21 cases each:
 
 | Case | What it shows |
 |---|---|

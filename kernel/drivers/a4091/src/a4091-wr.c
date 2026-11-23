@@ -1000,6 +1000,24 @@ int	card;
  * done, the command is completed and counted lost, and A4091_LOSTMAX lost
  * ones put the module back to polled for good, said on the console; if it
  * still runs after A4091_BOUND ticks it ends as the poll bound does (rc -2).
+ *
+ * Auto (intr=-1) leaves the interrupt ready after the self-test and stays
+ * polled until a4091queuex sees a command over A4091_LONG (armed 1, then 2).
+ *
+ * The spin (param spin=<us>, 0 = off, at most A4091_SPINMAX): a4091queue,
+ * still at spl5, reads ISTAT for up to that long after it launched its own
+ * command; a command that stops inside the spin is finished there and its
+ * cp->intr runs before the queue call returns, as when polled, so a short
+ * command pays no interrupt, sleep and wakeup.  A longer one is left to the
+ * interrupt.  DIEN stays set: a finished command's latched level 2 then finds
+ * nothing (one empty handler call).  The read budget per board comes from a
+ * calibration against the beam at the self-test (ISTAT reads per 64 us
+ * line), or from spinrd=<reads> when given (an emulator's beam is not time).
+ * Only a queue call from process context spins its own launch: never the
+ * handler's or the watchdog's (nor a queue call from a callback they run),
+ * the FIFO's next, or a queue call nested in a callback the spin ran.  One
+ * queue call holds spl5 for at most one spin and one finish; holdmax keeps
+ * the longest such hold in beam lines.
  * ------------------------------------------------------------------------- */
 #define	A4091_DIEN	0x35		/* DSTAT: BF ABRT SIR IID raise the line */
 #define	A4091_SIEN	0xaf		/* SSTAT0: M/A STO SGE UDC RST PAR */
@@ -1010,6 +1028,37 @@ int	card;
 #define	A4091_SLOWT	60		/* the trace's threshold on the interrupt path */
 #define	A4091_LOSTMAX	3
 #define	A4091_PRI	20		/* PRIBIO: the self-test's sleep */
+#define	A4091_SPINMAX	1000		/* spin= cap, us */
+#define	A4091_LONG	4096		/* auto: an sdcomx over this turns the interrupt on */
+#define	A4091_CALLINES	16		/* the calibration's span, beam lines */
+#define	A4091_CALMAX	0x100000	/* the calibration's read bound */
+#define	VPOSR		0xDFF004	/* custom: V8 in bit 0, NTSC in bit 12 */
+#ifndef	A4091_VPOS9
+#define	A4091_VPOS9()	a4091_vpos9()
+/*
+ * The beam's line, V8 (VPOSR bit 0) over V7..V0 (VHPOSR's high byte): two
+ * reads, so VPOSR is read again and the three taken again when V8 changed
+ * between them (else a read across line 255/256 or 312/0 is 256 lines off).
+ */
+static ulong
+a4091_vpos9()
+{
+	ushort	p1, h, p2;
+	int	n;
+
+	n = 0;
+	do {
+		p1 = *(volatile ushort *)VPOSR;
+		h = *(volatile ushort *)VHPOSR;
+		p2 = *(volatile ushort *)VPOSR;
+		n = n + 1;
+	} while (((p1 ^ p2) & 1) && n < 4);
+	return ((ulong)(p2 & 1) << 8) | (ulong)(h >> 8);
+}
+#endif
+#ifndef	A4091_FRAME
+#define	A4091_FRAME()	((*(volatile ushort *)VPOSR & 0x1000) ? 263 : 313)
+#endif
 #ifdef	A4091_A4KT
 #define	A4091_NAME	"a4kt710"
 #else
@@ -1039,6 +1088,13 @@ struct a4091_iq {
 	ulong	queued;			/* commands that waited behind another      */
 	ulong	qmax;			/* the FIFO's high-water length              */
 	ulong	fallback;		/* 1: back to polled after lost interrupts  */
+	ulong	spin;			/* spin= as _load took it, us (0 off)       */
+	ulong	rdline;			/* board 0: ISTAT reads per beam line        */
+	ulong	inl;			/* commands the spin finished inline         */
+	ulong	spinmiss;		/* commands the spin left to the interrupt   */
+	ulong	holdmax;		/* longest spl5 hold of a spin, beam lines   */
+	ulong	armed;			/* auto: 1 self-test passed, polled until a
+					 * command over A4091_LONG; 2 then switched */
 };
 struct a4091_iq	a4091_iq = { 0x4134494e, 0, -1 };
 
@@ -1057,6 +1113,10 @@ static ulong		a4091_qn;
 static uchar		a4091_cof[16];		/* sd card -> board index */
 static int		a4091_innext;		/* a4091_next is running */
 static int		a4091_wdid;		/* the watchdog's timeout, 0 none */
+static ulong		a4091_spinrd[A4091_NCARD];	/* the spin's ISTAT reads */
+static ulong		a4091_spinrdp;		/* spinrd= (0: calibrate) */
+static int		a4091_inspin;		/* 1: no spin now (a spin, the handler
+						 * or the watchdog is running) */
 static uchar		a4091_stwait[A4091_NCARD];	/* self-test armed */
 static int		a4091_stany;
 static ulong		a4091_stdsps[A4091_NCARD];	/* DSPS the self-test saw */
@@ -1415,12 +1475,92 @@ a4091_next()
 	a4091_innext = 0;
 }
 
+/* lines from a to b on the beam, the frame's wrap allowed */
+static ulong
+a4091_ldelta( a, b)
+ulong	a, b;
+{
+	ulong	fr;
+
+	fr = A4091_FRAME();
+	return (b + fr - a) % fr;
+}
+
+/*
+ * The spin (spl5, the command in flight is the queue's own): ISTAT for up to
+ * the board's budget; a stop is finished inline, the FIFO's next launched
+ * (without a spin).  A re-launch (the short-read recovery) or no stop leaves
+ * the command to the interrupt.
+ */
+static void
+a4091_spinfin()
+{
+	ulong	n, lim;
+	uchar	istat;
+
+	a4091_sel( a4091_fl.c);
+	lim = a4091_spinrd[a4091_fl.c];
+	istat = 0;
+	n = 0;
+	while (n < lim) {
+		istat = RD8(R_ISTAT);
+		if (istat & (ISTAT_SIP | ISTAT_DIP))
+			break;
+		n = n + 1;
+	}
+	if (!(istat & (ISTAT_SIP | ISTAT_DIP))) {
+		a4091_iq.spinmiss++;
+		return;
+	}
+	a4091_fl.poll = a4091_fl.poll + n;
+	if (a4091_step( istat)) {
+		a4091_iq.spinmiss++;
+		return;
+	}
+	a4091_finish();
+	a4091_iq.inl++;
+	a4091_next();
+}
+
+/*
+ * ISTAT reads per beam line on board k (spl5, the chip idle): n reads in the
+ * spin's own loop form, n doubled until they span A4091_CALLINES lines.  0
+ * when the beam does not move or the reads never span them.
+ */
+static ulong
+a4091_rdcal( k)
+int	k;
+{
+	ulong	n, i, a, b, d;
+	uchar	istat;
+
+	a4091_sel( k);
+	n = 256;
+	while (n <= A4091_CALMAX) {
+		a = A4091_VPOS9();
+		i = 0;
+		while (i < n) {
+			istat = RD8(R_ISTAT);
+			if (istat & (ISTAT_SIP | ISTAT_DIP))
+				break;
+			i = i + 1;
+		}
+		b = A4091_VPOS9();
+		d = a4091_ldelta( a, b);
+		if (d >= A4091_CALLINES)
+			return n / d;
+		n = n + n;
+	}
+	return 0;
+}
+
 bool
 a4091queue( c, cp)
 int		c;
 struct sdcom	*cp;
 {
 	int	s;
+	ulong	h0, h;
 
 	if (!a4091_iq.mode) {
 #ifdef	A4091_PROBE
@@ -1447,7 +1587,20 @@ struct sdcom	*cp;
 		a4091_iq.qmax = a4091_qn;
 	if (a4091_fl.cp != 0)
 		a4091_iq.queued++;
+	if (a4091_iq.spin == 0 || a4091_inspin) {
+		a4091_next();
+		splx( s);
+		return TRUE;
+	}
+	a4091_inspin = 1;
+	h0 = A4091_VPOS9();
 	a4091_next();
+	if (a4091_fl.cp == cp && a4091_spinrd[a4091_fl.c] != 0)
+		a4091_spinfin();
+	h = a4091_ldelta( h0, A4091_VPOS9());
+	a4091_inspin = 0;
+	if (h > a4091_iq.holdmax)
+		a4091_iq.holdmax = h;
 	splx( s);
 	return TRUE;
 }
@@ -1479,12 +1632,14 @@ static int
 a4091_isr( arg)
 char	*arg;
 {
-	int	k, claimed;
+	int	k, claimed, o;
 	uchar	istat;
 
 	if (!a4091_iq.mode && !a4091_stany)
 		return 0;
 	a4091_iq.intrs++;
+	o = a4091_inspin;
+	a4091_inspin = 1;		/* a queue call from a callback here: no spin */
 	claimed = 0;
 	for (k = 0; k < A4091_NCARD; ++k) {
 		if (siop_tbl[k] == 0)
@@ -1516,6 +1671,7 @@ char	*arg;
 	}
 	if (a4091_iq.mode)
 		a4091_next();
+	a4091_inspin = o;
 	return claimed;
 }
 
@@ -1525,7 +1681,7 @@ a4091_wd( arg)
 char	*arg;
 {
 	struct a4091_fl	*f;
-	int	s, r;
+	int	s, r, o;
 	uchar	istat;
 
 	f = &a4091_fl;
@@ -1533,6 +1689,8 @@ char	*arg;
 	if (!a4091_iq.mode)
 		return;
 	s = spl5();
+	o = a4091_inspin;
+	a4091_inspin = 1;		/* as in the handler */
 	if (f->cp != 0 && (ulong)lbolt - f->armed > A4091_WD) {
 		a4091_sel( f->c);
 		istat = RD8(R_ISTAT);
@@ -1544,6 +1702,7 @@ char	*arg;
 				a4091_mask();
 				printf( "%s: %d interrupts lost: polled from now on\n",
 				    A4091_NAME, (int)a4091_iq.lost);
+				a4091_inspin = o;
 				splx( s);
 				r = a4091_step( istat);
 				while (r)
@@ -1563,6 +1722,7 @@ char	*arg;
 	a4091_next();
 	if (a4091_iq.mode)
 		a4091_wdid = timeout( a4091_wd, (char *)0, A4091_WD);
+	a4091_inspin = o;
 	splx( s);
 }
 
@@ -1571,6 +1731,38 @@ a4091_wake( arg)
 char	*arg;
 {
 	wakeup( arg);
+}
+
+static void	a4091_intron();
+
+/*
+ * Each board's spin budget: spinrd= when given, else spin= us at the
+ * calibrated reads per 64 us line.  A board whose calibration fails does
+ * not spin, said on the console.
+ */
+static void
+a4091_spincal()
+{
+	int	k, s;
+	ulong	r;
+
+	for (k = 0; k < A4091_NCARD; ++k) {
+		if (siop_tbl[k] == 0)
+			continue;
+		if (a4091_spinrdp != 0) {
+			a4091_spinrd[k] = a4091_spinrdp;
+			continue;
+		}
+		s = spl5();
+		r = a4091_rdcal( k);
+		splx( s);
+		if (k == 0)
+			a4091_iq.rdline = r;
+		a4091_spinrd[k] = r * a4091_iq.spin / 64;
+		if (a4091_spinrd[k] == 0)
+			printf( "%s: board %d: no beam to time the spin: no spin\n",
+			    A4091_NAME, k);
+	}
 }
 
 /*
@@ -1632,12 +1824,29 @@ char	*arg;
 		(void)intr_detach( 2, a4091_isr, (char *)0);
 		return 0;
 	}
+	if (a4091_iq.spin != 0)
+		a4091_spincal();
+	if (a4091_iq.param < 0) {	/* auto: polled until the kernel sends a long command */
+		a4091_iq.armed = 1;
+		printf( "%s: interrupt ready (level 2), on at the first command over %d bytes\n",
+		    A4091_NAME, A4091_LONG);
+		return 0;
+	}
+	a4091_intron();
+	printf( "%s: completion on the interrupt (level 2)\n", A4091_NAME);
+	return 0;
+}
+
+/* Completion moves to the interrupt (the chip idle: polled commands end inline). */
+static void
+a4091_intron()
+{
+	int	s;
+
 	s = spl5();
 	a4091_iq.mode = 1;
 	a4091_wdid = timeout( a4091_wd, (char *)0, A4091_WD);
 	splx( s);
-	printf( "%s: completion on the interrupt (level 2)\n", A4091_NAME);
-	return 0;
 }
 
 /* key's number from _load's "name=value ..." string; dflt when absent */
@@ -1676,21 +1885,32 @@ long	dflt;
 /*
  * From _load, after the registrations and their limits: the deferred
  * self-test, for intr=1, or for intr=-1 (auto, the default) when every
- * board's limits were accepted.  Measured on an A4000D (k46, A4092): with
+ * board's limits were accepted.  Auto then stays polled until a4091queuex
+ * sees a command over A4091_LONG: accepted limits do not mean the kernel
+ * sends long commands (k46 -69 has sd_limits but no dd bounce form, 4 KiB).
+ * Measured on an A4000D (k46, A4092): with
  * the stock 2 KiB raw commands the interrupt costs about 0.4 ms of sleep
  * and wakeup per command, a quarter to a third of raw throughput, and the
  * CPU it frees comes in gaps too short to use; with the limits the kernel
- * sends commands of up to 64 KiB, and the interrupt pays.  If short
- * commands still cost too much there, a short spin before the sleep
- * (complete inline when the chip is done) is the next step.
+ * sends commands of up to 64 KiB, and the interrupt pays.  Short commands
+ * there still pay it unless spin= finishes them inline.
  */
 static void
 a4091_intrsetup( params)
 char	*params;
 {
 	int	e, k;
+	long	v;
 
 	a4091_iq.param = a4091_param( params, "intr=", -1L);
+	v = a4091_param( params, "spin=", 0L);
+	if (v < 0)
+		v = 0;
+	if (v > A4091_SPINMAX)
+		v = A4091_SPINMAX;
+	a4091_iq.spin = (ulong)v;
+	v = a4091_param( params, "spinrd=", 0L);
+	a4091_spinrdp = v > 0 ? (ulong)v : 0;
 	if (a4091_iq.param == 0)
 		return;
 	if (a4091_iq.param < 0)
@@ -1735,6 +1955,12 @@ struct sdcomx	*xp;
 		return TRUE;
 	}
 	a4091_xs.cmds++;
+	if (a4091_iq.armed == 1 && cp->nbyte > A4091_LONG) {
+		a4091_iq.armed = 2;
+		a4091_intron();
+		printf( "%s: a command of %d bytes: completion on the interrupt (level 2)\n",
+		    A4091_NAME, (int)cp->nbyte);
+	}
 	return a4091queue( c, cp);
 }
 

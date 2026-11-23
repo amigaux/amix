@@ -6,11 +6,16 @@
 # section 10.2) and touches nothing under $DD0000 undeclared.
 # $param declared (C4-2 v6 section 8.1): -1 the Kickstart's NCR ROM tag decides,
 # 0 never touch the window, 1 a manual override (touch without the tag).
-# $param intr: -1 (default, auto) completion on the interrupt when the C4-7
-# limits were accepted, else polled; 1 the interrupt always; 0 polled always.
-# The interrupt waits for the deferred self-test.
+# $param intr: -1 (default, auto) completion on the interrupt once the kernel
+# sends a command over 4 KiB through the C4-7 entry (the limits accepted and
+# the self-test passed: polled until then, and for good when the limits were
+# refused); 1 the interrupt always; 0 polled always.
 # $param limits: 1 (default) declare the C4-7 limits after sd_register (one
 # segment of up to 64 KiB), 0 declare nothing (the stock page commands).
+# $param spin: 0 (default) off; else, with the interrupt on, the queue reads
+# the chip for up to that many us after its launch and finishes a command
+# that stopped there inline (cap 1000).  spinrd: the spin's ISTAT reads per
+# command instead of the beam calibration (0, the default: calibrate).
 # $rank mobo: sd's class 3 (C4-1 section 4).  No $majors: sd owns them.
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
 $modtype misc
@@ -21,5 +26,7 @@ $unload never
 $param declared:int:-1:-1:1
 $param intr:int:-1:-1:1
 $param limits:int:1:0:1
+$param spin:int:0:0:1000
+$param spinrd:int:0:0:1048576
 $desc A4000T onboard SCSI (NCR 53C710), root-class disk controller
 a4kt710	a4kt710
