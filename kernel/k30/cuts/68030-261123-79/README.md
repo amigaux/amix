@@ -40,6 +40,35 @@ baseline and exactly the allowed eight differ; the linked rlimits table is data 
 pkginfo says so; the hardbus, sync and btwalk checks as in -78, before and after the module core's splice;
 `mkabi --check` gives abi 18c0a1c9; the sidecar checks; relsim finds no relocation the boot loader would refuse.
 
+Evidence, in emulation. The vehicle is the released 1.1.2 k30 image, first-booted on an A3000 (68030, 16 MiB
+motherboard fast RAM, so `dma_alloc` takes the kernel heap), with this cut's files laid and kern30m's record set to
+them, then a kbootset generation; the A4091 driver is a test build of 1.0.0-13 that declares 64 KiB commands of one
+segment. The emulator records every disk transfer (its D245 write log), so the command shapes below are counts, not
+estimates. The rows of the bounce form ran first on trial cut 68030-261123-93, whose `dd.o` is this cut's byte for
+byte; this cut repeats the cells, the loop and the boot.
+
+- **Boot and limits**: generation 2 of -79 booted with the A4091 driver loaded, `ddflag` 0x10 (`D_NOBRKUP`) and the
+  console line `dd: A4091 SCSI: commands of up to 65536 bytes through a bounce region`. The running kernel's
+  `rlimits` has data and vmem 0x1000000 soft, 0x7fffffff hard; `ulimit -d` and `-v` say 16384, and `ulimit -d
+  unlimited` and `ulimit -v unlimited` take.
+- **Command shapes, A4091**: the raw cells (16 MiB written, read and verified at 64 KiB, 1 MiB read at 2 KiB) are 1536
+  transfers, 1024 of them 64 KiB, where page commands make 33280 of 2 KiB; ufs on the same disk 17251 instead of
+  52381. The raw sequences equal -93's transfer for transfer on all three scratch disks.
+- **Throughput, A4091, -93** (32 MiB raw at 64 KiB, two passes): read 29 to 35 MB/s against 13.5 to 13.7 with page
+  commands, write 11.5 to 14.7 against 7.7 to 7.8; process system time per pass about 1 s against 2.1 to 2.5.
+- **No declaring driver**: with the same A4091 build told to declare nothing (`limits=0`) dd sends page commands, and
+  the raw sequences equal those of a kernel whose region is refused (`ddx_maxbytes` 1024: `limits below a page`) on
+  all three disks; an A2091 disk beside it gives step for step the sequence it gave before the bounce form. A kernel
+  compiled without `-DDD_SDLIM` (this recipe with the gate off; a kernel without the module core does not link) sends
+  page commands to the same declaring A4091 build, the same sequences again, and the driver's whole-command count
+  stays 0.
+- **Correctness**: in each cells row the trees copied to ufs on each disk and read back are the same, six cells run
+  concurrently across the A2091 and both A4091 disks pass, and every verify reads back what was written. Two units of
+  one card sharing its region queued for it (`wait` 1 here, 12 on -93). A refused `dma_alloc` (a 64 KiB region asked
+  for late, once the heap was fragmented) fell back to page commands cleanly; the cut now asks at the root's open.
+- **Five boots** of -79, each a 4 MiB raw write and verify through the region and a root file written and read back:
+  all pass, 140 whole commands per boot.
+
 | File | What |
 |---|---|
 | `SHA256SUMS-68030-261123-79` | the seven files of record, paths relative to the cut's `usr/sys` |
@@ -59,4 +88,5 @@ Inputs (`cut.sh` names each by an environment variable):
 
 `unix.brel` is the shipped form (as `/stand/k30/unix`), `kabi` is its sidecar, `unix.sym` holds its symbols, and
 `unix` is the ET_REL it was made from. `mod.d/ufs` and `mod.d/s5` are the carved core-tier modules bound to this
-build. Its sums were reproduced by `cut.sh` twice on the host with gcc-cross-amix `33ebadc`.
+build. Its sums were reproduced by `cut.sh` twice on the host with gcc-cross-amix `33ebadc`, and by `../build.sh` on the
+host and in the build container (`dist-33ebadc-d5a43a7`, the checkout's toolchain pins).
