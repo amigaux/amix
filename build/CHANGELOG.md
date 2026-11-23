@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — scan060-g14: libelf.a's xlate.o tables are known stock data (8b31502a)
+
+scan060-g14.py takes libelf.a's xlate.o tables in .text (x32, fmsize, mtype) as known stock data, by the member's sha256 (1b0a1ad7); a pointer in x32 decoded as movep.l failed the D4 gate on cde's shared dtsession. The gcc14 gate selftest gains a stripped libelf probe that needs the sysroot to pass. Package bytes unchanged.
+
 ## 2026-11-23 — pkgbuild: the NEEDED gate knows the shared C++ runtime (04dd3767)
 
 A binary that NEEDs libstdc++.so.6 must name cxxrt in package.sh's DEPENDS, as one that NEEDs libamixrt.so.1 names amixrt; the cxxrt package itself is exempt. The image's sysroot does not hold libstdc++.so.6, so a bare NEEDED of it, found nowhere on the binary's RPATH or in the sysroot's /usr/lib, now resolves to the pinned file of the gcc14 prefix (m68k-elf/lib/cxxrt/libstdc++.so.6, 62530457), which the cxxrt package ships as /usr/lib/libstdc++.so.6. Package bytes unchanged (bzip2-1.0.8-5 14d6e119).
