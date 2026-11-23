@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — cut 68030-261123-79, kern30m k30.1.6.261123-79 (c7b59dda, 71f39195, ee268fb2)
+
+Cut from c7b59dda: dd cuts its own block requests and sends whole requests of up to 64 KiB through a bounce region to a controller that declares limits; dlm core 0059 (kabi k30.1.6, abi 18c0a1c9 unchanged); the stock 16 MiB soft data and vmem limits again, hard limits unlimited, checked against the package text. unix.brel d5618316; kern30m-k30.1.6.261123-79.pkg sha256 d6c35751, the same bytes from cut.sh, cuts/build.sh and make kernel-k30. KNOWN-ISSUES gains a Disks section (in pool mode only one controller gets a bounce region) and the 16 MiB starting limits.
+
 ## 2026-11-23 — dd bounce form for controllers that declare limits (a228ff7c)
 
 For a controller that declares limits (C4-7 §5), dd takes sd_lim at the first open, holds a dma_alloc bounce region of up to 64 KiB per card and sends whole requests through sdqueuex, one unit at a time per card, with b_resid from sx_resid. A card without limits, or a region dma_alloc refuses or that lies out of reach, keeps page commands, and dd prints why on the console. Compiled in with -DDD_SDLIM, which the cross build sets for a module-core kernel at kabi minor 6 or later. In the emulator, raw 64 KiB reads went from 13.5 to 29–35 MB/s and writes from 7.8 to 11.5–14.7 MB/s on an A4091 build that declares limits; without one, command sequences are unchanged.
