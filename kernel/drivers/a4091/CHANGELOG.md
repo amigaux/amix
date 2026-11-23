@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — a4091 1.0.0-14, a4kt710 1.0.0-12: spin before the interrupt; auto waits for long commands (565bda24)
+
+param spin=<us> (0 by default, at most 1000) finishes a command that stops within that time inline on the interrupt path, so short commands skip the interrupt, sleep and wakeup; only process-context queue calls spin. The default intr=-1 now turns the interrupt on only at the first command over 4 KiB, not as soon as the kernel accepts the limits: k46 -69 accepts them but still sends 4 KiB commands, where polling is faster for raw transfers (A4000T: raw read 2002 kB/s polled, 1717 on the interrupt). Packages a4091-k30/-k46 1.0.0-14 (module 1.0.0-11), a4kt710-k30/-k46 1.0.0-12 (module 1.0.0-8).
+
 ## 2026-11-23 — a4091 1.0.0-13, a4kt710 1.0.0-11: interrupt completion, C4-7 limits (a23ed0c0, 2ac680cd, f3b86c1f, 76a1fc7f)
 
 Commands can complete on the 53C710 interrupt (param intr: -1 auto, the default; 1 interrupt; 0 polled). The modules declare the C4-7 limits (64 KiB, one segment, 16-byte alignment; param limits) and take sdcomx commands. Auto takes the interrupt only when the kernel accepted the boards' limits; on kernels before the segment minor it polls, as before. Measured on an A4000D with 2 KiB commands: polled raw read 1601 kB/s against 1243 with the interrupt, and a CPU-bound process keeps 47-56% of its speed beside a polled transfer against 4-10% beside an interrupt one. Packages a4091-k30/-k46 1.0.0-13 (modules 1.0.0-10), a4kt710-k30/-k46 1.0.0-11 (modules 1.0.0-7).
