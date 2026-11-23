@@ -59,6 +59,16 @@ make -C test/host clean
 | intr auto: limits accepted, interrupt | The deferred call is asked for (the mock's `sd_limits` accepting); the interrupt cases above load `intr=1` |
 | intr auto: armed, on at the first long command | After the self-test auto stays polled (`armed` 1, the console's `interrupt ready` line, no watchdog); a 512-byte READ and a 4 KiB sdcomx complete inside the call; a 64 KiB sdcomx switches to the interrupt (`armed` 2, mode 1, the watchdog, the console line) and the handler completes it |
 | `intr=1`: interrupt without limits | `intr=1` asks for the deferred call even with `sd_limits` refusing |
+| sync: off by default | IDENTIFY alone (length 1), SXFER 0 in the select word, no negotiation |
+| sync: an SDTR answer, 100 ns offset 8 | `sync=1`: the first command's MESSAGE OUT is IDENTIFY + SDTR 01 03 01 25 8; the answer stop (0xff20) continues at neg_ack with SXFER 0x18 and SBCL 1 written, the target synchronous, the console line; the next command sends IDENTIFY alone with SXFER 0x18 in the select word |
+| sync: 200 ns, the offset capped at 8 | An answer of 200 ns offset 15: SXFER 0x68 (TP 6 at SCLK/1, offset 8) |
+| sync: MESSAGE REJECT | The reject stop (0xff21) continues at command_phase; the target asynchronous |
+| sync: the SDTR ignored | No answer, the command completes: the target asynchronous, the next command IDENTIFY alone |
+| sync: a period the chip cannot time | 1020 ns: off for good, SXFER 0, the console line; the command fails |
+| sync: a parity error, off for good | A parity error on the synchronous target: the command fails, the target off for good with the console line, the bus reset before the next command (which another synchronous target renegotiates after), and the next command to it asynchronous |
+| sync: a parity error in the answer | SSTAT0 PAR latched at the SDTR stop: the target off for good (SXFER 0, continued at neg_ack), the console line `parity error in the negotiation`, the command fails |
+| sync: a parity error stops the exchange | The interrupt path: a SCSI stop with PAR while the target is pending: the command fails, the target off for good, the same console line |
+| sync: polled, a latched parity error | `intr=0 sync=1`, SIEN 0: a synchronous target's command ends at INT ok with SSTAT0 PAR latched: the command fails, the target off for good with the console line, the bus reset before the next command, which is okay; a latch on an asynchronous target's command is not read |
 | spin: off by default | `spin` 0: a chip already stopped waits for the interrupt; no spin counted |
 | spin: capped at 1000 µs | `spin=5000` taken as 1000 |
 | spin: a stopped chip finished inline | `spin=500`, the beam 20 lines a read: 12 reads a line; the READ completes inside the queue call, `inl` 1, `holdmax` 20 lines, DIEN still set; the latched level 2 then finds nothing |

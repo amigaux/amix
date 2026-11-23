@@ -16,6 +16,9 @@
 # the chip for up to that many us after its launch and finishes a command
 # that stopped there inline (cap 1000).  spinrd: the spin's ISTAT reads per
 # command instead of the beam calibration (0, the default: calibrate).
+# $param sync: 0 (default) every target asynchronous; 1 negotiate synchronous
+# transfers per target (SDTR, 100 ns offset 8), asynchronous for good after a
+# parity error or phase mismatch on a synchronous transfer.
 # $rank mobo: sd's class 3 (C4-1 section 4).  No $majors: sd owns them.
 # $modtype misc: MOD_HDRV_WRAPPER, no switch-table slot.
 $modtype misc
@@ -28,5 +31,6 @@ $param intr:int:-1:-1:1
 $param limits:int:1:0:1
 $param spin:int:0:0:1000
 $param spinrd:int:0:0:1048576
+$param sync:int:0:0:1
 $desc A4000T onboard SCSI (NCR 53C710), root-class disk controller
 a4kt710	a4kt710

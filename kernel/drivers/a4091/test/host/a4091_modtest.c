@@ -1056,6 +1056,256 @@ t_intr1_nolimits(void)
 	CHECK(a4091_iq[IQ_PARAM] == 1 && mock_defer_fn != 0, "intr=1 without limits: the deferred call asked");
 }
 
+/* ---- synchronous transfers (sync=) ---- */
+
+extern unsigned long	a4091_sy[];	/* magic, param, negs, syncs, asyncs, rejects, others, offs */
+extern unsigned char	a4091_sst[][8];
+extern unsigned char	a4091_ssx[][8];
+#define SY_NEGS		2
+#define SY_SYNCS	3
+#define SY_ASYNCS	4
+#define SY_REJECTS	5
+#define SY_OTHERS	6
+#define SY_OFFS		7
+#define R_SXFER		0x06
+#define R_SBCL		0x08
+#define SCRIPT_PA	(a4091_dapa + 0x20)
+
+/* the chip stopped at a SCRIPTS INT with this DSPS */
+static void
+chip_int(struct mock_board *b, unsigned long dsps)
+{
+	b->regs[0x22] = 0x01;
+	b->regs[0x0f] = 0x04;
+	b->regs[0x0e] = 0x00;
+	memcpy(&b->regs[0x30], &dsps, sizeof dsps);
+}
+
+/* the chip stopped on a SCSI interrupt with this SSTAT0 (a parity error: 0x01) */
+static void
+chip_sint(struct mock_board *b, unsigned char sstat0)
+{
+	b->regs[0x22] = 0x02;
+	b->regs[0x0e] = sstat0;
+	b->regs[0x0f] = 0x00;
+}
+
+/* intr=1 sync=1, one A4091, self-test run; then a READ to id 6 that sends the SDTR */
+static struct mock_board *
+sync_up(void)
+{
+	struct mock_board *b;
+	struct ds_mirror *d;
+	unsigned char *m;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load("intr=1 sync=1") == 0, "load returns 0");
+	mock_selftest_irq = 1;
+	CHECK(mock_defer_fn != 0 && mock_defer_fn((char *)0) == 0 && a4091_iq[IQ_MODE] == 1, "mode 1");
+	CHECK(a4091_sy[1] == 1, "sync 1 taken");
+	mock_chip_idle(b);
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 0, "a READ to id 6 queued");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	m = d ? area_va((unsigned long)d->p[DS_ID].buf) : NULL;
+	CHECK(d && d->p[DS_ID].len == 6 && m && m[0] == 0x80 && m[1] == 0x01 && m[2] == 0x03
+	    && m[3] == 0x01 && m[4] == 25 && m[5] == 8,
+	    "MESSAGE OUT: IDENTIFY + SDTR 01 03 01 25 8 (100 ns, offset 8)");
+	CHECK(a4091_sy[SY_NEGS] == 1 && a4091_sst[0][6] == 1, "negs 1, id 6 pending");
+	return b;
+}
+
+static void
+t_sync_off(void)
+{
+	struct mock_board *b = intr_up();
+	struct ds_mirror *d;
+
+	mock_chip_idle(b);
+	CHECK(qcmd(0, 6, 1, 0x28), "a READ queued");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	CHECK(d && d->p[DS_ID].len == 1 && (d->scsi_addr & 0xff00) == 0, "sync 0: IDENTIFY alone, SXFER 0");
+	CHECK(a4091_sy[1] == 0 && a4091_sy[SY_NEGS] == 0, "no negotiation");
+}
+
+static void
+t_sync_agreed(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+	struct ds_mirror *d;
+
+	mb[3] = 0x01; mb[4] = 25; mb[5] = 8;	/* the answer: 100 ns, offset 8 */
+	chip_int(b, 0xff20);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 0, "the SDTR stop claimed, the command still running");
+	CHECK(mock_wr32(b, R_DSP) == SCRIPT_PA + 0x130, "continued at neg_ack");
+	CHECK(mock_wr8(b, R_SXFER) == 0x18 && mock_wr8(b, R_SBCL) == 1, "SXFER TP 1 offset 8, SBCL SCLK/1");
+	CHECK(a4091_sst[0][6] == 2 && a4091_sy[SY_SYNCS] == 1, "id 6 synchronous");
+	CHECK(strstr(mock_last_line, "board 0 id 6 synchronous, period 100 ns, offset 8") != NULL,
+	    "console: board 0 id 6 synchronous, period 100 ns, offset 8");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && qcp[0].okay, "then the READ completed");
+	mock_chip_idle(b);
+	CHECK(qcmd(1, 6, 1, 0x28), "the next READ to id 6");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	CHECK(d && d->p[DS_ID].len == 1 && d->scsi_addr == ((0x10000UL << 6) | (0x18UL << 8))
+	    && mock_wr8(b, R_SBCL) == 1, "no SDTR again; SXFER 0x18 in the select word, SBCL 1");
+}
+
+static void
+t_sync_200ns(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+
+	mb[3] = 0x01; mb[4] = 50; mb[5] = 15;	/* 200 ns, offset 15 (over the chip's 8) */
+	chip_int(b, 0xff20);
+	CHECK(mock_isr((char *)0) == 1, "claimed");
+	CHECK(mock_wr8(b, R_SXFER) == 0x68 && mock_wr8(b, R_SBCL) == 1, "200 ns: TP 6 at SCLK/1, offset capped at 8");
+}
+
+static void
+t_sync_reject(void)
+{
+	struct mock_board *b = sync_up();
+
+	chip_int(b, 0xff21);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 0, "the reject stop claimed");
+	CHECK(mock_wr32(b, R_DSP) == SCRIPT_PA + 0x20, "continued at command_phase");
+	CHECK(a4091_sst[0][6] == 3 && a4091_sy[SY_REJECTS] == 1, "id 6 asynchronous, rejects 1");
+}
+
+static void
+t_sync_ignored(void)
+{
+	struct mock_board *b = sync_up();
+	struct ds_mirror *d;
+
+	mock_chip_done(b);			/* straight to COMMAND: the SDTR ignored */
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && qcp[0].okay, "the READ completed");
+	CHECK(a4091_sst[0][6] == 3 && a4091_sy[SY_ASYNCS] == 1, "no answer: id 6 asynchronous");
+	mock_chip_idle(b);
+	CHECK(qcmd(1, 6, 1, 0x28), "the next READ");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	CHECK(d && d->p[DS_ID].len == 1 && (d->scsi_addr & 0xff00) == 0, "IDENTIFY alone, SXFER 0");
+}
+
+static void
+t_sync_slow(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+
+	mb[3] = 0x01; mb[4] = 255; mb[5] = 8;	/* 1020 ns: past TP 7 at SCLK/2 */
+	chip_int(b, 0xff20);
+	CHECK(mock_isr((char *)0) == 1, "claimed");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && mock_wr8(b, R_SXFER) == 0, "id 6 off for good, SXFER 0");
+	CHECK(strstr(mock_last_line, "a synchronous period of 1020 ns cannot be timed: asynchronous from now on") != NULL,
+	    "console: cannot be timed");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay,
+	    "the command failed (the target may have run it synchronous)");
+}
+
+/* a parity error in the answer itself (latched in SSTAT0 at the SDTR stop) */
+static void
+t_sync_neg_parity(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+
+	mb[3] = 0x01; mb[4] = 25; mb[5] = 8;
+	chip_int(b, 0xff20);
+	b->regs[0x0e] = 0x01;			/* SSTAT0 PAR latched, no SIP */
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 0, "the SDTR stop claimed");
+	CHECK(mock_wr32(b, R_DSP) == SCRIPT_PA + 0x130 && mock_wr8(b, R_SXFER) == 0,
+	    "continued at neg_ack, SXFER 0");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && a4091_sy[SY_SYNCS] == 0, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error in the negotiation: asynchronous from now on") != NULL,
+	    "console: parity error in the negotiation");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay, "the command failed");
+}
+
+/* the interrupt path: a parity error stops the chip inside the exchange */
+static void
+t_sync_neg_sint(void)
+{
+	struct mock_board *b = sync_up();
+
+	chip_sint(b, 0x01);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay, "the command failed");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && a4091_sy[SY_ASYNCS] == 0, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error in the negotiation: asynchronous from now on") != NULL,
+	    "console: parity error in the negotiation");
+}
+
+/* the polled path (SIEN 0): a parity error on a synchronous transfer stops
+ * nothing, the command ends at INT ok with SSTAT0 PAR latched */
+static void
+t_sync_parity_polled(void)
+{
+	struct mock_board *b;
+	unsigned long n0;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load("intr=0 sync=1") == 0, "load returns 0");
+	CHECK(a4091_iq[IQ_MODE] == 0 && a4091_sy[1] == 1, "polled, sync 1");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(3, 5, 1, 0x28) && qcp[3].okay, "a first READ (to id 5): the board's reset done");
+	a4091_sst[0][6] = 2;			/* id 6 agreed earlier */
+	a4091_ssx[0][6] = 0x18;
+	mock_chip_done(b);
+	b->regs[0x0e] = 0x01;			/* SSTAT0 PAR latched, no SIP */
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 1, "the READ ended inside the queue call");
+	CHECK(!qcp[0].okay, "it failed: the latched parity error");
+	CHECK(mock_wr8(b, R_SIEN) == 0x00, "SIEN 0 on the polled path");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error on a synchronous transfer: asynchronous from now on") != NULL,
+	    "console: parity error on a synchronous transfer");
+	a4091_busreset = 1;
+	n0 = a4091_busreset_n;
+	mock_chip_done(b);
+	b->regs[0x0e] = 0x00;
+	CHECK(qcmd(1, 6, 1, 0x28) && qcp[1].okay && a4091_busreset_n == n0 + 1,
+	    "the next READ: the bus reset first, then okay (asynchronous)");
+	b->regs[0x0e] = 0x01;			/* a latch on an asynchronous target: not read */
+	mock_chip_done(b);
+	CHECK(qcmd(2, 6, 1, 0x28) && qcp[2].okay, "an off target's command is not failed by the latch");
+}
+
+static void
+t_sync_parity(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+	unsigned long n0;
+	struct ds_mirror *d;
+
+	mb[3] = 0x01; mb[4] = 25; mb[5] = 8;
+	chip_int(b, 0xff20);
+	CHECK(mock_isr((char *)0) == 1 && a4091_sst[0][6] == 2, "id 6 synchronous");
+	chip_sint(b, 0x01);			/* then a parity error in its data phase */
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay, "the READ failed");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error on a synchronous transfer: asynchronous from now on") != NULL,
+	    "console: parity error on a synchronous transfer: asynchronous from now on");
+	a4091_sst[0][5] = 2;			/* another target, synchronous */
+	a4091_busreset = 1;			/* the reset runs, timed by the mock beam */
+	n0 = a4091_busreset_n;
+	mock_chip_idle(b);
+	CHECK(qcmd(1, 6, 1, 0x28), "the next READ to id 6");
+	d = (struct ds_mirror *)area_va(mock_wr32(b, R_DSA));
+	CHECK(a4091_busreset_n == n0 + 1, "the bus reset before it");
+	CHECK(a4091_sst[0][5] == 0, "the reset put id 5 back to unknown (renegotiated)");
+	CHECK(d && d->p[DS_ID].len == 1 && (d->scsi_addr & 0xff00) == 0 && a4091_sst[0][6] == 4,
+	    "id 6 stays off: IDENTIFY alone, SXFER 0");
+}
+
 /* ---- the spin (spin=, spinrd=) ---- */
 
 /* one A4091 loaded with PARAMS, the beam STEP lines per read, self-test run */
@@ -1253,6 +1503,16 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "intr auto: limits accepted, interrupt", t_auto_limits },
 	{ "intr auto: armed, on at the first long command", t_auto_armed },
 	{ "intr=1: interrupt without limits", t_intr1_nolimits },
+	{ "sync: off by default", t_sync_off },
+	{ "sync: an SDTR answer, 100 ns offset 8", t_sync_agreed },
+	{ "sync: 200 ns, the offset capped at 8", t_sync_200ns },
+	{ "sync: MESSAGE REJECT", t_sync_reject },
+	{ "sync: the SDTR ignored", t_sync_ignored },
+	{ "sync: a period the chip cannot time", t_sync_slow },
+	{ "sync: a parity error, off for good", t_sync_parity },
+	{ "sync: a parity error in the answer", t_sync_neg_parity },
+	{ "sync: a parity error stops the exchange", t_sync_neg_sint },
+	{ "sync: polled, a latched parity error", t_sync_parity_polled },
 	{ "spin: off by default", t_spin_off },
 	{ "spin: capped at 1000 us", t_spin_cap },
 	{ "spin: a stopped chip finished inline", t_spin_inline },

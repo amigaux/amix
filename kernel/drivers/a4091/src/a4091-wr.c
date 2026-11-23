@@ -124,6 +124,7 @@
 #define	R_SIEN		0x00
 #define	R_SCNTL1	0x02
 #define	R_SCNTL0	0x03
+#define	R_SXFER		0x06		/* TP 6:4 period, MO 3:0 offset (0: async) */
 #define	R_SCID		0x07
 #define	R_SBCL		0x08
 #define	R_SSTAT2	0x0C		/* ro; low bits = live SCSI phase (MSG/CD/IO) */
@@ -155,6 +156,7 @@
 #define	DSTAT_SIR	0x04		/* SCRIPTS INT instruction */
 #define	SSTAT0_M_A	0x80		/* phase mismatch (or ATN active) (siopreg.h:402) */
 #define	SSTAT0_STO	0x20		/* selection timeout */
+#define	SSTAT0_PAR	0x01		/* parity error (siopreg.h:409) */
 #define	SSTAT1_ORF	0x40		/* output reg (sodr) still full (siopreg.h:425) */
 #define	SSTAT1_OLF	0x20		/* output latch (sodl) still full (siopreg.h:426) */
 #define	CTEST1_FMT	0xf0		/* DMA FIFO "byte empty" flags; ==0xf0 -> empty (siopreg.h:483) */
@@ -200,48 +202,66 @@ static long		board_phys;	/* current card: board phys base                    */
 #define	WR32(r,v)	(*(volatile ulong *)(siop + (r) + WRSHADOW) = (ulong)(v))
 
 /*
- * The minimal table-indirect INQUIRY SCRIPTS (based on reference/scripts/inq-wr.ss,
- * assembled by ncr53cxxx; now 23 instructions / 184 bytes).  DSPS result vectors:
- * ok=0xff00, err5(unexpected phase)=0xff05, seltimeout=0xff10.  Static array =>
- * lives in kernel .data => bus address == &inq_script[0] (TT0 identity).
+ * The table-indirect SCRIPTS: reference/scripts/inq-wr.ss, assembled by NetBSD's
+ * ncr53cxxx into inq-wr.out, of which this array is the copy (41 instructions,
+ * 328 bytes).  DSPS result vectors: ok=0xff00, err5(unexpected phase)=0xff05,
+ * seltimeout=0xff10; the synchronous negotiation's 0xff20 (an SDTR answer in
+ * ds_SyncMsg), 0xff21 (MESSAGE REJECT), 0xff22 (another message).  Static
+ * array => kernel .data => bus address == &inq_script[0] (TT0 identity); the
+ * module copies it into its dma_alloc area.
  *
- * The phase-dispatch block at byte offset SCRIPT_DISPATCH (0x30, just after the
- * CMD MOVE) fans out on the LIVE bus phase.  It is ALSO the re-entry point the
- * DATA_IN short-read recovery re-launches (see a4091queue): re-dispatching there
- * on the live phase drains STATUS + MSG_IN to a clean INT 0xff00.
- *
- * NOTE: hand-patched relative to the generated reference/scripts/inq-wr.out to add
- * a "JUMP msgin, WHEN MSG_IN" dispatch case (a non-STATUS post-data phase must not
- * fall to err_phase on real HW).  reference/scripts/inq-wr.ss is now stale and
- * should be regenerated to match in a follow-up (out of scope here).  All relative
- * displacements below were recomputed for the +1-instruction (8-byte) insertion.
+ * SCRIPT_DISPATCH, the phase-dispatch block after the CMD MOVE, fans out on the
+ * LIVE bus phase.  It is ALSO the re-entry point the DATA_IN short-read
+ * recovery re-launches (see a4091queue): re-dispatching there on the live
+ * phase drains STATUS + MSG_IN to a clean INT 0xff00.  SCRIPT_CMD and
+ * SCRIPT_NEGACK are where a negotiation stop continues.
  */
-#define	SCRIPT_DISPATCH	0x30		/* byte offset of the phase-dispatch block */
+#define	SCRIPT_DISPATCH	0x38		/* Ent_datadisp: the phase-dispatch block */
+#define	SCRIPT_CMD	0x20		/* Ent_command_phase */
+#define	SCRIPT_NEGACK	0x130		/* Ent_neg_ack: CLEAR ATN, CLEAR ACK, to CMD */
 
-static ulong inq_script[] = {		/* READ+WRITE: DATA phase dispatches on live bus phase */
-	0x47000000, 0x000000a8,		/* 0x00 SELECT ATN FROM ds_Device, REL(seltimeout) */
-	0x86830000, 0x00000098,		/* 0x08 JUMP err_phase, WHEN NOT MSG_OUT           */
-	0x1e000004, 0x00000004,		/* 0x10 MOVE FROM ds_MsgOut, WHEN MSG_OUT (IDENTIFY)*/
-	0x82830000, 0x00000088,		/* 0x18 JUMP err_phase, WHEN NOT CMD               */
-	0x60000008, 0x00000000,		/* 0x20 CLEAR ATN                                  */
-	0x1a00000c, 0x0000000c,		/* 0x28 MOVE FROM ds_Cmd, WHEN CMD                 */
-	0x808b0000, 0x00000020,		/* 0x30 datadisp: JUMP dataout, WHEN DATA_OUT (wr) */
-	0x818b0000, 0x00000028,		/* 0x38 JUMP datain,  WHEN DATA_IN   (read)        */
-	0x838b0000, 0x00000028,		/* 0x40 JUMP status_phase, WHEN STATUS (no data)   */
-	0x878b0000, 0x00000030,		/* 0x48 JUMP msgin,   WHEN MSG_IN (non-STATUS drain)*/
-	0x80880000, 0x00000050,		/* 0x50 JUMP err_phase               (unexpected)  */
-	0x1800003c, 0x0000003c,		/* 0x58 dataout: MOVE FROM ds_Data1, WHEN DATA_OUT */
-	0x80880000, 0x00000008,		/* 0x60 JUMP status_phase                          */
-	0x1900003c, 0x0000003c,		/* 0x68 datain:  MOVE FROM ds_Data1, WHEN DATA_IN  */
-	0x83830000, 0x00000030,		/* 0x70 status_phase: JUMP err_phase, WHEN NOT STATUS*/
-	0x1b000014, 0x00000014,		/* 0x78 MOVE FROM ds_Status, WHEN STATUS           */
-	0x87830000, 0x00000020,		/* 0x80 msgin: JUMP err_phase, WHEN NOT MSG_IN     */
-	0x1f00001c, 0x0000001c,		/* 0x88 MOVE FROM ds_Msg, WHEN MSG_IN              */
-	0x60000040, 0x00000000,		/* 0x90 CLEAR ACK                                  */
-	0x48000000, 0x00000000,		/* 0x98 WAIT DISCONNECT                            */
-	0x98080000, 0x0000ff00,		/* 0xa0 INT ok                                     */
-	0x98080000, 0x0000ff05,		/* 0xa8 err_phase: INT err5                        */
-	0x98080000, 0x0000ff10,		/* 0xb0 seltimeout: INT 0xff10                     */
+static ulong inq_script[] = {		/* reference/scripts/inq-wr.out, byte for byte */
+	0x47000000, 0x000000b0,		/* 0x00 SELECT ATN FROM ds_Device, REL(seltimeout)  */
+	0x86830000, 0x000000a0,		/* 0x08 msgout: JUMP err_phase, WHEN NOT MSG_OUT    */
+	0x1e000004, 0x00000004,		/* 0x10 MOVE FROM ds_MsgOut, WHEN MSG_OUT (IDENTIFY[+SDTR])*/
+	0x878b0000, 0x000000a0,		/* 0x18 JUMP neg_in, WHEN MSG_IN (an answer to it)  */
+	0x82830000, 0x00000088,		/* 0x20 command_phase: JUMP err_phase, WHEN NOT CMD */
+	0x60000008, 0x00000000,		/* 0x28 CLEAR ATN                                   */
+	0x1a00000c, 0x0000000c,		/* 0x30 MOVE FROM ds_Cmd, WHEN CMD                  */
+	0x808b0000, 0x00000020,		/* 0x38 datadisp: JUMP dataout, WHEN DATA_OUT (wr)  */
+	0x818b0000, 0x00000028,		/* 0x40 JUMP datain,  WHEN DATA_IN   (read)         */
+	0x838b0000, 0x00000028,		/* 0x48 JUMP status_phase, WHEN STATUS (no data)    */
+	0x878b0000, 0x00000030,		/* 0x50 JUMP msgin,   WHEN MSG_IN (non-STATUS drain)*/
+	0x80880000, 0x00000050,		/* 0x58 JUMP err_phase               (unexpected)   */
+	0x1800003c, 0x0000003c,		/* 0x60 dataout: MOVE FROM ds_Data1, WHEN DATA_OUT  */
+	0x80880000, 0x00000008,		/* 0x68 JUMP status_phase                           */
+	0x1900003c, 0x0000003c,		/* 0x70 datain:  MOVE FROM ds_Data1, WHEN DATA_IN   */
+	0x83830000, 0x00000030,		/* 0x78 status_phase: JUMP err_phase, WHEN NOT STATUS*/
+	0x1b000014, 0x00000014,		/* 0x80 MOVE FROM ds_Status, WHEN STATUS            */
+	0x87830000, 0x00000020,		/* 0x88 msgin: JUMP err_phase, WHEN NOT MSG_IN      */
+	0x1f00001c, 0x0000001c,		/* 0x90 MOVE FROM ds_Msg, WHEN MSG_IN               */
+	0x60000040, 0x00000000,		/* 0x98 CLEAR ACK                                   */
+	0x48000000, 0x00000000,		/* 0xa0 WAIT DISCONNECT                             */
+	0x98080000, 0x0000ff00,		/* 0xa8 INT ok                                      */
+	0x98080000, 0x0000ff05,		/* 0xb0 err_phase: INT err5                         */
+	0x98080000, 0x0000ff10,		/* 0xb8 seltimeout: INT 0xff10                      */
+	0x1f000024, 0x00000024,		/* 0xc0 neg_in: MOVE FROM ds_MsgIn, WHEN MSG_IN     */
+	0x808c0001, 0x00000028,		/* 0xc8 JUMP neg_ext, IF 0x01 (extended)            */
+	0x808c0007, 0x00000008,		/* 0xd0 JUMP neg_rej, IF 0x07 (REJECT)              */
+	0x98080000, 0x0000ff22,		/* 0xd8 INT neg_other 0xff22                        */
+	0x60000008, 0x00000000,		/* 0xe0 neg_rej: CLEAR ATN                          */
+	0x60000040, 0x00000000,		/* 0xe8 CLEAR ACK                                   */
+	0x98080000, 0x0000ff21,		/* 0xf0 INT neg_rej 0xff21 (-> command_phase)       */
+	0x60000040, 0x00000000,		/* 0xf8 neg_ext: CLEAR ACK                          */
+	0x1f00002c, 0x0000002c,		/* 0x100 MOVE FROM ds_ExtMsg, WHEN MSG_IN (len)      */
+	0x808c0003, 0x00000008,		/* 0x108 JUMP neg_sdtr, IF 0x03                      */
+	0x98080000, 0x0000ff22,		/* 0x110 INT neg_other 0xff22                        */
+	0x60000040, 0x00000000,		/* 0x118 neg_sdtr: CLEAR ACK                         */
+	0x1f000034, 0x00000034,		/* 0x120 MOVE FROM ds_SyncMsg, WHEN MSG_IN (01 P O)  */
+	0x98080000, 0x0000ff20,		/* 0x128 INT neg_sdtr 0xff20 (SXFER set)             */
+	0x60000008, 0x00000000,		/* 0x130 neg_ack: CLEAR ATN                          */
+	0x60000040, 0x00000000,		/* 0x138 CLEAR ACK                                   */
+	0x80880000, 0xfffffed8,		/* 0x140 JUMP command_phase                          */
 };
 
 /*
@@ -514,7 +534,7 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 #ifdef	A4091_MODULE
 /*
  * The module's chip-visible structures: one dma_alloc area (C4-5 section 3),
- * 1348 bytes from a 16-aligned base.  The names the queue path uses (ds,
+ * 1508 bytes from a 16-aligned base.  The names the queue path uses (ds,
  * inq_script, the buffers, the bounce) are redefined onto it below, so the code
  * is the static driver's; A4091_BUS() turns a member's kernel address into the
  * physical one the chip is given.  The SCRIPTS are position-independent (REL
@@ -533,11 +553,12 @@ static uchar	a4091_bounce[A4091_BOUNCE_MAX + 16];
 struct a4091_dmaarea {
 	uchar		d_sline[16];		/* 0x000 status 0-3, message 4-11 */
 	uchar		d_cline[16];		/* 0x010 the clear line: never written */
-	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x020, 184 */
-	struct siop_ds	d_ds;						/* 0x0d8, 76  */
-	uchar		d_ident[4];					/* 0x124      */
-	uchar		d_cdb[12];					/* 0x128      */
-	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x134      */
+	ulong		d_script[sizeof inq_script / sizeof (ulong)];	/* 0x020, 328 */
+	struct siop_ds	d_ds;						/* 0x168, 76  */
+	uchar		d_ident[4];					/* 0x1b4      */
+	uchar		d_cdb[12];					/* 0x1b8      */
+	uchar		d_bounce[A4091_BOUNCE_MAX + 16];		/* 0x1c4      */
+	uchar		d_mout[16];	/* 0x5d4: IDENTIFY + SDTR, one MESSAGE OUT */
 };
 
 struct a4091_dmaarea	*a4091_da;	/* kernel address, 0 until _load        */
@@ -877,7 +898,8 @@ a4091init()
  * SCSI bus reset, once per card, before its first command.  The board's
  * AmigaOS ROM may have negotiated synchronous transfer with a target (A4091/A4092
  * DIP SW6 Off); a target keeps that agreement until a bus reset, while this
- * driver always runs asynchronous (SXFER never written, no SDTR).  The soft reset
+ * driver starts asynchronous (the module negotiates its own with sync=1, after
+ * this reset; the static driver never does).  The soft reset
  * in a4091init() resets the chip only, not the bus.
  *
  * Timed by the beam counter, not a CPU loop: the high byte of VHPOSR (0xDFF006)
@@ -946,11 +968,18 @@ ulong	n;
 	}
 }
 
+#ifdef	A4091_MODULE
+static void	a4091_syreset();
+#endif
+
 static void
 a4091_busreset_card( card)
 int	card;
 {
 	a4091_rstdone[card] = 1;
+#ifdef	A4091_MODULE
+	a4091_syreset( card);		/* the targets forget their agreements */
+#endif
 	if (!a4091_busreset)
 		return;
 	a4091_busreset_chg = 0;
@@ -1021,7 +1050,7 @@ int	card;
  * ------------------------------------------------------------------------- */
 #define	A4091_DIEN	0x35		/* DSTAT: BF ABRT SIR IID raise the line */
 #define	A4091_SIEN	0xaf		/* SSTAT0: M/A STO SGE UDC RST PAR */
-#define	SCRIPT_SELTO	0xb0		/* INT 0xff10, run alone by the self-test */
+#define	SCRIPT_SELTO	0xb8		/* Ent_seltimeout: INT 0xff10, run alone by the self-test */
 #define	A4091_STDSPS	0xff10
 #define	A4091_WD	30		/* watchdog period, ticks */
 #define	A4091_BOUND	600		/* still running after this many ticks: rc -2 */
@@ -1102,11 +1131,54 @@ struct a4091_iq	a4091_iq = { 0x4134494e, 0, -1 };
 static struct a4091_fl {
 	struct sdcom	*cp;
 	int		c, dmadir, bounced, recovered, rc;
+	int		negbad;		/* the negotiation turned the target off: fail it */
 	ulong		dpa, dlen, dva, poll, dsps, armed;
+	uchar		sstat0;		/* the last stop's SSTAT0 */
 #ifdef	A4091_PROBE
 	ulong		l0, lstop;	/* the probe's beam lines: launch, stop */
 #endif
 } a4091_fl;
+
+/*
+ * Synchronous transfers (param sync=1; 0, the default, keeps every target
+ * asynchronous).  Per board and target a state: UNKNOWN negotiates on the
+ * next command (IDENTIFY and SDTR in one MESSAGE OUT, offering 100 ns and
+ * offset 8); PENDING while that command runs; SYNC with the agreed SXFER and
+ * SBCL, loaded at every selection; ASYNC when the target rejected, ignored or
+ * answered offset 0; OFF for good after a parity error or phase mismatch on a
+ * synchronous transfer, a parity error in the negotiation, or an answer the
+ * chip cannot time (said on the console; the command fails, and the bus is
+ * reset before the board's next command so the target forgets the
+ * agreement).  A bus reset puts every state but OFF back to UNKNOWN.
+ * The polled path runs with SIEN 0, so a parity error stops nothing there:
+ * it only latches SSTAT0 PAR.  SSTAT0 is therefore read before the launch
+ * (an older latch is not this command's), at the answer's stop and at the
+ * end of a command to a synchronous target.  The 53C710's SCLK is 50 MHz on the A4091 and the A4000T, so
+ * the synchronous clock is 20, 30 or 40 ns (SBCL SSCF 1, 2, 3) and a period
+ * is (TP + 4) of them.
+ */
+#define	SY_UNKNOWN	0
+#define	SY_PENDING	1
+#define	SY_SYNC		2
+#define	SY_ASYNC	3
+#define	SY_OFF		4
+#define	A4091_MINSYNC	25		/* the offer: 100 ns, in 4 ns units */
+#define	A4091_MAXOFF	8		/* the 53C710's offset */
+struct a4091_sy {
+	ulong	magic;			/* 0x41345359 "A4SY"                        */
+	ulong	param;			/* sync= as _load took it                   */
+	ulong	negs;			/* SDTR messages sent                       */
+	ulong	syncs;			/* answers that made a target synchronous   */
+	ulong	asyncs;			/* offset 0, or no answer: asynchronous     */
+	ulong	rejects;		/* MESSAGE REJECT                           */
+	ulong	others;			/* another message in answer                */
+	ulong	offs;			/* targets turned off for good              */
+};
+struct a4091_sy	a4091_sy = { 0x41345359 };
+uchar		a4091_sst[A4091_NCARD][8];	/* per board, target: SY_* */
+uchar		a4091_ssx[A4091_NCARD][8];	/* its SXFER */
+uchar		a4091_ssb[A4091_NCARD][8];	/* its SBCL (SSCF) */
+static uchar	a4091_tcp[4] = { 0, 20, 30, 40 };	/* ns: SCLK/1, /1.5, /2 */
 
 static struct sdcom	*a4091_qh, *a4091_qt;	/* waiting: a FIFO by cp->next */
 static ulong		a4091_qn;
@@ -1192,8 +1264,9 @@ int		c;
 struct sdcom	*cp;
 {
 	struct a4091_fl	*f;
-	int	i, target, cmdlen;
+	int	i, target, cmdlen, t;
 	ulong	da;
+	uchar	sx, sb;
 
 	f = &a4091_fl;
 	if (a4091map( c)) {
@@ -1243,16 +1316,34 @@ struct sdcom	*cp;
 	status_buf[0] = 0xff;
 	for (i = 0; i < 8; ++i) msg_buf[i] = 0xff;
 
-	ds.scsi_addr = (ulong)0x10000 << target;
+	t = target & 7;
+	sx = 0; sb = 0;
+	if (a4091_sst[c][t] == SY_SYNC) {
+		sx = a4091_ssx[c][t];
+		sb = a4091_ssb[c][t];
+	}
+	ds.scsi_addr = ((ulong)0x10000 << target) | ((ulong)sx << 8);
 	ds.idlen = 1;        ds.idbuf     = A4091_BUSP(ident_buf);
 	ds.cmdlen = cmdlen;  ds.cmdbuf    = A4091_BUSP(cdb_buf);
 	ds.stslen = 1;       ds.stsbuf    = A4091_BUSP(status_buf);
 	ds.msglen = 1;       ds.msgbuf    = A4091_BUSP(&msg_buf[0]);
 	ds.msginlen = 1;     ds.msginbuf  = A4091_BUSP(&msg_buf[1]);
 	ds.extmsglen = 1;    ds.extmsgbuf = A4091_BUSP(&msg_buf[2]);
-	ds.synmsglen = 1;    ds.synmsgbuf = A4091_BUSP(&msg_buf[3]);
+	ds.synmsglen = 3;    ds.synmsgbuf = A4091_BUSP(&msg_buf[3]);
 	ds.data1len = cp->nbyte;  ds.data1buf = (uchar *)f->dpa;
 	ds.data2len = 0;     ds.data2buf  = 0;
+	if (a4091_sy.param && a4091_sst[c][t] == SY_UNKNOWN) {
+		a4091_da->d_mout[0] = 0x80;		/* IDENTIFY, no disconnect */
+		a4091_da->d_mout[1] = 0x01;		/* extended message */
+		a4091_da->d_mout[2] = 0x03;
+		a4091_da->d_mout[3] = 0x01;		/* SDTR */
+		a4091_da->d_mout[4] = A4091_MINSYNC;
+		a4091_da->d_mout[5] = A4091_MAXOFF;
+		ds.idlen = 6;
+		ds.idbuf = A4091_BUSP(a4091_da->d_mout);
+		a4091_sst[c][t] = SY_PENDING;
+		a4091_sy.negs++;
+	}
 
 	/* D42 prepare after the DSA table is final, before the DSP write; then
 	 * C4-5 v3 section 2.3: the chip gets dma_addr(r, pa) (pa on k46, a pool
@@ -1273,6 +1364,7 @@ struct sdcom	*cp;
 
 	f->c = c;
 	f->recovered = 0;
+	f->negbad = 0;
 	f->rc = 0;
 	f->poll = 0;
 	f->dsps = 0;
@@ -1283,7 +1375,9 @@ struct sdcom	*cp;
 		WR8( R_SIEN, A4091_SIEN);
 	}
 	WR32( R_TEMP, 0);
-	WR8 ( R_SBCL, 0);
+	WR8 ( R_SBCL, sb);
+	if (a4091_sy.param)
+		(void)RD8(R_SSTAT0);		/* an older parity latch is not this command's */
 	WR32( R_DSA, A4091_BUS(&ds));
 #ifdef	A4091_PROBE
 	f->l0 = a4091_pline();
@@ -1313,6 +1407,111 @@ a4091_spin()
 }
 
 /*
+ * A negotiation stop (INT 0xff20, 0xff21, 0xff22): the target's state from
+ * the answer, SXFER and SBCL set for the rest of this connection; returns
+ * where the SCRIPTS continue.  The answer's bytes are read after the status
+ * line's sync (k30: the provider's complete clears the data cache).
+ */
+static ulong
+a4091_neg( dsps)
+ulong	dsps;
+{
+	struct a4091_fl	*f;
+	int	c, t, sb, tp;
+	ulong	ns, spa;
+	uchar	per, off;
+
+	f = &a4091_fl;
+	c = f->c;
+	t = (int)f->cp->unit & 7;
+	if (dsps == 0xff21) {			/* MESSAGE REJECT */
+		if (a4091_sst[c][t] == SY_PENDING) {
+			a4091_sst[c][t] = SY_ASYNC;
+			a4091_sy.rejects++;
+		}
+		return SCRIPT_CMD;
+	}
+	if (dsps != 0xff20) {			/* another message */
+		if (a4091_sst[c][t] == SY_PENDING) {
+			a4091_sst[c][t] = SY_ASYNC;
+			a4091_sy.others++;
+		}
+		return SCRIPT_NEGACK;
+	}
+	spa = A4091_BUS(a4091_da->d_cline);
+	a4091_dma_prepare( c, spa, (ulong)16, DMA_FROM_DEVICE);
+	a4091_dma_complete( c, spa, (ulong)16, DMA_FROM_DEVICE);
+	per = msg_buf[4];
+	off = msg_buf[5];
+	a4091_ssx[c][t] = 0;
+	a4091_ssb[c][t] = 0;
+	if (RD8(R_SSTAT0) & SSTAT0_PAR) {	/* the answer came with a parity error */
+		a4091_sst[c][t] = SY_OFF;
+		a4091_sy.offs++;
+		a4091_rstdone[c] = 0;
+		f->negbad = 1;
+		WR8( R_SXFER, 0);
+		WR8( R_SBCL, 0);
+		printf( "%s: board %d id %d: parity error in the negotiation: asynchronous from now on\n",
+		    A4091_NAME, c, t);
+		return SCRIPT_NEGACK;
+	}
+	if (msg_buf[3] != 0x01 || off == 0) {	/* not SDTR, or offset 0 */
+		a4091_sst[c][t] = SY_ASYNC;
+		a4091_sy.asyncs++;
+		WR8( R_SXFER, 0);
+		WR8( R_SBCL, 0);
+		return SCRIPT_NEGACK;
+	}
+	if (off > A4091_MAXOFF)
+		off = A4091_MAXOFF;
+	ns = (ulong)per * 4;
+	tp = 0;
+	sb = 1;
+	while (sb < 4) {
+		tp = (int)((ns - 1) / a4091_tcp[sb]) - 3;
+		if (tp >= 0 && tp <= 7)
+			break;
+		sb = sb + 1;
+	}
+	if (sb > 3 || per < A4091_MINSYNC) {	/* a period the chip cannot time */
+		a4091_sst[c][t] = SY_OFF;
+		a4091_sy.offs++;
+		a4091_rstdone[c] = 0;		/* the target forgets it at the reset */
+		f->negbad = 1;			/* this command may run synchronous on its side */
+		WR8( R_SXFER, 0);
+		WR8( R_SBCL, 0);
+		printf( "%s: board %d id %d: a synchronous period of %d ns cannot be timed: asynchronous from now on\n",
+		    A4091_NAME, c, t, (int)ns);
+		return SCRIPT_NEGACK;
+	}
+	a4091_ssx[c][t] = (uchar)((tp << 4) | off);
+	a4091_ssb[c][t] = (uchar)sb;
+	a4091_sst[c][t] = SY_SYNC;
+	a4091_sy.syncs++;
+	WR8( R_SXFER, a4091_ssx[c][t]);
+	WR8( R_SBCL, sb);
+	printf( "%s: board %d id %d synchronous, period %d ns, offset %d\n",
+	    A4091_NAME, c, t, (tp + 4) * (int)a4091_tcp[sb], (int)off);
+	return SCRIPT_NEGACK;
+}
+
+/* Every state of board c but OFF back to UNKNOWN (its bus was reset). */
+static void
+a4091_syreset( c)
+int	c;
+{
+	int	t;
+
+	for (t = 0; t < 8; ++t)
+		if (a4091_sst[c][t] != SY_OFF) {
+			a4091_sst[c][t] = SY_UNKNOWN;
+			a4091_ssx[c][t] = 0;
+			a4091_ssb[c][t] = 0;
+		}
+}
+
+/*
  * One stop of the chip, its ISTAT given: 1 = re-launched (the DATA_IN short
  * read's recovery, once per command: see the static driver's comment), 0 =
  * the end, a4091_fl.rc set.  Reading SSTAT0 and DSTAT clears the interrupt.
@@ -1331,6 +1530,12 @@ uchar	istat;
 	dstat  = (istat & ISTAT_DIP) ? RD8(R_DSTAT)  : 0;
 	dsps   = RD32(R_DSPS);
 	f->dsps = dsps;
+	f->sstat0 = sstat0;
+
+	if ((dstat & DSTAT_SIR) && dsps >= 0xff20 && dsps <= 0xff22 && !(istat & ISTAT_SIP)) {
+		WR32( R_DSP, A4091_BUS(inq_script) + a4091_neg( dsps));
+		return 1;
+	}
 
 	if (!(istat & (ISTAT_SIP | ISTAT_DIP)))         rc = -2;
 	else if (sstat0 & SSTAT0_STO)                   rc = -1;
@@ -1357,6 +1562,44 @@ uchar	istat;
 }
 
 /*
+ * The negotiation's end with the command: PENDING with no answer becomes
+ * ASYNC (a target that ignores SDTR), or UNKNOWN again when nobody answered
+ * the selection, or OFF after a parity error in the exchange; a parity error
+ * or phase mismatch on a SYNC target turns it OFF for good.  After an OFF
+ * the bus is reset before the board's next command.
+ */
+static void
+a4091_syend( c, t, rc, sstat0)
+int	c, t, rc;
+uchar	sstat0;
+{
+	if (a4091_sst[c][t] == SY_PENDING) {
+		if (rc == -1)
+			a4091_sst[c][t] = SY_UNKNOWN;
+		else if (rc == -3 && (sstat0 & SSTAT0_PAR)) {	/* stopped in the exchange */
+			a4091_sst[c][t] = SY_OFF;
+			a4091_sy.offs++;
+			a4091_rstdone[c] = 0;
+			printf( "%s: board %d id %d: parity error in the negotiation: asynchronous from now on\n",
+			    A4091_NAME, c, t);
+		} else {
+			a4091_sst[c][t] = SY_ASYNC;
+			a4091_sy.asyncs++;
+		}
+		return;
+	}
+	if (a4091_sst[c][t] == SY_SYNC && rc == -3 && (sstat0 & (SSTAT0_PAR | SSTAT0_M_A))) {
+		a4091_sst[c][t] = SY_OFF;
+		a4091_ssx[c][t] = 0;
+		a4091_ssb[c][t] = 0;
+		a4091_sy.offs++;
+		a4091_rstdone[c] = 0;
+		printf( "%s: board %d id %d: %s on a synchronous transfer: asynchronous from now on\n",
+		    A4091_NAME, c, t, (sstat0 & SSTAT0_PAR) ? "parity error" : "phase mismatch");
+	}
+}
+
+/*
  * The end of the command in flight: the trace on an anomaly, the stuck-bus
  * guard, the D42 complete, the bounce's copy-out, the status sync, then the
  * chip is free and cp->intr runs (it may queue the next command).
@@ -1366,14 +1609,32 @@ a4091_finish()
 {
 	struct a4091_fl	*f;
 	struct sdcom	*cp;
-	int	c, rc;
+	int	c, rc, s0rd;
 	ulong	t;
+	uchar	s0;
 
 	f = &a4091_fl;
 	cp = f->cp;
 	c = f->c;
 	rc = f->rc;
 	t = (ulong)lbolt - f->armed;
+	/* A synchronous target's command that ended well: SSTAT0 read for a
+	 * parity error the polled path's SIEN 0 let pass (it latches, nothing
+	 * stops); one fails the command, and a4091_syend turns the target off.
+	 * A target the negotiation turned off fails its command too. */
+	s0 = 0;
+	s0rd = 0;
+	if (rc == 0 && a4091_sst[c][(int)cp->unit & 7] == SY_SYNC) {
+		s0 = RD8(R_SSTAT0);
+		s0rd = 1;
+		if (s0 & SSTAT0_PAR) {
+			rc = -3;
+			f->sstat0 = f->sstat0 | s0;
+		}
+	}
+	if (rc == 0 && f->negbad)
+		rc = -3;
+	f->rc = rc;
 	/* A selection timeout is an absent id's normal answer to a bus scan:
 	 * counted, not traced. */
 	if (rc == -1)
@@ -1385,7 +1646,7 @@ a4091_finish()
 
 		di = RD8(R_ISTAT);
 		dd = RD8(R_DSTAT);
-		d0 = RD8(R_SSTAT0);
+		d0 = s0rd ? s0 : RD8(R_SSTAT0);
 		d1 = RD8(R_SSTAT1);
 		d2 = RD8(R_SSTAT2);
 		dp = RD32(R_DSP);
@@ -1433,6 +1694,7 @@ a4091_finish()
 	a4091_probe_cmd( cp, f->poll, rc);
 	a4091_probe.lc = a4091_probe.lc + a4091_pdelta( f->l0, f->lstop);
 #endif
+	a4091_syend( c, (int)cp->unit & 7, rc, f->sstat0);
 	cp->status = (rc == 0) ? status_buf[0] : 0xff;
 	cp->okay   = (rc == 0) ? TRUE : FALSE;
 	f->cp = 0;
@@ -1911,6 +2173,7 @@ char	*params;
 	a4091_iq.spin = (ulong)v;
 	v = a4091_param( params, "spinrd=", 0L);
 	a4091_spinrdp = v > 0 ? (ulong)v : 0;
+	a4091_sy.param = a4091_param( params, "sync=", 0L) == 1 ? 1 : 0;
 	if (a4091_iq.param == 0)
 		return;
 	if (a4091_iq.param < 0)
