@@ -228,8 +228,16 @@ the default, the build and its bytes are as before.
   `libgcc.a`'s, whose absolute call to `__fixunsdfdi` would be a text relocation in `libDtSvc` and
   `libDtMrm`; it goes when the toolchain's `libgcc` is position-independent.
 - `_XtInherit` from X11R6.3's shared variant's `libXtInherit.a` is linked into every program (its
-  README, *The shared variant*), and through the same link flags into each library; the program's
-  is the one bound at run time.
+  README, *The shared variant*), and into no library: a library's copy would be found first, the
+  program would take none, and the class records in a program's own data (`dtwm`, `dtfile`,
+  `dtcm`, `dtprintinfo`) would hold an address libXt does not know, so Xt stops with
+  "Unresolved inheritance operation". The build refuses a library that defines it and a program
+  that refers to it without its own.
+- **C++ programs link with `g++ -shared-libgcc`**, so ToolTalk's programs (`ttsession`,
+  `rpc.ttdbserver`, `tttrace` and the rest) use `libstdc++.so.6`, the runtime `libtt` uses, and
+  carry no static copy, which `libstdc++.so.6` refuses at start-up. They are linked in the library
+  pass and linked again with the programs' flags. The build refuses a program with a runtime of its
+  own.
 - **No text relocations**: the build refuses any, naming its source (`textrel-report.py`).
 - **Amix's `libm` comes from the program.** Amix has `libm` only static and not
   position-independent, so no shared library can link it. `libDtHelp` (`sin`, `cos`, `tan`, in its
@@ -245,8 +253,8 @@ the default, the build and its bytes are as before.
   ```
   cc ... -Wl,-u,sin -Wl,--export-dynamic-symbol=sin   (likewise cos tan log log10 sqrt) ... -lm
   ```
-  Without them, the libraries' references stay 0 and the program dies the first time it rotates
-  an image, decodes a JPEG in a help topic or ranks a search. The build refuses any of CDE's own
+  Without them, the runtime linker stops the program ("symbol not found") the first time it
+  rotates an image, decodes a JPEG in a help topic or ranks a search. The build refuses any of CDE's own
   programs that reaches these libraries and does not export all six.
 - **Gates**: `check-got-addend.py` on the PIC objects and compat, and `check-dynstr-order.py` on
   every library and program.

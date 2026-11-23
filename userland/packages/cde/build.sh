@@ -39,9 +39,7 @@ cde_vars() {
 		CDE_XLIBDIR="$SHLIB"
 		CDE_LIBKIND="--enable-shared --disable-static"
 		CDE_PIC=-fPIC
-		# with every program's own _XtInherit, ahead of libXt's (x11r6.3-shared's
-		# libXtInherit.a): a stopgap for the stock runtime linker
-		CDE_LDFLAGS="-L$SHLIB -L$COMPAT/lib -Wl,-rpath-link,$SHLIB -Wl,-rpath,$PREFIX/lib:/opt/amix/X11R6/lib:/opt/amix/lib -Wl,-u,_XtInherit -lXtInherit"
+		CDE_LDFLAGS="-L$SHLIB -L$COMPAT/lib -Wl,-rpath-link,$SHLIB -Wl,-rpath,$PREFIX/lib:/opt/amix/X11R6/lib:/opt/amix/lib"
 		# libtool's SVR4 vendor table lacks `cbm': pass_all, as for the vendors it
 		# knows, keeps each library's dependency libraries in its link
 		CDE_SEEDS="$CDE_SEEDS lt_cv_deplibs_check_method=pass_all lt_cv_archive_cmds_need_lc=no"
@@ -56,6 +54,12 @@ cde_vars() {
 		CDE_MATHLD=
 		for _m in $CDE_MATH; do CDE_MATHLD="$CDE_MATHLD -Wl,-u,$_m -Wl,--export-dynamic-symbol=$_m"; done
 		CDE_MATHLD="${CDE_MATHLD# } -lm"
+		# every program its own _XtInherit, ahead of libXt's (x11r6.3-shared's
+		# libXtInherit.a): a stopgap for the stock runtime linker, which binds the
+		# libraries to the program's copy but never to the PLT address a program's
+		# class records hold.  Programs only: a library that took a copy would be
+		# found first, and the program would take none
+		CDE_PROGLD="-Wl,-u,_XtInherit -lXtInherit $CDE_MATHLD"
 	else
 		# libtt is C++, and the C programs that link it need its runtime
 		# (__gxx_personality_v0, the type_info vtables): libtool's C++ probe
@@ -379,7 +383,12 @@ build() {
 	# the shared variant: libDtHelp and libDtSearch with their libm calls weak
 	# (compat/libm-weak.h), then every library with configure's link flags;
 	# the programs, linked after them, also take the stock libm's functions
-	# for those calls and export them (CDE_MATHLD), which a library link must not
+	# for those calls and export them (CDE_MATHLD), and their own _XtInherit,
+	# which a library link must not (CDE_PROGLD).  ToolTalk's programs, linked
+	# in lib, are linked again with those; C++ programs link with g++
+	# -shared-libgcc, so they use libstdc++.so.6, the runtime libtt's, not a
+	# static copy of their own (which libstdc++.so.6 refuses at start-up).
+	# libtool hands that option to program links only
 	if [ "$CDE_VARIANT" = shared ]; then
 		for d in lib/DtHelp lib/DtSearch; do
 			make -C "$d" CPPFLAGS="$(sed -n 's/^CPPFLAGS = //p' Makefile) -include $AMIX_GCC14_DECLS -include $COMPAT/libm-weak.h" "$@" \
@@ -387,7 +396,11 @@ build() {
 		done
 		make_cde -C util "$@" > "$BUILD/make-util.log" 2>&1 || { tail -30 "$BUILD/make-util.log" >&2; echo "[FAIL] make util" >&2; exit 1; }
 		make_cde -C lib "$@" > "$BUILD/make-lib.log" 2>&1 || { tail -30 "$BUILD/make-lib.log" >&2; echo "[FAIL] make lib" >&2; exit 1; }
-		set -- "$@" LDFLAGS="$(sed -n 's/^LDFLAGS = //p' Makefile) $CDE_MATHLD"
+		for d in lib/tt/bin/*/; do
+			grep -q '^clean-binPROGRAMS:' "$d/Makefile" 2>/dev/null || continue
+			make -C "$d" clean-binPROGRAMS > /dev/null || { echo "[FAIL] make -C $d clean-binPROGRAMS" >&2; exit 1; }
+		done
+		set -- "$@" LDFLAGS="$(sed -n 's/^LDFLAGS = //p' Makefile) $CDE_PROGLD" CXXLD="$CXX -shared-libgcc"
 	fi
 	make_cde "$@" > "$BUILD/make.log" 2>&1 || { tail -40 "$BUILD/make.log" >&2; echo "[FAIL] make" >&2; exit 1; }
 	# rpc.cmsd's hand-written lexer (lexit.c) without jump tables: the
@@ -461,7 +474,8 @@ stage() {
 		# Amix's libm through the program (compat/libm-weak.h): no library here
 		# defines one of CDE_MATH or needs it strongly; and every program that
 		# NEEDs libDtHelp or libDtSearch, or a library that NEEDs one of them,
-		# defines and exports all of CDE_MATH, or the libraries' calls reach 0
+		# defines and exports all of CDE_MATH, or the runtime linker stops it,
+		# "symbol not found", at the libraries' first call
 		_ml="libDtHelp.so.2 libDtSearch.so.2" _mb=
 		for _f in "$_ld"/*.so.*; do
 			[ -f "$_f" ] && [ ! -L "$_f" ] || continue
@@ -497,6 +511,22 @@ stage() {
 		[ -z "$_mb" ] || { echo "[FAIL] programs that reach libDtHelp or libDtSearch and do not export libm's$_mb" >&2; exit 1; }
 		[ $_mp -gt 0 ] || { echo "[FAIL] no program reaches libDtHelp or libDtSearch: the libm check checked nothing" >&2; exit 1; }
 		echo "  libm through the program: $_mp programs reach$(echo " $_ml" | sed 's/ / /g'), each exports $CDE_MATH"
+		# _XtInherit (CDE_PROGLD): no library defines it, and every program that
+		# refers to it defines it; and no program has a C++ runtime of its own
+		_xb= _xp=0 _cb=
+		for _f in $_dy; do
+			_s=$("$READELF" -W --dyn-syms "$_f" | awk '$8 == "_XtInherit" {print ($7 == "UND") ? "u" : "d"}
+				$7 != "UND" && ($8 == "__cxa_throw" || $8 == "__gxx_personality_v0" || $8 == "__cxa_begin_catch") {print "c"}')
+			case "$_f" in
+			*.so.*) case "$_s" in *d*) _xb="$_xb ${_f##*/}(defines _XtInherit)";; esac; continue;;
+			esac
+			case "$_s" in *u*) _xb="$_xb ${_f##*/}(no _XtInherit of its own)";; *d*) _xp=$((_xp + 1));; esac
+			case "$_s" in *c*) _cb="$_cb ${_f##*/}";; esac
+		done
+		[ -z "$_xb" ] || { echo "[FAIL] _XtInherit:$_xb" >&2; exit 1; }
+		[ -z "$_cb" ] || { echo "[FAIL] programs with a C++ runtime of their own (link with g++ -shared-libgcc):$_cb" >&2; exit 1; }
+		[ $_xp -gt 0 ] || { echo "[FAIL] no program defines _XtInherit: the check checked nothing" >&2; exit 1; }
+		echo "  _XtInherit: $_xp programs have their own, no library has one; no program has a C++ runtime of its own"
 	fi
 	# the programs are linked statically: the licence of each library in
 	# them ships beside CDE's own COPYING (README, Licence)

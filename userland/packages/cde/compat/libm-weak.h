@@ -6,9 +6,10 @@
  * instead: the shared variant links each program with them from the stock
  * libm and exports them (-Wl,-u and --export-dynamic-symbol, build.sh), and
  * the runtime linker binds the libraries' references to the program's copies.
- * A program that does not export them leaves the references 0: build.sh
- * refuses any program that NEEDs these libraries and does not (README, The
- * shared variant).
+ * In a program that does not export them, the runtime linker stops the
+ * process at the first call ("symbol not found"): build.sh refuses any
+ * program that NEEDs these libraries and does not (README, The shared
+ * variant).
  * MIT licence, see LICENSE in userland/packages.
  */
 #pragma weak sin
