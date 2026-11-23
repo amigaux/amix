@@ -12,7 +12,8 @@
 # root pass before the root is mounted; kbootset composes it as a root
 # record.  Parameters intr (1 default: interrupts after a self-test; 0
 # polled), slave, debug, master, slaveunit, board (0 default: the Kickstart
-# ROM decides; 1 A4000, 2 A1200, -1 never probe); the package sets none
+# ROM decides; 1 A4000, 2 A1200, -1 never probe), limits (1 default: the C4-7
+# limits on a kernel with the segment minor; 0 none); the package sets none
 # (modreg: comments only, the module's defaults).
 # 1.1.0-5 (2026-11-01): the module 1.1.0-3 (fork 24ed009), the same objects as
 # the earlier 1.1.0-4, first rolled from amix.
@@ -24,18 +25,24 @@
 # too, chosen by the Kickstart ROM's card.resource resident; param board.
 # 1.1.0-9 (2026-11-04): the same module and objects; the copyright file's licence
 # headings name the component, without the build path.
+# 1.1.0-10 (2026-11-23): the module 1.1.0-6 (fork cff38a0): declares the C4-7
+# limits after sd_register (one segment of up to 64 KiB a command, through
+# idequeuex) on a kernel with the segment minor, param limits (1 default, 0
+# none); whole sectors through an unrolled DATA loop.  Built and checked with
+# the kit of amix 17cc5692 (k30.1.6 / k46.1.7); sd_limits is weak, so the
+# module still needs only kabi k30.1.2 / k46.1.2.
 
 KM_NAME=gayle
 KM_SHORT=gayle
 KM_REPO=kernel/drivers/gayle-ide
-KM_VERSION=1.1.0-5
-KM_PKG_VERSION=1.1.0-9
+KM_VERSION=1.1.0-6
+KM_PKG_VERSION=1.1.0-10
 KM_VERSION_FILE=out/cache/forks/gayle-ide/module/VERSION
 
-KM_K30_SHA=3b7c03dadca22706ee7b4d13d748aa02d3854fe98aa35306bedd0c52c572e62b
-KM_K46_SHA=33504a56f68d09b5616ffc970276ca7ecc4f1664323538b638bb2ff6f10ee1db
+KM_K30_SHA=1574420dcec58da59509b45630fba57085561558f6d6778a89368a3b8755cc4d
+KM_K46_SHA=abb85d4b3222232bf0677b2ea7d9d62db6df767603a39945fa120341f0dd2490
 
-KM_KIT_COMMIT=f5678baccb09dad7aa3cba4b193f4d371777aa9e
+KM_KIT_COMMIT=17cc569212927c9bfd6a01ec71f5e6a2f759ff7e
 
 KM_LICENCES="\
 out/cache/forks/gayle-ide/LICENSE b2a9d95bb7959880868ac8f29fcb7268c02a9401597ba1d153b0055bdc5c9340"
@@ -47,6 +54,9 @@ polled I/O if the test fails.  The line \`param intr=0\` in
 Gayle IDE port of the A4000 and of the A1200: the Kickstart ROM's
 card.resource resident picks the A1200, else the A4000; \`param board=1\`
 (A4000) or \`param board=2\` (A1200) there picks one without reading the
-ROM, and \`param board=-1\` never probes.  There is no A600 row."
+ROM, and \`param board=-1\` never probes.  There is no A600 row.
+On a kernel with the segment minor (k30.1.6, k46.1.7) the module declares
+its limits, one segment of up to 64 KiB a command; \`param limits=0\`
+declares none, and an older kernel answers the declaration with ENOSYS."
 
-KM_SOURCE_EPOCH=1793577600	# 2026-11-02 00:00 UTC
+KM_SOURCE_EPOCH=1795392000	# 2026-11-23 00:00 UTC
