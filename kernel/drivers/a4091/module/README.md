@@ -230,20 +230,28 @@ the A4000T. The target's answer decides:
   synchronous, period P ns, offset O`;
 - offset 0, MESSAGE REJECT, another message, or no answer (the target goes
   straight to COMMAND): asynchronous;
-- a period the chip cannot time: asynchronous for good, said on the console.
+- a period the chip cannot time: asynchronous for good, said on the console;
+  that command fails, since the target may run it synchronous.
 
 A parity error or a phase mismatch on a synchronous transfer turns the target
 asynchronous for good, with the console line `board N id T: parity error on
-a synchronous transfer: asynchronous from now on` (or `phase mismatch`), and
-the bus is reset before the board's next command, so the target forgets the
-agreement. Every bus reset sends the other targets back to negotiate again.
+a synchronous transfer: asynchronous from now on` (or `phase mismatch`); a
+parity error in the negotiation itself does the same (`parity error in the
+negotiation`). The command fails, and the bus is reset before the board's
+next command, so the target forgets the agreement. Every bus reset sends the
+other targets back to negotiate again. The polled path runs with SIEN 0, so
+there a parity error stops nothing and only latches SSTAT0 PAR: SSTAT0 is
+read before each launch (an older latch is not the new command's), at the
+answer's stop and at the end of each command to a synchronous target.
 The SCRIPTS stop for the answer (INT 0xff20, 0xff21, 0xff22) and the driver
 continues them; `a4091_sy` (magic "A4SY") counts `negs`, `syncs`, `asyncs`,
 `rejects`, `others` and `offs`, and `a4091_sst[board][target]` holds each
 state (0 unknown, 1 pending, 2 synchronous, 3 asynchronous, 4 off for good).
 The emulator's 53C710 ignores SDTR, so it shows only the no-answer path; the
-answer, the reject and the fallback are host-tested, and their rates need
-metal.
+answer, the reject and the fallbacks are host-tested. On metal the A4092 and
+the A4000T's onboard 53C710 agree 100 ns offset 8 with a ZuluSCSI target, and
+a bus reset renegotiates; the polled path's raw rates do not change (it is
+CPU-bound at about 1.5 MB/s).
 
 ## Limits (C4-7)
 
@@ -350,8 +358,8 @@ Status as of 2026-10-27:
 
 | Row | Line | Result |
 |---|---|---|
-| H1 | k30 (`sptalloc` arm) | 61/61 cases |
-| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 61/61 cases |
+| H1 | k30 (`sptalloc` arm) | 64/64 cases |
+| H2 | k46 (`dev_kvmap` + `bprobe` arm) | 64/64 cases |
 
 The cases cover the registrations, the A4092/A4770 identities, two-board
 ordering, the four-board cap, every `_load` failure path, `_halt`, and the

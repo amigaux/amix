@@ -40,7 +40,8 @@
 # limits but still sends 4 KiB).
 # 1.0.0-15 (2026-11-23): module 1.0.0-12: param sync (0 default): SDTR per
 # target (100 ns, offset 8), asynchronous for good after a parity error or
-# phase mismatch on a synchronous transfer.
+# phase mismatch on a synchronous transfer or a parity error in the
+# negotiation (the polled path reads the SSTAT0 latch).
 
 KM_NAME=a4091
 KM_SHORT=a4091
@@ -48,8 +49,8 @@ KM_REPO=kernel/drivers/a4091
 KM_VERSION=1.0.0-12
 KM_PKG_VERSION=1.0.0-15
 
-KM_K30_SHA=5426a5a5588cb6944deaa55ac90f9ed9d1f11a0ae01fba5ff105cb5d0e7bd617
-KM_K46_SHA=df0a1a214f3acbd9a7578c9c66ccbd150426cc06f2de90626323a4ddd10e354a
+KM_K30_SHA=81535b6f2a6f6a8020965da0baca4cfa4b85b2e44a54656828fe5f8476fd13d7
+KM_K46_SHA=5888a6235421f6c7358a84d9c1ed1b67e2f28415e967d133c11158b73f60aaf4
 KM_K30_DEPS=
 KM_K46_DEPS=
 

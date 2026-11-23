@@ -1203,6 +1203,79 @@ t_sync_slow(void)
 	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && mock_wr8(b, R_SXFER) == 0, "id 6 off for good, SXFER 0");
 	CHECK(strstr(mock_last_line, "a synchronous period of 1020 ns cannot be timed: asynchronous from now on") != NULL,
 	    "console: cannot be timed");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay,
+	    "the command failed (the target may have run it synchronous)");
+}
+
+/* a parity error in the answer itself (latched in SSTAT0 at the SDTR stop) */
+static void
+t_sync_neg_parity(void)
+{
+	struct mock_board *b = sync_up();
+	unsigned char *mb = (unsigned char *)a4091_da + 4;
+
+	mb[3] = 0x01; mb[4] = 25; mb[5] = 8;
+	chip_int(b, 0xff20);
+	b->regs[0x0e] = 0x01;			/* SSTAT0 PAR latched, no SIP */
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 0, "the SDTR stop claimed");
+	CHECK(mock_wr32(b, R_DSP) == SCRIPT_PA + 0x130 && mock_wr8(b, R_SXFER) == 0,
+	    "continued at neg_ack, SXFER 0");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && a4091_sy[SY_SYNCS] == 0, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error in the negotiation: asynchronous from now on") != NULL,
+	    "console: parity error in the negotiation");
+	mock_chip_done(b);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay, "the command failed");
+}
+
+/* the interrupt path: a parity error stops the chip inside the exchange */
+static void
+t_sync_neg_sint(void)
+{
+	struct mock_board *b = sync_up();
+
+	chip_sint(b, 0x01);
+	CHECK(mock_isr((char *)0) == 1 && intr_calls == 1 && !qcp[0].okay, "the command failed");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1 && a4091_sy[SY_ASYNCS] == 0, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error in the negotiation: asynchronous from now on") != NULL,
+	    "console: parity error in the negotiation");
+}
+
+/* the polled path (SIEN 0): a parity error on a synchronous transfer stops
+ * nothing, the command ends at INT ok with SSTAT0 PAR latched */
+static void
+t_sync_parity_polled(void)
+{
+	struct mock_board *b;
+	unsigned long n0;
+
+	setup();
+	b = &mock_board[mock_add(P_A4091, 0x40000000)];
+	CHECK(a4091_load("intr=0 sync=1") == 0, "load returns 0");
+	CHECK(a4091_iq[IQ_MODE] == 0 && a4091_sy[1] == 1, "polled, sync 1");
+	mock_chip_done(b);
+	intr_calls = 0;
+	CHECK(qcmd(3, 5, 1, 0x28) && qcp[3].okay, "a first READ (to id 5): the board's reset done");
+	a4091_sst[0][6] = 2;			/* id 6 agreed earlier */
+	a4091_ssx[0][6] = 0x18;
+	mock_chip_done(b);
+	b->regs[0x0e] = 0x01;			/* SSTAT0 PAR latched, no SIP */
+	intr_calls = 0;
+	CHECK(qcmd(0, 6, 1, 0x28) && intr_calls == 1, "the READ ended inside the queue call");
+	CHECK(!qcp[0].okay, "it failed: the latched parity error");
+	CHECK(mock_wr8(b, R_SIEN) == 0x00, "SIEN 0 on the polled path");
+	CHECK(a4091_sst[0][6] == 4 && a4091_sy[SY_OFFS] == 1, "id 6 off for good");
+	CHECK(strstr(mock_last_line, "board 0 id 6: parity error on a synchronous transfer: asynchronous from now on") != NULL,
+	    "console: parity error on a synchronous transfer");
+	a4091_busreset = 1;
+	n0 = a4091_busreset_n;
+	mock_chip_done(b);
+	b->regs[0x0e] = 0x00;
+	CHECK(qcmd(1, 6, 1, 0x28) && qcp[1].okay && a4091_busreset_n == n0 + 1,
+	    "the next READ: the bus reset first, then okay (asynchronous)");
+	b->regs[0x0e] = 0x01;			/* a latch on an asynchronous target: not read */
+	mock_chip_done(b);
+	CHECK(qcmd(2, 6, 1, 0x28) && qcp[2].okay, "an off target's command is not failed by the latch");
 }
 
 static void
@@ -1437,6 +1510,9 @@ static const struct { const char *name; void (*fn)(void); } cases[] = {
 	{ "sync: the SDTR ignored", t_sync_ignored },
 	{ "sync: a period the chip cannot time", t_sync_slow },
 	{ "sync: a parity error, off for good", t_sync_parity },
+	{ "sync: a parity error in the answer", t_sync_neg_parity },
+	{ "sync: a parity error stops the exchange", t_sync_neg_sint },
+	{ "sync: polled, a latched parity error", t_sync_parity_polled },
 	{ "spin: off by default", t_spin_off },
 	{ "spin: capped at 1000 us", t_spin_cap },
 	{ "spin: a stopped chip finished inline", t_spin_inline },

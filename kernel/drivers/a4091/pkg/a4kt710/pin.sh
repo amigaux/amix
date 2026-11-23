@@ -48,7 +48,8 @@
 # limits but still sends 4 KiB).
 # 1.0.0-13 (2026-11-23): module 1.0.0-9: param sync (0 default): SDTR per
 # target (100 ns, offset 8), asynchronous for good after a parity error or
-# phase mismatch on a synchronous transfer.
+# phase mismatch on a synchronous transfer or a parity error in the
+# negotiation (the polled path reads the SSTAT0 latch).
 
 KM_NAME=a4kt710
 KM_SHORT=a4kt710
@@ -57,8 +58,8 @@ KM_VERSION=1.0.0-9
 KM_PKG_VERSION=1.0.0-13
 KM_VERSION_FILE=kernel/drivers/a4091/module/a4kt710/VERSION
 
-KM_K30_SHA=ba29e7d59cfc6129e5aaba1781cb2c2a7e011322a15cc021c9b2e1f4fbe83f75
-KM_K46_SHA=0cde4ed46c02dfbc95f5a41bfc0cf00d35ece50edf642ae363ec869f8eb7175b
+KM_K30_SHA=7b7198d55e86e943953c55018ddb406d52b90a788f526d3283b2324ec8795a7b
+KM_K46_SHA=33624a19202470098b9de02a2fbe1e892eb463da9a2a1d052cfaa0d9ae0fc772
 KM_K30_DEPS=
 KM_K46_DEPS=
 

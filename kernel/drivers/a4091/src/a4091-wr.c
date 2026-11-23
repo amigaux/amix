@@ -1131,6 +1131,7 @@ struct a4091_iq	a4091_iq = { 0x4134494e, 0, -1 };
 static struct a4091_fl {
 	struct sdcom	*cp;
 	int		c, dmadir, bounced, recovered, rc;
+	int		negbad;		/* the negotiation turned the target off: fail it */
 	ulong		dpa, dlen, dva, poll, dsps, armed;
 	uchar		sstat0;		/* the last stop's SSTAT0 */
 #ifdef	A4091_PROBE
@@ -1145,10 +1146,14 @@ static struct a4091_fl {
  * offset 8); PENDING while that command runs; SYNC with the agreed SXFER and
  * SBCL, loaded at every selection; ASYNC when the target rejected, ignored or
  * answered offset 0; OFF for good after a parity error or phase mismatch on a
- * synchronous transfer, or an answer the chip cannot time (said on the
- * console, and the bus is reset before the board's next command so the
- * target forgets the agreement).  A bus reset puts every state but OFF back
- * to UNKNOWN.  The 53C710's SCLK is 50 MHz on the A4091 and the A4000T, so
+ * synchronous transfer, a parity error in the negotiation, or an answer the
+ * chip cannot time (said on the console; the command fails, and the bus is
+ * reset before the board's next command so the target forgets the
+ * agreement).  A bus reset puts every state but OFF back to UNKNOWN.
+ * The polled path runs with SIEN 0, so a parity error stops nothing there:
+ * it only latches SSTAT0 PAR.  SSTAT0 is therefore read before the launch
+ * (an older latch is not this command's), at the answer's stop and at the
+ * end of a command to a synchronous target.  The 53C710's SCLK is 50 MHz on the A4091 and the A4000T, so
  * the synchronous clock is 20, 30 or 40 ns (SBCL SSCF 1, 2, 3) and a period
  * is (TP + 4) of them.
  */
@@ -1359,6 +1364,7 @@ struct sdcom	*cp;
 
 	f->c = c;
 	f->recovered = 0;
+	f->negbad = 0;
 	f->rc = 0;
 	f->poll = 0;
 	f->dsps = 0;
@@ -1370,6 +1376,8 @@ struct sdcom	*cp;
 	}
 	WR32( R_TEMP, 0);
 	WR8 ( R_SBCL, sb);
+	if (a4091_sy.param)
+		(void)RD8(R_SSTAT0);		/* an older parity latch is not this command's */
 	WR32( R_DSA, A4091_BUS(&ds));
 #ifdef	A4091_PROBE
 	f->l0 = a4091_pline();
@@ -1437,6 +1445,17 @@ ulong	dsps;
 	off = msg_buf[5];
 	a4091_ssx[c][t] = 0;
 	a4091_ssb[c][t] = 0;
+	if (RD8(R_SSTAT0) & SSTAT0_PAR) {	/* the answer came with a parity error */
+		a4091_sst[c][t] = SY_OFF;
+		a4091_sy.offs++;
+		a4091_rstdone[c] = 0;
+		f->negbad = 1;
+		WR8( R_SXFER, 0);
+		WR8( R_SBCL, 0);
+		printf( "%s: board %d id %d: parity error in the negotiation: asynchronous from now on\n",
+		    A4091_NAME, c, t);
+		return SCRIPT_NEGACK;
+	}
 	if (msg_buf[3] != 0x01 || off == 0) {	/* not SDTR, or offset 0 */
 		a4091_sst[c][t] = SY_ASYNC;
 		a4091_sy.asyncs++;
@@ -1459,6 +1478,7 @@ ulong	dsps;
 		a4091_sst[c][t] = SY_OFF;
 		a4091_sy.offs++;
 		a4091_rstdone[c] = 0;		/* the target forgets it at the reset */
+		f->negbad = 1;			/* this command may run synchronous on its side */
 		WR8( R_SXFER, 0);
 		WR8( R_SBCL, 0);
 		printf( "%s: board %d id %d: a synchronous period of %d ns cannot be timed: asynchronous from now on\n",
@@ -1544,8 +1564,9 @@ uchar	istat;
 /*
  * The negotiation's end with the command: PENDING with no answer becomes
  * ASYNC (a target that ignores SDTR), or UNKNOWN again when nobody answered
- * the selection; a parity error or phase mismatch on a SYNC target turns it
- * OFF for good, and its bus is reset before the board's next command.
+ * the selection, or OFF after a parity error in the exchange; a parity error
+ * or phase mismatch on a SYNC target turns it OFF for good.  After an OFF
+ * the bus is reset before the board's next command.
  */
 static void
 a4091_syend( c, t, rc, sstat0)
@@ -1555,7 +1576,13 @@ uchar	sstat0;
 	if (a4091_sst[c][t] == SY_PENDING) {
 		if (rc == -1)
 			a4091_sst[c][t] = SY_UNKNOWN;
-		else {
+		else if (rc == -3 && (sstat0 & SSTAT0_PAR)) {	/* stopped in the exchange */
+			a4091_sst[c][t] = SY_OFF;
+			a4091_sy.offs++;
+			a4091_rstdone[c] = 0;
+			printf( "%s: board %d id %d: parity error in the negotiation: asynchronous from now on\n",
+			    A4091_NAME, c, t);
+		} else {
 			a4091_sst[c][t] = SY_ASYNC;
 			a4091_sy.asyncs++;
 		}
@@ -1582,14 +1609,32 @@ a4091_finish()
 {
 	struct a4091_fl	*f;
 	struct sdcom	*cp;
-	int	c, rc;
+	int	c, rc, s0rd;
 	ulong	t;
+	uchar	s0;
 
 	f = &a4091_fl;
 	cp = f->cp;
 	c = f->c;
 	rc = f->rc;
 	t = (ulong)lbolt - f->armed;
+	/* A synchronous target's command that ended well: SSTAT0 read for a
+	 * parity error the polled path's SIEN 0 let pass (it latches, nothing
+	 * stops); one fails the command, and a4091_syend turns the target off.
+	 * A target the negotiation turned off fails its command too. */
+	s0 = 0;
+	s0rd = 0;
+	if (rc == 0 && a4091_sst[c][(int)cp->unit & 7] == SY_SYNC) {
+		s0 = RD8(R_SSTAT0);
+		s0rd = 1;
+		if (s0 & SSTAT0_PAR) {
+			rc = -3;
+			f->sstat0 = f->sstat0 | s0;
+		}
+	}
+	if (rc == 0 && f->negbad)
+		rc = -3;
+	f->rc = rc;
 	/* A selection timeout is an absent id's normal answer to a bus scan:
 	 * counted, not traced. */
 	if (rc == -1)
@@ -1601,7 +1646,7 @@ a4091_finish()
 
 		di = RD8(R_ISTAT);
 		dd = RD8(R_DSTAT);
-		d0 = RD8(R_SSTAT0);
+		d0 = s0rd ? s0 : RD8(R_SSTAT0);
 		d1 = RD8(R_SSTAT1);
 		d2 = RD8(R_SSTAT2);
 		dp = RD32(R_DSP);
