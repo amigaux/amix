@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-23 — cut 68060-261123-69 is the k46 cut on next; kern46m -69 (869f9129, 6023d173)
+
+port.pin moves to 01c4d2e on the port's next (cut commit d93ca1c, core at amix 812c763e). The kernel goes to kabi k46.1.7: a disk driver can declare its limits and take commands with segment lists (sd_limits, sd_lim, sdqueuex). Raw disk transfers and buf_breakup's later pieces go out in 4 KiB commands, not 2 KiB (on an A4000D with an A4092, raw reads 1.74 -> 2.13 MB/s, writes 1.32 -> 1.61 MB/s). The soft data and vmem limits are 16 MiB again, as in the stock kernel; the hard limits stay unlimited. abi 18c0a1c9, the ufs objects and kbootset-min 1.1.0.261103-37 are -68's. kern46m k46.1.7.261123-69: unix cabf24eb, kabi f05588ea, ufs.mod 2ad292a1; package sha256 58cd2a79.
+
 ## 2026-11-20 — cut 68060-261120-68 is the k46 cut of record; kern46m -68 (8c76e7e6, bb67961b)
 
 port.pin moves to 2dff5e4 on the port's release-1.1 (REV 43f80fc, core at amix 09b89ffb). Exec under vfork now unloads the parent's translations of the exec stack image, so a program started from a vfork child no longer finds its arguments overwritten when the parent starts another program the same way (CDE's session manager starts every client so). The ufs objects, abi 18c0a1c9 and kbootset-min 1.1.0.261103-37 are -67's. kern46m k46.1.6.261120-68: unix ff751c21 (2362531 bytes), kabi 05970a8b, ufs.mod 773726b9.
