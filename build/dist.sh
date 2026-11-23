@@ -73,8 +73,11 @@
 # userland, recipes/<name> and catalogs steps see it.
 #
 # Every step but `tools` runs in the build container: outside it, dist.sh
-# runs itself there (AMIX_IMAGE, default amix-toolchain:dist; the media step
-# AMIX_MEDIA_IMAGE, default amix-toolchain:media; CONTAINER, docker or podman),
+# runs itself there (CONTAINER, docker or podman): in AMIX_IMAGE (the media
+# step AMIX_MEDIA_IMAGE) when set, else in the image toolchain/image.ref names
+# by digest (toolchain/image-pull --use pulls and checks it when it is not
+# here, and tags nothing), else, without image.ref or with
+# TOOLS_FROM_SOURCE=1, in amix-toolchain:dist (amix-toolchain:media),
 # as the calling user, with the checkout at /src (a fixed path, for the period
 # compiler, which cannot remap one), its git directory where git expects it,
 # and SYSTEM read-only at /system. A step gets only its own inputs: STOCK,
@@ -213,10 +216,30 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	step=$1
 	gitdir=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir)
 	tool=${CONTAINER:-docker}
-	image=${AMIX_IMAGE:-amix-toolchain:dist}
 	if [ "$1" = media ]; then
 		[ -f "$top/media/build.sh" ] || missing media
-		image=${AMIX_MEDIA_IMAGE:-amix-toolchain:media}
+		name=media image=${AMIX_MEDIA_IMAGE:-} tag=amix-toolchain:media
+	else
+		name=dist image=${AMIX_IMAGE:-} tag=amix-toolchain:dist
+	fi
+	# the step's image: AMIX_IMAGE (the media step's AMIX_MEDIA_IMAGE) when
+	# set; else the one toolchain/image.ref names, by digest, so each line
+	# runs its own images whatever is tagged here (image-pull --use pulls and
+	# checks it when it is not here, and tags nothing); the local tag only
+	# without image.ref, or with TOOLS_FROM_SOURCE=1 (make tools built them)
+	refs=$top/toolchain/image.ref
+	if [ -n "$image" ]; then
+		:
+	elif [ -f "$refs" ] && [ "${TOOLS_FROM_SOURCE:-}" != 1 ]; then
+		image=$(CONTAINER=$tool "$top/toolchain/image-pull" --use "$name" "$refs") || {
+			echo "[FAIL] make dist: $step: the $name image toolchain/image.ref names was not taken (above)" >&2
+			exit 1
+		}
+		echo "make dist: $step in $image (toolchain/image.ref)"
+	else
+		image=$tag
+	fi
+	if [ "$1" = media ]; then
 		"$tool" image inspect "$image" > /dev/null 2>&1 || {
 			echo "[MISSING] media: no image $image (make tools builds it)" >&2
 			exit 3

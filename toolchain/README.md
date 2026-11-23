@@ -118,6 +118,12 @@ must be the build container's. Only then are they tagged `amix-toolchain:dist` a
 builds them here instead and says which it did. The file is not a `.pin`:
 those go into the image (`/opt/amix/PINS`), and an image cannot name its own digest.
 
+make dist's steps also run the image `image.ref` names, by digest, rather than
+the local tag: `image-pull --use dist` (or `media`) prints its reference, pulled
+and checked as above if it is not here yet, and tags nothing. An explicit
+`AMIX_IMAGE` (`AMIX_MEDIA_IMAGE`) still wins, and `TOOLS_FROM_SOURCE=1`, or no
+`image.ref`, runs the local `amix-toolchain:dist` (`:media`) instead.
+
 `make tools TOOLS_FROM_SOURCE=1` builds both here, then
 `image-pull --compare` pulls the published ones and compares their
 `/opt/amix/TOOLCHAIN.sha256`, and the media image's `/opt/amix-media/TOOLS`,

@@ -1,8 +1,13 @@
 # Changelog
 
+## 2026-11-23 — make dist runs the images toolchain/image.ref names (fccf7a97)
+
+Every make dist step but tools ran whatever amix-toolchain:dist (:media) was tagged locally; with master and next pinning different toolchains and images, one shared tag always left one line refused by check-image. A step now runs, in order: AMIX_IMAGE (AMIX_MEDIA_IMAGE) when set; else the image toolchain/image.ref names, by digest, which the new `toolchain/image-pull --use dist|media` fetches and checks as `make tools` does when it is not here yet, tagging nothing; else, without image.ref or with TOOLS_FROM_SOURCE=1, the local tags. An image.ref image that cannot be taken stops the step instead of falling back. Package bytes unchanged (bzip2-1.0.8-5 14d6e119 both ways). docs/BUILDING.md and toolchain/README.md say which image a step runs.
+
 ## 2026-11-23 — make kspace keeps the amix-paula repository in out/cache (800261b4)
 
 make kspace keeps the amix-paula repository the kernel recipes read in out/cache/paula-repo, as it keeps the port's, so it is fetched once rather than at every run.
+
 
 ## 2026-11-23 — kspace keeps the amix-paula repository in out/cache (bb895bb2)
 

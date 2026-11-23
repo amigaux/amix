@@ -777,6 +777,54 @@ clean:
     args = open(argf).read().split("\n") if os.path.exists(argf) else []
     check("but not into another step: a recipe's epoch is its own", rc == 0 and
           not any(x.startswith("SOURCE_DATE_EPOCH") for x in args), " ".join(args))
+
+    # the step's image: AMIX_IMAGE, else image.ref's digest (image-pull --use),
+    # else, without image.ref or with TOOLS_FROM_SOURCE=1, the local tag
+    refs = os.path.join(top, "toolchain", "image.ref")
+    pulls = os.path.join(tmp, "pull.seen")
+    dref, mref = "r@sha256:" + "a" * 64, "r@sha256:" + "b" * 64
+    write(os.path.join(top, "toolchain", "image-pull"),
+          '#!/bin/sh\necho "image-pull $* CONTAINER=$CONTAINER" >> "%s"\n[ "${PULL_RC:-0}" = 0 ] || exit 1\n'
+          'case $2 in dist) echo %s ;; media) echo %s ;; esac\n' % (pulls, dref, mref), 0o755)
+
+    def step(s, **env):
+        for f in (argf, pulls):
+            if os.path.exists(f):
+                os.remove(f)
+        e = dict(AMIX_IMAGE=None, AMIX_MEDIA_IMAGE=None, TOOLS_FROM_SOURCE=None)
+        e.update(env)
+        rc, out = run(s, DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"], DOCKER_ARGS=argf, **e)
+        return (rc, out, open(argf).read().split("\n") if os.path.exists(argf) else [],
+                open(pulls).read() if os.path.exists(pulls) else "")
+
+    rc, out, args, got = step("kspace")
+    check("image: no toolchain/image.ref: the local amix-toolchain:dist, nothing pulled",
+          rc == 0 and args[-5:-1] == ["amix-toolchain:dist", "sh", "build/dist.sh", "kspace"] and got == "",
+          out + got + " ".join(args))
+    write(refs, "dist %s\nmedia %s\n" % (dref, mref))
+    rc, out, args, got = step("kspace")
+    check("image: with toolchain/image.ref, the step runs its dist digest (image-pull --use), not the local tag",
+          rc == 0 and args[-5:-1] == [dref, "sh", "build/dist.sh", "kspace"]
+          and got == "image-pull --use dist %s CONTAINER=docker\n" % os.path.realpath(refs)
+          and "make dist: kspace in %s (toolchain/image.ref)" % dref in out, out + got + " ".join(args))
+    rc, out, args, got = step("media")
+    check("image: and the media step its media digest",
+          rc == 0 and args[-5:-1] == [mref, "sh", "build/dist.sh", "media"]
+          and got == "image-pull --use media %s CONTAINER=docker\n" % os.path.realpath(refs), out + got + " ".join(args))
+    rc, out, args, got = step("kspace", PULL_RC="1")
+    check("image: an image.ref image not taken (pull or check failed) stops the step, no local tag instead",
+          rc == 1 and "the dist image toolchain/image.ref names was not taken" in out and args == [],
+          out + got + " ".join(args))
+    rc, out, args, got = step("kspace", AMIX_IMAGE="amix-toolchain:test")
+    check("image: an explicit AMIX_IMAGE wins over toolchain/image.ref, nothing pulled",
+          rc == 0 and args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"] and got == "",
+          out + got + " ".join(args))
+    rc, out, args, got = step("kspace", TOOLS_FROM_SOURCE="1")
+    check("image: TOOLS_FROM_SOURCE=1 runs the local amix-toolchain:dist despite image.ref, nothing pulled",
+          rc == 0 and args[-5:-1] == ["amix-toolchain:dist", "sh", "build/dist.sh", "kspace"] and got == "",
+          out + got + " ".join(args))
+    os.remove(refs)
+    os.remove(os.path.join(top, "toolchain", "image-pull"))
     os.remove(os.path.join(top, "media", "build.sh"))
     reg = os.path.join(tmp, "rom-register")
     write(reg, "")
