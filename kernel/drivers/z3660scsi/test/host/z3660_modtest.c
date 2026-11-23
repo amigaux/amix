@@ -21,6 +21,14 @@
  * is cputype 30/40/60 x cache absent, -1, 0, 40, 60, 99, not a number; on the
  * 060 with no parameter the attach check runs (z3660_ci_ok 1) and a READ
  * pushes (z3660_push_n > 0), the on-box check after boot.
+ *
+ * C4-7, the limits (test_c47_limits()): _load declares them after a
+ * successful sd_register (one segment of 64 KiB, align 16, length 512,
+ * SDL_ALLRAM with reach 0x0FFFFFFF, no SDL_SEG, sl_queue z3660queuex), not with limits=0
+ * and not when sd_register failed, and loads on ENOSYS; z3660queuex runs a
+ * 64 KiB READ and WRITE as one mailbox request each with sx_resid 0, leaves
+ * them out of the page-cross census, refuses an SDX_SEG command without a
+ * doorbell (sx_resid nbyte), and gives a failed command sx_resid nbyte.
  */
 #include <stdio.h>
 #include <string.h>
@@ -31,8 +39,12 @@
 #include "mock_piscsi.h"
 #include "stubs/rico.h"
 #include "stubs/sd.h"
+#include "stubs/sys/sdseg.h"
 
 extern bool		z3660queue();
+extern bool		z3660queuex();
+extern long		z3660_limits, z3660_lim_rc;
+extern unsigned long	z3660_xseg, z3660_pagecross_n;
 extern int		z3660scsi_load();
 extern void		z3660scsi_halt();
 extern void		z3660_test_unmap();
@@ -73,6 +85,22 @@ char	*base, *name;
 	return sr_ret;
 }
 
+/* ---- the mock sd_limits (C4-7 section 3) ------------------------------ */
+static int		sl_calls, sl_ret;
+static bool		(*sl_fn)();
+static unsigned		sl_c;
+static struct sdlim	*sl_l;
+
+int sd_limits( fn, c, l)
+bool		(*fn)();
+unsigned	c;
+struct sdlim	*l;
+{
+	sl_calls++;
+	sl_fn = fn; sl_c = c; sl_l = l;
+	return sl_ret;
+}
+
 /* ---- console capture: what _load printed ------------------------------ */
 static char	cap[4096];
 static int	cap_fd, cap_saved;
@@ -101,6 +129,8 @@ static void cap_end()
 	close( cap_fd);
 }
 
+static char	*g_params;	/* the parameter string load_cell2 hands _load */
+
 /* load_cell2: also the fixed-window gate's inputs (a bus error at the probe,
  * one boot memory region lo..hi) */
 static int load_cell2( autocon_base, vposr, bus, berr, lo, hi)
@@ -123,8 +153,9 @@ unsigned long	lo, hi;
 	mock_mem_lo[0] = lo;
 	mock_mem_hi[0] = hi;
 	sr_calls = 0; sr_fn = 0; sr_base = 0; sr_name = 0; sr_c = 99; sr_rank = 0;
+	sl_calls = 0; sl_fn = 0; sl_c = 99; sl_l = 0;
 	cap_begin();
-	r = z3660scsi_load( (char *)0);
+	r = z3660scsi_load( g_params);
 	cap_end();
 	return r;
 }
@@ -241,6 +272,140 @@ static void test_zs06_arm()
 	cputype = 30;
 }
 
+/* ---- C4-7: the limits and the extended commands ---------------------- */
+static int		gx_done;
+static struct sdcomx	*gx_cp;
+static void xintr( cp) struct sdcom *cp; { gx_done++; gx_cp = (struct sdcomx *)cp; }
+
+static unsigned char	xbuf[65536 + 4096];
+
+static void x_cmd( x, op, lba, nblk, buf)
+struct sdcomx	*x;
+int		op;
+unsigned long	lba, nblk;
+unsigned char	*buf;
+{
+	memset( x, 0, sizeof *x);
+	x->sx_com.unit = 0;
+	x->sx_com.cdb[0] = op;
+	x->sx_com.cdb[2] = lba >> 24; x->sx_com.cdb[3] = lba >> 16;
+	x->sx_com.cdb[4] = lba >> 8;  x->sx_com.cdb[5] = lba;
+	x->sx_com.cdb[7] = nblk >> 8; x->sx_com.cdb[8] = nblk;
+	x->sx_com.addr = (caddr_t)buf;
+	x->sx_com.nbyte = nblk * 512;
+	x->sx_com.reading = (op == 0x28);
+	x->sx_com.intr = (void (*)())xintr;
+	x->sx_resid = 0xDEAD;
+}
+
+static void test_c47_limits()
+{
+	struct sdcomx	x;
+	unsigned char	*bk, *buf;
+	unsigned long	db, pc;
+	int		r, i, same;
+
+	printf("\n=== C4-7: the limits and the extended commands ===\n");
+
+	sr_ret = 0; sl_ret = 0; g_params = 0;
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && sr_calls == 1 && sl_calls == 1 && sl_fn == z3660queue && sl_c == 0
+	       && z3660_lim_rc == 0 && z3660_limits == 1,
+	       "_load declares the limits once, after sd_register, for (z3660queue, 0); result 0 kept");
+	CHECK( sl_l && sl_l->sl_ver == 1 && sl_l->sl_flags == SDL_ALLRAM && sl_l->sl_maxbytes == 65536
+	       && sl_l->sl_maxseg == 1 && sl_l->sl_align == 16 && sl_l->sl_gran == 512
+	       && sl_l->sl_pad == 0 && sl_l->sl_reach == 0x0FFFFFFFUL && sl_l->sl_queue == z3660queuex,
+	       "limits: version 1, SDL_ALLRAM and no SDL_SEG, 64 KiB, 1 segment, align 16, length 512, reach 0x0FFFFFFF, queue z3660queuex");
+
+	/* a 64 KiB READ through sl_queue, the buffer across pages (2 KiB NBPP) */
+	bk = mock_backing( 0);
+	buf = xbuf + 100 * 16;			/* 16-aligned, not page-aligned */
+	memset( buf, 0x5A, 65536);
+	db = mock_doorbells[0]; pc = z3660_pagecross_n; gx_done = 0;
+	x_cmd( &x, 0x28, 0, 128, buf);
+	(*sl_l->sl_queue)( 0, &x);
+	CHECK( gx_done == 1 && gx_cp == &x && x.sx_com.okay && x.sx_com.status == 0
+	       && x.sx_resid == 0 && mock_doorbells[0] == db + 1 && memcmp( buf, bk, 65536) == 0,
+	       "64 KiB READ (sdcomx, no SDX_SEG): one mailbox request, the data, GOOD, sx_resid 0");
+	CHECK( z3660_pagecross_n == pc,
+	       "a C4-7 command is contiguous: not counted in the page-cross census");
+
+	/* a 64 KiB WRITE */
+	for (i = 0; i < 65536; i++)
+		buf[i] = (unsigned char)(i * 7 + 3);
+	db = mock_doorbells[0]; gx_done = 0;
+	x_cmd( &x, 0x2A, 128, 128, buf);
+	(*sl_l->sl_queue)( 0, &x);
+	CHECK( gx_done == 1 && x.sx_com.okay && x.sx_resid == 0 && mock_doorbells[0] == db + 1
+	       && memcmp( bk + 128 * 512, buf, 65536) == 0,
+	       "64 KiB WRITE (sdcomx): one mailbox request, the data on the disk, sx_resid 0");
+
+	/* a stock command after it is in the census again (z3660_xcur cleared) */
+	{
+		struct sdcom	sc;
+
+		memset( &sc, 0, sizeof sc);
+		sc.unit = 0; sc.cdb[0] = 0x28; sc.cdb[8] = 8;
+		sc.addr = (caddr_t)(xbuf + 2048 - 512);	/* crosses a 2 KiB page */
+		sc.nbyte = 4096; sc.reading = 1; sc.intr = (void (*)())tintr;
+		pc = z3660_pagecross_n; g_done = 0;
+		z3660queue( 0, &sc);
+		CHECK( g_done && sc.okay && z3660_pagecross_n == pc + 1,
+		       "a stock READ across a page after a C4-7 command: counted, as before");
+	}
+
+	/* SDX_SEG: refused, no doorbell */
+	db = mock_doorbells[0]; gx_done = 0;
+	x_cmd( &x, 0x28, 0, 8, buf);
+	x.sx_flags = SDX_SEG; x.sx_nseg = 1;
+	(*sl_l->sl_queue)( 0, &x);
+	CHECK( gx_done == 1 && !x.sx_com.okay && x.sx_resid == 4096 && mock_doorbells[0] == db
+	       && z3660_xseg == 1,
+	       "an SDX_SEG command (none declared): refused, sx_resid nbyte, no doorbell, counted");
+
+	/* a failing extended command: past the end */
+	db = mock_doorbells[0]; gx_done = 0;
+	x_cmd( &x, 0x28, 0x10000UL - 4, 8, buf);
+	(*sl_l->sl_queue)( 0, &x);
+	CHECK( gx_done == 1 && !x.sx_com.okay && x.sx_resid == 4096 && mock_doorbells[0] == db,
+	       "a C4-7 READ past the end: failed, sx_resid nbyte, no doorbell");
+
+	/* the stock entry never touches a residual it does not have */
+	same = 1;
+	{
+		struct sdcomx	y;
+
+		x_cmd( &y, 0x28, 0, 8, buf);
+		g_done = 0;
+		y.sx_com.intr = (void (*)())tintr;
+		z3660queue( 0, &y.sx_com);
+		same = (y.sx_resid == 0xDEAD);
+		CHECK( g_done && y.sx_com.okay && same,
+		       "a command through the stock entry: run, no residual written");
+	}
+
+	g_params = "limits=0";
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && sr_calls == 1 && sl_calls == 0 && z3660_limits == 0,
+	       "limits=0: registered, no limits declared");
+	g_params = "cache=0 limits=1";
+	z3660_lim_rc = -1;
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && sl_calls == 1 && z3660_limits == 1 && z3660_lim_rc == 0,
+	       "limits=1 beside another parameter: declared");
+
+	g_params = 0; sl_ret = 89;		/* ENOSYS: a kernel before the segment minor */
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == 0 && sr_calls == 1 && sl_calls == 1 && z3660_lim_rc == 89,
+	       "ENOSYS (no segment minor): _load still 0, the result kept, today's commands");
+	sl_ret = 0;
+
+	sr_ret = EBUSY_;
+	r = load_cell( 0UL, (unsigned short)0x2300, MOCK_BUS_BOARD);
+	CHECK( r == EBUSY_ && sl_calls == 0, "sd_register refused: no limits declared");
+	sr_ret = 0;
+}
+
 int main()
 {
 	struct sdcom	sc;
@@ -320,6 +485,7 @@ int main()
 	sr_ret = 0;
 
 	test_zs06_arm();
+	test_c47_limits();
 
 	printf("\n=== MODULE GATING: %d passed, %d failed ===\n", g_pass, g_fail);
 	return g_fail ? 1 : 0;

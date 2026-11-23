@@ -9,6 +9,7 @@ emulator. Catches CDB-shape regressions (the kind that only surface at a real
 make -C test/host check     # the default build, then the DIAG build; exit 0 == all pass
 make -C test/host check-diag   # the DIAG build only (-DZ3660_DIAG, in build-diag)
 make -C test/host check-m68k   # the default build for m68k, run under qemu-m68k
+make -C test/host check-probe  # the measurement build only (-DZ3660_PROBE, in build-probe)
 make -C test/host clean
 ```
 
@@ -29,11 +30,20 @@ without the fix and passes with it; the host build passes either way.
 Current run: **234 gating assertions passed, 0 failed** in the default build
 (264 in the DIAG build; the same 234 under `check-m68k`), plus 6/6 stretch parity against the firmware's CD
 oracle; then `z3660_modtest`, the root-class module form
-(`-DZ3660SCSI_MODULE`, a mock `sd_register`): **46 passed, 0 failed**
+(`-DZ3660SCSI_MODULE`, a mock `sd_register` and `sd_limits`): **59 passed, 0 failed**
 (`module/README.md`), 31 of them the ZS-06 cache arm: `cputype` 30/40/60 ×
 `cache=` absent, -1, 0, 40, 60, 99 and not a number, the parser's shape, and
 on the 060 with no parameter `z3660_ci_ok` 1 and a READ that pushes. Mutation
 checked: without the arm, or with it after `z3660map()`, the 060 cells fail.
+13 are the C4-7 limits (`test_c47_limits()`): the declaration's fields
+(`SDL_ALLRAM`, 64 KiB, align 16, granule 512, reach `0x0FFFFFFF`, the
+queue entry), a 64 KiB READ and WRITE through `sl_queue` with one doorbell
+each and `sx_resid` 0, no page-cross census for them while a stock
+page-crossing READ after them is still counted, `SDX_SEG` refused, a READ
+past the end failing with `sx_resid` = `nbyte`, the stock entry writing no
+resid, `limits=0` and `cache=0 limits=1`, `ENOSYS` from an older kernel, and
+no `sd_limits` call when `sd_register` fails. Mutation checked: without the
+resid, or without the census skip, one cell fails each.
 
 `z3660queue()` is driven with a hand-built `struct sdcom` and completes
 **in-context**: since a5af58a the driver delivers through `z3660_complete()`
@@ -134,6 +144,14 @@ the two mapped units) to pin the cache fill to
 A cheap-but-wrong cache would pass every count, so the same gate re-checks READ
 CAPACITY(10)'s reported block size and block count against the mock's geometry while
 asserting it cost no wire reads (2 trips: the armed DRVNUMX select).
+
+`check-probe` adds `test_probe_lean()` to the measurement build: with
+`z3660_lean` bit 0 the READ/WRITE path skips the DRVNUMX select, with bit 1
+a descriptor cell this driver latched since attach is checked by one
+read-back instead of rewritten (never ADDR4, and the READ and WRITE latches
+apart); the trip counts it gates are 15, 13, 11, 12 and 13 for READs and 9
+for a WRITE. On the 68060 those cuts saved about 15–20 µs of a 1.2–3.5 ms
+request (`module/README.md`), so they stay out of the shipped object.
 
 Stretch (reported, never gated): a parity table of the driver against the CD
 half of the firmware oracle

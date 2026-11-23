@@ -12,6 +12,9 @@
 #   make -C module clean
 #   make -C module DIAG=1     a diagnostic build: also the page-cross ring and
 #                             the fault knob (-DZ3660_DIAG); never shipped
+#   make -C module PROBE=1    a measurement build: per-request counters and
+#                             beam-line times in z3660_probe (-DZ3660_PROBE);
+#                             never shipped
 #
 # DLM is the kernel/dlm directory whose kits are built (`make kit` there gives
 # build/kit/k30 and build/kit/k46); KIT_k30 / KIT_k46 name a kit directly.
@@ -50,7 +53,7 @@ OBJS   = z3660.o
 MODOUT = $(TOP)/build/$(LINE)
 SRC    = $(TOP)/src
 ALIEN  = -I$(KIT)/stock/usr/sys/amiga/alien
-DIAGDEF = $(if $(DIAG),-DZ3660_DIAG)
+DIAGDEF = $(if $(DIAG),-DZ3660_DIAG) $(if $(PROBE),-DZ3660_PROBE)
 CFLAGS = -DZ3660SCSI_MODULE -fno-common $(ALIEN) $(DIAGDEF)
 vpath %.c $(SRC)
 include $(KIT)/mk/module.mk

@@ -633,3 +633,13 @@ unsigned long	pdt, block_size, nblocks;
 	d->block_size = block_size;
 	d->nblocks    = nblocks;
 }
+
+/* Set a descriptor latch behind the driver's back (the PROBE build's lean
+ * test: a cell that moved underneath must be rewritten, not trusted). */
+void mock_poke(unsigned long off, unsigned long v)
+{
+	if (off >= R_READ_ADDR1 && off < R_READ_ADDR1 + 16)
+		u32_read[(off - R_READ_ADDR1) / 4] = v;
+	else if (off >= R_WRITE_ADDR1 && off < R_WRITE_ADDR1 + 16)
+		u32_write[(off - R_WRITE_ADDR1) / 4] = v;
+}

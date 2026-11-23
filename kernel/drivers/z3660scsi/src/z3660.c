@@ -97,6 +97,10 @@
 #include	"sys/moddefs.h"		/* the ABI kit's wrapper (kernel/dlm C3-1, C4-2) */
 #include	"sys/amixddi.h"		/* the kit's DDI: sd_register (C4-1) */
 #endif
+#ifdef	Z3660SCSI_MODULE
+#include	"sys/sdseg.h"		/* C4-7: struct sdcomx, sd_limits (kits k30.1.6,
+					 * k46.1.7); test/host/stubs under HOST_TEST */
+#endif
 
 #define	Z3660_PROD	0x144B0001	/* autocon pc = (manufacturer<<16)|product */
 #define	Z3660_FIXED	0x10000000	/* combo window base when not autoconfigured */
@@ -392,6 +396,114 @@ static uchar	z3660_sense_key, z3660_sense_asc, z3660_sense_ascq;
  * stays in the shipping driver.
  */
 ulong	z3660_nest_depth, z3660_nest_hits;
+
+#ifdef	Z3660SCSI_MODULE
+/*
+ * C4-7 (kernel/dlm docs/contracts/C4-7-sd-segments.md): the extended command
+ * in flight, or 0 for a stock one.  Set by z3660queuex() for the length of its
+ * z3660queue() call, inside which nothing else can start a transaction (the
+ * bracket); z3660_rw() reads it to leave contiguous commands out of the page-
+ * cross census, and z3660queue() to set sx_resid before the completion.
+ */
+static struct sdcomx	*z3660_xcur;
+#endif
+
+#ifdef	Z3660_PROBE
+/*
+ * Measurement build only (-DZ3660_PROBE; never in a shipped object): per
+ * request counters and times, kmem-readable as `modadmin -p z3660_probe:28`.
+ * Times are beam lines (VPOSR/VHPOSR, 64 us a line on PAL), one interval at
+ * a time, each under a frame; over thousands of requests the means are much
+ * finer than a line.  Per READ/WRITE chunk:
+ *   lpre  the cache prepare, any staging copy and the address triple
+ *         (9 mailbox accesses: arming read, write, read-back, three times);
+ *   lbell the doorbell (2 accesses: arming read, then the trigger write, which
+ *         returns when the firmware has served the request);
+ *   lpost USED_DMA (2 accesses), then the bounce copy or the invalidate.
+ * lq is the whole z3660queue() call of a READ/WRITE, preamble included (the
+ * armed DRVNUMX select, 2 accesses), completion excluded.  sz[] buckets by
+ * cp->nbyte: 0, <=512, <=2K, <=4K, <=8K, <=16K, <=64K, more.
+ */
+struct z3660_probe {
+	ulong	magic;			/*   0: 0x5A335052 "Z3PR"                   */
+	ulong	cmds, reads, writes;	/*   4: every command; READs; WRITEs        */
+	ulong	other, fails, xcmds;	/*  16: non-R/W; okay false; sdcomx ones    */
+	ulong	bytes, chunks;		/*  28: R/W bytes; mailbox requests          */
+	ulong	staged, bounced;	/*  36: WRITE staging copies; READ bounces   */
+	ulong	sz[8];			/*  44                                       */
+	ulong	lbolt0, lbolt1;		/*  76: first and last counted command       */
+	ulong	lq, lpre, lbell, lpost;	/*  84                                       */
+	ulong	frame;			/* 100: lines per frame (313 PAL, 263 NTSC)  */
+	ulong	lqmax, lbellmax;	/* 104: the longest of each, in lines        */
+};
+struct z3660_probe	z3660_probe = { 0x5A335052 };
+#ifdef	HOST_TEST
+static long	lbolt;			/* the harness has no clock: every time 0 */
+#define	Z3660_BEAM(r)	0
+#else
+extern long	lbolt;
+#define	Z3660_BEAM(r)	(*(volatile ushort *)(r))
+#endif
+
+static ulong
+z3660_pline()
+{
+	ushort	p, h;
+
+	p = Z3660_BEAM( 0xDFF004);
+	h = Z3660_BEAM( 0xDFF006);
+	if (z3660_probe.frame == 0)
+		z3660_probe.frame = (p & 0x1000) ? 263 : 313;
+	return ((ulong)(p & 1) << 8) | (ulong)(h >> 8);
+}
+
+static ulong
+z3660_pdelta( a, b)
+ulong	a, b;
+{
+	return (b + z3660_probe.frame - a) % z3660_probe.frame;
+}
+
+static void
+z3660_probe_cmd( cp, rw, lines)
+struct sdcom	*cp;
+int		rw;
+ulong		lines;
+{
+	ulong	n;
+	int	b;
+
+	n = (ulong)cp->nbyte;
+	if (z3660_probe.cmds == 0)
+		z3660_probe.lbolt0 = (ulong)lbolt;
+	z3660_probe.lbolt1 = (ulong)lbolt;
+	z3660_probe.cmds++;
+	if (!cp->okay)
+		z3660_probe.fails++;
+#ifdef	Z3660SCSI_MODULE
+	if (z3660_xcur)
+		z3660_probe.xcmds++;
+#endif
+	if (rw == 0) {
+		z3660_probe.other++;
+		return;
+	}
+	if (rw == 1)
+		z3660_probe.reads++;
+	else
+		z3660_probe.writes++;
+	z3660_probe.bytes += n;
+	z3660_probe.lq += lines;
+	if (lines > z3660_probe.lqmax)
+		z3660_probe.lqmax = lines;
+	b = n == 0 ? 0 : n <= 512 ? 1 : n <= 2048 ? 2 : n <= 4096 ? 3
+	  : n <= 8192 ? 4 : n <= 16384 ? 5 : n <= 65536 ? 6 : 7;
+	z3660_probe.sz[b]++;
+}
+#define	Z3660_PT(v)	((v) = z3660_pline())
+#else
+#define	Z3660_PT(v)
+#endif
 
 /*
  * ---------------------------------------------------------------------------
@@ -1519,16 +1631,51 @@ ulong	z3660_rb_retry;		/* descriptor mismatches rewritten              */
 ulong	z3660_rb_fail;		/* requests failed: mismatch survived a rewrite */
 ulong	z3660_rb_last[3];	/* last mismatch: offset, written, read back    */
 
+#ifdef	Z3660_PROBE
+/*
+ * Probe build only: z3660_lean, a kmem switch for measuring two trip cuts on
+ * one boot (0, the default, is the shipping behaviour):
+ *   bit 0  no DRVNUMX select before a READ/WRITE: the firmware takes the unit
+ *          from the doorbell's value (scsi.c: d = &devs[val]), and the
+ *          geometry reads select their own unit (z3660_geom_fill());
+ *   bit 1  a descriptor cell that holds the value this driver last latched
+ *          there since attach is checked with an armed read (2 accesses)
+ *          instead of rewritten (arm, write, read-back: 3).
+ * z3660_lean_skip counts the cells checked instead of written.
+ */
+ulong	z3660_lean, z3660_lean_skip;
+static ulong	z3660_cellv[6];		/* READ_ADDR1-3, WRITE_ADDR1-3 */
+static uchar	z3660_cellok[6];	/* latched by this driver since attach */
+#define	Z3660_CELL(c)	((c) >= P_WRITE_ADDR1 ? 3 + ((c) - P_WRITE_ADDR1) / 4 : ((c) - P_READ_ADDR1) / 4)
+#endif
+
 static int
 z3660_set( cmd, val)
 int	cmd;
 ulong	val;
 {
 	ulong	rb;
+#ifdef	Z3660_PROBE
+	int	ci = Z3660_CELL( cmd);
+
+	if ((z3660_lean & 2) && z3660_cellok[ci] && z3660_cellv[ci] == val) {
+		Z3660_RDA( cmd, rb);
+		if (rb == val) {
+			z3660_lean_skip++;
+			return 0;
+		}
+	}
+	z3660_cellok[ci] = 0;
+#endif
 
 	Z3660_WRV( cmd, val, rb);
-	if (rb == val)
+	if (rb == val) {
+#ifdef	Z3660_PROBE
+		z3660_cellv[ci] = val;
+		z3660_cellok[ci] = 1;
+#endif
 		return 0;
+	}
 	z3660_rb_last[0] = (ulong)cmd;
 	z3660_rb_last[1] = val;
 	z3660_rb_last[2] = rb;
@@ -1568,6 +1715,9 @@ ulong	block, blocks, bs;
 uchar	*data;
 {
 	ulong	chunk, len, i, perchunk, pa;
+#ifdef	Z3660_PROBE
+	ulong	ta, tb, tc, td, d;
+#endif
 #ifdef	Z3660_DIAG
 	ulong	req, reqlen;
 
@@ -1582,6 +1732,7 @@ uchar	*data;
 		chunk = (blocks < perchunk) ? blocks : perchunk;
 		len   = chunk * bs;
 		pa    = (ulong)data;
+		Z3660_PT( ta);
 
 		/*
 		 * S11 census (docs/BLIZZARD-F3.md 3.4).  cp->addr is ONE vtop(),
@@ -1603,7 +1754,12 @@ uchar	*data;
 		 * into z3660_pagecross_ring (record only), so the addresses
 		 * behind a non-zero count can be read off a running kernel.
 		 */
-		if ((pa & (ulong)(NBPP - 1)) + len > (ulong)NBPP) {
+		if ((pa & (ulong)(NBPP - 1)) + len > (ulong)NBPP
+#ifdef	Z3660SCSI_MODULE
+		    /* a C4-7 command's segment is contiguous by contract (2.1) */
+		    && z3660_xcur == 0
+#endif
+		    ) {
 			z3660_pagecross_n++;
 #ifdef	Z3660_DIAG
 			z3660_pcr_note( unit, write, block, len, pa, req, reqlen);
@@ -1620,11 +1776,16 @@ uchar	*data;
 			z3660_push( pa, len);
 			if (pa < BOUNCE_THRESH) {
 				z3660_bounce_wr_n++;	/* unreachable on AMIX RAM */
+#ifdef	Z3660_PROBE
+				z3660_probe.staged++;
+#endif
 				bcopy( (caddr_t)data, (caddr_t)bounce, (int)len);
 			}
 			if (z3660_desc( P_WRITE_ADDR1, block, len, pa))
 				return EIO;
+			Z3660_PT( tb);
 			Z3660_RING( P_WRITE_ADDR2, P_WRITE, unit);	/* trigger (sync) */
+			Z3660_PT( tc);
 			/* no completion op: TO_DEVICE never invalidates */
 		} else {
 			/*
@@ -1635,7 +1796,9 @@ uchar	*data;
 			z3660_push( pa, len);
 			if (z3660_desc( P_READ_ADDR1, block, len, pa))
 				return EIO;
+			Z3660_PT( tb);
 			Z3660_RING( P_READ_ADDR2, P_READ, unit);	/* trigger (sync) */
+			Z3660_PT( tc);
 			z3660_sync();		/* S4: doorbell must precede the readback */
 			Z3660_RDX( P_UDMA_ARM, P_USED_DMA, z3660_dma);
 			if (z3660_dma != 0) {
@@ -1648,6 +1811,9 @@ uchar	*data;
 				 * just written along with their line neighbours.
 				 */
 				z3660_bounce_rd_n++;
+#ifdef	Z3660_PROBE
+				z3660_probe.bounced++;
+#endif
 				bcopy( (caddr_t)bounce, (caddr_t)data, (int)len);
 			} else {
 				/* DIRECT arm -- the ARM wrote RAM behind the CPU's
@@ -1655,6 +1821,16 @@ uchar	*data;
 				z3660_inv( pa, len);
 			}
 		}
+#ifdef	Z3660_PROBE
+		Z3660_PT( td);
+		z3660_probe.chunks++;
+		z3660_probe.lpre  += z3660_pdelta( ta, tb);
+		d = z3660_pdelta( tb, tc);
+		z3660_probe.lbell += d;
+		if (d > z3660_probe.lbellmax)
+			z3660_probe.lbellmax = d;
+		z3660_probe.lpost += z3660_pdelta( tc, td);
+#endif
 
 		block  += chunk;
 		blocks -= chunk;
@@ -1759,6 +1935,30 @@ struct sdcom	*cp;
 }
 
 /*
+ * Deliver a finished command.  For a C4-7 command (z3660_xcur, set by
+ * z3660queuex() around its z3660queue() call) first set sx_resid, all or
+ * nothing as C4-7 2.2 allows: 0 when the command moved its data, nbyte when
+ * it failed or ended in CHECK CONDITION.  z3660_xcur is cleared before the
+ * completion runs, because dd's completion may queue the next command.
+ */
+#ifdef	Z3660SCSI_MODULE
+static void
+z3660_done( cp)
+struct sdcom	*cp;
+{
+	struct sdcomx	*x;
+
+	if ((x = z3660_xcur) != 0) {
+		z3660_xcur = 0;
+		x->sx_resid = (cp->okay && cp->status == 0) ? 0 : cp->nbyte;
+	}
+	z3660_complete( cp);
+}
+#else	/* the static driver has no C4-7 entry: the object stays as it was */
+#define	z3660_done(cp)	z3660_complete(cp)
+#endif
+
+/*
  * Generic SCSI queue entry -- mirrors a4091queue()/a3091queue().  Interprets the
  * CDB from cp->cdb (the piscsi firmware only does block I/O + geometry, so the
  * non-data commands are synthesised here, as in z3660_scsi.c:piscsi_scsi()).
@@ -1773,6 +1973,10 @@ struct sdcom	*cp;
 	uchar	*data;
 	uchar	op;
 	struct z3660_unitgeom	*g;
+#ifdef	Z3660_PROBE
+	ulong	tq0, tq1;
+	int	rw = 0;			/* 0 other, 1 READ, 2 WRITE */
+#endif
 
 	/*
 	 * Bracket the ENTIRE transaction -- register setup, the synchronous
@@ -1783,11 +1987,12 @@ struct sdcom	*cp;
 	 * rw helpers all run inside this bracket.
 	 */
 	s = z3660_enter();
+	Z3660_PT( tq0);
 
 	if (e = z3660map()) {
 		cp->status = 0xff; cp->okay = FALSE;
 		z3660_leave( s);
-		z3660_complete( cp);		/* deliver OUTSIDE the mailbox bracket */
+		z3660_done( cp);		/* deliver OUTSIDE the mailbox bracket */
 		return TRUE;
 	}
 
@@ -1803,6 +2008,9 @@ struct sdcom	*cp;
 	 * a hit); before that cache existed these three facts cost four further
 	 * round trips on every single CDB.
 	 */
+#ifdef	Z3660_PROBE
+	unless (z3660_lean & 1)
+#endif
 	Z3660_WRA( P_DRVNUMX, unit);	/* ZS-05: armed, like every mailbox write */
 	g   = z3660_geom_get( unit);
 	bs  = g->bs;
@@ -1984,6 +2192,9 @@ struct sdcom	*cp;
 		       | ((ulong)cp->cdb[4] << 8)  | cp->cdb[5];
 		blocks = ((ulong)cp->cdb[7] << 8)  | cp->cdb[8];
 	rw:
+#ifdef	Z3660_PROBE
+		rw = write ? 2 : 1;
+#endif
 		z3660_lastblock = block;
 		z3660_lastlen   = blocks * bs;
 		/*
@@ -2059,10 +2270,44 @@ struct sdcom	*cp;
 	}
 
 	z3660_rc = cp->okay ? 0 : 0xff;
+#ifdef	Z3660_PROBE
+	Z3660_PT( tq1);
+	z3660_probe_cmd( cp, rw, z3660_pdelta( tq0, tq1));
+#endif
 	z3660_leave( s);
-	z3660_complete( cp);			/* deliver OUTSIDE the mailbox bracket */
+	z3660_done( cp);			/* deliver OUTSIDE the mailbox bracket */
 	return TRUE;
 }
+
+#ifdef	Z3660SCSI_MODULE
+/*
+ * C4-7 section 3: the extended commands, through sl_queue.  Declared without
+ * SDL_SEG (one address and a length per firmware request), so dd sends one
+ * segment of up to 64 KiB from its bounce region, as an sdcomx without
+ * SDX_SEG; one with the flag is refused (okay false, sx_resid nbyte), never
+ * run.  The command itself is the stock part, run by z3660queue(), which
+ * sets sx_resid before the completion (z3660_done()).
+ */
+ulong	z3660_xseg;		/* kmem: SDX_SEG commands refused (must stay 0) */
+
+bool
+z3660queuex( c, cpx)
+int		c;
+struct sdcomx	*cpx;
+{
+	if (cpx->sx_flags & SDX_SEG) {
+		z3660_xseg++;
+		cpx->sx_com.status = 0xff;
+		cpx->sx_com.okay = FALSE;
+		cpx->sx_resid = cpx->sx_com.nbyte;
+		z3660_complete( &cpx->sx_com);
+		return TRUE;
+	}
+	z3660_xcur = cpx;
+	(void)z3660queue( c, &cpx->sx_com);
+	return TRUE;
+}
+#endif
 
 #ifndef	Z3660SCSI_MODULE
 void
@@ -2153,18 +2398,17 @@ long	z3660_cache_src;	/* kmem: 0 = z3660_cache from cputype, 1 = cache= */
 ulong	z3660_cache_bad;	/* kmem: cache= refused or not understood (count) */
 
 /*
- * The `cache` parameter in the string the core passes to _load: the
- * manifest's "name=value ..." records, or 0 (C3-6 section 1.1); C3-1's int
- * form, decimal with an optional '-' (kernel/modules monsw_param's shape).
- * Returns 0 if absent, 1 with *vp set if a decimal (saturating above
- * 100000), -1 if present but not a decimal.
+ * A parameter (`cache=`, `limits=`) in the string the core passes to _load:
+ * the manifest's "name=value ..." records, or 0 (C3-6 section 1.1); C3-1's
+ * int form, decimal with an optional '-' (kernel/modules monsw_param's
+ * shape).  Returns 0 if absent, 1 with *vp set if a decimal (saturating
+ * above 100000), -1 if present but not a decimal.
  */
 static int
-z3660_param( params, vp)
-char	*params;
+z3660_param( params, name, vp)
+char	*params, *name;
 long	*vp;
 {
-	static char	name[] = "cache=";
 	char	*p, *n;
 	long	v;
 	int	neg, nd;
@@ -2207,7 +2451,7 @@ char	*params;
 	bycpu = (cpu == 40 || cpu == 60) ? cpu : 0;
 	z3660_cache = bycpu;
 	z3660_cache_src = 0;
-	r = z3660_param( params, &v);
+	r = z3660_param( params, "cache=", &v);
 	if (r == 0 || (r == 1 && v == -1))
 		return;
 	if (r == 1 && (v == 0 || v == 40 || v == 60)) {
@@ -2230,11 +2474,40 @@ char	*params;
 			(int)bycpu, (int)cpu);
 }
 
+/*
+ * C4-7 section 6: the controller's limits, declared after sd_register.  The
+ * firmware request is one physical address and a length (no segment list),
+ * so no SDL_SEG: one segment of up to MAXXFER, 64 KiB, the firmware bounce
+ * aperture's size.  Alignment 16 (the 040/060 cache line; the SD
+ * controller's ADMA needs 4), length a multiple of 512 (whole sectors).
+ * Reach: the firmware writes the Z3660 DDR (0x08000000-0x0FFFFFFF) directly
+ * and stages anything else through its aperture, which this driver copies
+ * (z3660_rw) -- for a READ always, for a WRITE below 0x08000000.  So it
+ * reaches whatever RAM the CPU does up to 0x0FFFFFFF, the DDR included:
+ * SDL_ALLRAM (C4-7 3.2) with reach 0x0FFFFFFF.  The reach also keeps every
+ * buffer the kernel hands it inside what the WRITE staging rule covers.
+ * dd's bounce region on -79 comes from dma_alloc whatever is declared.
+ *
+ * The reference is weak (DDI_SD_LIMITS): on a kernel before the segment
+ * minor the call gives ENOSYS and the controller keeps today's commands.
+ * Parameter limits=0 declares nothing.  z3660_lim_rc: -1 not called, else
+ * sd_limits' result (0 accepted).
+ */
+#ifndef	HOST_TEST
+DDI_SD_LIMITS_DECL;
+#endif
+static struct sdlim	z3660_lim = {
+	SDLIM_VER, SDL_ALLRAM, MAXXFER, 1, 16, 512, 0, 0x0FFFFFFF, z3660queuex
+};
+long	z3660_limits = 1;	/* kmem: the limits parameter (0 = declare none) */
+long	z3660_lim_rc = -1;	/* kmem: sd_limits' result, -1 = not called */
+
 int
 z3660scsi_load( params)
 char	*params;
 {
 	int	e;
+	long	v;
 
 	z3660_arm( params);		/* ZS-06: before z3660map()'s ci_check */
 	z3660_nest_hits += (z3660_nest_depth != 0);
@@ -2249,7 +2522,12 @@ char	*params;
 		printf( "z3660: sd_register failed (errno %d)\n", e);
 		return e;
 	}
-	return 0;
+	z3660_limits = 1;
+	if (z3660_param( params, "limits=", &v) == 1 && v == 0)
+		z3660_limits = 0;
+	if (z3660_limits)
+		z3660_lim_rc = DDI_SD_LIMITS( z3660queue, 0, &z3660_lim);
+	return 0;	/* a refusal leaves today's commands; the core names it */
 }
 
 /*
