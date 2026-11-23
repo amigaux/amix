@@ -230,9 +230,23 @@ the default, the build and its bytes are as before.
 - `_XtInherit` from X11R6.3's shared variant's `libXtInherit.a` is linked into every program (its
   README, *The shared variant*), and through the same link flags into each library; the program's
   is the one bound at run time.
-- **Text relocations in two libraries, named by the build** (`textrel-report.py`), from code
-  that exists on Amix only static and non-PIC: Amix's `libm` (`sin`, `cos`, `tan` in
-  `libDtHelp.so.2`; `log`, `log10`, `sqrt` in `libDtSearch.so.2`, with their helpers). Each costs,
-  per process, the pages it relocates. A text relocation from any other source fails the build.
+- **No text relocations**: the build refuses any, naming its source (`textrel-report.py`).
+- **Amix's `libm` comes from the program.** Amix has `libm` only static and not
+  position-independent, so no shared library can link it. `libDtHelp` (`sin`, `cos`, `tan`, in its
+  image rotation and JPEG code) and `libDtSearch` (`log`, `log10`, `sqrt`, in search ranking) call
+  them through weak references (`compat/libm-weak.h`). Every program is linked with the six from
+  the stock `libm` and exports them (`-Wl,-u,sin -Wl,--export-dynamic-symbol=sin`, and so on for
+  each, then `-lm`), and the runtime linker binds the libraries' calls to the program's copies;
+  `matherr` and `errno` are the program's, as SVR4 has them. The libraries are linked before those
+  flags are given, so none of them takes a copy. This costs each program about 6 KB of text of its
+  own (the functions and their helpers).
+- **A program from outside CDE that links `libDtHelp` or `libDtSearch`** (or a library that needs
+  one of them, such as `libDtPrint`, `libDtTerm` or `libDtMrm`) must be linked the same way:
+  ```
+  cc ... -Wl,-u,sin -Wl,--export-dynamic-symbol=sin   (likewise cos tan log log10 sqrt) ... -lm
+  ```
+  Without them, the libraries' references stay 0 and the program dies the first time it rotates
+  an image, decodes a JPEG in a help topic or ranks a search. The build refuses any of CDE's own
+  programs that reaches these libraries and does not export all six.
 - **Gates**: `check-got-addend.py` on the PIC objects and compat, and `check-dynstr-order.py` on
   every library and program.

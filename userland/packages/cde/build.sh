@@ -48,6 +48,14 @@ cde_vars() {
 		# compat ahead of libgen: its PIC basename, not libgen's non-PIC one
 		# (libtool keeps a repeated library's last place, so libgen moves to the end)
 		CDE_LIBS="$(echo "$CDE_LIBS" | sed 's/ -lgen / /') -lgen"
+		# Amix's libm is static and not PIC: libDtHelp and libDtSearch call it
+		# through weak references (compat/libm-weak.h), and every program links
+		# these from the stock libm and exports them for the libraries; given to
+		# the program links only, after the libraries are built (build)
+		CDE_MATH="sin cos tan log log10 sqrt"
+		CDE_MATHLD=
+		for _m in $CDE_MATH; do CDE_MATHLD="$CDE_MATHLD -Wl,-u,$_m -Wl,--export-dynamic-symbol=$_m"; done
+		CDE_MATHLD="${CDE_MATHLD# } -lm"
 	else
 		# libtt is C++, and the C programs that link it need its runtime
 		# (__gxx_personality_v0, the type_info vtables): libtool's C++ probe
@@ -368,6 +376,19 @@ build() {
 		> "$BUILD/make-dtsvc.log" 2>&1 || { tail -30 "$BUILD/make-dtsvc.log" >&2; echo "[FAIL] make lib/DtSvc" >&2; exit 1; }
 	make -C lib/csa CPPFLAGS="$(sed -n 's/^CPPFLAGS = //p' Makefile) -include $AMIX_GCC14_DECLS -include $AMIX_GCC14_RPCGEN -Wno-unused-variable" "$@" \
 		> "$BUILD/make-csa.log" 2>&1 || { tail -30 "$BUILD/make-csa.log" >&2; echo "[FAIL] make lib/csa" >&2; exit 1; }
+	# the shared variant: libDtHelp and libDtSearch with their libm calls weak
+	# (compat/libm-weak.h), then every library with configure's link flags;
+	# the programs, linked after them, also take the stock libm's functions
+	# for those calls and export them (CDE_MATHLD), which a library link must not
+	if [ "$CDE_VARIANT" = shared ]; then
+		for d in lib/DtHelp lib/DtSearch; do
+			make -C "$d" CPPFLAGS="$(sed -n 's/^CPPFLAGS = //p' Makefile) -include $AMIX_GCC14_DECLS -include $COMPAT/libm-weak.h" "$@" \
+				> "$BUILD/make-${d#lib/}.log" 2>&1 || { tail -30 "$BUILD/make-${d#lib/}.log" >&2; echo "[FAIL] make $d" >&2; exit 1; }
+		done
+		make_cde -C util "$@" > "$BUILD/make-util.log" 2>&1 || { tail -30 "$BUILD/make-util.log" >&2; echo "[FAIL] make util" >&2; exit 1; }
+		make_cde -C lib "$@" > "$BUILD/make-lib.log" 2>&1 || { tail -30 "$BUILD/make-lib.log" >&2; echo "[FAIL] make lib" >&2; exit 1; }
+		set -- "$@" LDFLAGS="$(sed -n 's/^LDFLAGS = //p' Makefile) $CDE_MATHLD"
+	fi
 	make_cde "$@" > "$BUILD/make.log" 2>&1 || { tail -40 "$BUILD/make.log" >&2; echo "[FAIL] make" >&2; exit 1; }
 	# rpc.cmsd's hand-written lexer (lexit.c) without jump tables: the
 	# 68060 gate cannot bound its two-level byte-class dispatch; then the
@@ -431,12 +452,51 @@ stage() {
 		python3 -I "$G14TOOLS/check-dynstr-order.py" $_dy > "$BUILD/dynstr.log" 2>&1 || {
 			tail -20 "$BUILD/dynstr.log" >&2; echo "[FAIL] check-dynstr-order" >&2; exit 1; }
 		echo "  check-dynstr-order: $(echo "$_dy" | wc -l) dynamic objects clean"
-		# text relocations: named, not failed (GCC's static C++ runtime and Amix's
-		# static libm have no PIC form; README, Shared variant); anything else fails
+		# no text relocations, which the box's NEEDED gate refuses; any found are
+		# named by their source (textrel-report.py) before the build fails
 		python3 -I "$HERE/textrel-report.py" "$READELF" "$NM" $_dy > "$BUILD/textrel.log" || exit 1
-		cat "$BUILD/textrel.log"
-		! grep -q "^    other:" "$BUILD/textrel.log" || {
-			echo "[FAIL] text relocations from an unexpected source (above)" >&2; exit 1; }
+		[ ! -s "$BUILD/textrel.log" ] || {
+			cat "$BUILD/textrel.log" >&2; echo "[FAIL] text relocations (above)" >&2; exit 1; }
+		echo "  no text relocations in $(echo "$_dy" | wc -l) dynamic objects"
+		# Amix's libm through the program (compat/libm-weak.h): no library here
+		# defines one of CDE_MATH or needs it strongly; and every program that
+		# NEEDs libDtHelp or libDtSearch, or a library that NEEDs one of them,
+		# defines and exports all of CDE_MATH, or the libraries' calls reach 0
+		_ml="libDtHelp.so.2 libDtSearch.so.2" _mb=
+		for _f in "$_ld"/*.so.*; do
+			[ -f "$_f" ] && [ ! -L "$_f" ] || continue
+			_x=$("$NM" -D "$_f" | awk -v m=" $CDE_MATH " 'index(m, " " $NF " ") && $(NF-1) != "w" {print $(NF-1), $NF}')
+			[ -z "$_x" ] || _mb="$_mb ${_f##*/}($(echo $_x))"
+		done
+		[ -z "$_mb" ] || { echo "[FAIL] libm defined or strongly needed in:$_mb" >&2; exit 1; }
+		_nl=x
+		while [ "$_nl" != "$_ml" ]; do
+			_nl=$_ml
+			for _f in "$_ld"/*.so.*; do
+				[ -f "$_f" ] && [ ! -L "$_f" ] || continue
+				case " $_ml " in *" ${_f##*/} "*) continue;; esac
+				for _n in $("$READELF" -d "$_f" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); do
+					case " $_ml " in *" $_n "*) _ml="$_ml ${_f##*/}"; break;; esac
+				done
+			done
+		done
+		_mp=0 _mb=
+		for _f in $_dy; do
+			case "$_f" in *.so.*) continue;; esac
+			_u=no
+			for _n in $("$READELF" -d "$_f" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); do
+				case " $_ml " in *" $_n "*) _u=yes; break;; esac
+			done
+			[ $_u = yes ] || continue
+			_mp=$((_mp + 1))
+			_e=$("$NM" -D --defined-only "$_f" | awk '{print $NF}')
+			for _m in $CDE_MATH; do
+				echo "$_e" | grep -qx "$_m" || _mb="$_mb ${_f##*/}($_m)"
+			done
+		done
+		[ -z "$_mb" ] || { echo "[FAIL] programs that reach libDtHelp or libDtSearch and do not export libm's$_mb" >&2; exit 1; }
+		[ $_mp -gt 0 ] || { echo "[FAIL] no program reaches libDtHelp or libDtSearch: the libm check checked nothing" >&2; exit 1; }
+		echo "  libm through the program: $_mp programs reach$(echo " $_ml" | sed 's/ / /g'), each exports $CDE_MATH"
 	fi
 	# the programs are linked statically: the licence of each library in
 	# them ships beside CDE's own COPYING (README, Licence)

@@ -6,8 +6,8 @@ land in grouped by the static archive they come from, with those functions'
 bytes.  Each group's functions are named by the symbol at or before the
 relocation: from the symbol table, or the dynamic symbols of a library
 stripped of it (local helpers, such as libgcc's, then go under the exported
-symbol before them).  Prints a report;
-exits 0 (the shared variant names its text relocations, it does not hide them).
+symbol before them).  Prints a report, nothing when there are none, and
+exits 0: the build fails on any text relocation, and this names its source.
 MIT licence, see LICENSE in userland/packages."""
 import bisect, re, subprocess, sys
 
