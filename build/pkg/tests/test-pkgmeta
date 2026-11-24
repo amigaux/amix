@@ -163,6 +163,34 @@ try:
     check("DEPENDS reaches the catalog line as a comma list",
           rc == 0 and out.split("|")[6] == "zlib,acompat", err or out)
 
+    # --- dependency floors: name>=version in DEPENDS, as written ---------------------
+    fl = os.path.join(tmp, "floor")
+    rc, out, err = run("check", recipe(fl, "flo", PKG="flo", DEPENDS='"zlib amixrt>=1.0-5"'))
+    check("check passes a DEPENDS floor, amixrt>=1.0-5", rc == 0, err)
+    rc, out, err = run("catalog", os.path.join(fl, "flo"), "--md5", "0" * 32, "--size", "1")
+    check("a DEPENDS floor reaches the catalog line as written",
+          rc == 0 and out.split("|")[6] == "zlib,amixrt>=1.0-5", err or out)
+    rc, out, err = run("fragments", fl)
+    check("a DEPENDS floor reaches deps.conf as written",
+          rc == 0 and "\nflo: zlib,amixrt>=1.0-5\n" in out, err or out)
+    rc, out, err = run("build-order", fl)
+    check("a DEPENDS floor takes no part in the build order",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["flo"], err or out)
+    for name, over, needle in (
+            ("flgt", {"DEPENDS": '"amixrt>1.0-5"'}, "DEPENDS: 'amixrt>1.0-5' is not a package name or name>=version"),
+            ("fleq", {"DEPENDS": '"amixrt=1.0-5"'}, "DEPENDS: 'amixrt=1.0-5' is not a package name or name>=version"),
+            ("flle", {"DEPENDS": '"amixrt<=1.0-5"'}, "'amixrt<=1.0-5' is not a package name or name>=version"),
+            ("flnov", {"DEPENDS": '"amixrt>="'}, "'amixrt>=' is not a package name or name>=version"),
+            ("flnon", {"DEPENDS": '">=1.0-5"'}, "'>=1.0-5' is not a package name or name>=version"),
+            ("fltwo", {"DEPENDS": '"amixrt>=1.0>=2"'}, "'amixrt>=1.0>=2' is not a package name or name>=version"),
+            ("flslash", {"DEPENDS": '"amixrt>=1.0/5"'}, "'amixrt>=1.0/5' is not a package name or name>=version"),
+            ("flsp", {"DEPENDS": '"amixrt >= 1.0-5"'}, "DEPENDS: '>=' is not a package name or name>=version"),
+            ("flsh", {"SHARED_DEPENDS": '"amixrt>1"'}, "SHARED_DEPENDS: 'amixrt>1' is not a package name or name>=version"),
+            ("flbd", {"BUILD_DEPENDS": '"amixrt>=1.0-5"'},
+             "BUILD_DEPENDS: 'amixrt>=1.0-5' is not a package name (a floor goes in DEPENDS)")):
+        refused("check refuses %s" % name, ("check", recipe(os.path.join(tmp, "flbad"), name, **over)),
+                needle)
+
     # --- CONFFILES and the prototype ----------------------------------------------
     PROTO = ("i pkginfo\n"
              "d none /etc 0755 root sys\n"
@@ -908,6 +936,19 @@ try:
     rc, out, err = run("fragments", "--variant", "shared", os.path.join(tmp, "var"))
     check("variant: fragments --variant shared writes SHARED_DEPENDS into deps.conf",
           rc == 0 and "\nvgood: zlib,amixrt\n" in out, err or out)
+    shf = variant("varf", "vfloor", SHARED_PKGREV="2.s", DEPENDS='"zlib"',
+                  SHARED_DEPENDS='"zlib amixrt>=1.0-5"')
+    rc, out, err = run("check", shf)
+    check("variant: check passes a SHARED_DEPENDS floor", rc == 0, err)
+    rc, out, err = run("catalog", "--variant", "shared", shf, "--md5", "0" * 32, "--size", "1")
+    check("variant: the shared catalog line carries the SHARED_DEPENDS floor",
+          rc == 0 and out.split("|")[6] == "zlib,amixrt>=1.0-5", err or out)
+    rc, out, err = run("fragments", "--variant", "shared", os.path.join(tmp, "varf"))
+    check("variant: fragments --variant shared writes the floor into deps.conf",
+          rc == 0 and "\nvfloor: zlib,amixrt>=1.0-5\n" in out, err or out)
+    rc, out, err = run("fragments", os.path.join(tmp, "varf"))
+    check("variant: the static deps.conf line has no floor",
+          rc == 0 and "\nvfloor: zlib\n" in out, err or out)
 
     # --- a gate over nothing is no gate ------------------------------------------------
     os.makedirs(os.path.join(tmp, "nothing-built"))

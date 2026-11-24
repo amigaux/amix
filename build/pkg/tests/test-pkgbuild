@@ -399,7 +399,10 @@ stage() {
 }
 """)
         # a binary that needs libamixrt.so.1, with and without DEPENDS on amixrt
-        for nm, dep in (("elfrt", 'DEPENDS="amix-base amixrt"\n'), ("elfnort", 'DEPENDS="amix-base"\n')):
+        # and with a floor on it, or on another name that starts with it
+        for nm, dep in (("elfrt", 'DEPENDS="amix-base amixrt"\n'), ("elfnort", 'DEPENDS="amix-base"\n'),
+                        ("elfrtf", 'DEPENDS="amix-base,amixrt>=1.0-5"\n'),
+                        ("elfrtx", 'DEPENDS="amix-base amixrt-dev>=1.0-5"\n')):
             d = package(pkgs, nm, "hooks", dep, build=HOOKS_BUILD, src={"greet.txt": "x\n"})
             write(os.path.join(d, "prototype"), PROTOTYPE.replace("out.txt", "out.elf"))
             write(os.path.join(d, "build.sh"), HOOKS_BUILD + """
@@ -843,6 +846,12 @@ stage() {
               rc == 0 and "libamixrt.so.1 (sysroot /usr/lib)" in out, out)
         rc, out = build("elfnort", STUB_DYN=rt, **elf_env)
         check("UNDEF: without amixrt in DEPENDS it is refused",
+              rc == 1 and "NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" in out, out)
+        rc, out = build("elfrtf", STUB_DYN=rt, **elf_env)
+        check("UNDEF: a floor, amixrt>=1.0-5, names amixrt",
+              rc == 0 and "libamixrt.so.1 (sysroot /usr/lib)" in out, out)
+        rc, out = build("elfrtx", STUB_DYN=rt, **elf_env)
+        check("UNDEF: a floor on amixrt-dev does not",
               rc == 1 and "NEEDs libamixrt.so.1: package.sh DEPENDS must name amixrt" in out, out)
         cx = libc + "  NEEDED      libstdc++.so.6\n  RPATH       /opt/amix/lib"
         rc, out = build("elfcx", STUB_DYN=cx, AMIX_GCC14_PREFIX=g14prefix, **elf_env)

@@ -106,6 +106,10 @@ SHARED_KEYS = (("PKGREV", "SHARED_PKGREV"), ("SUMMARY", "SHARED_SUMMARY"),
                ("BUILD_DEPENDS", "SHARED_BUILD_DEPENDS"))
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*$")
+# a DEPENDS word: a package name, or a dependency floor "name>=version"
+# (apkg 0.3.14), the version as gen-catalog.py takes it: no space, '|',
+# ',' or '/', and none of '<', '>', '='
+DEP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+.-]*(>=[^\s|,/<>=]+)?$")
 VENDOR = "amix-packages"
 ARCH = "Amiga"
 
@@ -201,7 +205,8 @@ def styles():
 
 
 def words(value):
-    """DEPENDS-style lists: names separated by spaces or commas."""
+    """DEPENDS-style lists: words separated by spaces or commas (a DEPENDS
+    word may carry a floor, name>=version, and goes out as written)."""
     return [w for w in re.split(r"[\s,]+", value) if w]
 
 
@@ -776,10 +781,16 @@ def problems(recipe, m):
     if m["TOOLCHAIN"] not in TOOLCHAINS:
         out.append("TOOLCHAIN=%s -- known: %s"
                    % (m["TOOLCHAIN"], ", ".join(TOOLCHAINS)))
-    for k in ("DEPENDS", "BUILD_DEPENDS", "SHARED_DEPENDS", "SHARED_BUILD_DEPENDS"):
+    for k in ("DEPENDS", "SHARED_DEPENDS"):
+        for d in words(m[k]):
+            if not DEP_RE.match(d):
+                out.append("%s: '%s' is not a package name or name>=version"
+                           % (k, d))
+    for k in ("BUILD_DEPENDS", "SHARED_BUILD_DEPENDS"):
         for d in words(m[k]):
             if not TOKEN_RE.match(d):
-                out.append("%s: '%s' is not a package name" % (k, d))
+                out.append("%s: '%s' is not a package name%s" % (
+                    k, d, " (a floor goes in DEPENDS)" if ">=" in d else ""))
     out += prototype_problems(recipe, m)
     out += shared_problems(recipe, m)
     return out
