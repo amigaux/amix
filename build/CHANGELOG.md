@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-24 — pkgmeta: dependency floors in DEPENDS (e8d07248)
+
+DEPENDS and SHARED_DEPENDS accept `name>=version` (amixrt>=1.0-5) and pass the word as written into the catalog line and deps.conf; BUILD_DEPENDS stays bare names. pkgbuild's amixrt/cxxrt check reads a floored word by its name. Recipes without a floor give byte-identical output.
+
 ## 2026-11-24 — scan060-g14: libm.a's gamma.o tables are known stock data (c99c83e4)
 
 scan060-g14.py takes libm.a's gamma.o coefficient tables (sqrtpi through c, the 0x1f0 bytes ahead of _gamma, in .text) as known stock data, matched by the member's sha256. In dtksh, q4 decoded as movepw and failed the 68060 gate. Scans of existing programs are unchanged.

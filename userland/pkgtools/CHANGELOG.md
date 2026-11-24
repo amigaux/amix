@@ -1,3 +1,7 @@
+## 2026-11-24 — apkg 0.3.14 on the release line: dependency floors (1f0bfe2a)
+
+The same bytes as next's f8189f1d. A catalog deps word may carry a floor, `name>=version`; install and upgrade first upgrade an installed dependency below it, in the same transaction, and a floor the catalog cannot meet refuses the call (exit 5). apkg 0.3.11 and 0.3.13 refuse a floored package as a missing dependency. gen-catalog checks the form, assemble-release the live version, older-apkg-check names floored rows.
+
 ## 2026-11-17 — gen-catalog: no module floor at or below the base; the older-apkg gate (89fb4308, 6c60eedc)
 
 gen-catalog writes no module floor at or below kbootset.conf's module-floor-base (C2-2 v8), so 1.1 and 1.1.1 (apkg 0.3.11) take xsurf 1.0.0-4 in one plain upgrade; assemble-release takes such a line over the published one; new older-apkg-check.sh runs every earlier release's apkg against a new tree. T33 accepts the base line.
