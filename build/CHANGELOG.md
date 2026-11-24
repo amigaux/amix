@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-24 — scan060-g14: libm.a's gamma.o tables are known stock data (c99c83e4)
+
+scan060-g14.py takes libm.a's gamma.o coefficient tables (sqrtpi through c, the 0x1f0 bytes ahead of _gamma, in .text) as known stock data, matched by the member's sha256. In dtksh, q4 decoded as movepw and failed the 68060 gate. Scans of existing programs are unchanged.
+
 ## 2026-11-23 — gates: the awk 060 scanner skips scan060-g14.py's data ranges (e9a389c6)
 
 Under TOOLCHAIN=gcc14 the 68060 gate's awk scanner drops hits inside the data ranges scan060-g14.py prints with its new --data-ranges mode: sized switch tables, known stock data and data objects in .text. Before, it read a pointer in libelf.a xlate.o's x32 as cas2w and failed cde's shared dtsession. Real cas2 and 64-bit mul/div in code still fail the gate; objects, archives and the period toolchain are unchanged. Package bytes unchanged.
