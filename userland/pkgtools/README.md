@@ -155,7 +155,9 @@ Pipe-delimited text, one package per line, `#` comments:
 name|version|pkginst|filename|md5|size|deps|category|description[|offset]
 ```
 
-`deps` is a comma-separated list of catalog names or `none`; `filename` is relative to `pkgs/`
+`deps` is a comma-separated list of catalog names or `none`; a name may carry a floor,
+`amixrt>=1.0-5`, the lowest version of it the package works with (apkg 0.3.14 upgrades an
+installed one below it; an older apkg refuses the package as a missing dependency); `filename` is relative to `pkgs/`
 and may contain `/` (the repository is organized into `stock/`, `base/`, `test/`, … purely as
 metadata — reorganizing means regenerating the catalog, not moving a package's identity); `md5`
 and `size` describe the file exactly as served (so, the `.Z` file for a compressed package). The

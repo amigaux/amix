@@ -346,8 +346,11 @@ static int cmd_info(const struct conf *cf, struct catalog *cat,
     if (e->ndeps == 0) {
         printf("none\n");
     } else {
-        for (i = 0; i < e->ndeps; i++)
+        for (i = 0; i < e->ndeps; i++) {
             printf("%s%s", i > 0 ? ", " : "", e->deps[i]);
+            if (e->depmin[i] != NULL)
+                printf(" (%s or newer)", e->depmin[i]);
+        }
         printf("\n");
     }
     printf("Category:    %s\n", e->category);

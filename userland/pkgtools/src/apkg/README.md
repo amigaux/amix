@@ -22,7 +22,8 @@ list [installed|all]    catalog entries with installed-version column
 search <substr>         case-insensitive match on name|description
 info <name>             full catalog entry + installed state
 download <name>         fetch <repo>/pkgs/<file> into the cache, md5-verify
-install <name>...       resolve deps -> download+verify all -> pkgadd each
+install <name>...       resolve deps -> download+verify all -> pkgadd each;
+                        an installed dep below its floor is upgraded first
 upgrade <name>...       catalog newer than installed: ONE pkgadd over each
                         installed instance (instance=overwrite, no pkgrm);
                         several names = one transaction, one kbootset trigger
@@ -51,7 +52,7 @@ it); with no terminal and no flag they stay pending. See
 
 Exit codes: `0` ok · `1` usage/config · `2` network · `3` verify
 (md5/sha256/size/catalog, a malformed `APKG_FSTYPE`) · `4` pkgadd/pkgrm/zcat
-(or installf for `--conf-new`) failure · `5` dependency cycle or missing dependency, a kernel-space
+(or installf for `--conf-new`) failure · `5` dependency cycle, missing dependency or a floor the catalog cannot meet, a kernel-space
 pre-flight refusal, a UFS-only package on another filesystem, or the removal of an essential
 package · `6`
 kbootset could not run or failed (status 1/2; `apkg recover` retries) ·
@@ -191,7 +192,8 @@ against test vectors in the suite.
   constant an operator cannot reach.
 * **Catalog v1** (`catalog.c`): first line must be `#apkg-catalog 1`,
   then `name|version|pkginst|filename|md5|size|deps|category|description`
-  per line (`deps` = comma-separated names or `none`), plus an
+  per line (`deps` = comma-separated names or `none`; a name may carry
+  a floor, `name>=version`, 0.3.14), plus an
   **optional 10th `offset` field** (a decimal byte offset the RAW
   source uses; a 9-field line leaves it unset and RAW fails closed).
   Parsing is

@@ -2941,6 +2941,15 @@ if [ -x "$HB/pkgmk" ] && [ -x "$HB/pkgtrans" ] && [ -x "$APKGH" ] &&
     printf 'zlibt: nosuch\n' > "$S34/ul2/pkgs/deps.conf"; rm -f "${S34:?}/ul2/pkgs/ktool-2.0.pkg"
     python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
     t34no 1 "a dependency no live row names: refused" "zlibt 1.0 (userland) depends on nosuch" --userland "$S34/ul2"
+    printf 'zlibt: ktool>=2.0\n' > "$S34/ul2/pkgs/deps.conf"
+    python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
+    t34no 1 "a dependency floor above the live row: refused" \
+        "zlibt 1.0 (userland) needs ktool 2.0 or newer; the live row is ktool 1.0 (kspace)" --userland "$S34/ul2"
+    printf 'zlibt: ktool>=1.0\n' > "$S34/ul2/pkgs/deps.conf"
+    python3 "$GEN" --packages-conf none -o "$S34/ul2" "$S34/ul2/pkgs" >/dev/null 2>&1
+    ar34 "$S34/out40/1.1" --userland "$S34/ul2" >"$WORK/t34.fl" 2>&1
+    check "a floor the live row meets: rc 0, the row keeps 'ktool>=1.0'" \
+        bash -c "test $? -eq 0 && grep -q '^zlibt|1.0|.*|ktool>=1.0|' '$S34/out40/1.1/catalog'"
     SCAN_HIT=zlibt.elf t34no 1 "scan060.py finding a hit in a period ELF: refused" "scan060 refused the tree"
     G14_RC=1 t34no 1 "scan060-g14.py finding a hit in a GCC 14 ELF: refused" "scan060-g14 refused the tree"
     G14_RC=3 t34no 1 "scan060-g14.py unable to size a table: refused" "scan060-g14 refused the tree (exit 3)"
@@ -3552,7 +3561,8 @@ cat > "$S39/bin/apkg" <<'EOS'
 #!/bin/sh
 [ "$1" = version ] && { echo "apkg 0.3.9"; exit 0; }
 case $3 in
-update) echo "catalog updated: ${F39_ROWS:-1} package, ${F39_K:-3} kernel-space" ;;
+update) s=s; [ "${F39_ROWS:-1}" = 1 ] && s=
+    echo "catalog updated: ${F39_ROWS:-1} package$s, ${F39_K:-3} kernel-space" ;;
 list) for n in ${F39_REF:-}; do echo "$n 1.0 [refused] module x"; done; echo "toy 1.0 - system toy" ;;
 info) echo "Refused:     only a kernel entry may carry kbootset=" ;;
 esac
@@ -3583,6 +3593,19 @@ check "no base at all: a refused module fails" \
     bash -c "test $? -eq 1 && grep -q '^FAIL .*high-k46 is refused' '$S39/out'"
 TMPDIR="$S39" sh "$OAC" --apkg-bin "$S39/bin/apkg" "$S39/nosuch" > "$S39/out" 2>&1
 check "no tree: rc 2" test $? -eq 2
+# a dependency floor (apkg 0.3.14): an older apkg waits; the tree's own apkg
+# must know floors
+cp "$S39/tree/1.1/catalog" "$S39/cat.save"
+sed -i '/^toy|/s/|none|/|apkg>=0.3.14|/' "$S39/tree/1.1/catalog"
+sed -i '/^toy|/a apkg|0.3.14|APKG|base/APKG-0.3.14.pkg|00000000000000000000000000000000|1|none|admin|apkg' "$S39/tree/1.1/catalog"
+F39_ROWS=2 oac39 --floor-base 1.1.0.261114-45
+check "a floored row, the tree's apkg 0.3.14: WAIT for apkg 0.3.9, rc 0" \
+    bash -c "test $? -eq 0 && grep -q '^WAIT apkg 0.3.9 .*: toy: a dependency floor (apkg>=0.3.14)' '$S39/out' && grep -q ', 1 waiting$' '$S39/out'"
+sed -i 's/^apkg|0.3.14|APKG|base\/APKG-0.3.14.pkg|/apkg|0.3.13|APKG|base\/APKG-0.3.13.pkg|/' "$S39/tree/1.1/catalog"
+F39_ROWS=2 oac39 --floor-base 1.1.0.261114-45
+check "  ... the tree's apkg 0.3.13: FAIL, rc 1" \
+    bash -c "test $? -eq 1 && grep -q '^FAIL toy: its dependency floor (apkg>=0.3.14) needs apkg 0.3.14 or newer; the tree.s apkg is 0.3.13' '$S39/out'"
+cp "$S39/cat.save" "$S39/tree/1.1/catalog"
 # the real thing: apkg 0.3.11 from the release tag 1.1.1, when the clone has it
 if git -C "$HERE" rev-parse -q --verify "refs/tags/1.1.1^{}" >/dev/null 2>&1; then
     TMPDIR="$S39" sh "$OAC" --ref 1.1.1 --floor-base 1.1.0.261114-45 "$S39/tree/1.1" > "$S39/real" 2>&1
@@ -3595,6 +3618,52 @@ if git -C "$HERE" rev-parse -q --verify "refs/tags/1.1.1^{}" >/dev/null 2>&1; th
         bash -c "test $? -eq 0 && grep -q '^ok   apkg 0.3.11 (1.1.1): reads 1 rows and 3 kernel-space lines, 1 waiting$' '$S39/real'"
 else
     echo "  skip- older-apkg-check against apkg 0.3.11 (no tag 1.1.1 in this clone)"
+fi
+
+# --------------------------------------------------------------- T40 ----
+# a dependency's floor, "name>=version" (apkg 0.3.14), from APKG_DEPS or
+# deps.conf, into the deps field as written; any other operator SKIPs
+echo "T40: dependency floors in gen-catalog"
+S40="$WORK/t40"
+syn40() {   # syn40 <dir> <PKG> <VERSION> <APKG_DEPS>: a synthetic datastream (T6's way)
+    mkdir -p "$1/b/$2"
+    printf 'PKG=%s\nNAME=%s\nARCH=Amiga\nVERSION=%s\nCATEGORY=application\nAPKG_DEPS=%s\nCLASSES=none\n' \
+        "$2" "$2" "$3" "$4" > "$1/b/$2/pkginfo"
+    printf ': 1 1\n1 i pkginfo 200 12345 1234567890\n' > "$1/b/$2/pkgmap"
+    { printf '# PaCkAgE DaTaStReAm\n%s 1 1\n# end of header\n' "$2"; head -c 512 /dev/zero; } |
+        head -c 512 > "$1/b/hdr"
+    ( cd "$1/b" && printf '%s/pkginfo\n%s/pkgmap\n' "$2" "$2" | cpio -o -H odc --quiet > arch1 )
+    cat "$1/b/hdr" "$1/b/arch1" > "$1/$2.pkg"
+    rm -rf "${1:?}/b"
+}
+mkdir -p "$S40/a" "$S40/c" "$S40/d"
+syn40 "$S40/a" FLAPP 2.0 'FLLIB>=1.0-5,other'
+syn40 "$S40/a" FLLIB 1.0-2 ''
+python3 "$GEN" --packages-conf none "$S40/a" >"$S40/out" 2>"$S40/err"
+check "a floor from APKG_DEPS goes into the deps field as written" \
+    test "$(field "$S40/a/catalog" flapp 7)" = "FLLIB>=1.0-5,other"
+syn40 "$S40/c" FLBAD 1.0 'fllib>1.0'
+python3 "$GEN" --packages-conf none "$S40/c" >"$S40/out" 2>"$S40/err"
+check "'name>version' SKIPs the package, naming the form; no catalog" \
+    bash -c "test ! -e '$S40/c/catalog' && grep -q \"SKIP FLBAD.pkg: dependency 'fllib>1.0': a floor is written 'name>=version'\" '$S40/err'"
+syn40 "$S40/d" FLBAD2 1.0 'fllib>=1 0'
+python3 "$GEN" --packages-conf none "$S40/d" >"$S40/out" 2>"$S40/err"
+check "a floor with a space SKIPs the package" \
+    bash -c "test ! -e '$S40/d/catalog' && grep -q 'SKIP FLBAD2.pkg' '$S40/err'"
+mkdir -p "$S40/b"
+syn40 "$S40/b" FLAPP 2.0 ''
+syn40 "$S40/b" FLLIB 1.0-2 ''
+printf 'flapp: fllib>=1.0-5\n' > "$S40/b/deps.conf"
+python3 "$GEN" --packages-conf none "$S40/b" >"$S40/out" 2>"$S40/err"
+check "a floor from deps.conf" test "$(field "$S40/b/catalog" flapp 7)" = "fllib>=1.0-5"
+check "  ... above the version this catalog has: a warning, the catalog written" \
+    bash -c "grep -q 'warning: flapp needs fllib 1.0-5 or newer; this catalog has fllib 1.0-2' '$S40/err' && test -s '$S40/b/catalog'"
+if [ -x "$APKGH" ]; then
+    mkdir -p "$S40/root/var/apkg/cache"
+    printf 'repo=file://%s\ncachedir=%s/var/apkg/cache\nadmin=%s/admin\n' "$S40/b" "$S40/root" "$S40/root" > "$S40/root/apkg.conf"
+    APKG_ROOT="$S40/root" "$APKGH" -c "$S40/root/apkg.conf" update >/dev/null 2>&1
+    APKG_ROOT="$S40/root" "$APKGH" -c "$S40/root/apkg.conf" info flapp >"$S40/info" 2>&1
+    check "  ... and this apkg reads it: 'fllib (1.0-5 or newer)'" grep -q '^Depends: *fllib (1.0-5 or newer)$' "$S40/info"
 fi
 
 # -------------------------------------------------------------- done ----
