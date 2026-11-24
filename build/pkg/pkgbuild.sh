@@ -511,11 +511,12 @@ for b in $BINS; do
 	# a binary that needs a GCC 14 runtime library, libamixrt.so.1 or the
 	# shared C++ runtime libstdc++.so.6, needs the package that ships it
 	# (amixrt, cxxrt): package.sh says so in DEPENDS (nothing adds it behind
-	# the recipe), except that package itself
+	# the recipe; a floor, amixrt>=1.0-5, names it too), except that package
+	# itself
 	for rt in libamixrt.so.1:amixrt libstdc++.so.6:cxxrt; do
 		case " $libs " in
 		*" ${rt%%:*} "*)
-			case " $(echo "$DEPENDS" | tr ',' ' ') " in
+			case " $(echo "$DEPENDS" | tr ',' ' ' | sed 's/>=[^[:space:]]*//g') " in
 			*" ${rt#*:} "*) ;;
 			*) [ "$NAME" = "${rt#*:}" ] || {
 				echo "[FAIL] $(basename "$b") NEEDs ${rt%%:*}: package.sh DEPENDS must name ${rt#*:}" >&2
