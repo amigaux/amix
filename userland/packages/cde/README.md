@@ -101,6 +101,10 @@ The manual pages, help volumes and catalogues of the parts not built are left ou
   up to 2^53 (9007199254740992); larger ones are rounded, and 2^63-1 is out of reach
   (`integer i=9223372036854775807` gives -9223372036854775808). `typeset -i` is 32 bits, as
   everywhere; `typeset -li` (`integer`) is 64.
+- **dtksh's arithmetic functions are those of Amix's libm.** ksh offers the functions its probe
+  finds in the C library: C89's and System V's (`sqrt`, `pow`, `fmod`, `hypot`, `rint`, `lgamma`,
+  `j0` ...), not C99's (`round`, `trunc`, `tgamma`, `exp2`, `log2`, `fmin`, `isinf` ...). Libm
+  reports a domain error on standard error (`sqrt: DOMAIN error`) and returns 0, not NaN.
 - **ToolTalk types on the box need the C development set.** `tt_type_comp` runs the types source
   through `/usr/ccs/lib/cpp`, which comes with Cdev; without it, it warns and reads the source
   as it is, without `#include` and `#define`.
@@ -157,6 +161,9 @@ The manual pages, help volumes and catalogues of the parts not built are left ou
 | `50-ksh93-shell-declarations` | ksh declares `remainder`, `ptsname`, `grantpt` and `unlockpt`, and has POSIX's example `rand_r`, which Amix's libc lacks |
 | `51-dtksh-wide-prototypes` | dtksh calls `XmTextSetEditable` and `XmTextSetAddMode` through a pointer of their own type: `int` where X is built with wide prototypes, as X11R6.3 is |
 | `52-ksh93-fixargs-stack-top` | a script without `#!`, which ksh runs itself, no longer clears a byte past its argument strings: on Amix they can end at the top of the stack, and ksh died with a memory fault |
+| `53-ksh93-unknown-class` | an unknown `[:class:]` in a pattern is no class: without the C library's `wctype`, libast returned the entry past the end of its class table as the class's function, and ksh jumped to a data address |
+| `54-ksh93-getcwd-root-home` | libast's own `getcwd` (Amix has no such system call) no longer puts root's HOME, `/`, in front of the path it walked: `$PWD` and script paths began `//` |
+| `55-dtksh-number-buffers` | dtksh's number buffers hold any `long`: `catopen` printed a catalogue's heap address, ten digits, into 10 bytes, and dtksh jumped to a broken return address (dtlp died at start) |
 
 Each patch has a header that says what and why.
 

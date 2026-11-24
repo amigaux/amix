@@ -1,0 +1,23 @@
+ksh93: an unknown character class is an error, not a jump.
+
+regclass looks a [:class:] name up in its table, then, where the C
+library has wctype, asks wctype. Amix has no wctype: an unknown name
+left the search one entry past the end of the table, and regclass
+returned whatever lay there as the class's function. A pattern such as
+[[:bogus:]] made ksh jump to a data address. Without wctype an unknown
+name is now no class.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/regex/regclass.c
++++ b/programs/dtksh/ksh93/src/lib/libast/regex/regclass.c
+@@ -212,7 +212,10 @@
+ 		if (n == cp->size && strneq(s, cp->name, n) && (!cp->next || cp->next == lc))
+ 			goto found;
+ 	}
+-#if _lib_wctype
++#if !_lib_wctype
++	/* not a class: cp is past the end of the table */
++	return 0;
++#else
+ 	if (!(cp = zp))
+ 	{
+ 		if (!(cp = xp))
