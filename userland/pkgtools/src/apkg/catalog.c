@@ -10,7 +10,12 @@
  *
  *   name|version|pkginst|filename|md5|size|deps|category|description[|offset]
  *
- * deps is a comma-separated list of package NAMES or the word "none".
+ * deps is a comma-separated list of package NAMES or the word "none";
+ * a name may carry a floor, "name>=version" (0.3.14): the lowest
+ * version of that dependency the package works with.  An apkg before
+ * 0.3.14 takes the whole word for a name the catalog does not have, so
+ * it refuses to install that package ("missing dependency"), and only
+ * that one: it reads the catalog as before.
  * The 10th field, offset, is OPTIONAL: a decimal byte offset the RAW
  * source addresses the package by (gen-catalog.py --raw emits it).  A
  * 9-field line - every HTTP/FILE catalog - leaves offset = -1, which the
@@ -118,9 +123,14 @@ static void ent_free(struct pkgent *e)
     free(e->md5);
     free(e->category);
     free(e->desc);
-    for (i = 0; i < e->ndeps; i++)
+    for (i = 0; i < e->ndeps; i++) {
         free(e->deps[i]);
+        if (e->depmin != NULL && e->depmin[i] != NULL)
+            free(e->depmin[i]);
+    }
     free((char *)e->deps);
+    if (e->depmin != NULL)
+        free((char *)e->depmin);
     if (e->kspace) {
         free(e->role);
         free(e->kline);
@@ -424,6 +434,7 @@ static int parse_kpkg(char *line, struct pkgent *e, const char *path,
         sprintf(e->desc, "kernel-space %s, line %s, kabi %s",
                 e->role, e->kline, e->kabi);
     e->deps = NULL;
+    e->depmin = NULL;
     e->ndeps = 0;
     if (e->refused != NULL)
         note("%s:%d: kernel-space entry %s refused: %s",
@@ -468,14 +479,26 @@ static int has_word_prefix(const char *line, const char *w)
            (line[n] == ' ' || line[n] == '\t');
 }
 
+/* a dependency name or floor: a safe word without the floor's
+ * operator characters */
+static int dep_word(const char *s)
+{
+    return safe_word(s) && strchr(s, '>') == NULL &&
+           strchr(s, '<') == NULL && strchr(s, '=') == NULL;
+}
+
+/* deps field -> e->deps (names) and e->depmin (the floor of each, or
+ * NULL); -1 on a malformed word, which rejects the line as before */
 static int parse_deps(const char *field, struct pkgent *e)
 {
     char *copy;
     char *p;
     char *tok;
+    char *op;
     int n;
 
     e->deps = NULL;
+    e->depmin = NULL;
     e->ndeps = 0;
     if (strcmp(field, "none") == 0 || field[0] == '\0')
         return 0;
@@ -487,13 +510,30 @@ static int parse_deps(const char *field, struct pkgent *e)
         p = strchr(p, ',');
         if (p != NULL)
             *p = '\0';
-        if (tok[0] == '\0' || !safe_word(tok)) {
+        op = strstr(tok, ">=");
+        if (op != NULL)
+            *op = '\0';
+        if (!dep_word(tok) || (op != NULL && !dep_word(op + 2))) {
+            while (n-- > 0) {
+                free(e->deps[n]);
+                if (e->depmin[n] != NULL)
+                    free(e->depmin[n]);
+            }
+            if (e->deps != NULL) {
+                free((char *)e->deps);
+                free((char *)e->depmin);
+            }
+            e->deps = NULL;
+            e->depmin = NULL;
             free(copy);
             return -1;
         }
         e->deps = (char **)xrealloc((char *)e->deps,
                                     (unsigned)((n + 1) * sizeof(char *)));
+        e->depmin = (char **)xrealloc((char *)e->depmin,
+                                      (unsigned)((n + 1) * sizeof(char *)));
         e->deps[n] = xstrdup(tok);
+        e->depmin[n] = op != NULL ? xstrdup(op + 2) : NULL;
         n++;
         if (p == NULL)
             break;

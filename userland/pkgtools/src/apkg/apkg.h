@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.13"
+#define APKG_VERSION "0.3.14"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -287,6 +287,9 @@ struct pkgent {
     char *md5;        /* 32 lowercase hex chars */
     long size;        /* bytes of the file as transported */
     char **deps;      /* dependency package names */
+    char **depmin;    /* per dependency: its floor ("name>=version", the
+                       * lowest version it may be), or NULL; NULL when
+                       * there are no dependencies (0.3.14)            */
     int ndeps;
     char *category;
     char *desc;

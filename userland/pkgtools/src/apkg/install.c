@@ -449,6 +449,209 @@ static int ent_partial(const struct conf *cf, const struct pkgent *e)
     return pkg_partial(cf, e->pkginst) == 1;
 }
 
+/* ---------------- dependency floors (0.3.14) ----------------
+ *
+ * A dependency may carry a floor in the catalog ("amixrt>=1.0-5"): the
+ * lowest version of it the package works with.  The rule: every package
+ * a transaction lays (installs, lays again or upgrades) finds each of its
+ * floored dependencies at or above the floor when the transaction ends.
+ * An installed dependency below its floor is upgraded in the same
+ * transaction, before the package that needs it; a floor the catalog
+ * cannot meet refuses the whole transaction before anything is fetched.
+ * A dependency without a floor is left as it was (an older installed one
+ * is reported, not upgraded).
+ */
+
+/* index of e in v[0..n-1], or -1 */
+static int ent_index(struct pkgent **v, int n, const struct pkgent *e)
+{
+    int i;
+
+    for (i = 0; i < n; i++)
+        if (v[i] == e)
+            return i;
+    return -1;
+}
+
+static void floor_refused(const struct pkgent *e, int j,
+                          const struct pkgent *d)
+{
+    warnx2("%s %s needs %s %s or newer; the catalog has %s %s",
+           e->name, e->version, e->deps[j], e->depmin[j], d->name,
+           d->version);
+}
+
+/* deps before dependents, among todo[] only, else in the order given
+ * (a cycle is cut where it closes); ow[] moves with todo[] */
+static void deps_visit(struct catalog *cat, struct pkgent **todo, int *ow,
+                       int nt, int i, int *st, struct pkgent **out,
+                       int *oo, int *no)
+{
+    struct pkgent *e;
+    int j;
+    int k;
+
+    if (st[i])
+        return;
+    st[i] = 1;
+    e = todo[i];
+    for (j = 0; j < e->ndeps; j++) {
+        k = ent_index(todo, nt, catalog_find(cat, e->deps[j]));
+        if (k >= 0)
+            deps_visit(cat, todo, ow, nt, k, st, out, oo, no);
+    }
+    out[*no] = e;
+    oo[*no] = ow[i];
+    (*no)++;
+}
+
+static void order_deps(struct catalog *cat, struct pkgent **todo, int *ow,
+                       int nt)
+{
+    struct pkgent **out;
+    int *oo;
+    int *st;
+    int no;
+    int i;
+
+    if (nt < 2)
+        return;
+    out = (struct pkgent **)xmalloc((unsigned)(nt * sizeof(struct pkgent *)));
+    oo = (int *)xmalloc((unsigned)(nt * sizeof(int)));
+    st = (int *)xmalloc((unsigned)(nt * sizeof(int)));
+    for (i = 0; i < nt; i++)
+        st[i] = 0;
+    no = 0;
+    for (i = 0; i < nt; i++)
+        deps_visit(cat, todo, ow, nt, i, st, out, oo, &no);
+    for (i = 0; i < nt; i++) {
+        todo[i] = out[i];
+        ow[i] = oo[i];
+    }
+    free((char *)out);
+    free((char *)oo);
+    free((char *)st);
+}
+
+/* install: which members of the closure order[0..no-1] the floors make
+ * an upgrade.  lay[i] says whether order[i] is laid anyway (missing,
+ * cut short, or named under -f); up[i] is set for an installed
+ * dependency below a floor, and by[i]/min[i] name the package and the
+ * floor that asked for it.  EX_DEPS (message printed) when a floor
+ * cannot be met; EX_OK otherwise. */
+static int install_floors(const struct conf *cf, struct catalog *cat,
+                          struct pkgent **order, int no, const int *lay,
+                          int *up, struct pkgent **by, const char **min)
+{
+    struct pkgent *e;
+    struct pkgent *d;
+    char iver[128];
+    int changed;
+    int i, j, k;
+
+    for (i = 0; i < no; i++) {
+        up[i] = 0;
+        by[i] = NULL;
+        min[i] = NULL;
+    }
+    do {
+        changed = 0;
+        for (i = 0; i < no; i++) {
+            if (!lay[i] && !up[i])
+                continue;
+            e = order[i];
+            for (j = 0; j < e->ndeps; j++) {
+                if (e->depmin[j] == NULL)
+                    continue;
+                k = ent_index(order, no, catalog_find(cat, e->deps[j]));
+                if (k < 0 || lay[k] || up[k])
+                    continue;
+                if (ent_installed(cf, order[k], iver, sizeof(iver)) &&
+                    apkg_vercmp(iver, e->depmin[j]) < 0) {
+                    up[k] = 1;
+                    by[k] = e;
+                    min[k] = e->depmin[j];
+                    changed = 1;
+                }
+            }
+        }
+    } while (changed);
+    /* each floor against what the transaction leaves */
+    for (i = 0; i < no; i++) {
+        if (!lay[i] && !up[i])
+            continue;
+        e = order[i];
+        for (j = 0; j < e->ndeps; j++) {
+            if (e->depmin[j] == NULL)
+                continue;
+            d = catalog_find(cat, e->deps[j]);
+            k = ent_index(order, no, d);
+            if (k < 0)
+                continue;
+            if ((lay[k] || up[k]) &&
+                apkg_vercmp(d->version, e->depmin[j]) < 0) {
+                floor_refused(e, j, d);
+                return EX_DEPS;
+            }
+        }
+    }
+    return EX_OK;
+}
+
+/* upgrade: the installed dependencies of todo[] below a floor join the
+ * transaction (*todo and *ow grow); a dependency that is not installed
+ * is not pulled in, as before.  EX_DEPS (message printed) when a floor
+ * cannot be met. */
+static int upgrade_floors(const struct conf *cf, struct catalog *cat,
+                          struct pkgent ***todo, int **ow, int *nt)
+{
+    struct pkgent *e;
+    struct pkgent *d;
+    char iver[128];
+    int changed;
+    int i, j;
+
+    do {
+        changed = 0;
+        for (i = 0; i < *nt; i++) {
+            e = (*todo)[i];
+            for (j = 0; j < e->ndeps; j++) {
+                if (e->depmin[j] == NULL)
+                    continue;
+                d = catalog_find(cat, e->deps[j]);
+                if (d == NULL)
+                    continue;
+                if (ent_index(*todo, *nt, d) >= 0) {
+                    if (apkg_vercmp(d->version, e->depmin[j]) < 0) {
+                        floor_refused(e, j, d);
+                        return EX_DEPS;
+                    }
+                    continue;
+                }
+                if (!ent_installed(cf, d, iver, sizeof(iver)) ||
+                    apkg_vercmp(iver, e->depmin[j]) >= 0)
+                    continue;
+                if (apkg_vercmp(d->version, e->depmin[j]) < 0) {
+                    floor_refused(e, j, d);
+                    return EX_DEPS;
+                }
+                printf("upgrading %s %s -> %s (%s %s needs %s or newer)\n",
+                       d->name, disp_ver(iver), d->version, e->name,
+                       e->version, e->depmin[j]);
+                *todo = (struct pkgent **)xrealloc((char *)*todo,
+                    (unsigned)((*nt + 1) * sizeof(struct pkgent *)));
+                *ow = (int *)xrealloc((char *)*ow,
+                    (unsigned)((*nt + 1) * sizeof(int)));
+                (*todo)[*nt] = d;
+                (*ow)[*nt] = 1;
+                (*nt)++;
+                changed = 1;
+            }
+        }
+    } while (changed);
+    return EX_OK;
+}
+
 /* the record's `source` (C2-2 §2/§3): the catalog URL for HTTP, the
  * mount path or the raw device as apkg saw it for a medium */
 static char *source_id(const struct source *s)
@@ -870,6 +1073,10 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     int cmp;
     int named;
     int rc;
+    int *lay;              /* parallel to order[]: laid anyway */
+    int *up;               /* parallel to order[]: upgraded for a floor */
+    struct pkgent **by;    /* ... by whose floor */
+    const char **min;      /* ... and which */
 
     /* resolve the dependency closure, deps first */
     for (i = 0; i < cat->n; i++)
@@ -917,6 +1124,30 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
      * Kernel-space packages follow the same rules; their installed
      * version is their record's.
      */
+    /* the floors (0.3.14): an installed dependency below one is
+     * upgraded, before the package that needs it */
+    lay = (int *)xmalloc((unsigned)((no > 0 ? no : 1) * sizeof(int)));
+    up = (int *)xmalloc((unsigned)((no > 0 ? no : 1) * sizeof(int)));
+    by = (struct pkgent **)xmalloc(
+        (unsigned)((no > 0 ? no : 1) * sizeof(struct pkgent *)));
+    min = (const char **)xmalloc(
+        (unsigned)((no > 0 ? no : 1) * sizeof(char *)));
+    for (i = 0; i < no; i++)
+        lay[i] = ent_partial(cf, order[i]) ||
+                 !ent_installed(cf, order[i], iver, sizeof(iver)) ||
+                 (opt_force && is_named(names, nnames, order[i]));
+    rc = install_floors(cf, cat, order, no, lay, up, by, min);
+    free((char *)lay);
+    if (rc != EX_OK) {
+        warnx2("nothing was changed");
+        free((char *)up);
+        free((char *)by);
+        free((char *)min);
+        if (order != NULL)
+            free((char *)order);
+        return rc;
+    }
+
     todo = (struct pkgent **)xmalloc(
         (unsigned)((no > 0 ? no : 1) * sizeof(struct pkgent *)));
     ow = (int *)xmalloc((unsigned)((no > 0 ? no : 1) * sizeof(int)));
@@ -924,6 +1155,16 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
     for (i = 0; i < no; i++) {
         ent = order[i];
         named = is_named(names, nnames, ent);
+        if (up[i]) {
+            (void)ent_installed(cf, ent, iver, sizeof(iver));
+            printf("upgrading %s %s -> %s (%s %s needs %s or newer)\n",
+                   ent->name, disp_ver(iver), ent->version, by[i]->name,
+                   by[i]->version, min[i]);
+            todo[nt] = ent;
+            ow[nt] = 1;
+            nt++;
+            continue;
+        }
         if (ent_partial(cf, ent)) {
             /* an install cut short: lay the package again, over the
              * instance the engine left */
@@ -961,6 +1202,9 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
                        ent->name, disp_ver(iver), ent->version);
                 warnx2("use 'apkg upgrade %s' to update it, "
                        "or -f to force a reinstall", ent->name);
+                free((char *)up);
+                free((char *)by);
+                free((char *)min);
                 free((char *)order);
                 free((char *)todo);
                 free((char *)ow);
@@ -974,6 +1218,9 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
                    "skipping\n", ent->name, disp_ver(iver), ent->version);
         }
     }
+    free((char *)up);
+    free((char *)by);
+    free((char *)min);
     if (order != NULL)
         free((char *)order);
     if (nt == 0) {
@@ -1399,8 +1646,15 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
         free((char *)ow);
         return rc;
     }
+    if (upgrade_floors(cf, cat, &todo, &ow, &nt) != EX_OK) {
+        warnx2("nothing was upgraded");
+        free((char *)todo);
+        free((char *)ow);
+        return EX_DEPS;
+    }
     kspace_expand(cf, cat, &todo, &ow, &nt);
     kspace_floor(cf, cat, &todo, &ow, &nt);
+    order_deps(cat, todo, ow, nt);
     order_set(todo, ow, nt);
     /* an upgrade keeps its pkginst, so it replaces no other kernel
      * package; kspace_replaces() still refuses a line with two kernel

@@ -65,7 +65,8 @@
 #     smaller release;
 #   - against --previous: a published name and version whose bytes differ,
 #     a version older than the published live one, a row that changes kind;
-#   - a dependency that names no live row;
+#   - a dependency that names no live row, or whose floor ("name>=version",
+#     apkg 0.3.14) is above that row's version;
 #   - a 68060-unimplemented instruction in an ELF of a live ordinary row,
 #     by build/pkg's D4 rule: scan060.py for period ELFs; for GCC 14 ELFs
 #     scan060-g14.py, with every scan060.py hit explained by it (stock/ is
@@ -515,12 +516,15 @@ def merge(inputs, prev_live, prev_older):
             raise Refused("pkginst %s is live twice: %s and %s"
                           % (e.pkginst, inst[e.pkginst].who(), e.who()))
         inst[e.pkginst] = e
-    names = set(live)
     for e in sorted(live.values(), key=lambda x: x.name):
         for d in e.deps:
-            if d not in names:
+            name, _, floor = d.partition(">=")
+            if name not in live:
                 raise Refused("%s depends on %s, which no live row names"
-                              % (e.who(), d))
+                              % (e.who(), name))
+            if floor and vercmp(live[name].version, floor) < 0:
+                raise Refused("%s needs %s %s or newer; the live row is %s"
+                              % (e.who(), name, floor, live[name].who()))
     return live, older, notes
 
 

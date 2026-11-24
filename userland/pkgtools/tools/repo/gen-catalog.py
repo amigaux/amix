@@ -18,7 +18,13 @@
 #           deps.conf   "name: dep1,dep2" lines -- wins over APKG_DEPS in
 #                       pkginfo.  Keys match the catalog name (post
 #                       names.conf mapping); the pkginst (PKG) also matches
-#                       as a fallback.
+#                       as a fallback.  A dependency may carry a floor,
+#                       "dep>=version" (here and in APKG_DEPS): the lowest
+#                       version of it the package works with.  It goes into
+#                       the deps field as written; apkg 0.3.14 upgrades an
+#                       installed dependency below it, an older apkg refuses
+#                       the package as a missing dependency.  Any other use
+#                       of '<', '>' or '=' SKIPs the package.
 #           names.conf  "PKG: name" lines -- catalog name for a pkginst;
 #                       default is lowercased PKG.
 #           cats.conf   "name: category" lines -- wins over CATEGORY in
@@ -1160,6 +1166,30 @@ def normalize_deps(raw):
     return ",".join(deps) if deps else "none"
 
 
+# a dependency floor, "name>=version" (apkg 0.3.14): the name a catalog
+# token, the version what a VERSION field may hold in a catalog line (no
+# space, '|', ',' or '/') and none of the operator characters
+DEP_FLOOR_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9+.-]*)>=([^\s|,/<>=]+)$")
+
+
+def dep_floors(deps):
+    """normalized deps field -> [(name, floor or None)]; Malformed on a
+    word that uses '<', '>' or '=' other than as one "name>=version"."""
+    out = []
+    if deps == "none":
+        return out
+    for d in deps.split(","):
+        m = DEP_FLOOR_RE.match(d)
+        if m:
+            out.append((m.group(1), m.group(2)))
+        elif any(c in d for c in "<>="):
+            raise Malformed("dependency %r: a floor is written 'name>=version'"
+                            % d)
+        else:
+            out.append((d, None))
+    return out
+
+
 # ---------------------------------------------------------------- main ---
 
 def fstype_mark(params):
@@ -1433,6 +1463,7 @@ def build_entry(path, relname, deps_conf, names_conf, cats_conf, cat_groups,
         "description": description,
         "fstype": fstype,
     }
+    dep_floors(entry["deps"])           # a malformed floor SKIPs it
     isize = installed_size(pkgmap_text)
     entry["isize"] = None if isize is None else str(isize)
     if " " in entry["version"]:
@@ -1841,6 +1872,17 @@ def main(argv):
             e["offset"] = str(off)
             off += roundup512(int(e["size"]))
         fields = FIELDS + ("offset",)
+
+    # A floor above the version of its dependency in this catalog: apkg
+    # would refuse the package.  A warning only; assemble-release refuses
+    # it against the release's live rows.
+    vers = dict((e["name"], e["version"]) for e in entries)
+    for e in entries:
+        for d, floor in dep_floors(e["deps"]):
+            if floor is not None and d in vers and vercmp(vers[d], floor) < 0:
+                print("gen-catalog: warning: %s needs %s %s or newer; this "
+                      "catalog has %s %s" % (e["name"], d, floor, d, vers[d]),
+                      file=sys.stderr)
 
     # Gate 8: an entry line apkg's parser cannot read.  catalog.c reads
     # lines with fgets() into a MAXLINE buffer and treats an unterminated

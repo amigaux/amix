@@ -19,7 +19,11 @@
 # above kbootset.conf's module-floor-base (C2-2 v8).  apkg 0.3.5-0.3.11
 # refuse kbootset= on a module line; such a module installs, by name or in
 # the next upgrade, once the first upgrade has brought the newer apkg.  It
-# is named on a WAIT line.
+# is named on a WAIT line.  So is a row whose deps carry a floor
+# ("name>=version") for an apkg before 0.3.14, which reads the row but
+# refuses to install it as a missing dependency until `apkg upgrade apkg`;
+# such a row in a tree whose own apkg row is older than 0.3.14 fails: no
+# apkg of the tree could install it.
 #
 #   --ref TAG        a release tag to take an apkg from (repeatable).
 #                    Default: every tag of TREE's release series (TREE's
@@ -116,7 +120,18 @@ nrows=$(awk '!/^#/ && NF { n++ } END { print n + 0 }' "$tree/catalog")
 nk=$(awk '/^#ext kpkg 1$/ { k = 1; next } /^#end kpkg$/ { k = 0; next }
 	k && /^#kpkg / { n++ } END { print n + 0 }' "$tree/catalog")
 
+# rows whose deps carry a floor (apkg 0.3.14), and the tree's own apkg
+floored=$(awk -F'|' '!/^#/ && NF >= 9 && $7 ~ />=/ { print $1 "|" $7 }' "$tree/catalog")
+treeapkg=$(awk -F'|' '!/^#/ && $1 == "apkg" { print $2; exit }' "$tree/catalog")
+FLOOR_APKG=0.3.14
+
 rc=0
+if [ -n "$floored" ] && { [ -z "$treeapkg" ] || [ "$(vgt "$FLOOR_APKG" "$treeapkg")" = 1 ]; }; then
+	for f in $floored; do
+		echo "FAIL ${f%%|*}: its dependency floor (${f#*|}) needs apkg $FLOOR_APKG or newer; the tree's apkg is ${treeapkg:-missing}"
+	done
+	rc=1
+fi
 for b in $bins; do
 	case $b in
 	*"("*")") bin=${b%(*}; from=${b##*(}; from=${from%)} ;;
@@ -163,6 +178,13 @@ for b in $bins; do
 			bad=$((bad + 1))
 		fi
 	done
+	bare=${ver#apkg }
+	if [ -n "$floored" ] && [ "$(vgt "$FLOOR_APKG" "$bare")" = 1 ]; then
+		for f in $floored; do
+			echo "WAIT $ver ($from): ${f%%|*}: a dependency floor (${f#*|}); it installs once 'apkg upgrade apkg' has brought apkg $FLOOR_APKG or newer"
+			wait=$((wait + 1))
+		done
+	fi
 	if [ $bad -gt 0 ]; then
 		rc=1
 	else

@@ -64,7 +64,8 @@ apkg info <name>             full catalog entry + installed state
 apkg download <name>         fetch <repo>/pkgs/<filename> into cache, md5-verify
 apkg clean                    remove the package files from the cache (-n: say what it would)
 apkg licence <name>          print an installed package's saved notice, name its licence files
-apkg install <name>...       resolve deps (recursive, topological) -> download -> pkgadd each
+apkg install <name>...       resolve deps (recursive, topological) -> download -> pkgadd each;
+                             an installed dep below its floor is upgraded, first (0.3.14)
 apkg upgrade [<name>...]     if catalog version > installed: download, then one pkgadd over the
                              installed instance (instance=overwrite); no pkgrm runs; a journaled
                              transaction is finished first (recover), and a package an install
@@ -80,7 +81,8 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
   resolver keys (`nameserver`, `dns_timeout`, `dns_retries`)
 - **Catalog format v1** — pipe-delimited text, `#` comments, one package per line:
   `name|version|pkginst|filename|md5|size|deps|category|description[|offset]`
-  deps = comma-separated `name`s or `none`. No pipes in any field; spaces allowed only in
+  deps = comma-separated `name`s or `none`; a name may carry a **floor**, `name>=version`
+  (apkg 0.3.14, below). No pipes in any field; spaces allowed only in
   description. Header line `#apkg-catalog 1` required. The 10th field, `offset`, is **optional**:
   a decimal byte offset the RAW source (below) addresses the package by; a 9-field line (every
   HTTP/FILE catalog) leaves it unset and the RAW source fails closed on such an entry.
@@ -105,6 +107,25 @@ Options: -n dry-run, -f force (reinstall same version), -v verbose, -c <conffile
   the other way), so a free-space consumer should budget **~1.10×**, not the bare sum.
 - **Version compare**: split on `.`/`-`; numeric segments compare numerically, else strcmp;
   missing segments = 0. (Documented, used by upgrade + install skip.)
+- **Dependency floors** (apkg 0.3.14): `amixrt>=1.0-5` in the deps field says the package needs
+  that version of the dependency or a newer one. The rule: every package a transaction lays
+  (installs, lays again or upgrades) finds each floored dependency at or above its floor when the
+  transaction ends. An installed dependency below its floor is upgraded in the same transaction,
+  before the package that needs it (`install` and `upgrade` alike; the floors of what it brings
+  count too); a floor the catalog's version does not meet refuses the whole call, exit 5, before
+  anything is fetched. A dependency without a floor is left as before: an older installed one is
+  reported, not upgraded, and `upgrade` still pulls in no missing dependency. An `upgrade` lays
+  the ordinary packages of a transaction each after its dependencies among them. The floor sits
+  in the deps field, not in a trailer block, on purpose: the apkg of 1.1, 1.1.1 and 1.1.2 (0.3.11,
+  0.3.13; tests/depfloor.sh runs them) reads the word as a dependency name the catalog does not have,
+  so it reads the catalog as before and refuses that one package ("missing dependency:
+  amixrt>=1.0-5 (needed by cde)", exit 5, nothing installed) instead of laying it beside a
+  runtime too old for it. `apkg upgrade apkg` is the remedy there. A floor comes from the
+  package's `APKG_DEPS` or a `deps.conf` line, as written; gen-catalog SKIPs a package that uses
+  `<`, `>` or `=` any other way and warns about a floor above the version its own catalog has;
+  assemble-release refuses a floor above the live row's version, and older-apkg-check names a
+  floored row on a WAIT line for an apkg before 0.3.14 and fails it in a tree whose own apkg row
+  is older.
 - **Installed state**: `/var/sadm/pkg/<pkginst>/pkginfo` exists → installed; VERSION= read from it
   (post-migration it exists; absent → "unversioned").
 - **HTTP**: hand-rolled HTTP/1.0 GET, `Host:` header (virtual host!), `Connection: close`,
@@ -379,7 +400,7 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   - a catalog.md5, size or hash differs;
   - a name, pkginst or filename is in two inputs (no newest-wins between inputs);
   - a published version would change bytes, or a version would go backwards;
-  - a dependency names no live row;
+  - a dependency names no live row, or its floor is above that row's version;
   - a live userland row's ELF has a 68060-unimplemented instruction, by build/pkg's D4 rule: a
     period ELF's verdict is scan060.py's; a GCC 14 ELF's is scan060-g14.py's, and every
     scan060.py hit on it must be one scan060-g14.py explains. stock/ is vendor code, and
@@ -511,7 +532,8 @@ conflict, every one is named, and no catalog is written (rc 4). `sets.py` merges
 chain.
 
 - `deps.conf` — the dependency graph. `core` is essential base and never a declared dep, and there
-  are **no "you need a compiler" deps**.
+  are **no "you need a compiler" deps**. A dependency may carry a floor, `name: dep>=version`
+  (section 2); the media install-order tool reads this file too, so the base set carries none.
 - `cats.conf` — the category taxonomy, applied at *catalog* level (it wins over the package's own
   `CATEGORY`, which is `system` for all 27 factory packages). Two statement types:
   `<name>: <category>` assigns, `@group <token>: <gloss>` **declares**. Declaring any group closes

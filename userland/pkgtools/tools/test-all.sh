@@ -110,6 +110,7 @@ run apkg-kbootset-consumer sh src/apkg/tests/kbootset-consumer.sh
 run apkg-conffile-e2e sh src/apkg/tests/conffile-e2e.sh
 run apkg-conffile-gain sh src/apkg/tests/conffile-gain.sh
 run apkg-partial sh src/apkg/tests/partial.sh
+run apkg-depfloor bash src/apkg/tests/depfloor.sh
 run apkg-nohttp-variant sh src/apkg/tests/nohttp-variant.sh
 run conffile sh src/conffile/tests/run-tests.sh
 run contents-fsck make -C src/contents-fsck test

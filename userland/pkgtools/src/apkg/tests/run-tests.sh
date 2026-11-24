@@ -493,6 +493,128 @@ else
     bad "out-of-date dependency handling wrong (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
 
+# ------------------------------------------------ dependency floors (0.3.14)
+# "name>=version" in the deps field: the lowest version of that dependency
+# the package works with.  Its own repository and installed records, the
+# main catalog put back at the end.
+FR=$WORK/floorrepo
+mkdir -p "$FR/pkgs"
+for f in flib-2.0.pkg fapp-1.0.pkg fsat-2.0.pkg fok-1.0.pkg fmd-1.0.pkg \
+         fmis-1.0.pkg fbig-1.0.pkg fuapp-2.0.pkg ftool-2.0.pkg fchain-1.0.pkg \
+         fnone-1.0.pkg; do
+    printf 'fake SVR4 datastream for %s\n' "$f" > "$FR/pkgs/$f"
+done
+fr() {  # fr <name> <version> <pkginst> <deps>: a catalog row of floorrepo
+    printf '%s|%s|%s|%s-%s.pkg|%s|%s|%s|system|floor fixture %s\n' "$1" "$2" "$3" \
+        "$1" "$2" "$(md5of "$FR/pkgs/$1-$2.pkg")" "$(sizeof "$FR/pkgs/$1-$2.pkg")" "$4" "$1"
+}
+{
+    echo "#apkg-catalog 1"
+    fr fuapp 2.0 FUAPP 'flib>=2.0'      # listed before its dependency
+    fr fchain 1.0 FCHAIN 'ftool>=2.0'
+    fr ftool 2.0 FTOOL 'flib>=2.0'
+    fr flib 2.0 FLIB none
+    fr fapp 1.0 FAPP 'flib>=2.0'
+    fr fsat 2.0 FSAT none
+    fr fok 1.0 FOK 'fsat>=1.5'
+    fr fmd 1.0 FMD none
+    fr fmis 1.0 FMIS 'fmd>=1.0'
+    fr fbig 1.0 FBIG 'flib>=3.0,fmd'
+    fr fnone 1.0 FNONE 'flib'
+} > "$FR/catalog"
+md5sum "$FR/catalog" > "$FR/catalog.md5"
+mkconf "$WORK/conf-floor" "http://127.0.0.1:$PORT/floorrepo" "$WORK/bin/pkgadd-shim"
+fin() {  # fin <PKGINST> <version>: an installed record
+    mkdir -p "$ROOT/var/sadm/pkg/$1"
+    printf 'PKG=%s\nNAME=floor fixture\nVERSION=%s\nCATEGORY=system\n' "$1" "$2" \
+        > "$ROOT/var/sadm/pkg/$1/pkginfo"
+}
+fin FLIB 1.0            # below every floor on it
+fin FSAT 1.5            # at its floor; the catalog has newer
+fin FUAPP 1.0
+fin FTOOL 1.0
+FC="$APKG -c $WORK/conf-floor"
+run 0 "a catalog with floors is read" $FC update
+echo "$OUT" | grep -q "catalog updated: 11 packages" \
+    && ok "... every row of it" || bad "floor catalog rows" "$OUT"
+run 0 "info shows a floor" $FC info fapp
+echo "$OUT" | grep -q "^Depends: *flib (2.0 or newer)$" \
+    && ok "... as 'flib (2.0 or newer)'" || bad "info floor" "$OUT"
+# 1. the dependency is missing: installed with the package, dependency first
+: > "$SHIMLOG"
+run 0 "floor, dependency missing: install" $FC install fmis
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '1p' | grep -q ' FMD$' && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '2p' | grep -q ' FMIS$' && \
+! grep -q 'admin.overwrite' "$SHIMLOG" \
+    && ok "... fmd, then fmis, both fresh" || bad "floor missing dep" "$OUT $(cat "$SHIMLOG")"
+# 2. installed and new enough: left alone, reported as today
+: > "$SHIMLOG"
+run 0 "floor, dependency installed at the floor: install" $FC install fok
+grep -q ' FOK$' "$SHIMLOG" && ! grep -q ' FSAT$' "$SHIMLOG" && \
+echo "$OUT" | grep -q "fsat 1.5 installed, catalog has 2.0 (dependency satisfied" \
+    && ok "... fsat 1.5 is left alone, the newer one reported" || bad "floor met" "$OUT $(cat "$SHIMLOG")"
+# 3. installed and too old: upgraded first, in the same transaction
+: > "$SHIMLOG"
+run 0 "floor, dependency installed below it: install" $FC install fapp
+echo "$OUT" | grep -q "upgrading flib 1.0 -> 2.0 (fapp 1.0 needs 2.0 or newer)" && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '1p' | grep -q "admin.overwrite -d .*/flib-2.0.pkg FLIB$" && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '2p' | grep -q "admin -d .*/fapp-1.0.pkg FAPP$" && \
+[ "$(grep -c pkgadd "$SHIMLOG")" = 2 ] \
+    && ok "... flib 1.0 -> 2.0 over its instance, then fapp" || bad "floor upgrade" "$OUT $(cat "$SHIMLOG")"
+# the same without a floor: as before, reported and not upgraded
+: > "$SHIMLOG"
+run 0 "no floor, dependency installed older: install" $FC install fnone
+grep -q ' FNONE$' "$SHIMLOG" && ! grep -q ' FLIB$' "$SHIMLOG" && \
+echo "$OUT" | grep -q "apkg upgrade flib" \
+    && ok "... flib is reported and left alone" || bad "no floor" "$OUT $(cat "$SHIMLOG")"
+# 4. the floor is not in the repository: refused, nothing fetched or laid
+: > "$SHIMLOG"
+rm -f "${CACHE:?}"/f*-*.pkg
+run 5 "floor above the catalog's version: refused with exit 5" $FC install fbig
+echo "$OUT" | grep -q "fbig 1.0 needs flib 3.0 or newer; the catalog has flib 2.0" && \
+echo "$OUT" | grep -q "nothing was changed" && [ ! -s "$SHIMLOG" ] && \
+[ -z "$(ls "$CACHE" | grep '^f.*-.*\.pkg$')" ] \
+    && ok "... it says why; nothing is fetched or installed (not fmd either)" \
+    || bad "floor unavailable" "$OUT $(cat "$SHIMLOG") $(ls "$CACHE")"
+# upgrade: an installed dependency below the floor joins, and goes first
+: > "$SHIMLOG"
+run 0 "upgrade: a floor below the installed dependency" $FC upgrade fuapp
+echo "$OUT" | grep -q "upgrading flib 1.0 -> 2.0 (fuapp 2.0 needs 2.0 or newer)" && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '1p' | grep -q ' FLIB$' && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '2p' | grep -q ' FUAPP$' \
+    && ok "... flib, then fuapp" || bad "upgrade floor" "$OUT $(cat "$SHIMLOG")"
+# a chain of floors through a dependency that is not itself upgraded by name
+: > "$SHIMLOG"
+fin FCHAIN 0.9
+run 0 "upgrade: floors in a chain" $FC upgrade fchain
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '1p' | grep -q ' FLIB$' && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '2p' | grep -q ' FTOOL$' && \
+grep -n 'pkgadd' "$SHIMLOG" | sed -n '3p' | grep -q ' FCHAIN$' \
+    && ok "... flib, ftool, fchain" || bad "floor chain" "$OUT $(cat "$SHIMLOG")"
+# no names: catalog order puts fuapp first; the dependency still goes first
+: > "$SHIMLOG"
+run 0 "upgrade, no names: dependencies first" $FC upgrade
+a=$(grep -n ' FLIB$' "$SHIMLOG" | cut -d: -f1); b=$(grep -n ' FUAPP$' "$SHIMLOG" | cut -d: -f1)
+[ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ] \
+    && ok "... flib before fuapp" || bad "upgrade order" "$OUT $(cat "$SHIMLOG")"
+# the floor out of reach in an upgrade
+sed -i 's/|flib>=2.0|system|floor fixture fuapp$/|flib>=9|system|floor fixture fuapp/' "$FR/catalog"
+md5sum "$FR/catalog" > "$FR/catalog.md5"
+$FC update >/dev/null 2>&1
+: > "$SHIMLOG"
+run 5 "upgrade: a floor the catalog cannot meet" $FC upgrade fuapp
+echo "$OUT" | grep -q "fuapp 2.0 needs flib 9 or newer; the catalog has flib 2.0" && \
+echo "$OUT" | grep -q "nothing was upgraded" && [ ! -s "$SHIMLOG" ] \
+    && ok "... refused, nothing laid" || bad "upgrade floor out of reach" "$OUT $(cat "$SHIMLOG")"
+# a malformed floor rejects the catalog, as any malformed deps field does
+sed -i 's/|flib>=9|/|flib>=|/' "$FR/catalog"
+md5sum "$FR/catalog" > "$FR/catalog.md5"
+run 3 "a malformed floor (flib>=) rejects the catalog" $FC update
+echo "$OUT" | grep -q "bad deps field 'flib>='" && ok "... naming the field" || bad "bad floor" "$OUT"
+for p in FLIB FSAT FUAPP FTOOL FCHAIN; do rm -rf "${ROOT:?}/var/sadm/pkg/${p:?}"; done
+rm -f "${CACHE:?}"/f*-*.pkg
+"$APKG" update >/dev/null 2>&1 || bad "the main catalog is not back"
+
 # ------------------------------------------------ missing dep / cycle / unknown
 run 5 "install with missing dep fails with exit 5" "$APKG" install misdep
 run 5 "install with dependency cycle fails with exit 5" "$APKG" install cyca

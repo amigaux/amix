@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.13" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.14" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -134,7 +134,20 @@ refuses and points at
 .BR upgrade ;
 if it only arrived as somebody's dependency, the version gap is
 reported, the dependency counts as satisfied, and nothing is upgraded
-behind your back.  Filenames ending in
+behind your back.  The exception is a dependency with a floor: the
+catalog may say a package needs at least a given version of a dependency
+.RB ( info
+shows "amixrt (1.0-5 or newer)").  An installed dependency below its
+floor is upgraded in the same transaction, before the package that needs
+it ("upgrading amixrt 1.0-2 -> 1.0-5 (cde 2.5.3-3 needs 1.0-5 or
+newer)").  When the catalog's version of the dependency is below the
+floor too, the whole call is refused with exit 5 before anything is
+fetched ("cde 2.5.3-3 needs amixrt 1.0-5 or newer; the catalog has
+amixrt 1.0-2"), and nothing is changed.  An apkg before 0.3.14 does not
+know floors: it refuses to install such a package as a missing
+dependency, and
+.B "apkg upgrade apkg"
+is the remedy.  Filenames ending in
 .B .Z
 are decompressed with
 .BR zcat (1)
@@ -171,8 +184,12 @@ one journal covers them, and a transaction that changes kernel space ends
 with one kbootset build and commit (so a kernel, the loader and kbootset
 upgrade into one generation).  A name not in the catalog (exit 5) or not
 installed (exit 1) refuses the whole call before anything is fetched.  No
-dependency is pulled in, with one exception: a kernel brings its set (see
-.BR "KERNEL SPACE" ).
+dependency is pulled in, with two exceptions: a kernel brings its set (see
+.BR "KERNEL SPACE" ),
+and an installed dependency below the floor a package being upgraded
+names for it is upgraded too, as for
+.BR install ;
+a floor the catalog cannot meet refuses the call (exit 5).
 .IP
 With no names, every installed package whose catalog version is newer
 moves, as one transaction ("every installed package is up to date" when
@@ -180,7 +197,8 @@ there is none).  This is the way to take a new kernel cut: the kernel,
 kbootset, the loader and every module package move together.
 .IP
 The packages of a transaction are installed in this order: the package
-tools (the engine, apkg, kbootset), the other ordinary packages, the
+tools (the engine, apkg, kbootset), the other ordinary packages (each
+after the dependencies it has in the transaction), the
 loader, the modules, the kernel last.
 The generation is built once, after the last
 .BR pkgadd ;
