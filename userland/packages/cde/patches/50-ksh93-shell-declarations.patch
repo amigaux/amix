@@ -1,0 +1,64 @@
+ksh93: ksh declares what Amix's headers do not, and has rand_r.
+
+- remainder (ksh's $RANDOM seed) is in Amix's libm, but <math.h> hides it
+  from an ANSI compiler: the externs probe declares it when it has none.
+- rand_r is not in Amix's libc: ksh has POSIX's example rand_r when the
+  probe finds none.
+- ptsname, grantpt and unlockpt are in Amix's libc with no prototype: the
+  pty probe declares them when the headers do not, so its pty test
+  compiles and pty.c finds them.
+
+--- a/programs/dtksh/ksh93/src/cmd/ksh93/features/externs
++++ b/programs/dtksh/ksh93/src/cmd/ksh93/features/externs
+@@ -1,6 +1,6 @@
+ hdr	nc,exec_attr
+ mem	exception.name,_exception.name math.h
+-lib	setreuid,setregid,nice,fork,spawnveg,fchdir
++lib	setreuid,setregid,nice,fork,spawnveg,fchdir,rand_r
+ lib	pathnative,pathposix,fts_notify
+ lib	memcntl sys/mman.h
+ lib	getexecuser,free_execattr exec_attr.h -lsecdb
+@@ -11,6 +11,10 @@
+ extern	setreuid	int	(uid_t,uid_t)
+ extern	setregid	int	(gid_t,gid_t)
+ 
++reference	math.h
++
++extern	remainder	double	(double,double)
++
+ tst	note{ determining default number of extra bytes per argument for arguments list }end output{
+ 	/*
+ 	 * Figure out if this OS requires extra bytes per argument
+--- a/programs/dtksh/ksh93/src/cmd/ksh93/sh/init.c
++++ b/programs/dtksh/ksh93/src/cmd/ksh93/sh/init.c
+@@ -144,6 +144,15 @@
+ 
+ #define RANDMASK	0x7fff
+ 
++#if !_lib_rand_r
++/* the C library has none: POSIX's example rand_r(), 0 to 32767 */
++static int rand_r(unsigned int *seed)
++{
++	*seed = *seed * 1103515245 + 12345;
++	return (int)(*seed / 65536 % 32768);
++}
++#endif
++
+ #ifndef CHILD_MAX
+ #   define CHILD_MAX	(1*1024)
+ #endif
+--- a/programs/dtksh/ksh93/src/cmd/builtin/features/pty
++++ b/programs/dtksh/ksh93/src/cmd/builtin/features/pty
+@@ -11,6 +11,12 @@
+ lib	grantpt,unlockpt,posix_openpt stdlib.h
+ lib	cfmakeraw termios.h
+ 
++reference	stdlib.h
++
++extern	ptsname		char*	(int)
++extern	grantpt		int	(int)
++extern	unlockpt	int	(int)
++
+ # try once with -lm, once without
+ tst - -lm - - output{
+ 	#include	<fcntl.h>

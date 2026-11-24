@@ -1,0 +1,12 @@
+#!/bin/sh
+# pcc -- the C compiler for the cross build of dtksh's ksh93 (README.md, dtksh).
+# Compiles (-c, -E, -S, -M, -MM) go to the real compiler, PCC_REAL; a link goes
+# through pcc.py, which turns each feature probe into a stub that answers as the
+# probe did when it ran on Amix.  PCC_DIR: this directory.
+# MIT licence, see LICENSE in userland/packages.
+for a do
+	case $a in
+	-c|-E|-S|-M|-MM) exec $PCC_REAL "$@" ;;
+	esac
+done
+exec python3 -I "$PCC_DIR/pcc.py" "$@"

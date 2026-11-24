@@ -1,0 +1,36 @@
+ksh93: iffe finds the native header behind a wrapper.
+
+iffe's nxt test names the system's own header (<dirent.h>, <wchar.h>,
+...) that AST's header of the same name includes after its own. It took
+the first header of that name the preprocessor entered. With GCC 14's
+fixed headers for Amix that is the wrapper in include-fixed, which only
+does #include_next of the same name: included by its path, its
+include_next finds itself, and the system header is never read. iffe now
+takes the first one that is not such a wrapper. Its filter for the
+sys/ header of the same name never matched (one backslash too many) and
+now does.
+
+--- a/programs/dtksh/ksh93/src/cmd/INIT/iffe.sh
++++ b/programs/dtksh/ksh93/src/cmd/INIT/iffe.sh
+@@ -3538,10 +3538,10 @@
+ #include <$f.h>" > $tmp.c
+ 						case $f in
+ 						sys/*)	e= ;;
+-						*)	e='-e /[\\\\\/]sys[\\\\\/]'$f'\\.h"/d' ;;
++						*)	e='-e /[\\/]sys[\\/]'$f'\.h"/d' ;;
+ 						esac
+ 						if	compile $cc -E $tmp.c <&$nullin >$tmp.i
+-						then	i=$(sed -e '/^#[line 	]*[0123456789][0123456789]*[ 	][ 	]*"[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:]*[\\\/].*[\\\/]'$f'\.h"/!d' $e -e 's/.*"\(.*\)".*/\1/' -e 's,\\,/,g' -e 's,///*,/,g' $tmp.i | sed 1q)
++						then	i=$(sed -e '/^#[line 	]*[0123456789][0123456789]*[ 	][ 	]*"[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:]*[\\\/].*[\\\/]'$f'\.h"/!d' $e -e '/"[ 	][ 	]*1\([ 	]\|$\)/!d' -e 's/.*"\(.*\)".*/\1/' -e 's,\\,/,g' -e 's,///*,/,g' $tmp.i | while read -r h; do grep -q "include_next[ 	]*<$f\.h>" "$h" 2>/dev/null || { echo "$h"; break; }; done)
+ 							case $i in
+ 							[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ]:[\\/]*)
+ 								;;
+@@ -3552,7 +3552,7 @@
+ $inc
+ #include <$k>" > $tmp.c
+ 								if	compile $cc -E $tmp.c <&$nullin >$tmp.i
+-								then	j=$(sed -e '/^#[line 	]*[0123456789][0123456789]*[ 	][ 	]*"[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:]*[\\\/].*[\\\/]'$f'\.h"/!d' $e -e 's/.*"\(.*\)".*/\1/' -e 's,\\,/,g' -e 's,///*,/,g' $tmp.i | sed 1q)
++								then	j=$(sed -e '/^#[line 	]*[0123456789][0123456789]*[ 	][ 	]*"[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:]*[\\\/].*[\\\/]'$f'\.h"/!d' $e -e '/"[ 	][ 	]*1\([ 	]\|$\)/!d' -e 's/.*"\(.*\)".*/\1/' -e 's,\\,/,g' -e 's,///*,/,g' $tmp.i | while read -r h; do grep -q "include_next[ 	]*<$f\.h>" "$h" 2>/dev/null || { echo "$h"; break; }; done)
+ 									wi=$(wc < "$i")
+ 									wj=$(wc < "$j")
+ 									case $wi in
