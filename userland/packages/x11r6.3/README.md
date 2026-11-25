@@ -3,7 +3,8 @@
 The X Window System, release 6.3, under `/opt/amix/X11R6`:
 - the `Xrtg` server for RTG cards, the ZZ9000, the Z3660 RTG and the VA2000 (the Amiga DDX; who wrote it:
   below), also installed as `Xzz9000` and `X`;
-- the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (static) with their headers;
+- the Xlib, Xt, Xaw, Xmu, Xext, SM and ICE libraries (shared; static in the static variant) with
+  their headers;
 - xinit, xdm, twm, xterm and the standard clients, with smproxy, iceauth and rstart;
 - x11perf with x11perfcomp (the server benchmark and its result comparer), and oclock.
 
@@ -16,7 +17,8 @@ It coexists with the stock X11R4/R5 in `/usr/X`.
 68LC060 the server starts in about 25 s; the 68LC040 is untested). A 68030 with a 68881/68882,
 or a full 68040 or 68060, runs it at full speed.
 
-    sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
+    VARIANT=shared sh build/pkg/pkgbuild.sh userland/packages/x11r6.3     # the default variant
+    VARIANT=static sh build/pkg/pkgbuild.sh userland/packages/x11r6.3
 
 The whole tree (libraries, server, clients) compiles under the gcc14 strict gate: no implicit
 declarations, no pointer/integer conversions, `-mno-strict-align` on every compile line. It
@@ -67,10 +69,15 @@ the new revision, since removing 6.3-8, which shipped these files as ordinary on
 ## The shared variant
 
 `VARIANT=shared` builds the same package with shared libraries, version `6.3-<PKGREV>.s`
-(`SHARED_PKGREV`), from `prototype.shared` in the build tree `x11r6.3-shared`, to compare memory
-use with the static build. It is the same package (`x11r63`, the same paths and configuration
-files), so a machine has one variant or the other. The hooks take the variant from `$VARIANT`;
-with `VARIANT=static`, the default, the build and its bytes are as before.
+(`SHARED_PKGREV`), from `prototype.shared` in the build tree `x11r6.3-shared`. **It is the
+default variant.** `VARIANT=static` builds the static one, version `6.3-<PKGREV>`, from
+`prototype`, its bytes as before. Both are the same package (`x11r63`, the same paths and
+configuration files), so a machine has one variant or the other; `6.3-<PKGREV>.s` sorts above
+`6.3-<PKGREV>` and below the next revision. The hooks take the variant from `$VARIANT`.
+
+The shared variant needs `amixrt` 1.0-5 or later (`amixrt>=1.0-5`): its libraries take only
+`gettimeofday` and `__cxa_finalize` from it, which 1.0-2 has, but 1.0-2 to 1.0-4 set a wrong
+`errno` on a failing call.
 
 - **Plain shared libraries**, made by X11R6.3's own SVR4 rules (`host-shared.def.in`):
   `libX11.so.6.1`, `libXt.so.6.0`, `libXext.so.6.3`, `libXmu.so.6.0`, `libXaw.so.6.1`,

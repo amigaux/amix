@@ -13,7 +13,9 @@ CDE 2.5.3 (cdesktopenv), built from the upstream release against X11R6.3 and Mot
 - the action and data-type databases, the app-defaults, the C locale's message catalogues, the
   backdrops, palettes and icons.
 
-    sh build/pkg/pkgbuild.sh userland/packages/cde     # in the build container: make -C build recipes/cde
+    VARIANT=shared sh build/pkg/pkgbuild.sh userland/packages/cde     # the default variant
+    VARIANT=static sh build/pkg/pkgbuild.sh userland/packages/cde
+    # in the build container: VARIANT=shared make -C build recipes/cde (or VARIANT=static)
 
 Package: `cde`, category `x11`, set `extra`. It depends on `x11r6.3` (the server, its fonts and
 `lib/X11`); it builds against x11r6.3, motif, libjpeg and regex (`BUILD_DEPENDS`). Built with GCC 14
@@ -26,11 +28,13 @@ statically, so they also contain X11R6.3's libraries (X Consortium licence), Mot
 `dtksh` also contains ksh93's libraries (EPL-2.0):
 `LGPL-2.0-or-later AND CC-BY-SA-3.0 AND X11 AND IJG AND Spencer-94 AND MIT AND EPL-2.0`. CDE's own
 licence is `/usr/dt/COPYING`; the texts of the libraries linked in are in `/opt/amix/dt/doc`, one
-directory each (`x11r6.3`, `motif`, `libjpeg`, `regex`, `compat`, `ksh93`).
+directory each (`x11r6.3`, `motif`, `libjpeg`, `regex`, `compat`, `ksh93`). That is the static
+variant; the shared one takes X11R6.3, Motif, libjpeg and regex from their packages at run time and
+ships the same texts.
 
-**Two variants.** The package is the static build; `VARIANT=shared` builds the shared variant,
-version `2.5.3-<PKGREV>.s`, with CDE's libraries shared (*The shared variant* below). A machine has
-one or the other.
+**Two variants.** The default is the shared variant, version `2.5.3-<PKGREV>.s`, with CDE's
+libraries shared (*The shared variant* below); `VARIANT=static` builds the static one,
+`2.5.3-<PKGREV>`. A machine has one or the other.
 
 ## Layout
 
@@ -270,10 +274,15 @@ cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
 `VARIANT=shared` builds CDE with its libraries shared, version `2.5.3-<PKGREV>.s`
 (`SHARED_PKGREV`), from `prototype.shared` in the build tree `cde-shared`, against the shared
 variants of X11R6.3 and Motif (their build trees `x11r6.3-shared` and `motif-shared`) and the
-shared `libjpeg` and `regex`, to compare memory use with the static build. It is the same package
-(`cde`, the same paths and configuration files), so a machine has one variant or the other, with
-the shared X11R6.3 and Motif. The hooks take the variant from `$VARIANT`; with `VARIANT=static`,
-the default, the build and its bytes are as before.
+shared `libjpeg` and `regex`. **It is the default variant.** `VARIANT=static` builds the static
+one, from `prototype`, its bytes as before. It is the same package (`cde`, the same paths and
+configuration files), so a machine has one variant or the other, with the shared X11R6.3 and
+Motif. The hooks take the variant from `$VARIANT`.
+
+The shared variant needs `amixrt` 1.0-5 or later (`amixrt>=1.0-5`): ten functions that `libtt`,
+`libDtTerm`, `libcsa`, `libDtSvc` and `libDtMrm` take from it (`syslog`, `openlog`, `getmntent`,
+`siglongjmp`, `vfork`, the four `utmpx` calls and `sysinfo`) are new in 1.0-5; an older one lacks
+them.
 
 - **CDE's ten libraries** in `/opt/amix/dt/lib` in place of the archives, each the file its
   soname names (`libDtSvc.so.2` and the rest) with a `lib*.so` link beside it, and the programs
