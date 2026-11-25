@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-25 — x11r6.3, motif, cde: the shared variant is the default (eb8b5d65, c3d07d94, 54ff4b0c, 4f3a4abe)
+
+x11r6.3 6.3-15.s, motif 2.3.8-3.s and cde 2.5.3-4.s are the default variant; the static one stays buildable with VARIANT=static, its bytes unchanged (x11r6.3 ed908516, motif 8932ed0c, cde cf062db0). The shared variants need amixrt 1.0-5; motif and cde also need the shared X11R6.3 (and cde the shared Motif) and regex 3.8-2, so installing CDE on a machine with the static X11R6.3 lifts it in the same transaction (apkg 0.3.14 or later). cde's build log no longer carries a shell trace.
+
 ## 2026-11-25 — cde 2.5.3-4 and 2.5.3-4.s: dtksh (4c0e3cfb, ad041a78, 7c2b0d30, 029f610a)
 
 dtksh, the desktop Korn shell (ksh93u+m 1.0.3), ships with dterror, dtlp and dthelpgen. Its ksh93 is cross-built from probe answers recorded on Amix (dtksh/answers). Fixed in ksh93: a fault when a script starts with a file argument (52), a jump on an unknown bracket class (53), "//" paths for root (54); in dtksh: a buffer overflow at catopen (55); dtlp runs with its print options unset, quotes the banner title in its lp line and places its dialog cursor on the printer name it shows (56). The 68060 gate is clean in both variants. cde-2.5.3-4.pkg md5 cf062db0, 147689472 bytes; cde-2.5.3-4.s.pkg md5 a726c8c9, 37150720 bytes.
