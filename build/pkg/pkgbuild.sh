@@ -54,7 +54,7 @@
 # sha256 after it; nothing may be compiled, every ELF of the payload must be
 # listed, and the listed ones are gated but never stripped.
 #
-# VARIANT=static (the default) or shared: a recipe with a prototype.shared
+# VARIANT=shared (the default) or static: a recipe with a prototype.shared
 # beside its prototype builds its shared variant with VARIANT=shared, the
 # same package (PKG, conffiles, source, epoch) at version
 # VERSION-SHARED_PKGREV, with SHARED_SUMMARY, SHARED_DESC, SHARED_DEPENDS
@@ -107,7 +107,7 @@ MAN_REPLACES= STOCK_PATCHED=
 SHARED_PKGREV= SHARED_SUMMARY= SHARED_DESC= SHARED_DEPENDS= SHARED_BUILD_DEPENDS=
 . "$HERE/package.sh"
 PROTO=$HERE/prototype BUILDNAME=$NAME
-case ${VARIANT:=static} in
+case ${VARIANT:=shared} in
 static) ;;
 shared)
 	if [ -f "$HERE/prototype.shared" ]; then

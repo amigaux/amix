@@ -888,30 +888,33 @@ try:
                  CONFFILES='"/etc/foo.conf"')
     rc, out, err = run("check", sh)
     check("variant: a recipe with prototype.shared and SHARED_PKGREV passes (control)", rc == 0, err)
-    rc, static, err = run("pkginfo", sh)
-    check("variant: pkginfo is the static one by default",
+    rc, static, err = run("pkginfo", "--variant", "static", sh)
+    check("variant: pkginfo --variant static is the static one",
           rc == 0 and "\nVERSION=2.8.1-2\n" in static and "NAME=GNU diffutils 2.8.1\n" in static
           and "\nCLASSES=none conffile\n" in static, err or static)
-    rc, out, err = run("pkginfo", "--variant", "static", sh)
-    check("variant: --variant static is the default's bytes", rc == 0 and out == static, err or out)
-    rc, out, err = run("pkginfo", "--variant", "shared", sh)
+    rc, shared, err = run("pkginfo", "--variant", "shared", sh)
     check("variant: --variant shared takes SHARED_PKGREV, SHARED_SUMMARY and SHARED_DESC",
-          rc == 0 and "\nVERSION=2.8.1-2.s\n" in out and "NAME=foo, shared\n" in out
-          and "\nDESC=foo with libfoo.so.1\n" in out and "PSTAMP=amix-packages-vgood-2.8.1-2.s-gcc14\n" in out,
-          err or out)
+          rc == 0 and "\nVERSION=2.8.1-2.s\n" in shared and "NAME=foo, shared\n" in shared
+          and "\nDESC=foo with libfoo.so.1\n" in shared and "PSTAMP=amix-packages-vgood-2.8.1-2.s-gcc14\n" in shared,
+          err or shared)
+    rc, out, err = run("pkginfo", sh)
+    check("variant: pkginfo is the shared one by default", rc == 0 and out == shared, err or out)
     rc, out, err = run("catalog", "--variant", "shared", sh, "--md5", "0" * 32, "--size", "1")
     f = out.split("|")
     check("variant: the shared catalog line: its version, file name and SHARED_DEPENDS",
           rc == 0 and f[1] == "2.8.1-2.s" and f[3] == "vgood-2.8.1-2.s.pkg" and f[6] == "zlib,amixrt", err or out)
+    shared_line = out
     rc, out, err = run("catalog", sh, "--md5", "0" * 32, "--size", "1")
+    check("variant: the catalog line is the shared one by default", rc == 0 and out == shared_line, err or out)
+    rc, out, err = run("catalog", "--variant", "static", sh, "--md5", "0" * 32, "--size", "1")
     f = out.split("|")
     check("variant: the static catalog line keeps DEPENDS",
           rc == 0 and f[1] == "2.8.1-2" and f[6] == "zlib", err or out)
     plain = variant("var", "vplain", None)
-    rc, a, err = run("pkginfo", plain)
-    rc2, b, err2 = run("pkginfo", "--variant", "shared", plain)
-    check("variant: a recipe without prototype.shared gives its static variant for --variant shared",
-          rc == 0 and rc2 == 0 and a == b, err + err2)
+    rc, a, err = run("pkginfo", "--variant", "static", plain)
+    rc2, b, err2 = run("pkginfo", plain)
+    check("variant: a recipe without prototype.shared gives its static variant by default",
+          rc == 0 and rc2 == 0 and a == b and "\nVERSION=2.8.1-2\n" in b, err + err2)
     for name, sproto, over, needle in (
             ("vnorev", SPROTO, {}, "there is a prototype.shared, but SHARED_PKGREV is not set"),
             ("vsuffix", SPROTO, {"SHARED_PKGREV": "2s"}, "SHARED_PKGREV=2s is not PKGREV, a dot and a lowercase word"),
@@ -931,7 +934,10 @@ try:
     check("variant: build-order --variant shared follows SHARED_BUILD_DEPENDS",
           rc == 0 and [os.path.basename(l) for l in out.split()] == ["q", "r"], out + err)
     rc, out, err = run("build-order", vb, "--for", "r")
-    check("variant: build-order keeps BUILD_DEPENDS for the static variant",
+    check("variant: build-order follows SHARED_BUILD_DEPENDS by default",
+          rc == 0 and [os.path.basename(l) for l in out.split()] == ["q", "r"], out + err)
+    rc, out, err = run("build-order", "--variant", "static", vb, "--for", "r")
+    check("variant: build-order --variant static keeps BUILD_DEPENDS",
           rc == 0 and [os.path.basename(l) for l in out.split()] == ["p", "r"], out + err)
     rc, out, err = run("fragments", "--variant", "shared", os.path.join(tmp, "var"))
     check("variant: fragments --variant shared writes SHARED_DEPENDS into deps.conf",
@@ -947,6 +953,9 @@ try:
     check("variant: fragments --variant shared writes the floor into deps.conf",
           rc == 0 and "\nvfloor: zlib,amixrt>=1.0-5\n" in out, err or out)
     rc, out, err = run("fragments", os.path.join(tmp, "varf"))
+    check("variant: fragments writes the shared floor into deps.conf by default",
+          rc == 0 and "\nvfloor: zlib,amixrt>=1.0-5\n" in out, err or out)
+    rc, out, err = run("fragments", "--variant", "static", os.path.join(tmp, "varf"))
     check("variant: the static deps.conf line has no floor",
           rc == 0 and "\nvfloor: zlib\n" in out, err or out)
 

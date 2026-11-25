@@ -831,7 +831,7 @@ stage() {
         rc, out = build("elfvar", STUB_DYN=bar, VARIANT="shared", **elf_env)
         check("VARIANT=shared: then its shared one",
               rc == 0 and "libbar.so.1 (libdep-shared /opt/amix/lib)" in out, out)
-        rc, out = build("elfvar", STUB_DYN=bar, **elf_env)
+        rc, out = build("elfvar", STUB_DYN=bar, VARIANT="static", **elf_env)
         check("VARIANT=static: the BUILD_DEPENDS package's own tree, a shared one beside it or not",
               rc == 0 and "libbar.so.1 (libdep /opt/amix/lib)" in out, out)
         rc, out = build("elfrp", STUB_DYN=libc + "  NEEDED      libX.so\n  RPATH       /usr/X/lib", **elf_env)
@@ -906,19 +906,19 @@ stage() {
               rc == 1 and "NEEDED libfoo.so.1 is not in its RPATH (none)" in out, out)
 
         # --- VARIANT ---------------------------------------------------------------------
-        rc, out = build("var")
+        rc, out = build("var", VARIANT="static")
         bt = read(os.path.join(out_pkg, "var", "BUILD.txt")) if rc == 0 else ""
-        check("VARIANT unset: the static variant, in <name>/, its version and prototype",
+        check("VARIANT=static: the static variant, in <name>/, its version and prototype",
               rc == 0 and seen().get("VARIANT") == "static"
               and "PROTO ok  4 paths" in out and "variant" not in out
               and os.path.isfile(os.path.join(out_pkg, "pkg", "var-1.0-1.pkg"))
               and "\nVERSION=1.0-1\n" in read(os.path.join(log, "pkginfo"))
               and "\nvariant " not in bt, out)
         static_tar = read(os.path.join(out_pkg, "pkg", "var-1.0-1.pkg")) if rc == 0 else None
-        rc, out = build("var", VARIANT="shared")
+        rc, out = build("var")
         bt = read(os.path.join(out_pkg, "var-shared", "BUILD.txt")) if rc == 0 else ""
         pi = read(os.path.join(log, "pkginfo")) if rc == 0 else ""
-        check("VARIANT=shared: prototype.shared, SHARED_PKGREV and SHARED_DESC, in <name>-shared/",
+        check("VARIANT unset: the shared variant, prototype.shared, SHARED_PKGREV and SHARED_DESC, in <name>-shared/",
               rc == 0 and seen().get("VARIANT") == "shared" and "variant shared" in out
               and "PROTO ok  5 paths" in out
               and os.path.isfile(os.path.join(out_pkg, "pkg", "var-1.0-1.s.pkg"))
@@ -927,10 +927,14 @@ stage() {
               == read(os.path.join(var, "prototype.shared"))
               and "\nvariant shared (prototype.shared)\n" in bt
               and "pkg %s/pkg/var-1.0-1.s.pkg " % out_pkg in bt, out)
-        check("VARIANT=shared: the static tree and package stay as they were",
+        check("VARIANT unset: the static tree and package stay as they were",
               os.path.isfile(os.path.join(out_pkg, "var", "BUILD.txt"))
               and not os.path.exists(os.path.join(out_pkg, "var", "dest", "opt", "amix", "share", "shared.txt"))
               and read(os.path.join(out_pkg, "pkg", "var-1.0-1.pkg")) == static_tar, out)
+        rc, out = build("var", VARIANT="shared")
+        check("VARIANT=shared: the default's variant, pkginfo and BUILD.txt",
+              rc == 0 and seen().get("VARIANT") == "shared" and read(os.path.join(log, "pkginfo")) == pi
+              and read(os.path.join(out_pkg, "var-shared", "BUILD.txt")) == bt, out)
         rc, out = build("conf", VARIANT="shared")
         check("VARIANT=shared: a recipe without prototype.shared builds its static variant and says so",
               rc == 0 and "VARIANT=shared: conf has no prototype.shared; its one variant, static, is built" in out

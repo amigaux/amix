@@ -9,8 +9,8 @@ STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland apk
 
 .PHONY: $(STEPS) test selftests check-packages
 
-# SYSTEM=<amix-system checkout>, LOCK=<lock of record> and VARIANT=static
-# (default) or shared, the userland variant, are passed on to dist.sh in
+# SYSTEM=<amix-system checkout>, LOCK=<lock of record> and VARIANT=shared
+# (default) or static, the userland variant, are passed on to dist.sh in
 # the environment.
 export SYSTEM LOCK VARIANT
 

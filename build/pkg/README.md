@@ -68,8 +68,9 @@ driver does, so the two never disagree about a value.
 ### Variants: static and shared
 
 A recipe that builds its libraries both ways has a `prototype.shared` beside
-its `prototype`. `VARIANT=shared` (the driver's environment; `make dist
-VARIANT=shared` for the whole userland) builds that variant: the same package
+its `prototype`. `VARIANT` (the driver's environment; `make dist
+VARIANT=static` for the whole userland) picks the variant, `shared` unless it
+says `static`. The shared variant is the same package
 (`PKG`, catalog name, conffiles, source and epoch) at version
 `VERSION-SHARED_PKGREV`, with the `SHARED_` values, rolled from
 `prototype.shared` in `<build root>/<name>-shared/`, so the static build tree
@@ -77,9 +78,12 @@ stays as it is. A `BUILD_DEPENDS` package's tree is then its `-shared` one
 where that was built. The hooks see the variant as `$VARIANT` (`static` or
 `shared`), and `BUILD.txt` names it. A recipe without a `prototype.shared`
 builds its one variant, static, under either value, and says so. `pkgmeta
-check` checks both prototypes, and `check-packages` the shared variants'
-`BUILD_DEPENDS` order and versions. Being one package, a box has one variant
-or the other; a catalog holds the variant its build was made with.
+check` checks both prototypes, and `check-packages` both variants'
+`BUILD_DEPENDS` order and versions. `pkginfo`, `catalog`, `fragments` and
+`build-order` give the shared variant unless `--variant static` says
+otherwise, so `conf/` holds the shared variant's dependencies. Being one
+package, a box has one variant or the other; a catalog holds the variant
+its build was made with.
 
 A package has one source: the tarball at `URL`, a fork at the commit a
 checkout pin names (`FORKPIN`), or the source in the tree. That is the
