@@ -5,6 +5,8 @@ there when the variable is unset ("LPDEST: parameter not set"), and the
 print actions set none of them, so dtlp exited before its dialog. It
 tests ${VAR-} instead. SINGLE_QUOTE, which quotes the banner title in
 the lp command that dtlp evals, was never set: it is a single quote.
+The dialog put its cursor at ${#PRINTER}, never set; it is ${#printer},
+the printer name the dialog shows.
 
 --- a/programs/dtprintegrate/dtlp.src
 +++ b/programs/dtprintegrate/dtlp.src
@@ -73,3 +75,12 @@ the lp command that dtlp evals, was never set: it is a single quote.
      then
          default_printer=$LPDEST
      else
+@@ -1409,7 +1410,7 @@
+     HASH
+     HASH move cursor to end of printer name
+     HASH
+-    XtSetValues "$PRINTER_TF" cursorPosition:${#PRINTER}
++    XtSetValues "$PRINTER_TF" cursorPosition:${#printer}
+ 
+     HASH
+     HASH set focus callbacks to track printer name changes

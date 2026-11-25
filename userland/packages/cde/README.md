@@ -164,7 +164,7 @@ The manual pages, help volumes and catalogues of the parts not built are left ou
 | `53-ksh93-unknown-class` | an unknown `[:class:]` in a pattern is no class: without the C library's `wctype`, libast returned the entry past the end of its class table as the class's function, and ksh jumped to a data address |
 | `54-ksh93-getcwd-root-home` | libast's own `getcwd` (Amix has no such system call) no longer puts root's HOME, `/`, in front of the path it walked: `$PWD` and script paths began `//` |
 | `55-dtksh-number-buffers` | dtksh's number buffers hold any `long`: `catopen` printed a catalogue's heap address, ten digits, into 10 bytes, and dtksh jumped to a broken return address (dtlp died at start) |
-| `56-dtlp-unset-options` | dtlp runs under `set -u` with its environment options (`LPDEST`, `DTPRINTSILENT` and the rest) unset, as the print actions leave them: it tested them with `${#VAR}`, which ksh93 refuses on an unset variable; and `SINGLE_QUOTE`, which quotes the banner title in the `lp` line dtlp evaluates, is set |
+| `56-dtlp-unset-options` | dtlp runs under `set -u` with its environment options (`LPDEST`, `DTPRINTSILENT` and the rest) unset, as the print actions leave them: it tested them with `${#VAR}`, which ksh93 refuses on an unset variable; `SINGLE_QUOTE`, which quotes the banner title in the `lp` line dtlp evaluates, is set; and its dialog puts the cursor after the printer name (`${#printer}`, not the unset `${#PRINTER}`) |
 
 Each patch has a header that says what and why.
 
