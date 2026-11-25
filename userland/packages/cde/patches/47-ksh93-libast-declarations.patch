@@ -1,0 +1,111 @@
+ksh93: libast declares what Amix's headers do not.
+
+- settimeofday is in Amix's libc with no prototype in <sys/time.h>: the
+  tvlib probe declares it when it has none.
+- mbrtowc and wcrtomb are libast's own (comp/wc.c) where libc has none,
+  as on Amix, but nothing declared mbrtowc, and sfio claimed both were in
+  libc before <wchar.h> read that they were not, so neither was declared:
+  <wchar.h> declares both and sfio includes it first.
+- error_info.write is ssize_t (*)(int, const void*, size_t); Amix declares
+  write with int and unsigned, the same types under other names: libast's
+  default is a function of that type which calls write.
+- procopen calls setenv, which is libast's own (comp/setenv.c) and which
+  Amix's <stdlib.h> does not declare: procopen declares it.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/features/tvlib
++++ b/programs/dtksh/ksh93/src/lib/libast/features/tvlib
+@@ -1,5 +1,6 @@
+ hdr	time
+ lib	clock_settime,gettimeofday,settimeofday,stime,utimes
++npt	settimeofday sys/time.h
+ lib	nanosleep,usleep
+ lib	utimensat -D_ATFILE_SOURCE sys/stat.h note{ complete utimensat implementation }end link{
+ 	#include <fcntl.h>
+@@ -88,6 +89,9 @@
+ 			return 1;
+ 		printf("#define tmgettimeofday(p)	gettimeofday(p,(struct timezone*)0)\n");
+ #if _lib_settimeofday
++#if _npt_settimeofday
++		printf("extern int	settimeofday(struct timeval*, struct timezone*);\n");
++#endif
+ 		printf("#define tmsettimeofday(p)	settimeofday(p,(struct timezone*)0)\n");
+ #endif
+ #endif
+--- a/programs/dtksh/ksh93/src/lib/libast/features/wchar
++++ b/programs/dtksh/ksh93/src/lib/libast/features/wchar
+@@ -10,7 +10,7 @@
+ 	#endif
+ }end
+ 
+-lib	mbstowcs,wctomb,wcrtomb,wcslen,wcstombs,wcwidth stdlib.h stdio.h wchar.h
++lib	mbstowcs,wctomb,mbrtowc,wcrtomb,wcslen,wcstombs,wcwidth stdlib.h stdio.h wchar.h
+ lib	towlower,towupper stdlib.h stdio.h wchar.h
+ typ	mbstate_t stdlib.h stdio.h wchar.h
+ nxt	wchar
+@@ -109,6 +109,9 @@
+ 	#if !_lib_wctomb
+ 	extern int		wctomb(char*, wchar_t);
+ 	#endif
++	#if !_lib_mbrtowc
++	extern size_t		mbrtowc(wchar_t*, const char*, size_t, mbstate_t*);
++	#endif
+ 	#if !_lib_wcrtomb
+ 	extern size_t		wcrtomb(char*, wchar_t, mbstate_t*);
+ 	#endif
+--- a/programs/dtksh/ksh93/src/lib/libast/sfio/sfhdr.h
++++ b/programs/dtksh/ksh93/src/lib/libast/sfio/sfhdr.h
+@@ -62,7 +62,9 @@
+ #include	<ast_tty.h>
+ #include	<ls.h>
+ 
+-/* AST always provides multibyte handling */
++/* AST always provides multibyte handling; <wchar.h> first, so it still
++ * declares AST's own mbrtowc() and wcrtomb() where libc has none */
++#include	<wchar.h>
+ #undef _hdr_wchar
+ #undef _lib_mbrtowc
+ #undef _lib_wcrtomb
+--- a/programs/dtksh/ksh93/src/lib/libast/misc/error.c
++++ b/programs/dtksh/ksh93/src/lib/libast/misc/error.c
+@@ -45,9 +45,20 @@
+  *	      to allow future Error_info_t growth
+  */
+ 
++/*
++ * the native write() may be declared with other but equivalent argument
++ * types (int and unsigned for ssize_t and size_t)
++ */
++
++static ssize_t
++errwrite(int fd, const void* buf, size_t n)
++{
++	return write(fd, buf, n);
++}
++
+ static Error_info_t	_error_info_ =
+ {
+-	2, exit, write,
++	2, exit, errwrite,
+ 	0,0,0,0,0,0,0,0,
+ 	0,			/* version			*/
+ 	0,			/* auxilliary			*/
+@@ -548,7 +559,7 @@
+ #endif
+ 			sfsync(sfstdout);
+ 			sfsync(sfstderr);
+-			if (fd == sffileno(sfstderr) && error_info.write == write)
++			if (fd == sffileno(sfstderr) && error_info.write == errwrite)
+ 			{
+ 				sfwrite(sfstderr, s, n);
+ 				sfsync(sfstderr);
+--- a/programs/dtksh/ksh93/src/lib/libast/misc/procopen.c
++++ b/programs/dtksh/ksh93/src/lib/libast/misc/procopen.c
+@@ -58,6 +58,8 @@
+ 
+ #include <namval.h>
+ 
++extern int	setenv(const char*, const char*, int);	/* comp/setenv.c */
++
+ #define PROC_ENV_OPTIONS	"PROC_OPTIONS"
+ 
+ #define PROC_OPT_ENVIRONMENT	(1<<0)

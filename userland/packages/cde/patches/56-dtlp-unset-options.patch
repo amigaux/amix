@@ -1,0 +1,86 @@
+dtlp: runs with its environment options unset.
+
+dtlp runs under set -u and tests each option with ${#VAR}; ksh93 stops
+there when the variable is unset ("LPDEST: parameter not set"), and the
+print actions set none of them, so dtlp exited before its dialog. It
+tests ${VAR-} instead. SINGLE_QUOTE, which quotes the banner title in
+the lp command that dtlp evals, was never set: it is a single quote.
+The dialog put its cursor at ${#PRINTER}, never set; it is ${#printer},
+the printer name the dialog shows.
+
+--- a/programs/dtprintegrate/dtlp.src
++++ b/programs/dtprintegrate/dtlp.src
+@@ -81,6 +81,7 @@
+ XCOMM For string processing
+ XCOMM
+ MINUS_T="-t"
++SINGLE_QUOTE="'"
+ 
+ XCOMM #################################################################
+ XCOMM ##  Initialize()
+@@ -174,19 +175,19 @@
+ XCOMM #################################################################
+ SetPreEnvironment()
+ {
+-    if (( ${#LPDEST} ))
++    if [[ -n ${LPDEST-} ]]
+     then
+         printer_name=$LPDEST
+         printer_name_flag=1
+     fi
+ 
+-    if (( ${#DTPRINTCWD} ))
++    if [[ -n ${DTPRINTCWD-} ]]
+     then
+         print_cwd=$DTPRINTCWD
+         print_cwd_flag=1
+     fi
+ 
+-    if (( ${#DTPRINTFILEREMOVE} ))
++    if [[ -n ${DTPRINTFILEREMOVE-} ]]
+     then
+         HASH check for True
+         Uppercase_string=$DTPRINTFILEREMOVE
+@@ -197,7 +198,7 @@
+         Uppercase_string=""
+     fi
+ 
+-    if (( ${#DTPRINTSILENT} ))
++    if [[ -n ${DTPRINTSILENT-} ]]
+     then
+         HASH check for True
+         Uppercase_string=$DTPRINTSILENT
+@@ -208,13 +209,13 @@
+         Uppercase_string=""
+     fi
+ 
+-    if (( ${#DTPRINTUSERFILENAME} ))
++    if [[ -n ${DTPRINTUSERFILENAME-} ]]
+     then
+         user_filename=$DTPRINTUSERFILENAME
+         user_filename_flag=1
+     fi
+ 
+-    if (( ${#DTPRINTTESTOUTPUT} ))
++    if [[ -n ${DTPRINTTESTOUTPUT-} ]]
+     then
+         test_flag=1
+     fi
+@@ -537,7 +538,7 @@
+ #endif
+ 
+     default_printer=""
+-    if (( ${#LPDEST} ))
++    if [[ -n ${LPDEST-} ]]
+     then
+         default_printer=$LPDEST
+     else
+@@ -1409,7 +1410,7 @@
+     HASH
+     HASH move cursor to end of printer name
+     HASH
+-    XtSetValues "$PRINTER_TF" cursorPosition:${#PRINTER}
++    XtSetValues "$PRINTER_TF" cursorPosition:${#printer}
+ 
+     HASH
+     HASH set focus callbacks to track printer name changes

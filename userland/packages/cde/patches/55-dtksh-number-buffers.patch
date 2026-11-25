@@ -1,0 +1,82 @@
+dtksh: its number buffers hold any long.
+
+catopen and seven text commands print a number into a 10-byte buffer.
+On Amix a message catalogue is a heap address, ten digits as a long:
+catopen wrote its eleventh byte past the buffer, and dtksh jumped to a
+broken return address (dtlp died at start). They hold 24 bytes, as
+dtksh's other number buffers do.
+
+--- a/programs/dtksh/xmcmds.c
++++ b/programs/dtksh/xmcmds.c
+@@ -3730,7 +3730,7 @@
+    char * arg0 = argv[0];
+    char * var = argv[1];
+    char * catName = argv[2];
+-   char buf[10];
++   char buf[24];
+    char * altCatName;
+    char * ptr;
+    nl_catd nlmsg_fd = (nl_catd)-1;
+@@ -3966,7 +3966,7 @@
+    wtab_t *w;
+    int result;
+    char * string;
+-   char buf[10];
++   char buf[24];
+    char * errmsg;
+ 
+    if (argc != 3) 
+@@ -4079,7 +4079,7 @@
+ {
+    char *arg0 = argv[0];
+    wtab_t *w;
+-   char buf[10];
++   char buf[24];
+    Boolean boolean;
+    XrmValue fval, tval;
+    char * errmsg;
+@@ -4140,7 +4140,7 @@
+    wtab_t *w;
+    Boolean result;
+    int string;
+-   char buf[10];
++   char buf[24];
+    char * p;
+    int param;
+    char * errmsg;
+@@ -4328,7 +4328,7 @@
+ {
+    char *arg0 = argv[0];
+    wtab_t *w;
+-   char buf[10];
++   char buf[24];
+    XmTextPosition left;
+    XmTextPosition right;
+    Boolean result;
+@@ -4418,7 +4418,7 @@
+    Position y;
+    char * p;
+    Boolean result;
+-   char buf[10];
++   char buf[24];
+    char * errmsg;
+ 
+    if (argc != 5) 
+@@ -4593,7 +4593,7 @@
+    Position y;
+    XmTextPosition position;
+    char * p;
+-   char buf[10];
++   char buf[24];
+    char * errmsg;
+ 
+    if (argc != 5) 
+@@ -4716,7 +4716,7 @@
+    char * p;
+    XrmValue fval, tval;
+    Boolean result;
+-   char buf[10];
++   char buf[24];
+    char * errmsg;
+ 
+    if (argc != 6) 

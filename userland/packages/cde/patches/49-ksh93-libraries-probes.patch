@@ -1,0 +1,36 @@
+ksh93: the socket and dynamic-linking libraries are found.
+
+AST's build records the libraries each of its libraries needs by linking
+a test program with and without them. Amix's libsocket needs libnsl after
+it, so the program did not link with -lsocket alone and ksh was linked
+without either; the socket test now links with -lsocket -lnsl. The dl
+test called dlopen only, which Amix's toolchain resolves without -ldl;
+libdll also calls dlsym, dlerror and dlclose, which only libdl has, and
+the test calls them too.
+
+--- a/programs/dtksh/ksh93/src/cmd/INIT/Mamfile
++++ b/programs/dtksh/ksh93/src/cmd/INIT/Mamfile
+@@ -989,7 +989,7 @@
+ 			exec - for i in socket.c nsl.c
+ 			exec - do if ${CC} -c $i > /dev/null
+ 			exec - then g=
+-			exec - for p in socket -
++			exec - for p in socket nsl -
+ 			exec - do case $p in
+ 			exec - -) if ${CC} -o socket.exe $i $g > /dev/null 2>&1
+ 			exec - then ${CC} -o socket.exe $i > /dev/null 2>&1 || {
+--- a/programs/dtksh/ksh93/src/cmd/INIT/dl.c
++++ b/programs/dtksh/ksh93/src/cmd/INIT/dl.c
+@@ -25,6 +25,11 @@
+ int
+ main()
+ {
+-	dlopen("libdl.so",0);
++	void*	h = dlopen("libdl.so",0);
++
++	/* all of libdll's calls: a library may have dlopen alone */
++	dlsym(h, "main");
++	dlerror();
++	dlclose(h);
+ 	return 0;
+ }

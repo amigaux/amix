@@ -1,0 +1,20 @@
+ksh93: the current directory has one leading slash where HOME is /.
+
+Amix has no getcwd system call, so libast's getcwd walks up the tree,
+and stops early at a directory it knows from $PWD or $HOME, putting
+that path in front. Root's HOME is "/", and in front of "var/pk" it gave
+"//var/pk": $PWD, ${.sh.file} and script paths began with two slashes.
+"/" is not taken as such a directory; the walk ends at the root.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/misc/getcwd.c
++++ b/programs/dtksh/ksh93/src/lib/libast/misc/getcwd.c
+@@ -298,7 +298,8 @@
+ 		closedir(dirp);
+ 		dirp = 0;
+ 		for (n = 0; n < elementsof(env); n++)
+-			if (env[n].ino == par->st_ino && env[n].dev == par->st_dev)
++			/* not "/" (root's HOME), which gave "//dir": the walk ends at the root */
++			if (env[n].ino == par->st_ino && env[n].dev == par->st_dev && env[n].path[1])
+ 			{
+ 				namlen = strlen(env[n].path);
+ 				goto found;

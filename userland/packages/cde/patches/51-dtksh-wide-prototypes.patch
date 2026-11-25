@@ -1,0 +1,35 @@
+dtksh: XmTextSetEditable and XmTextSetAddMode through their own type.
+
+dtksh calls both through a pointer to void (Widget, char). Motif declares
+their second argument int where X is built with NeedWidePrototypes, as
+X11R6.3 is here, and Boolean otherwise; GCC 14 refuses the other type.
+The pointer's type now follows NeedWidePrototypes as Motif's does.
+
+--- a/programs/dtksh/xmcmds.c
++++ b/programs/dtksh/xmcmds.c
+@@ -177,7 +177,11 @@
+                         int argc,
+                         char *argv[]) ;
+ static int Text_WidgetAndBoolean( 
+-                        void (*func)(Widget w, char b),
++#if NeedWidePrototypes
++                        void (*func)(Widget w, int b),
++#else
++                        void (*func)(Widget w, Boolean b),
++#endif
+                         int argc,
+                         char *argv[]) ;
+ static int Text_WidgetAndOneParam( 
+@@ -4065,7 +4069,11 @@
+ 
+ static int
+ Text_WidgetAndBoolean(
+-        void (*func)(Widget w, char b),
++#if NeedWidePrototypes
++        void (*func)(Widget w, int b),
++#else
++        void (*func)(Widget w, Boolean b),
++#endif
+         int argc,
+         char *argv[] )
+ {
