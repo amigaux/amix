@@ -2533,6 +2533,7 @@ f none /opt/amix/dt/bin/dthelptag 0755 root bin
 f none /opt/amix/dt/bin/dthelpview 0755 root bin
 f none /opt/amix/dt/bin/dticon 0755 root bin
 f none /opt/amix/dt/bin/dtimsstart 0755 root bin
+f none /opt/amix/dt/bin/dtksh 0755 root bin
 f none /opt/amix/dt/bin/dtlogin 0755 root bin
 f none /opt/amix/dt/bin/dtlp 0755 root bin
 f none /opt/amix/dt/bin/dtlpsetup 0755 root bin
@@ -2612,11 +2613,13 @@ f none /opt/amix/dt/config/Xsession.d/0060.dtsysenv 0755 root bin
 f none /opt/amix/dt/config/ims/start.conf 0644 root bin
 f none /opt/amix/dt/config/svc/CDE.lcx 0644 root bin
 d none /opt/amix/dt/doc/compat 0755 root sys
+d none /opt/amix/dt/doc/ksh93 0755 root sys
 d none /opt/amix/dt/doc/libjpeg 0755 root sys
 d none /opt/amix/dt/doc/motif 0755 root sys
 d none /opt/amix/dt/doc/regex 0755 root sys
 d none /opt/amix/dt/doc/x11r6.3 0755 root sys
 f none /opt/amix/dt/doc/compat/LICENSE 0644 root bin
+f none /opt/amix/dt/doc/ksh93/LICENSE.md 0644 root bin
 f none /opt/amix/dt/doc/libjpeg/README 0644 root bin
 f none /opt/amix/dt/doc/motif/COPYING 0644 root bin
 f none /opt/amix/dt/doc/regex/COPYRIGHT 0644 root bin
@@ -2675,6 +2678,8 @@ s none /opt/amix/dt/lib/libcsa.so=/opt/amix/dt/lib/libcsa.so.2
 f none /opt/amix/dt/lib/libcsa.so.2 0755 root bin
 s none /opt/amix/dt/lib/libtt.so=/opt/amix/dt/lib/libtt.so.2
 f none /opt/amix/dt/lib/libtt.so.2 0755 root bin
+d none /opt/amix/dt/lib/dtksh 0755 root sys
+f none /opt/amix/dt/lib/dtksh/DtFuncs.dtsh 0755 root bin
 d none /opt/amix/dt/lib/nls 0755 root sys
 d none /opt/amix/dt/lib/nls/msg 0755 root sys
 d none /opt/amix/dt/lib/nls/msg/C 0755 root sys
@@ -2703,6 +2708,7 @@ f none /opt/amix/dt/lib/nls/msg/C/dthelpgen.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dthelpprint.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dticon.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dtimsstart.cat 0644 root bin
+f none /opt/amix/dt/lib/nls/msg/C/dtksh.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dtlogin.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dtlp.cat 0644 root bin
 f none /opt/amix/dt/lib/nls/msg/C/dtmailopts.cat 0644 root bin
@@ -3379,6 +3385,7 @@ f none /opt/amix/man/1/dthelptag 0644 root bin
 f none /opt/amix/man/1/dthelpview 0644 root bin
 f none /opt/amix/man/1/dticon 0644 root bin
 f none /opt/amix/man/1/dtimsstart 0644 root bin
+f none /opt/amix/man/1/dtksh 0644 root bin
 f none /opt/amix/man/1/dtlogin 0644 root bin
 f none /opt/amix/man/1/dtlp 0644 root bin
 f none /opt/amix/man/1/dtlpsetup 0644 root bin
@@ -3413,6 +3420,7 @@ f none /opt/amix/man/1/dtudcfonted 0644 root bin
 f none /opt/amix/man/1/dtwm 0644 root bin
 f none /opt/amix/man/1/huffcode 0644 root bin
 f none /opt/amix/man/1/tt_type_comp 0644 root bin
+f none /opt/amix/man/1/ksh-cde 0644 root bin
 f none /opt/amix/man/1/ttauth 0644 root bin
 f none /opt/amix/man/1/ttcp 0644 root bin
 f none /opt/amix/man/1/ttmv 0644 root bin

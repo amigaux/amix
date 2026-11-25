@@ -1,0 +1,189 @@
+ksh93: probes print 64-bit values without printf's %ll.
+
+Amix's C library printf does not know the ll size: "%016llx" and "%llu"
+print the low 32 bits or nothing. The probe for a 64-bit integer type
+checked the compiler's 64-bit arithmetic through sprintf "%016llx", failed,
+and libast took int as its widest integer (intmax_t), so ksh's arithmetic
+and strtoll were 32-bit; the limits and float probes printed LLONG_MAX as
+4294967295 and LLONG_MIN as 0. They format those values themselves.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/features/common
++++ b/programs/dtksh/ksh93/src/lib/libast/features/common
+@@ -189,8 +189,14 @@
+ 		p = 0x12345678;
+ 		p <<= 32;
+ 		p |= 0x9abcdef0;
+-		sprintf(buf, "0x%016llx", p);
+-		if (strcmp(buf, "0x123456789abcdef0"))
++		/* format by hand: an old libc printf may not know %ll */
++		for (t = 15; t >= 0; t--)
++		{
++			buf[t] = "0123456789abcdef"[p & 0xf];
++			p >>= 4;
++		}
++		buf[16] = 0;
++		if (strcmp(buf, "123456789abcdef0"))
+ 			return 1;
+ 	#endif
+ 		for (s = 0; s < elementsof(int_size); s++)
+--- a/programs/dtksh/ksh93/src/lib/libast/features/limits.c
++++ b/programs/dtksh/ksh93/src/lib/libast/features/limits.c
+@@ -69,6 +69,21 @@
+ #undef	getpagesize
+ #undef	getdtablesize   
+ 
++#if _typ_uint64_t
++/* an old libc printf may not know %ll: format by hand */
++static char*
++ullstr(uint64_t v)
++{
++	static char	buf[2][24];
++	static int	i;
++	char*		s = buf[i = !i] + sizeof(buf[0]) - 1;
++
++	*s = 0;
++	do *--s = '0' + v % 10; while (v /= 10);
++	return s;
++}
++#endif
++
+ int main()
+ {
+ 	char			c;
+@@ -251,9 +266,9 @@
+ 		vll = ull;
+ 		printf("#ifndef ULLONG_MAX\n");
+ 		printf("#if _ast_LL\n");
+-		printf("#define ULLONG_MAX	%lluULL\n", vll);
++		printf("#define ULLONG_MAX	%sULL\n", ullstr(vll));
+ 		printf("#else\n");
+-		printf("#define ULLONG_MAX	%llu\n", vll);
++		printf("#define ULLONG_MAX	%s\n", ullstr(vll));
+ 		printf("#endif\n");
+ 		printf("#endif\n");
+ #endif
+@@ -262,9 +277,9 @@
+ 		vll = (uint64_t)(ull >> 1) + 1;
+ 		printf("#ifndef LLONG_MIN\n");
+ 		printf("#if _ast_LL\n");
+-		printf("#define LLONG_MIN	(-%lluLL-1LL)\n", vll - 1);
++		printf("#define LLONG_MIN	(-%sLL-1LL)\n", ullstr(vll - 1));
+ 		printf("#else\n");
+-		printf("#define LLONG_MIN	(-%llu-1)\n", vll - 1);
++		printf("#define LLONG_MIN	(-%s-1)\n", ullstr(vll - 1));
+ 		printf("#endif\n");
+ 		printf("#endif\n");
+ #endif
+@@ -273,9 +288,9 @@
+ 		vll = (uint64_t)(ull >> 1);
+ 		printf("#ifndef LLONG_MAX\n");
+ 		printf("#if _ast_LL\n");
+-		printf("#define LLONG_MAX	%lluLL\n", vll);
++		printf("#define LLONG_MAX	%sLL\n", ullstr(vll));
+ 		printf("#else\n");
+-		printf("#define LLONG_MAX	%llu\n", vll);
++		printf("#define LLONG_MAX	%s\n", ullstr(vll));
+ 		printf("#endif\n");
+ 		printf("#endif\n");
+ #endif
+--- a/programs/dtksh/ksh93/src/lib/libast/features/float
++++ b/programs/dtksh/ksh93/src/lib/libast/features/float
+@@ -259,6 +259,17 @@
+ 	#endif
+ 	#include <signal.h>
+ 	#ifdef SIGFPE
++	/* an old libc printf may not know %ll: format by hand */
++	static char*
++	ullstr(unsigned _ast_intmax_t v)
++	{
++		static char	buf[24];
++		char*		s = buf + sizeof(buf) - 1;
++
++		*s = 0;
++		do *--s = '0' + v % 10; while (v /= 10);
++		return s;
++	}
+ 	static int caught = 0;
+ 	static void catch(int sig)
+ 	{
+@@ -350,7 +361,7 @@
+ 		printf("#define FLT_ULONG_MAX		%lu.0F\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define FLT_ULLONG_MAX		%llu.0F\n", w);
++			printf("#define FLT_ULLONG_MAX		%s.0F\n", ullstr(w));
+ 			printf("#define FLT_UINTMAX_MAX		FLT_ULLONG_MAX\n");
+ 		}
+ 		else
+@@ -363,7 +374,7 @@
+ 		printf("#define FLT_LONG_MAX		%lu.0F\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define FLT_LLONG_MAX		%llu.0F\n", w);
++			printf("#define FLT_LLONG_MAX		%s.0F\n", ullstr(w));
+ 			printf("#define FLT_INTMAX_MAX		FLT_LLONG_MAX\n");
+ 		}
+ 		else
+@@ -376,7 +387,7 @@
+ 		printf("#define FLT_LONG_MIN		(-%lu.0F)\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define FLT_LLONG_MIN		(-%llu.0F)\n", w);
++			printf("#define FLT_LLONG_MIN		(-%s.0F)\n", ullstr(w));
+ 			printf("#define FLT_INTMAX_MIN		FLT_LLONG_MIN\n");
+ 		}
+ 		else
+@@ -525,7 +536,7 @@
+ 		printf("#define DBL_ULONG_MAX		%lu.0\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define DBL_ULLONG_MAX		%llu.0\n", w);
++			printf("#define DBL_ULLONG_MAX		%s.0\n", ullstr(w));
+ 			printf("#define DBL_UINTMAX_MAX		DBL_ULLONG_MAX\n");
+ 		}
+ 		else
+@@ -538,7 +549,7 @@
+ 		printf("#define DBL_LONG_MAX		%lu.0\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define DBL_LLONG_MAX		%llu.0\n", w);
++			printf("#define DBL_LLONG_MAX		%s.0\n", ullstr(w));
+ 			printf("#define DBL_INTMAX_MAX		DBL_LLONG_MAX\n");
+ 		}
+ 		else
+@@ -551,7 +562,7 @@
+ 		printf("#define DBL_LONG_MIN		(-%lu.0)\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define DBL_LLONG_MIN		(-%llu.0)\n", w);
++			printf("#define DBL_LLONG_MIN		(-%s.0)\n", ullstr(w));
+ 			printf("#define DBL_INTMAX_MIN		DBL_LLONG_MIN\n");
+ 		}
+ 		else
+@@ -696,7 +707,7 @@
+ 		printf("#define LDBL_ULONG_MAX		%lu.0L\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define LDBL_ULLONG_MAX		%llu.0L\n", w);
++			printf("#define LDBL_ULLONG_MAX		%s.0L\n", ullstr(w));
+ 			printf("#define LDBL_UINTMAX_MAX	LDBL_ULLONG_MAX\n");
+ 		}
+ 		else
+@@ -709,7 +720,7 @@
+ 		printf("#define LDBL_LONG_MAX		%lu.0L\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define LDBL_LLONG_MAX		%llu.0L\n", w);
++			printf("#define LDBL_LLONG_MAX		%s.0L\n", ullstr(w));
+ 			printf("#define LDBL_INTMAX_MAX		LDBL_LLONG_MAX\n");
+ 		}
+ 		else
+@@ -722,7 +733,7 @@
+ 		printf("#define LDBL_LONG_MIN		(-%lu.0L)\n", u);
+ 		if (sizeof(w) > sizeof(u))
+ 		{
+-			printf("#define LDBL_LLONG_MIN		(-%llu.0L)\n", w);
++			printf("#define LDBL_LLONG_MIN		(-%s.0L)\n", ullstr(w));
+ 			printf("#define LDBL_INTMAX_MIN		LDBL_LLONG_MIN\n");
+ 		}
+ 		else

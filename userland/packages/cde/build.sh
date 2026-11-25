@@ -159,10 +159,14 @@ build_compat() {
 	$CC $AMIX_CFLAGS $CDE_PIC -Wall -I"$COMPAT" -include "$AMIX_GCC14_DECLS" -fno-builtin-round \
 		-c -o "$COMPAT/lib/amix-compat.o" "$COMPAT/lib/amix-compat.c" || exit 1
 	# basename in a member of its own: only a link that puts compat ahead of
-	# libgen (the shared variant) takes it
-	$CC $AMIX_CFLAGS $CDE_PIC -Wall -I"$COMPAT" -include "$AMIX_GCC14_DECLS" \
-		-c -o "$COMPAT/lib/basename.o" "$COMPAT/lib/basename.c" || exit 1
-	_co="$COMPAT/lib/amix-compat.o $COMPAT/lib/basename.o"
+	# libgen (the shared variant) takes it; mkstemp, wcslen and fnmatch too:
+	# dtksh links libast's, ahead of compat
+	_co="$COMPAT/lib/amix-compat.o"
+	for _f in basename mkstemp wcslen fnmatch; do
+		$CC $AMIX_CFLAGS $CDE_PIC -Wall -I"$COMPAT" -include "$AMIX_GCC14_DECLS" \
+			-c -o "$COMPAT/lib/$_f.o" "$COMPAT/lib/$_f.c" || exit 1
+		_co="$_co $COMPAT/lib/$_f.o"
+	done
 	# the shared variant: sysinfo too (sysinfo.S: libc.so.1 does not export it),
 	# and a position-independent __fixdfdi ahead of libgcc.a's, whose absolute
 	# jsr to __fixunsdfdi is a text relocation (fixdfdi.c; it goes away when the
@@ -318,6 +322,36 @@ host_docs() {
 	$HOSTCC -o "$O/dthelp_htag2" $pobjs "$O/htag2.a" "$O/util.a" || exit 1
 }
 
+# dtksh's ksh93 (README, dtksh): AST's own build, bin/package, for Amix, with
+# each feature probe answered as it was on Amix (dtksh/answers), into the flat
+# view programs/dtksh's make links dtksh from; ksh's options are dtksh's own
+# (KSH93_SHOPTS).  The patched source is kept, unbuilt, in $BUILD/ksh93-src,
+# for host/probes/ksh93-record.sh
+build_ksh93() {
+	rm -rf -- "${BUILD:?}/ksh93-src"
+	cp -R "$TREE/programs/dtksh/ksh93" "$BUILD/ksh93-src" || return 1
+	PCC_ANSWERS="$HERE/dtksh/answers" PCC_MODE=replay \
+		sh "$HERE/host/probes/ksh93.sh" "$TREE/programs/dtksh/ksh93" "$BUILD/ksh93-probes" \
+		"$(mvar programs/dtksh KSH93_SHOPTS)"
+}
+
+# sh_exec (sh/xec.c) and test_binop (bltins/test.c) without jump tables: the
+# 68060 gate cannot bound one dispatch in each (no bound check it knows; a
+# two-level table).  The two objects are compiled again so, by the commands
+# ksh93's build logged, and replace libshell's, which dtksh links
+ksh93_no_jump_tables() {
+	_k=$TREE/programs/dtksh/ksh93; _a=$_k/arch/amix.m68k; _o=$_a/src/cmd/ksh93
+	for _s in sh/xec.c bltins/test.c; do
+		_c=$(sed -n "s|^+ pcc \(.* -c [^ ]*/src/cmd/ksh93/$_s\)\$|\1|p" "$_a/lib/package/gen/make.out" | tail -1)
+		[ -n "$_c" ] || { echo "no compile line for $_s" >&2; return 1; }
+		( cd "$_o" && eval "$CC $AMIX_CFLAGS -include $AMIX_GCC14_DECLS -fno-jump-tables $_c" ) || return 1
+	done
+	( cd "$_o" && $AR rD libshell.a xec.o test.o ) || return 1
+	for _l in "$_a/lib/libshell.a" "$_k/lib/libshell.a"; do
+		rm -f -- "${_l:?}" && cp "$_o/libshell.a" "$_l" || return 1
+	done
+}
+
 build() {
 	cde_vars
 	if [ "$CDE_VARIANT" = shared ]; then
@@ -342,7 +376,7 @@ build() {
 		./configure --host=\"\$AMIX_HOST_TRIPLET\" --build=\"\$\(./config.guess\)\" \
 			--x-includes=\"\$XROOT/include\" --x-libraries=\"\$CDE_XLIBDIR\" \
 			$CDE_LIBKIND \
-			--disable-dtinfo --disable-dtdocbook --disable-dtksh
+			--disable-dtinfo --disable-dtdocbook
 	} > "$BUILD/configure.log" 2>&1 || { tail -30 "$BUILD/configure.log" >&2; echo "[FAIL] configure" >&2; exit 1; }
 	for v in "CPP_PROGRAM = /usr/ccs/lib/cpp" "KSH = /usr/bin/ksh" \
 		"XRDB = /opt/amix/X11R6/bin/xrdb" "SESSREG = /opt/amix/X11R6/bin/sessreg"; do
@@ -352,6 +386,9 @@ build() {
 	host_dthelp > "$BUILD/host-dthelp.log" 2>&1 || { tail -20 "$BUILD/host-dthelp.log" >&2; echo "[FAIL] dthelp generators" >&2; exit 1; }
 	host_tooltalk > "$BUILD/host-tooltalk.log" 2>&1 || { tail -20 "$BUILD/host-tooltalk.log" >&2; echo "[FAIL] host tt_type_comp" >&2; exit 1; }
 	host_docs > "$BUILD/host-docs.log" 2>&1 || { tail -20 "$BUILD/host-docs.log" >&2; echo "[FAIL] host documentation tools" >&2; exit 1; }
+	build_ksh93 > "$BUILD/ksh93.log" 2>&1 || { tail -40 "$BUILD/ksh93.log" >&2; echo "[FAIL] ksh93 for dtksh" >&2; exit 1; }
+	echo "  $(tail -1 "$BUILD/ksh93.log")"
+	ksh93_no_jump_tables > "$BUILD/ksh93-nojt.log" 2>&1 || { tail -20 "$BUILD/ksh93-nojt.log" >&2; echo "[FAIL] sh_exec and test_binop without jump tables" >&2; exit 1; }
 	# the shared variant: each CDE library records the libraries it calls
 	# (DT_NEEDED); upstream's LIBADDs name almost none, as static programs link
 	# them all anyway.  libtt first, as libDtSvc now NEEDs it; the additions are
@@ -402,6 +439,9 @@ build() {
 		done
 		set -- "$@" LDFLAGS="$(sed -n 's/^LDFLAGS = //p' Makefile) $CDE_PROGLD" CXXLD="$CXX -shared-libgcc"
 	fi
+	# dtksh: ksh93's libdll calls dlsym, dlerror and dlclose, which only libdl
+	# has (configure's dlopen check passes without it)
+	set -- "$@" dtksh_LDADD="$(mvar programs/dtksh dtksh_LDADD) -ldl"
 	make_cde "$@" > "$BUILD/make.log" 2>&1 || { tail -40 "$BUILD/make.log" >&2; echo "[FAIL] make" >&2; exit 1; }
 	# rpc.cmsd's hand-written lexer (lexit.c) without jump tables: the
 	# 68060 gate cannot bound its two-level byte-class dispatch; then the
@@ -531,12 +571,14 @@ stage() {
 	# the programs are linked statically: the licence of each library in
 	# them ships beside CDE's own COPYING (README, Licence)
 	dd=$DEST/opt/amix/dt/doc
-	mkdir -p "$dd/x11r6.3" "$dd/motif" "$dd/libjpeg" "$dd/regex" "$dd/compat"
+	mkdir -p "$dd/x11r6.3" "$dd/motif" "$dd/libjpeg" "$dd/regex" "$dd/compat" "$dd/ksh93"
 	cp "$XROOT/doc/x11r63/LICENSE" "$XROOT/doc/x11r63/COPYRIGHT" "$dd/x11r6.3/"
 	cp "$MROOT/doc/motif/COPYING" "$dd/motif/"
 	cp "$JROOT/doc/libjpeg/README" "$dd/libjpeg/"
 	cp "$RROOT/doc/regex/COPYRIGHT" "$dd/regex/"
 	cp "$HERE/../LICENSE" "$dd/compat/LICENSE"
+	# dtksh contains ksh93's libraries (libshell, libcmd, libast, libdll)
+	cp "$TREE/programs/dtksh/ksh93/LICENSE.md" "$dd/ksh93/LICENSE.md"
 	chmod 0644 "$dd"/*/*
 	# manual pages (README): sections 1 and 1m into /opt/amix/man with
 	# whatis.d/cde (docs/man-pages.md); the reference sections 3, 4 and 5

@@ -1,0 +1,32 @@
+ksh93: wide character classes where the system has no <wctype.h>.
+
+Amix has no <wctype.h> and no isw* functions. libast's iswalpha fell back
+to isalpha, which ksh's lexer defines as iswalpha: the call came back to
+an iswalpha that does not exist. Without a native <wctype.h> the fallback
+calls the C library's isalpha function, and iswgraph (ksh's sh_isprint)
+is the 8-bit isgraph; outside a multibyte locale these are the classes.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/features/wctype
++++ b/programs/dtksh/ksh93/src/lib/libast/features/wctype
+@@ -8,6 +8,21 @@
+ 
+ 	#undef	iswalpha
+ 
++!
++case ${_nxt_wctype-} in
++?*)	cat <<!
+ 	#define iswalpha(w)	(ast.mb_alpha?(*ast.mb_alpha)(w):isalpha(w))
+ !
++	;;
++*)	cat <<!
++	/*
++	 * no native wctype.h: outside a multibyte locale the 8-bit classes,
++	 * through the C library's functions, not a macro a program may have
++	 * defined in terms of these (ksh's isalpha is iswalpha)
++	 */
++	#define iswalpha(w)	(ast.mb_alpha?(*ast.mb_alpha)(w):((unsigned long)(w)<=0xff&&(isalpha)(w)))
++	#define iswgraph(w)	((unsigned long)(w)<=0xff&&(isgraph)(w))
++!
++	;;
++esac
+ }end

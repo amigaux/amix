@@ -1,0 +1,30 @@
+ksh93: no feature-test macros on Amix.
+
+libast's standards probe picks the macros it compiles everything with
+(_ALL_SOURCE, _POSIX_SOURCE, _XOPEN_SOURCE, ...). Amix's System V Release
+4.0 headers hide what libast needs under _POSIX_SOURCE and _XOPEN_SOURCE
+(<time.h> from <sys/time.h>, SYS_NMLN and more): with them most of libast
+did not compile. On Amix (__AMIX__) none are defined.
+
+--- a/programs/dtksh/ksh93/src/lib/libast/features/standards
++++ b/programs/dtksh/ksh93/src/lib/libast/features/standards
+@@ -181,6 +181,19 @@
+ 		#define _FILE_OFFSET_BITS 64
+ 		#endif
+ 	}
++elif tst note{ Amix (System V Release 4.0) }end compile{
++		/*
++		 * Amiga Unix: its System V Release 4.0 headers hide interfaces libast
++		 * needs (<time.h> from <sys/time.h>, SYS_NMLN, ...) under _POSIX_SOURCE
++		 * and _XOPEN_SOURCE; with neither defined they show all but a few
++		 * extensions kept for __STDC__ == 0 (isnan), which libast does without.
++		 */
++		#if !__AMIX__
++		#error not Amix
++		#endif
++	}end {
++		/* Amix: no feature test macros */
++	}
+ elif tst note{ _ALL_SOURCE & _POSIX_SOURCE & _POSIX_C_SOURCE & _XOPEN_SOURCE & __EXTENSIONS__ works }end compile{
+ 		#define _ALL_SOURCE	1
+ 		#define _POSIX_SOURCE	1

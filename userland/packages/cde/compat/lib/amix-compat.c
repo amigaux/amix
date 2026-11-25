@@ -12,43 +12,6 @@
 #include <unistd.h>
 
 /*
- * mkstemp: replace the trailing XXXXXX of tmpl with letters and digits and
- * create the file, O_EXCL, mode 0600; another name on EEXIST.  Returns the
- * open descriptor, or -1 with errno set (EINVAL for a template without
- * six trailing X's).
- */
-int
-mkstemp(char *tmpl)
-{
-	static const char set[] =
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	static unsigned long seq;
-	size_t len = strlen(tmpl);
-	char *x;
-	unsigned long v;
-	int tries, i, fd;
-
-	if (len < 6 || strcmp(tmpl + len - 6, "XXXXXX") != 0) {
-		errno = EINVAL;
-		return -1;
-	}
-	x = tmpl + len - 6;
-	for (tries = 0; tries < 10000; tries++) {
-		v = ((unsigned long)getpid() << 16) ^ (unsigned long)time(NULL)
-		    ^ (++seq * 2654435761UL);
-		for (i = 0; i < 6; i++) {
-			x[i] = set[v % 62];
-			v /= 62;
-		}
-		fd = open(tmpl, O_RDWR | O_CREAT | O_EXCL, 0600);
-		if (fd >= 0 || errno != EEXIST)
-			return fd;
-	}
-	errno = EEXIST;
-	return -1;
-}
-
-/*
  * strtok_r: strtok with the position kept in *save instead of a static.
  */
 char *
@@ -83,16 +46,6 @@ strtok_r(char *s, const char *delim, char **save)
 #include <stdlib.h>
 #include <ctype.h>
 #include <wchar.h>
-
-size_t
-wcslen(const wchar_t *s)
-{
-	const wchar_t *p = s;
-
-	while (*p)
-		p++;
-	return (size_t)(p - s);
-}
 
 wchar_t *
 wcscpy(wchar_t *d, const wchar_t *s)
@@ -314,104 +267,6 @@ int
 madvise(void *addr, size_t len, int advice)
 {
 	return memcntl((caddr_t)addr, len, MC_ADVISE, (caddr_t)(long)advice, 0, 0);
-}
-
-/*
- * fnmatch: shell pattern matching, POSIX.  *, ?, [...] with ranges and !
- * or ^ to negate, \ to quote unless FNM_NOESCAPE; with FNM_PATHNAME a /
- * is matched only by a /, with FNM_PERIOD a leading . only by a . (after a
- * / too, with FNM_PATHNAME).  0 on a match, FNM_NOMATCH otherwise.
- */
-#include <fnmatch.h>
-
-static int
-amix_fnm_leading(const char *s, const char *start, int flags)
-{
-	return (flags & FNM_PERIOD) && *s == '.' &&
-	    (s == start || ((flags & FNM_PATHNAME) && s[-1] == '/'));
-}
-
-static int
-amix_fnm(const char *p, const char *s, const char *start, int flags)
-{
-	for (;;) {
-		char c = *p++;
-
-		switch (c) {
-		case '\0':
-			return *s == '\0' ? 0 : FNM_NOMATCH;
-		case '?':
-			if (*s == '\0' || ((flags & FNM_PATHNAME) && *s == '/') ||
-			    amix_fnm_leading(s, start, flags))
-				return FNM_NOMATCH;
-			s++;
-			break;
-		case '*':
-			if (amix_fnm_leading(s, start, flags))
-				return FNM_NOMATCH;
-			while (*p == '*')
-				p++;
-			if (*p == '\0')
-				return ((flags & FNM_PATHNAME) && strchr(s, '/')) ? FNM_NOMATCH : 0;
-			for (; *s; s++) {
-				if (amix_fnm(p, s, start, flags & ~FNM_PERIOD) == 0)
-					return 0;
-				if ((flags & FNM_PATHNAME) && *s == '/')
-					break;
-			}
-			return amix_fnm(p, s, start, flags & ~FNM_PERIOD);
-		case '[': {
-			int neg, ok = 0;
-			const char *q = p;
-
-			if (*s == '\0' || ((flags & FNM_PATHNAME) && *s == '/') ||
-			    amix_fnm_leading(s, start, flags))
-				return FNM_NOMATCH;
-			neg = (*q == '!' || *q == '^');
-			if (neg)
-				q++;
-			do {
-				char lo = *q++, hi;
-
-				if (lo == '\0')		/* no closing ]: an ordinary [ */
-					goto literal;
-				if (lo == '\\' && !(flags & FNM_NOESCAPE) && *q)
-					lo = *q++;
-				hi = lo;
-				if (*q == '-' && q[1] && q[1] != ']') {
-					hi = q[1];
-					q += 2;
-					if (hi == '\\' && !(flags & FNM_NOESCAPE) && *q)
-						hi = *q++;
-				}
-				if ((unsigned char)*s >= (unsigned char)lo &&
-				    (unsigned char)*s <= (unsigned char)hi)
-					ok = 1;
-			} while (*q != ']');
-			if (ok == neg)
-				return FNM_NOMATCH;
-			p = q + 1;
-			s++;
-			break;
-		}
-		case '\\':
-			if (!(flags & FNM_NOESCAPE) && *p)
-				c = *p++;
-			/* FALLTHROUGH */
-		default:
-		literal:
-			if (*s != c)
-				return FNM_NOMATCH;
-			s++;
-			break;
-		}
-	}
-}
-
-int
-fnmatch(const char *pattern, const char *string, int flags)
-{
-	return amix_fnm(pattern, string, string, flags);
 }
 
 /* strnlen: strlen, looking at most n bytes */

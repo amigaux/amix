@@ -8,6 +8,8 @@ CDE 2.5.3 (cdesktopenv), built from the upstream release against X11R6.3 and Mot
 - ToolTalk (`ttsession`, `rpc.ttdbserver`, the `tt*` commands, `tt_type_comp`, the message
   viewer `ttsnoop`) and its types database;
 - the App Builder, `dtbuilder`, with its code generator `dtcodegen`;
+- `dtksh`, the desktop Korn shell (ksh93 with the Xt, Motif and Dt commands), and the desktop's
+  scripts that run under it: `dterror`, `dtlp`, `dthelpgen`, `dthelpprint`;
 - the action and data-type databases, the app-defaults, the C locale's message catalogues, the
   backdrops, palettes and icons.
 
@@ -21,9 +23,10 @@ Package: `cde`, category `x11`, set `extra`. It depends on `x11r6.3` (the server
 documentation) are CC BY-SA 3.0, attributed to The Open Group (`COPYING`). The programs are linked
 statically, so they also contain X11R6.3's libraries (X Consortium licence), Motif (LGPL), libjpeg
 (IJG), regex (Henry Spencer's licence) and this recipe's compatibility library (MIT, `compat/`):
-`LGPL-2.0-or-later AND CC-BY-SA-3.0 AND X11 AND IJG AND Spencer-94 AND MIT`. CDE's own licence is
-`/usr/dt/COPYING`; the texts of the libraries linked in are in `/opt/amix/dt/doc`, one directory
-each (`x11r6.3`, `motif`, `libjpeg`, `regex`, `compat`).
+`dtksh` also contains ksh93's libraries (EPL-2.0):
+`LGPL-2.0-or-later AND CC-BY-SA-3.0 AND X11 AND IJG AND Spencer-94 AND MIT AND EPL-2.0`. CDE's own
+licence is `/usr/dt/COPYING`; the texts of the libraries linked in are in `/opt/amix/dt/doc`, one
+directory each (`x11r6.3`, `motif`, `libjpeg`, `regex`, `compat`, `ksh93`).
 
 **Two variants.** The package is the static build; `VARIANT=shared` builds the shared variant,
 version `2.5.3-<PKGREV>.s`, with CDE's libraries shared (*The shared variant* below). A machine has
@@ -75,13 +78,11 @@ built first: the release gate is that no CDE component is left out.
 
 | Part | Why it is not built yet | To do |
 |---|---|---|
-| `dtksh` (the desktop Korn shell) | its ksh93 is built by AST's own system, which compiles and runs hundreds of feature probes on the build machine | run the probes once on the emulator, commit Amix's answers as a reviewed file, cross-build ksh93 from them |
 | `dtinfo` (the information library browser), with `DtMmdb` | needs LMDB, whose 0.9 locking needs process-shared POSIX mutexes or semaphores, which Amix lacks | LMDB 0.9 with upstream's System V semaphore locking backported |
 | `dtdocbook` (`instant`, `dtdocbook2sdl`, `dtdocbook2man`) and the information library tools | they need Tcl and OpenSP on the box | Tcl and OpenSP ported as Amix packages |
 
-Until then the scripts that run under `dtksh` are installed but do not work: `dterror` (dtfile's
-error dialogs), `dtlp` (printing from the desktop), `dthelpgen` and `dthelpprint`. The manual
-pages, help volumes and catalogues of the parts not built are left out with them (patch 29).
+The manual pages, help volumes and catalogues of the parts not built are left out with them
+(patch 29).
 
 ## Known limits
 
@@ -95,6 +96,15 @@ pages, help volumes and catalogues of the parts not built are left out with them
   usage, dtlogin's two help screens, two of DtSearch's). The C catalogues leave them out, and the
   programs print their built-in text, the same English. A translation could not carry them while
   the limit stands; only the C locale is built.
+- **dtksh's arithmetic is double precision.** Amix's `long double` is its `double` (`float.h`:
+  53-bit mantissa) and its printf has no `%L`, so ksh93 computes in `double`: integers are exact
+  up to 2^53 (9007199254740992); larger ones are rounded, and 2^63-1 is out of reach
+  (`integer i=9223372036854775807` gives -9223372036854775808). `typeset -i` is 32 bits, as
+  everywhere; `typeset -li` (`integer`) is 64.
+- **dtksh's arithmetic functions are those of Amix's libm.** ksh offers the functions its probe
+  finds in the C library: C89's and System V's (`sqrt`, `pow`, `fmod`, `hypot`, `rint`, `lgamma`,
+  `j0` ...), not C99's (`round`, `trunc`, `tgamma`, `exp2`, `log2`, `fmin`, `isinf` ...). Libm
+  reports a domain error on standard error (`sqrt: DOMAIN error`) and returns 0, not NaN.
 - **ToolTalk types on the box need the C development set.** `tt_type_comp` runs the types source
   through `/usr/ccs/lib/cpp`, which comes with Cdev; without it, it warns and reads the source
   as it is, without `#include` and `#define`.
@@ -107,7 +117,7 @@ pages, help volumes and catalogues of the parts not built are left out with them
 | `02-dtinfo-dtdocbook-optional` | `--disable-dtinfo`, `--disable-dtdocbook`; LMDB and Tcl checked only for them; their catalogues, app-defaults, actions and ToolTalk types only with them |
 | `03-build-time-tools-fail` | the localized and tttypes rules went on after their tool failed; now they stop the build |
 | `04-svr4-host` | configure chose the build machine's system branch; now the target's, with an SVR4 branch (`-DSVR4`) |
-| `05-dtksh-dtappbuilder-optional` | `--disable-dtksh`, `--disable-dtappbuilder` (with ttsnoop); this build uses the first only |
+| `05-dtksh-dtappbuilder-optional` | `--disable-dtksh`, `--disable-dtappbuilder` (with ttsnoop); this build uses neither |
 | `06-tooltalk-svr4` | ToolTalk's SVR4 options: TLI, sysinfo, the SVR4 mount table; signal handler types; vsyslog |
 | `07-tt-type-comp-no-cpp` | tt_type_comp says so when cpp is missing |
 | `08-dtsvc-svr4` | DtSvc's headers on SVR4 (dirent.h, MAXNAMELEN) |
@@ -142,8 +152,57 @@ pages, help volumes and catalogues of the parts not built are left out with them
 | `41-libtt-print-without-wide-printf` | libtt prints a message's strings (tt_message_print, the ToolTalk trace, ttsnoop's log) with each character's own bytes: it used printf's `%C`, a wide character, which the C library here does not know, and printed a C for every character but the last few |
 | `42-ttsnoop-svr4-tail` | ttsnoop's panes run `tail +1f file`, the form the SVR4 tail takes (it opened `+0` from `tail -n +0 -f` and said "cannot open input"), and a log named with `-o` or `-O` is made first, since tail opens it before ttsnoop writes it (also an input of the App Builder's code: the record was made from the patched file) |
 | `43-dtterm-svr4-pty-modules` | DtTerm (dtterm, and ttsnoop's panes) pushes `ptem` and `ldterm` on its pty slave, each unless `I_FIND` finds it: configure builds the `-pts` variant everywhere but Solaris, whose setup does nothing, and an SVR4 pty slave is a bare stream until its opener pushes them, so dtterm's shell found no terminal (no prompt, no echo) and output lines were not returned to the left margin |
+| `44-ksh93-iffe-native-header` | dtksh's ksh93: AST's iffe finds the system's header behind GCC 14's `#include_next` wrapper of the same name; its filter for the `sys/` header of that name works |
+| `45-ksh93-svr4-feature-macros` | libast defines no feature-test macros on Amix, whose System V headers hide what it needs under `_POSIX_SOURCE` and `_XOPEN_SOURCE` |
+| `46-ksh93-probes-without-printf-ll` | the probes format 64-bit values themselves: Amix's printf has no `%ll`, and libast had taken `int` as its widest integer and `LLONG_MAX` as 4294967295 |
+| `47-ksh93-libast-declarations` | libast declares `settimeofday`, its own `mbrtowc`, `wcrtomb` and `setenv`, and gives `error_info.write` a function of its own type, where Amix's headers do not |
+| `48-ksh93-no-native-wctype` | without a native `<wctype.h>`, `iswalpha` and `iswgraph` are the C library's 8-bit classes (ksh's `isalpha`, which is `iswalpha`, looped back to a missing function) |
+| `49-ksh93-libraries-probes` | AST finds that ksh needs `-lsocket -lnsl` and `-ldl` (libsocket needs libnsl after it; Amix resolves `dlopen` without libdl, but not `dlsym`) |
+| `50-ksh93-shell-declarations` | ksh declares `remainder`, `ptsname`, `grantpt` and `unlockpt`, and has POSIX's example `rand_r`, which Amix's libc lacks |
+| `51-dtksh-wide-prototypes` | dtksh calls `XmTextSetEditable` and `XmTextSetAddMode` through a pointer of their own type: `int` where X is built with wide prototypes, as X11R6.3 is |
+| `52-ksh93-fixargs-stack-top` | a script without `#!`, which ksh runs itself, no longer clears a byte past its argument strings: on Amix they can end at the top of the stack, and ksh died with a memory fault |
+| `53-ksh93-unknown-class` | an unknown `[:class:]` in a pattern is no class: without the C library's `wctype`, libast returned the entry past the end of its class table as the class's function, and ksh jumped to a data address |
+| `54-ksh93-getcwd-root-home` | libast's own `getcwd` (Amix has no such system call) no longer puts root's HOME, `/`, in front of the path it walked: `$PWD` and script paths began `//` |
+| `55-dtksh-number-buffers` | dtksh's number buffers hold any `long`: `catopen` printed a catalogue's heap address, ten digits, into 10 bytes, and dtksh jumped to a broken return address (dtlp died at start) |
+| `56-dtlp-unset-options` | dtlp runs under `set -u` with its environment options (`LPDEST`, `DTPRINTSILENT` and the rest) unset, as the print actions leave them: it tested them with `${#VAR}`, which ksh93 refuses on an unset variable; `SINGLE_QUOTE`, which quotes the banner title in the `lp` line dtlp evaluates, is set; and its dialog puts the cursor after the printer name (`${#printer}`, not the unset `${#PRINTER}`) |
 
 Each patch has a header that says what and why.
+
+## dtksh
+
+`dtksh` is ksh93 (ksh 93u+m 1.0.3, in CDE's tree as `programs/dtksh/ksh93`) with CDE's commands
+added. ksh93 is built by AST's own build, `bin/package`, which decides how to build by compiling
+and **running** feature probes on the build machine: 128 programs that print what they find
+(type sizes, limits, which calls work and how, the pty and terminal setup). A cross build cannot
+run them, so their answers are kept here, from runs on Amix:
+
+- `build.sh` (`build_ksh93`) runs `host/probes/ksh93.sh`: AST is built for the build machine
+  first, for the tools the build runs (`mamake`, `iffe`), then for Amix with `host/probes/pcc` as
+  the compiler, with dtksh's own ksh options (`KSH93_SHOPTS`), into the flat view that
+  `programs/dtksh`'s make links `dtksh` from (`lib/libshell.a` and the rest). ksh93 is built as
+  the release it is: AST makes a development build, with the commit compiled in, when its source
+  is in a git checkout, so git is kept from finding the repository the build tree lies in.
+- `pcc` compiles as GCC 14 does, with the house declarations (`amix-decls.h`). A probe program
+  (every one is named `*.exe`) is linked for Amix, and in its place goes a stub that gives back
+  what that probe printed, on its standard output and error, and its exit status, when it ran on
+  Amix: its answer in **`dtksh/answers`**.
+- An answer is found by the probe's **key**: the sha256 of its C source as the compiler sees it
+  (preprocessed with the same flags, so every header it includes is in it, AST's generated
+  feature headers among them), the `-l` libraries it links, and its run's arguments. A changed
+  probe, header, flag or toolchain header is a new key with no answer: the build stops and names
+  it. Nothing is reused that was not asked in the same words.
+- `dtksh/answers` is text, for review: a comment that names the toolchain it was recorded with,
+  then each probe, its source as iffe wrote it and where the build asked it, and each run of it:
+  arguments, exit status, standard output and error (lines after `| `; other bytes as `\xNN`).
+- **To record**, on a build directory whose `ksh93-src` is the patched ksh93 source as `build.sh`
+  keeps it (`out/build/userland/cde`), with a box on the network: in the toolchain image, with
+  `AMIX_HOST` and `AMIX_PASS` (root's) set and `build/pkg/common/gcc14-env.sh` read, `sh host/probes/ksh93-record.sh record <build dir> dtksh/answers` builds ksh93 again in a
+  copy and runs each probe with no answer on the box (`host/probes/prund.py`: one telnet session
+  and one FTP connection, active, for the whole build; each probe is copied to `/var/pr`, run,
+  and its output read back through `od -b`, checked against the box's byte counts). A new file is a
+  whole recording. **After a toolchain change**, `verify` runs every probe on the box again into
+  a new file and lists each answer that differs from `dtksh/answers`; review the difference before
+  committing a new recording.
 
 ## The App Builder's code
 
@@ -196,7 +255,13 @@ cannot run it, so its output is kept here, in `dtcodegen/`, from a run on Amix:
 - **`compat/`**: prototyped copies of Amix's K&R headers (RPC, TLI, sockets, netdb, the X11R6.3
   headers that lack prototypes) and the calls Amix's libc lacks (`mkstemp`, `strtok_r`, the
   wide-character calls, `vasprintf`, `posix_openpt`, `getdomainname`, `madvise`, `fnmatch`,
-  `strnlen`, `round`), in `libamixcompat-cde.a`, linked into every program.
+  `strnlen`, `round`), in `libamixcompat-cde.a`, linked into every program. `mkstemp`, `wcslen`
+  and `fnmatch` are members of their own: dtksh links libast's, which comes first, and takes
+  compat's other calls without them.
+- **dtksh's `sh_exec` and `test_binop` are compiled without jump tables** (`-fno-jump-tables`):
+  the 68060 gate cannot bound one dispatch in each (no bound check it knows; a two-level table).
+  After ksh93's build, `build.sh` compiles the two objects again by the commands that build
+  logged and puts them in `libshell.a`, as it does with `rpc.cmsd`'s lexer.
 - configure is answered for what a cross build cannot test (the static X and Motif libraries) and
   given the box's paths: `/usr/ccs/lib/cpp` for tt_type_comp, `/usr/bin/ksh` for the scripts.
 
