@@ -50,5 +50,8 @@ TOOLCHAIN=gcc14
 PREFIX=/opt/amix/X11R6
 SYSTEM_PATHS=/usr/X11R6
 DEPENDS=""
-SHARED_DEPENDS="amixrt"
+# amixrt 1.0-5: 1.0-2 has the two functions the libraries take from it
+# (gettimeofday, __cxa_finalize), but 1.0-2..1.0-4 set a wrong errno on a
+# failing call
+SHARED_DEPENDS="amixrt>=1.0-5"
 BUILD_DEPENDS=""

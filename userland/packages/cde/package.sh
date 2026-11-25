@@ -25,6 +25,8 @@ PREFIX=/opt/amix/dt
 SYSTEM_PATHS="/usr/dt /usr/share/lib/terminfo/d/dtterm"
 DEPENDS="amix-base x11r6.3"
 BUILD_DEPENDS="x11r6.3 motif libjpeg regex"
-# the shared variant: the C++ runtime for libtt (cxxrt), and amixrt
-SHARED_DEPENDS="amix-base x11r6.3 motif libjpeg regex amixrt cxxrt"
+# the shared variant: the C++ runtime for libtt (cxxrt), and amixrt 1.0-5,
+# the first with the functions libtt, libDtTerm, libcsa, libDtSvc and
+# libDtMrm take from it (syslog, getutxline, sysinfo and seven more)
+SHARED_DEPENDS="amix-base x11r6.3 motif libjpeg regex amixrt>=1.0-5 cxxrt"
 SHARED_BUILD_DEPENDS="x11r6.3 motif libjpeg regex"

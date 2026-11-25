@@ -25,5 +25,7 @@ PREFIX=/opt/amix/X11R6
 DEPENDS="x11r6.3"
 BUILD_DEPENDS="x11r6.3"
 # libregex.so.1 for POSIX regcomp (Amix libc has none; libgen's regcmp is static-only)
-SHARED_DEPENDS="x11r6.3 regex amixrt"
+# amixrt 1.0-5: libXm's select comes from it, and 1.0-2..1.0-4 set a wrong
+# errno on a failing call, so an interrupted select was not EINTR
+SHARED_DEPENDS="x11r6.3 regex amixrt>=1.0-5"
 SHARED_BUILD_DEPENDS="x11r6.3 regex"
