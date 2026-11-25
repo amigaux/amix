@@ -72,7 +72,9 @@ package (`motif`), so a machine has one variant or the other. The hooks take the
 
 The shared variant needs `amixrt` 1.0-5 or later (`amixrt>=1.0-5`): `libXm` takes `select` from
 it, and 1.0-2 to 1.0-4 set a wrong `errno` on a failing call, so an interrupted `select` did not
-return `EINTR`.
+return `EINTR`. It also needs the shared X11R6.3 (`x11r6.3>=6.3-15.s`) and `libregex.so.1`
+(`regex>=3.8-2`; 3.8-1 was static only), so installing it over a static X11R6.3 or regex lifts
+them to these in the same transaction.
 
 - `libXm.so.4`, `libMrm.so.4` and `libUil.so.4` in `/opt/amix/X11R6/lib`, each the file its
   soname names with a `lib*.so` link beside it (libtool's `libfoo.so.4.0.4` name goes), and `mwm`,

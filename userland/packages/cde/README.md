@@ -282,7 +282,9 @@ Motif. The hooks take the variant from `$VARIANT`.
 The shared variant needs `amixrt` 1.0-5 or later (`amixrt>=1.0-5`): ten functions that `libtt`,
 `libDtTerm`, `libcsa`, `libDtSvc` and `libDtMrm` take from it (`syslog`, `openlog`, `getmntent`,
 `siglongjmp`, `vfork`, the four `utmpx` calls and `sysinfo`) are new in 1.0-5; an older one lacks
-them.
+them. Its programs load the shared X11R6.3 and Motif libraries and `libregex.so.1`, so it needs
+`x11r6.3>=6.3-15.s`, `motif>=2.3.8-3.s` and `regex>=3.8-2`: installing it on a machine with the
+static X11R6.3 (1.1 and 1.1.1 have 6.3-8) lifts that to the shared one in the same transaction.
 
 - **CDE's ten libraries** in `/opt/amix/dt/lib` in place of the archives, each the file its
   soname names (`libDtSvc.so.2` and the rest) with a `lib*.so` link beside it, and the programs
