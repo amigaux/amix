@@ -125,6 +125,29 @@ for v in SYSTEM AMIX_SYSTEM LOCK STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PAT
 	esac
 done
 
+# DIST_OUT=<directory>: the output tree in place of out/ (a relative path is
+# from the top of the checkout), so that two builds, static and shared or a
+# roll and its repeat, run at once, each in its own tree with its own cache.
+# The container sees it as /src/out, so every path a build can write into
+# what it makes is the default's. It needs the container (not DIST_HOST),
+# and may not be, or hold, the checkout.
+if [ -z "${AMIX_IN_CONTAINER:-}" ] && [ -n "${DIST_OUT:-}" ]; then
+	case $DIST_OUT in
+	*:*) echo "[FAIL] make dist: DIST_OUT=$DIST_OUT: a path with ':' cannot be mounted" >&2; exit 2 ;;
+	/*) ;;
+	*) DIST_OUT=$top/$DIST_OUT ;;
+	esac
+	[ -z "${DIST_HOST:-}" ] || {
+		echo "[FAIL] make dist: DIST_OUT needs the build container; DIST_HOST builds in out/" >&2; exit 2; }
+	mkdir -p "$DIST_OUT" "$top/out"
+	DIST_OUT=$(cd "$DIST_OUT" && pwd)
+	case $top/ in
+	"$DIST_OUT"/*) echo "[FAIL] make dist: DIST_OUT=$DIST_OUT is or holds the checkout" >&2; exit 2 ;;
+	esac
+	export DIST_OUT
+	out=$DIST_OUT
+fi
+
 # more than one step: each its own process, so each gets only its own inputs
 if [ $# -gt 1 ]; then
 	for s; do
@@ -280,6 +303,8 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 		eval "p=\${$v:-}"
 		[ -z "$p" ] || set -- -e "$v=$p" "$@"
 	done
+	# DIST_OUT over the checkout's out/
+	[ -z "${DIST_OUT:-}" ] || set -- -v "$out:/src/out" "$@"
 	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi

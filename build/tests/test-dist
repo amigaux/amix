@@ -735,6 +735,31 @@ clean:
           args[-5:-1] == ["amix-toolchain:test", "sh", "build/dist.sh", "kspace"]
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))
     check("no release input set, none mounted", not any("/release-in/" in x for x in args), " ".join(args))
+    check("no DIST_OUT: nothing mounted over /src/out", not any(x.endswith(":/src/out") for x in args), " ".join(args))
+    # DIST_OUT: an output tree of its own, the container's /src/out
+    rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test", DIST_OUT="out/roll2")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    r2 = os.path.join(os.path.realpath(top), "out", "roll2")
+    check("DIST_OUT=out/roll2 (from the top): mounted over /src/out, its own .ids",
+          rc == 0 and "%s:/src/out" % r2 in args and "%s/.ids/passwd:/etc/passwd:ro" % r2 in args
+          and os.path.isfile(os.path.join(r2, ".ids", "passwd")), out + " ".join(args))
+    elsewhere = os.path.join(tmp, "roll3")
+    rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test", DIST_OUT=elsewhere)
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("DIST_OUT outside the checkout: made, and mounted over /src/out",
+          rc == 0 and "%s:/src/out" % os.path.realpath(elsewhere) in args, out + " ".join(args))
+    for what, env, needle in (
+            ("the checkout itself", dict(DIST_OUT="."), "is or holds the checkout"),
+            ("a directory holding the checkout", dict(DIST_OUT=".."), "is or holds the checkout"),
+            ("a path with ':'", dict(DIST_OUT="out/a:b"), "a path with ':' cannot be mounted")):
+        rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                      DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test", **env)
+        check("DIST_OUT: %s is refused, exit 2" % what, rc == 2 and needle in out, out)
+    rc, out = run("kspace", DIST_OUT="out/roll4")
+    check("DIST_OUT with DIST_HOST is refused, exit 2",
+          rc == 2 and "DIST_OUT needs the build container" in out, out)
     stock0 = os.path.join(tmp, "stock0")
     os.makedirs(stock0)
     rc, out = run("kernel-k46", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
