@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-25 — the shared variant is the build default; DIST_OUT (12d473e6, 255aa056)
+
+pkgbuild.sh, make dist and pkgmeta (pkginfo, catalog, fragments, build-order) take VARIANT=shared unless told VARIANT=static; userland/packages/conf holds the shared fragments, and a static catalog generates its own; check-packages checks both variants' build order. `make DIST_OUT=<dir>` builds into an output tree of its own, mounted over /src/out in the container, so two rolls can run at once with the same bytes (x11r63 6.3-15.s 15909334, motif 2.3.8-3.s 2af365c8, cde 2.5.3-4.s a726c8c9 from concurrent rolls).
+
 ## 2026-11-24 — pkgmeta: dependency floors in DEPENDS (e8d07248)
 
 DEPENDS and SHARED_DEPENDS accept `name>=version` (amixrt>=1.0-5) and pass the word as written into the catalog line and deps.conf; BUILD_DEPENDS stays bare names. pkgbuild's amixrt/cxxrt check reads a floored word by its name. Recipes without a floor give byte-identical output.

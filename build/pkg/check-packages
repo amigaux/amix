@@ -7,9 +7,10 @@
 #
 # The default directories are userland/packages and userland/base/pkg, one
 # catalog. Every package.sh passes pkgmeta check, one version each over all
-# of them (the shared variants too, in BUILD_DEPENDS order), and the
+# of them (both variants, in BUILD_DEPENDS order), and the
 # generated files of the first directory are current: INDEX.md (pkgmeta
-# index) and the catalog fragments in conf/ (pkgmeta fragments). Without arguments, the kernel-space recipes' prototypes under
+# index) and the catalog fragments in conf/ (pkgmeta fragments, the shared
+# variant's). Without arguments, the kernel-space recipes' prototypes under
 # kernel/ pass pkgmeta dirs too: every shared directory (/opt, /opt/amix and
 # its doc and man directories) is 0755 root sys in every package. A directory
 # that does not exist, or no package.sh in any of them, is a failure: nothing
@@ -37,9 +38,10 @@ done
 	exit 1
 }
 pkgmeta check "$@"
-# the shared variants together: their BUILD_DEPENDS name packages, with no
+# both variants' build orders: their BUILD_DEPENDS name packages, with no
 # cycle, and one version each
 pkgmeta build-order --variant shared "$@" >/dev/null
+pkgmeta build-order --variant static "$@" >/dev/null
 [ -z "$kspace" ] || pkgmeta dirs "$kspace"
 pkgmeta index "$@" -o "$out/INDEX.md" --check
 pkgmeta fragments "$@" -o "$out/conf" --check

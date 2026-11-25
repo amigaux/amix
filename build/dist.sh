@@ -65,12 +65,13 @@
 # `recipes/<name>` (one userland package, after its BUILD_DEPENDS) and
 # `drivers/<name>`.
 #
-# VARIANT=static (the default) or shared picks the userland variant of the
-# whole build: with shared, each recipe that has a prototype.shared is rolled
-# as its shared variant (build/pkg/pkgbuild.sh), in BUILD_DEPENDS order of
-# that variant, and the userland catalog takes its dependencies from the
-# same values; the recipes without one are rolled as they are. Only the
-# userland, recipes/<name> and catalogs steps see it.
+# VARIANT=shared (the default) or static picks the userland variant of the
+# whole build: each recipe that has a prototype.shared is rolled as that
+# variant (build/pkg/pkgbuild.sh), in BUILD_DEPENDS order of that variant,
+# and the userland catalog takes its dependencies from the same values
+# (userland/packages/conf for shared, the static fragments for static); the
+# recipes without one are rolled as they are. Only the userland,
+# recipes/<name> and catalogs steps see it.
 #
 # Every step but `tools` runs in the build container: outside it, dist.sh
 # runs itself there (CONTAINER, docker or podman): in AMIX_IMAGE (the media
@@ -111,7 +112,7 @@ for s; do
 	esac
 done
 
-case ${VARIANT:=static} in
+case ${VARIANT:=shared} in
 static|shared) ;;
 *) echo "[FAIL] make dist: VARIANT=$VARIANT: static or shared" >&2; exit 2 ;;
 esac
@@ -126,6 +127,29 @@ for v in SYSTEM AMIX_SYSTEM LOCK STOCK RELEASE_PREVIOUS ROM_MANIFEST PRIVACY_PAT
 	*) eval "$v=\$top/\$p"; export "${v:?}" ;;
 	esac
 done
+
+# DIST_OUT=<directory>: the output tree in place of out/ (a relative path is
+# from the top of the checkout), so that two builds, static and shared or a
+# roll and its repeat, run at once, each in its own tree with its own cache.
+# The container sees it as /src/out, so every path a build can write into
+# what it makes is the default's. It needs the container (not DIST_HOST),
+# and may not be, or hold, the checkout.
+if [ -z "${AMIX_IN_CONTAINER:-}" ] && [ -n "${DIST_OUT:-}" ]; then
+	case $DIST_OUT in
+	*:*) echo "[FAIL] make dist: DIST_OUT=$DIST_OUT: a path with ':' cannot be mounted" >&2; exit 2 ;;
+	/*) ;;
+	*) DIST_OUT=$top/$DIST_OUT ;;
+	esac
+	[ -z "${DIST_HOST:-}" ] || {
+		echo "[FAIL] make dist: DIST_OUT needs the build container; DIST_HOST builds in out/" >&2; exit 2; }
+	mkdir -p "$DIST_OUT" "$top/out"
+	DIST_OUT=$(cd "$DIST_OUT" && pwd)
+	case $top/ in
+	"$DIST_OUT"/*) echo "[FAIL] make dist: DIST_OUT=$DIST_OUT is or holds the checkout" >&2; exit 2 ;;
+	esac
+	export DIST_OUT
+	out=$DIST_OUT
+fi
 
 # more than one step: each its own process, so each gets only its own inputs
 if [ $# -gt 1 ]; then
@@ -282,6 +306,8 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 		eval "p=\${$v:-}"
 		[ -z "$p" ] || set -- -e "$v=$p" "$@"
 	done
+	# DIST_OUT over the checkout's out/
+	[ -z "${DIST_OUT:-}" ] || set -- -v "$out:/src/out" "$@"
 	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi
@@ -461,11 +487,12 @@ step_catalogs() {
 		case $space in
 		userland)
 			conf=$top/userland/packages/conf
-			# the shared variant's dependencies: its own fragments
-			if [ "$VARIANT" = shared ]; then
-				conf=$out/build/conf-shared
+			# conf/ holds the shared variant's fragments; the static
+			# variant's dependencies are its own fragments
+			if [ "$VARIANT" = static ]; then
+				conf=$out/build/conf-static
 				rm -rf "${conf:?}"
-				python3 -I "$here/pkg/pkgmeta" fragments --variant shared $(userland_roots) \
+				python3 -I "$here/pkg/pkgmeta" fragments --variant static $(userland_roots) \
 					-o "$conf" >/dev/null
 			fi
 			;;

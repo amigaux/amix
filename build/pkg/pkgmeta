@@ -42,7 +42,7 @@ Commands:
                             name that is no package, or on a cycle
 
 pkginfo, catalog, fragments and build-order take --variant static|shared
-(default static): shared is the variant of a recipe with a prototype.shared,
+(default shared): shared is the variant of a recipe with a prototype.shared,
 with the SHARED_ values of its package.sh (SHARED_PKGREV, SHARED_SUMMARY,
 SHARED_DESC, SHARED_DEPENDS, SHARED_BUILD_DEPENDS); a recipe without one
 gives its static variant.
@@ -1119,17 +1119,17 @@ def main(argv):
     p.add_argument("paths", nargs="+")
     p = sub.add_parser("pkginfo")
     p.add_argument("recipe")
-    p.add_argument("--variant", choices=VARIANTS, default="static")
+    p.add_argument("--variant", choices=VARIANTS, default="shared")
     p = sub.add_parser("catalog")
     p.add_argument("recipe")
-    p.add_argument("--variant", choices=VARIANTS, default="static")
+    p.add_argument("--variant", choices=VARIANTS, default="shared")
     p.add_argument("--pkg")
     p.add_argument("--md5")
     p.add_argument("--size", type=int)
     p.add_argument("--filename")
     p = sub.add_parser("fragments")
     p.add_argument("roots", nargs="+")
-    p.add_argument("--variant", choices=VARIANTS, default="static")
+    p.add_argument("--variant", choices=VARIANTS, default="shared")
     p.add_argument("-o", "--output-dir")
     p.add_argument("--check", action="store_true")
     p = sub.add_parser("index")
@@ -1145,7 +1145,7 @@ def main(argv):
     p = sub.add_parser("build-order")
     p.add_argument("roots", nargs="+")
     p.add_argument("--for", dest="names", action="append")
-    p.add_argument("--variant", choices=VARIANTS, default="static")
+    p.add_argument("--variant", choices=VARIANTS, default="shared")
     a = ap.parse_args(argv)
 
     if a.cmd == "check":
