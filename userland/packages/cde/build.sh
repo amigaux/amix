@@ -368,7 +368,7 @@ build() {
 	command -v amix-xcpp > /dev/null || { echo "[FAIL] no amix-xcpp on PATH (build/hosttools)" >&2; exit 1; }
 	build_compat > "$BUILD/compat.log" 2>&1 || { cat "$BUILD/compat.log" >&2; echo "[FAIL] compat" >&2; exit 1; }
 	sh ./autogen.sh > "$BUILD/autogen.log" 2>&1 || { tail -30 "$BUILD/autogen.log" >&2; echo "[FAIL] autogen.sh" >&2; exit 1; }
-	{
+	(
 		set -x
 		eval env $CDE_SEEDS GENCAT=\"gencat -m\" \
 		CC=\"\$CC\" CXX=\"\$CXX\" CFLAGS=\"\$AMIX_CFLAGS\" CXXFLAGS=\"\$AMIX_CFLAGS\" \
@@ -377,7 +377,7 @@ build() {
 			--x-includes=\"\$XROOT/include\" --x-libraries=\"\$CDE_XLIBDIR\" \
 			$CDE_LIBKIND \
 			--disable-dtinfo --disable-dtdocbook
-	} > "$BUILD/configure.log" 2>&1 || { tail -30 "$BUILD/configure.log" >&2; echo "[FAIL] configure" >&2; exit 1; }
+	) > "$BUILD/configure.log" 2>&1 || { tail -30 "$BUILD/configure.log" >&2; echo "[FAIL] configure" >&2; exit 1; }
 	for v in "CPP_PROGRAM = /usr/ccs/lib/cpp" "KSH = /usr/bin/ksh" \
 		"XRDB = /opt/amix/X11R6/bin/xrdb" "SESSREG = /opt/amix/X11R6/bin/sessreg"; do
 		grep -qx "$v" Makefile || { echo "[FAIL] configure did not take the box's path: $v" >&2; exit 1; }
