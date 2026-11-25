@@ -6,7 +6,8 @@ The Motif toolkit under `/opt/amix/X11R6`, beside X11R6.3:
 - `uil`, the user interface language compiler, and `xmbind` with the virtual key bindings;
 - the manual pages.
 
-    sh build/pkg/pkgbuild.sh userland/packages/motif
+    VARIANT=shared sh build/pkg/pkgbuild.sh userland/packages/motif     # the default variant
+    VARIANT=static sh build/pkg/pkgbuild.sh userland/packages/motif
 
 Package: `motif`, category `x11`, set `extra`. It depends on `x11r6.3` (its server and its
 `lib/X11` tree); it builds against x11r6.3's build output (`BUILD_DEPENDS`). Built with GCC 14
@@ -14,9 +15,9 @@ Package: `motif`, category `x11`, set `extra`. It depends on `x11r6.3` (its serv
 source file's header; `COPYING` is the LGPL 2.1); `mwm`, `uil` and `xmbind` also contain X11R6.3's
 libraries, under the X Consortium's licence (`LGPL-2.0-or-later AND X11`).
 
-**This revision is the static build.** The libraries are static archives and `mwm`, `uil` and
-`xmbind` link X11R6.3 and Motif statically. The shared build (`libXm`, `libMrm`, `libUil` as plain
-shared libraries) follows as a new revision of this package.
+**Two variants.** The default is the shared one (*The shared variant* below): `libXm`, `libMrm`
+and `libUil` as plain shared libraries. In the static variant (`VARIANT=static`) the libraries are
+static archives and `mwm`, `uil` and `xmbind` link X11R6.3 and Motif statically.
 
 **UFS only**, as `x11r63` is: the section-3 pages keep names longer than s5's 14 bytes.
 
@@ -64,9 +65,16 @@ Motif uses floating point, so it needs an FPU or the kernel's FP emulation, as X
 
 `VARIANT=shared` builds Motif with shared libraries, version `2.3.8-<PKGREV>.s` (`SHARED_PKGREV`),
 from `prototype.shared`, against X11R6.3's shared variant (its build tree `x11r6.3-shared`) and
-the regex package's `libregex.so.1`, to compare memory use with the static build. It is the same
+the regex package's `libregex.so.1`. **It is the default variant.** `VARIANT=static` builds the
+static one, version `2.3.8-<PKGREV>`, from `prototype`, its bytes as before. Both are the same
 package (`motif`), so a machine has one variant or the other. The hooks take the variant from
-`$VARIANT`; with `VARIANT=static`, the default, the build and its bytes are as before.
+`$VARIANT`.
+
+The shared variant needs `amixrt` 1.0-5 or later (`amixrt>=1.0-5`): `libXm` takes `select` from
+it, and 1.0-2 to 1.0-4 set a wrong `errno` on a failing call, so an interrupted `select` did not
+return `EINTR`. It also needs the shared X11R6.3 (`x11r6.3>=6.3-15.s`) and `libregex.so.1`
+(`regex>=3.8-2`; 3.8-1 was static only), so installing it over a static X11R6.3 or regex lifts
+them to these in the same transaction.
 
 - `libXm.so.4`, `libMrm.so.4` and `libUil.so.4` in `/opt/amix/X11R6/lib`, each the file its
   soname names with a `lib*.so` link beside it (libtool's `libfoo.so.4.0.4` name goes), and `mwm`,
