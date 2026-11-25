@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-25 — cde 2.5.3-4 and 2.5.3-4.s: dtksh (4c0e3cfb, ad041a78, 7c2b0d30, 029f610a)
+
+dtksh, the desktop Korn shell (ksh93u+m 1.0.3), ships with dterror, dtlp and dthelpgen. Its ksh93 is cross-built from probe answers recorded on Amix (dtksh/answers). Fixed in ksh93: a fault when a script starts with a file argument (52), a jump on an unknown bracket class (53), "//" paths for root (54); in dtksh: a buffer overflow at catopen (55); dtlp runs with its print options unset, quotes the banner title in its lp line and places its dialog cursor on the printer name it shows (56). The 68060 gate is clean in both variants. cde-2.5.3-4.pkg md5 cf062db0, 147689472 bytes; cde-2.5.3-4.s.pkg md5 a726c8c9, 37150720 bytes.
+
 ## 2026-11-23 — cde 2.5.3-3.s: the shared variant (0c787823, ff91ea75, 4be460a8, ee839398)
 
 CDE's shared variant, on x11r63 6.3-15.s and motif 2.3.8-3.s: its libraries are position-independent with no text relocations. libgcc's __fixdfdi comes as a PIC copy, and libDtHelp and libDtSearch reach Amix's static libm through the program, which exports sin, cos, tan, log, log10 and sqrt (without them the runtime linker stops the program at the first call). Every program carries its own _XtInherit, and the C++ programs use the shared C++ runtime. The build refuses a library or program that breaks any of these. cde-2.5.3-3.s.pkg md5 328f1c8e, 35429376 bytes; the static cde 2.5.3-3 is unchanged (af40aab1).
