@@ -54,6 +54,32 @@ built at amix 7d9e944f:
   `394ff54b7715ee3818beb8a575ac880d`) and the 26 older versions `carried-1.1`
   names. The media are the same bytes in both.
 
+## A point release with new kernels: 1.1.2
+
+1.1.2 is built the same way, at its commit on the published 1.1.1 tree. Against
+1.1.1 it adds amix-base 1.0-36, APKG 0.3.13, kbootset 1.1.0.261115-46, both
+kernels (kern30m k30.1.5.261115-78, kern46m k46.1.6.261115-67), prngd 0.9.29-4,
+x11r6.3 6.3-11, xsurf-k30 and xsurf-k46 1.0.0-4, z3660rtg-k30 and -k46 1.1.2-3,
+and the new va2000-k30 and va2000-k46 1.1.0-2. The versions they replace move
+to the older block, and every 1.1.1 file is kept byte for byte. Its lock, built
+at amix ec9dfd6e twice with the same result:
+
+- `amix-1.1.2-published.lock` (sha256 `fc73999a22892c9bac3fb287a6facaed6103f8f31c8689ccfd9f5fe50124891d`):
+  the record of what `http://pkg.amigaux.org/1.1` holds with 1.1.2 (catalog md5
+  `5c958843dc71e9fda47246eba056610d`), the build on the published 1.1.1 tree.
+  Its `previous` line is the digest of 1.1.1's catalog. The media were not
+  part of this release: the step stops at the 1.1 RAM-disk images, which do
+  not hold the new kernels' modules, so the lock has no lines for them.
+
+A box upgrades with the apkg it has. On a 1.1 or 1.1.1 box (apkg 0.3.11),
+the first `apkg upgrade` brings APKG 0.3.13. A module row that names a
+kbootset above `module-floor-base` (`kernel/conf/kbootset.conf`, C2-2 v8),
+such as va2000's, installs only after that, by name or in the next upgrade.
+The release step checks this: pkgtools' `older-apkg-check.sh` runs the apkg
+of every earlier release of the series, built from its tag, against the
+written tree. A row it refuses fails the step; a row that only has to wait
+is named on a WAIT line.
+
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
 of record, `+` in this build).
