@@ -843,7 +843,8 @@ static void txn_summary(const struct conf *cf, int upgrade,
         printf("  %s %s%s%s%s\n", todo[i]->name,
                from[i] != NULL ? from[i] : "",
                from[i] != NULL ? " -> " : "", todo[i]->version,
-               p[i].done ? "" : ": not done");
+               p[i].done ? "" : ent_partial(cf, todo[i]) ?
+               ": partially installed" : ": not done");
     }
     if (notices > 0)
         printf("licence notices: apkg licence <name>\n");
@@ -945,7 +946,16 @@ static int commit_txn(const struct conf *cf, const struct source *src,
             (void)ent_installed(cf, todo[i], iver, sizeof(iver));
         if (install_one(cf, pkgadd, files[i], insts[i], ow[i],
                         p) != EX_OK) {
-            if (upgrade)
+            if (!opt_dryrun && !t.kspace && ent_partial(cf, todo[i])) {
+                /* the engine stopped after it began laying files: the
+                 * old instance is not intact, whatever it was */
+                warnx2("pkgadd of %s %s stopped part-way: %s is partially "
+                       "installed", todo[i]->name, todo[i]->version,
+                       todo[i]->name);
+                warnx2("once the cause above is fixed, 'apkg %s %s' "
+                       "lays it again", upgrade ? "upgrade" : "install",
+                       todo[i]->name);
+            } else if (upgrade)
                 warnx2("pkgadd of %s %s failed; the installed %s is "
                        "untouched", todo[i]->name, todo[i]->version,
                        disp_ver(iver));

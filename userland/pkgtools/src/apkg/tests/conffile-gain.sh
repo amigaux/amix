@@ -278,8 +278,15 @@ for b in new old; do
 done
 check "apkg 0.3.12 stores no baseline for it" \
     test ! -e "$WORK/l-new/t/var/sadm/conffiles/LINKT/etc/g/link.conf.tmp"
-[ -n "$OLD" ] && check "  ... and the outcome is 0.3.11's, byte for byte" \
-    cmp -s "$WORK/l-new.state" "$WORK/l-old.state"
+# the engine stops part-way here (LINKT keeps its !I-Lock!): 0.3.11 called
+# the old version untouched, 0.3.15 says partially installed; the rest of
+# the outcome is the same byte for byte
+grep -v '^apkg: pkgadd of linkt 2 \|^apkg: once the cause above' "$WORK/l-new.state" > "$WORK/l-new.rest"
+grep -v '^apkg: pkgadd of linkt 2 ' "$WORK/l-old.state" > "$WORK/l-old.rest" 2>/dev/null
+[ -n "$OLD" ] && check "  ... and the outcome is 0.3.11's but for apkg's words on the failed pkgadd" \
+    cmp -s "$WORK/l-new.rest" "$WORK/l-old.rest"
+check "  ... which say linkt is partially installed and how to lay it again" \
+    bash -c "grep -q '^apkg: pkgadd of linkt 2 stopped part-way: linkt is partially installed\$' '$WORK/l-new.state' && grep -q \"^apkg: once the cause above is fixed, 'apkg upgrade linkt' lays it again\\\$\" '$WORK/l-new.state' && test -e '$WORK/l-new/t/var/sadm/pkg/LINKT/!I-Lock!'"
 
 # ------------------------------------------- back to a version without the class ---
 echo "a downgrade to a version that ships the files as plain files"

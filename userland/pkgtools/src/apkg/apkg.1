@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.14" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.15" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -317,7 +317,11 @@ package script that failed \(em leaves the package partially installed: the
 package tools keep
 .BI /var/sadm/pkg/ pkginst /!I-Lock!
 until an install ends cleanly, and by then the package database already
-names the new version and holds its file entries.  apkg treats such a
+names the new version and holds its file entries.  When the package tools
+stop part-way under apkg, apkg says so then ("pkgadd of x11r6.3 6.3-15.s
+stopped part-way: x11r6.3 is partially installed"), names the command that
+lays it again once the cause is fixed, and the summary of a transaction
+marks the package "partially installed".  apkg treats such a
 package as needing its install, whatever the versions say:
 .TP 4
 \(bu

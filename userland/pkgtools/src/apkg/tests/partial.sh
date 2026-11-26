@@ -190,8 +190,8 @@ for st in lay cas post; do
         if [ "$how" = all ]; then
             check "$tag: the journal stays" test -e "$T/var/apkg/txn"
         else
-            check "$tag: apkg saw the pkgadd fail; no journal" \
-                bash -c "test ! -e '$T/var/apkg/txn' && grep -q 'pkgadd of part 2 failed' '$R/cut.out'"
+            check "$tag: apkg saw the pkgadd stop part-way and says so; no journal" \
+                bash -c "test ! -e '$T/var/apkg/txn' && grep -q 'pkgadd of part 2 stopped part-way: part is partially installed' '$R/cut.out' && grep -q \"'apkg upgrade part' lays it again\" '$R/cut.out'"
         fi
         ap list installed
         check "$tag: list shows it [partial]" says "[partial]"
