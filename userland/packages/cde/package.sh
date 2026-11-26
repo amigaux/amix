@@ -28,6 +28,8 @@ BUILD_DEPENDS="x11r6.3 motif libjpeg regex"
 # the shared variant: the C++ runtime for libtt (cxxrt), and amixrt 1.0-5,
 # the first with the functions libtt, libDtTerm, libcsa, libDtSvc and
 # libDtMrm take from it (syslog, getutxline, sysinfo and seven more); the shared
-# X11R6.3 and Motif and libregex.so.1, so a static one already installed is lifted
-SHARED_DEPENDS="amix-base x11r6.3>=6.3-15.s motif>=2.3.8-3.s libjpeg regex>=3.8-2 amixrt>=1.0-5 cxxrt"
+# X11R6.3 and Motif and libregex.so.1, so a static one already installed is lifted;
+# amix-base 1.0-38, whose xstart -dtlogin gives dtlogin the local_uid root server
+# line (with 1.0-36 or 1.0-37 the server runs as nobody and cannot open the card)
+SHARED_DEPENDS="amix-base>=1.0-38 x11r6.3>=6.3-15.s motif>=2.3.8-3.s libjpeg regex>=3.8-2 amixrt>=1.0-5 cxxrt"
 SHARED_BUILD_DEPENDS="x11r6.3 motif libjpeg regex"
