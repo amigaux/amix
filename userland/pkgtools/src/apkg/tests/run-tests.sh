@@ -713,6 +713,48 @@ else
     bad "failed-upgrade behaviour wrong (rc=$rc)" "$OUT $(cat $SHIMLOG)"
 fi
 
+# A pkgadd that stops PART-WAY (a class action script that could not
+# fork, say) leaves the engine's !I-Lock! and a failure: the old instance
+# is not intact, so apkg must not call it untouched.  It says the package
+# is partially installed and names the command that lays it again.
+cat > "$WORK/bin/pkgadd-partial" <<EOF
+#!/bin/sh
+echo "pkgadd-partial \$*" >> $SHIMLOG
+for a; do p=\$a; done
+mkdir -p "$ROOT/var/sadm/pkg/\$p" && : > "$ROOT/var/sadm/pkg/\$p/!I-Lock!"
+echo "Installation of <\$p> failed (internal error) - package partially"
+echo "installed."
+exit 1
+EOF
+chmod +x "$WORK/bin/pkgadd-partial"
+sed "s|^pkgadd=.*|pkgadd=$WORK/bin/pkgadd-partial|" "$WORK/conf-fail" > "$WORK/conf-partial"
+: > "$SHIMLOG"
+rm -f "${CACHE:?}/oldpkg-2.0.pkg"
+OUT=$("$APKG" -c "$WORK/conf-partial" upgrade oldpkg 2>&1); rc=$?
+if [ $rc -eq 4 ] && echo "$OUT" | grep -q "pkgadd of oldpkg 2.0 stopped part-way: oldpkg is partially installed" && \
+   echo "$OUT" | grep -q "once the cause above is fixed, 'apkg upgrade oldpkg' lays it again" && \
+   ! echo "$OUT" | grep -q "untouched"; then
+    ok "an upgrade pkgadd stopped part-way says partially installed and how to lay it again"
+else
+    bad "partial upgrade message wrong (rc=$rc)" "$OUT"
+fi
+OUT=$("$APKG" -c "$WORK/conf-partial" upgrade oldpkg 2>&1)
+echo "$OUT" | grep -q "oldpkg is partially installed (an install was cut short); installing 2.0 again" \
+    && ok "the next upgrade lays the partial package again, as the message says" \
+    || bad "partial package not laid again by upgrade" "$OUT"
+rm -f "$ROOT/var/sadm/pkg/OLDPKG/!I-Lock!"
+: > "$SHIMLOG"
+rm -f "${CACHE:?}/foo-1.0.pkg" "${CACHE:?}/bar-2.0.pkg"
+OUT=$("$APKG" -c "$WORK/conf-partial" install bar 2>&1); rc=$?
+if [ $rc -eq 4 ] && echo "$OUT" | grep -q "pkgadd of foo 1.0 stopped part-way: foo is partially installed" && \
+   echo "$OUT" | grep -q "once the cause above is fixed, 'apkg install foo' lays it again" && \
+   echo "$OUT" | grep -q "^  foo 1.0: partially installed$" && echo "$OUT" | grep -q "^  bar 2.0: not done$"; then
+    ok "an install stopped part-way: the message and the summary say partially installed"
+else
+    bad "partial install message or summary wrong (rc=$rc)" "$OUT"
+fi
+rm -rf "${ROOT:?}/var/sadm/pkg/FOO"
+
 # THE ADMIN FILE IS MATERIALISED, NEVER ASSUMED.  This is the exact metal
 # failure generalised: with /var/apkg/admin absent, the old client handed
 # pkgadd a -a path that did not exist and pkgadd refused to run.
