@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26 — carried-1.1 keeps xztop 1.1.1-1 (0d7d7668)
+
+carried-1.1 keeps xztop 1.1.1-1, which 1.1.3's xztop 1.1.1-3.s replaces, by the bytes of the published 1.1.2 lock, rebuilt by make dist at ec9dfd6e.
+
 ## 2026-11-26 — the 1.1.2 lock on the release line (9680c963, e4bdbaa8)
 
 The 1.1.2 lock (amix-1.1.2-published.lock, sha256 fc73999a, built at ec9dfd6e on the published 1.1.1 tree) and its README section are on the release line, with the 2026-11-17 catalog-only update (catalog 5c958843 → 6c837186; the xsurf 1.0.0-4 lines without the kbootset -45 floor).
