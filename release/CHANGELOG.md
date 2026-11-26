@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26 — carried-1.1: the 1.1.2 versions 1.1.3 replaces (22b57d65)
+
+carried-1.1 keeps the 33 versions 1.1.3 replaces from 1.1.2, by the bytes of the published 1.1.2 lock, rebuilt by make dist at ec9dfd6e.
+
 ## 2026-11-17 — README: the catalog-only update of 1.1 (b3f4026f)
 
 The 1.1 catalog changed from md5 5c958843… to 6c837186…; no package file changed. The two xsurf 1.0.0-4
