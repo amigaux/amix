@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26 — carried-1.1: the 1.1.2 versions 1.1.3 replaces (22b57d65)
+
+carried-1.1 keeps the 33 versions 1.1.3 replaces from 1.1.2, by the bytes of the published 1.1.2 lock, rebuilt by make dist at ec9dfd6e.
+
 ## 2026-11-16 — together-1.1: x11r63 6.3-11 needs amix-base 1.0-36 (c8e7aa5a)
 
 With an older amix-base, ending xinit by a signal makes xstart print a wrong message; a release rule, not a package dependency. test-together 13/13.

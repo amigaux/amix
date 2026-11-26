@@ -1,3 +1,7 @@
+## 2026-11-26 — apkg 0.3.15 on the release line: a pkgadd that stops part-way is reported as such (4878ed75)
+
+The same bytes as next's e58ee6e6. An upgrade no longer calls the installed version untouched when the engine has left the package partial; apkg says it is partially installed, names the command that lays it again, and the transaction summary marks it. A pkgadd that fails before laying anything reads as before. Host tests 724/724.
+
 ## 2026-11-24 — apkg 0.3.14 on the release line: dependency floors (1f0bfe2a)
 
 The same bytes as next's f8189f1d. A catalog deps word may carry a floor, `name>=version`; install and upgrade first upgrade an installed dependency below it, in the same transaction, and a floor the catalog cannot meet refuses the call (exit 5). apkg 0.3.11 and 0.3.13 refuse a floored package as a missing dependency. gen-catalog checks the form, assemble-release the live version, older-apkg-check names floored rows.
