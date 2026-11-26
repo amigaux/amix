@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-26 — x11contrib 6.0-1.s, xztop 1.1.1-3.s: shared variants; cde needs amix-base 1.0-38 (bea277de, 1cdd8cc0)
+
+x11contrib 6.0-1.s and xztop 1.1.1-3.s are shared variants and the default; they load X11R6.3's shared libraries and need x11r6.3 6.3-15.s and amixrt 1.0-5, so installing or upgrading them over a static X11R6.3 lifts it in the same transaction. The static variants stay buildable with unchanged bytes (x11contrib e3e2bfbf, xztop a736ae57). cde 2.5.3-4.s needs amix-base 1.0-38 (dtlogin's local_uid root server line); apkg install cde lifts it. x11contrb-6.0-1.s.pkg md5 9139b006, xztop-1.1.1-3.s.pkg md5 bdeac944 (29184 bytes; static 807424).
+
 ## 2026-11-25 — x11r6.3, motif, cde: the shared variant is the default (eb8b5d65, c3d07d94, 54ff4b0c, 4f3a4abe)
 
 x11r6.3 6.3-15.s, motif 2.3.8-3.s and cde 2.5.3-4.s are the default variant; the static one stays buildable with VARIANT=static, its bytes unchanged (x11r6.3 ed908516, motif 8932ed0c, cde cf062db0). The shared variants need amixrt 1.0-5; motif and cde also need the shared X11R6.3 (and cde the shared Motif) and regex 3.8-2, so installing CDE on a machine with the static X11R6.3 lifts it in the same transaction (apkg 0.3.14 or later). cde's build log no longer carries a shell trace.
