@@ -6277,6 +6277,46 @@ def audit_swap_by_ram():
             bad.append("%s %s MB %s MB disk: %r, want %r" % (cpu, ram, disk, r.stdout.strip(), exp))
     (fail if bad else ok)("swap_by_ram EXECUTED on %d cases (memory unknown counts as 16 MB)%s"
                           % (len(want), (": " + "; ".join(bad)) if bad else ""))
+    # kinfo_fast_mb EXECUTED on a made /dev/kinfo: the long at 528 (what the kernel uses of its region: the region
+    # less its 32-byte memory header, and on the RAM-disk boot less the image and the gap under 64 KiB above it)
+    # plus the loader record's RAM-disk size at 204, rounded to the MB
+    d = workpath("kinfo-sr"); os.makedirs(os.path.join(d, "bin"), exist_ok=True)
+    with open(os.path.join(d, "bin", "sum"), "w") as fh:
+        fh.write("#!/bin/sh\nod -An -tu1 | awk 'NF { print $1 + 0, 1 }'\n")
+    os.chmod(os.path.join(d, "bin", "sum"), 0o755)
+    MiB = 1 << 20
+    def kinfo(fast, rd, magic=b"KIF1"):
+        rec = bytearray(1604); rec[0:4] = magic
+        struct.pack_into(">L", rec, 204, rd); struct.pack_into(">L", rec, 528, fast)
+        p = os.path.join(d, "kinfo"); open(p, "wb").write(bytes(rec)); return p
+    def rdboot(region, image, gap=40000):
+        return (region - 32 - image - gap, image)
+    kcases = (
+        ("a 32 MiB region, disk boot (33554400)", (32 * MiB - 32, 0), "060", 1023, "32 128 948"),
+        ("a 16 MiB region, disk boot", (16 * MiB - 32, 0), "060", 1023, "16 64 445"),
+        ("a 64 MiB region, disk boot", (64 * MiB - 32, 0), "030", 1023, "64 128 384"),
+        ("a 32 MiB region, the RAM-disk boot (6 MiB image)", rdboot(32 * MiB, 6 * MiB), "060", 1023, "32 128 948"),
+        ("a 16 MiB region, the RAM-disk boot (6 MiB image)", rdboot(16 * MiB, 6 * MiB), "060", 1023, "16 64 445"),
+        ("a 32 MiB region, the RAM-disk boot (11.5 MiB image)", rdboot(32 * MiB, 11 * MiB + MiB // 2, 65535), "030", 1023, "32 128 384"),
+        ("k30 capped at 64 MiB, the RAM-disk boot", rdboot(64 * MiB + 32, 6 * MiB, 0), "030", 199, "64 49 384"),
+        ("a 128 MiB region, the RAM-disk boot", rdboot(128 * MiB, 6 * MiB), "060", 4000, "128 128 630"),
+    )
+    kbad = []
+    for what, (fast, rd), cpu, disk, exp in kcases:
+        p = kinfo(fast, rd)
+        body = ('INST=%s\nINSTALL_CPU=%s\nMINSWAP=%d\n%s\nswap_by_ram %d\necho "$RAM_MB $DEFSWAP $SWAPBOUND"\n'
+                % (d, cpu, 30 if cpu == "060" else 5, a.group(1).replace("/dev/kinfo", p), disk))
+        r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10)
+        if r.stdout.strip() != exp:
+            kbad.append("%s: %r, want %r" % (what, r.stdout.strip(), exp))
+    p = kinfo(32 * MiB - 32, 0, b"XXXX")
+    body = 'INST=%s\n%s\nkinfo_fast_mb\necho "[$KINFO_MB]"\n' % (d, a.group(1).replace("/dev/kinfo", p))
+    r = subprocess.run(["/usr/bin/dash", "-c", body], capture_output=True, text=True, timeout=10)
+    if r.stdout.strip() != "[]":
+        kbad.append("no KIF1 magic: %r, want nothing" % r.stdout.strip())
+    (fail if kbad else ok)("kinfo_fast_mb EXECUTED on %d made kinfo records: the region to the nearest MB, the RAM "
+                           "disk added back, nothing without the magic%s"
+                           % (len(kcases) + 1, (": " + "; ".join(kbad)) if kbad else ""))
     st = open(SETUP, encoding="utf-8").read()
     (ok if 'Use ${SWAPBOUND} megabytes instead? [y] ' in st and '[ "$ask" -gt "$SWAPBOUND" ]' in st else fail)(
         "the swap question warns past SWAPBOUND and offers it; a NO keeps the typed size")
