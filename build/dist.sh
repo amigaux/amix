@@ -133,7 +133,9 @@ done
 # roll and its repeat, run at once, each in its own tree with its own cache.
 # The container sees it as /src/out, so every path a build can write into
 # what it makes is the default's. It needs the container (not DIST_HOST),
-# and may not be, or hold, the checkout.
+# and may not be, or hold, the checkout. DIST_NETWORK=<network> runs each
+# step's container on it: with none, a build that would fetch (a pin its
+# caches lack) fails instead.
 if [ -z "${AMIX_IN_CONTAINER:-}" ] && [ -n "${DIST_OUT:-}" ]; then
 	case $DIST_OUT in
 	*:*) echo "[FAIL] make dist: DIST_OUT=$DIST_OUT: a path with ':' cannot be mounted" >&2; exit 2 ;;
@@ -308,6 +310,8 @@ if [ -z "${AMIX_IN_CONTAINER:-}" ]; then
 	done
 	# DIST_OUT over the checkout's out/
 	[ -z "${DIST_OUT:-}" ] || set -- -v "$out:/src/out" "$@"
+	# DIST_NETWORK, the container's network (none: every input from the caches)
+	[ -z "${DIST_NETWORK:-}" ] || set -- --network "$DIST_NETWORK" "$@"
 	exec "$tool" run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e AMIX_IN_CONTAINER=1 \
 		-e AMIX_SYSTEM=/system -v "$top:/src" -v "$gitdir:$gitdir:ro" -v "$sys:/system:ro" "$@"
 fi

@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+# test-nightly: host test of build/nightly-dist, the nightly make dist.
+#
+# MIT licence, see LICENSE at the top of the repository.
+# A throwaway repository holds a stand-in build/dist.sh that writes what the
+# real steps would (a catalog, a lock, a recipe's log) and fails on the step
+# FAIL_STEP names. Checked: a green night, a night with no new commit, a red
+# one naming its step, recipe and log tail, a gap, the caches carried to the
+# next night, and old results reduced to their logs. Prints "N/N passed";
+# exits non-zero on any failure.
+
+import datetime
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+TOP = os.path.dirname(os.path.dirname(HERE))
+NIGHTLY = os.path.join(TOP, "build", "nightly-dist")
+
+passed = failed = 0
+
+
+def check(what, ok, detail=""):
+    global passed, failed
+    if ok:
+        passed += 1
+    else:
+        failed += 1
+        print("FAIL %s%s" % (what, ("\n    " + detail.strip().replace(
+            "\n", "\n    ")) if detail else ""))
+
+
+def write(path, text, mode=0o644):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fp:
+        fp.write(text)
+    os.chmod(path, mode)
+
+
+def read(path):
+    return open(path).read() if os.path.exists(path) else ""
+
+
+def git(*args, cwd):
+    return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                           "-c", "commit.gpgsign=false"] + list(args), cwd=cwd, check=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.decode().strip()
+
+
+def result(d):
+    r = {}
+    for ln in read(os.path.join(d, "result")).splitlines():
+        k, _, v = ln.partition("=")
+        r[k] = v
+    return r
+
+
+FAKE_DIST = r'''#!/bin/sh
+# a stand-in for make dist's steps
+o=${DIST_OUT:?}
+echo "$1" >> "$o/steps-run"
+[ "$1" != kit ] || { [ -f "$o/cache/seed" ] && echo seeded >> "$o/steps-run"; echo new > "$o/cache/fetched"; }
+[ "$1" != kernel-k30 ] || { [ -f kernel/k30/build/src/port-repo/x ] && echo kseeded >> "$o/steps-run"; mkdir -p kernel/k30/build/src/port-repo; echo y > kernel/k30/build/src/port-repo/y; }
+if [ "$1" = "${FAIL_STEP:-}" ]; then
+	mkdir -p "$o/build/userland"
+	i=0; while [ $i -lt 60 ]; do echo "line $i of foo's build" >> "$o/build/userland/foo.log"; i=$((i + 1)); done
+	echo "[FAIL] pkgbuild: an inner line of foo's log tail" >&2
+	echo "[FAIL] userland: foo did not build; log out/build/userland/foo.log" >&2
+	exit 1
+fi
+if [ "$1" = "${LOCK_FAIL:-}" ]; then
+	echo "[FAIL] mklock: old-1-1.pkg: an older version not in release/carried-1.1" >&2
+	exit 1
+fi
+if [ "$1" = "${GAP_STEP:-}" ]; then
+	echo "[MISSING] release: no stock package bar" >&2
+	exit 3
+fi
+case $1 in
+release) mkdir -p "$o/release/1.1"; echo catalog > "$o/release/1.1/catalog" ;;
+lock) echo lock > "$o/lock" ;;
+esac
+exit 0
+'''
+
+tmp = tempfile.mkdtemp(prefix="test-nightly.")
+try:
+    repo = os.path.join(tmp, "amix")
+    write(os.path.join(repo, "build", "dist.sh"), FAKE_DIST, 0o755)
+    git("init", "-q", "-b", "master", cwd=repo)
+    git("add", ".", cwd=repo)
+    git("commit", "-q", "-m", "one", cwd=repo)
+    c1 = git("rev-parse", "HEAD", cwd=repo)
+    root = os.path.join(tmp, "nightly")
+    sysdir = os.path.join(tmp, "system")
+    os.makedirs(sysdir)
+    today = datetime.date.today().isoformat()
+    base = {k: v for k, v in os.environ.items()
+            if not k.startswith(("NIGHTLY_", "AMIX_", "DIST_", "GIT_"))
+            and k not in ("SYSTEM", "STOCK", "RELEASE_PREVIOUS", "RELEASE_PUBLIC", "FAIL_STEP", "GAP_STEP", "LOCK_FAIL")}
+
+    def run(*lines, **env):
+        e = dict(base, NIGHTLY_REPO=repo, NIGHTLY_ROOT=root, SYSTEM=sysdir)
+        e.update(env)
+        p = subprocess.run(["sh", NIGHTLY] + list(lines), env=e,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        return p.returncode, p.stdout.decode()
+
+    # seeds from an earlier night
+    write(os.path.join(root, "cache", "master", "out", "seed"), "s\n")
+    write(os.path.join(root, "cache", "master", "kernel", "k30", "build", "src", "port-repo", "x"), "x\n")
+    # an old result, and one inside the days kept
+    oldday = (datetime.date.today() - datetime.timedelta(days=5)).isoformat()
+    newday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    for day in (oldday, newday):
+        d = os.path.join(root, "%s-master" % day)
+        write(os.path.join(d, "src", "f"), "f\n")
+        write(os.path.join(d, "out", "f"), "f\n")
+        write(os.path.join(d, "result"), "status=GREEN\n")
+        write(os.path.join(d, "dist.log"), "x" * (2 << 20))
+
+    rc, out = run("master")
+    d1 = os.path.join(root, "%s-master" % today)
+    r = result(d1)
+    ran = read(os.path.join(d1, "out", "steps-run")).split()
+    check("a green night: exit 0, status GREEN, every step of make dist but media, in order",
+          rc == 0 and r.get("status") == "GREEN"
+          and ran == ["kit", "seeded", "kernel-k30", "kseeded", "kernel-k46", "modules", "drivers", "kspace",
+                      "userland", "apkg", "catalogs", "release", "lock"], out + " ".join(ran))
+    check("the result names the commit, the catalog md5 and the lock sha256",
+          r.get("commit") == c1 and r.get("catalog_md5") == "1.1:" + subprocess.run(
+              ["md5sum"], input=b"catalog\n", stdout=subprocess.PIPE).stdout.decode()[:32]
+          and r.get("lock_sha256") == subprocess.run(
+              ["sha256sum"], input=b"lock\n", stdout=subprocess.PIPE).stdout.decode()[:64]
+          and r.get("rc") == "0" and r.get("seconds", "").isdigit()
+          and r.get("steps", "").startswith("kit:0:"), read(os.path.join(d1, "result")))
+    check("the status file is one line: GREEN <commit> <date>",
+          read(os.path.join(root, "status-master")) == "GREEN %s %s\n" % (c1, today),
+          read(os.path.join(root, "status-master")))
+    check("the summary names the line, GREEN and the short commit",
+          read(os.path.join(root, "summary")).startswith("nightly make dist, %s\nmaster: GREEN at %s" % (today, c1[:8])),
+          read(os.path.join(root, "summary")))
+    check("the clone is a full one at the line's head",
+          git("rev-parse", "HEAD", cwd=os.path.join(d1, "src")) == c1
+          and git("rev-parse", "--is-shallow-repository", cwd=os.path.join(d1, "src")) == "false")
+    check("the night's caches are carried to the next",
+          read(os.path.join(root, "cache", "master", "out", "fetched")) == "new\n"
+          and read(os.path.join(root, "cache", "master", "out", "seed")) == "s\n"
+          and read(os.path.join(root, "cache", "master", "kernel", "k30", "build", "src", "port-repo", "y")) == "y\n")
+    od = os.path.join(root, "%s-master" % oldday)
+    nd = os.path.join(root, "%s-master" % newday)
+    check("a result older than the days kept: clone and output gone, the log gzipped, the result kept",
+          not os.path.exists(os.path.join(od, "src")) and not os.path.exists(os.path.join(od, "out"))
+          and os.path.exists(os.path.join(od, "dist.log.gz")) and "pruned=%s" % today in read(os.path.join(od, "result")))
+    check("a result inside the days kept is left alone",
+          os.path.exists(os.path.join(nd, "src", "f")) and os.path.exists(os.path.join(nd, "dist.log")))
+
+    rc, out = run("master")
+    check("no new commit: skipped, said in the summary and the status, no new result",
+          rc == 0 and "master: skipped, no new commit (GREEN at %s" % c1[:8] in read(os.path.join(root, "summary"))
+          and read(os.path.join(root, "status-master")) == "GREEN %s %s skipped %s\n" % (c1, today, today)
+          and not os.path.exists(d1 + "-r2"), out)
+
+    write(os.path.join(repo, "README"), "two\n")
+    git("add", ".", cwd=repo)
+    git("commit", "-q", "-m", "two", cwd=repo)
+    c2 = git("rev-parse", "HEAD", cwd=repo)
+    rc, out = run("master", FAIL_STEP="userland")
+    d2 = d1 + "-r2"
+    r = result(d2)
+    ran = read(os.path.join(d2, "out", "steps-run")).split()
+    fail = read(os.path.join(d2, "fail.txt"))
+    check("a red night: exit 1, status RED, the step and the recipe named",
+          rc == 1 and r.get("status") == "RED" and r.get("failed_step") == "userland"
+          and r.get("failed_recipe") == "foo" and r.get("rc") == "1", out + read(os.path.join(d2, "result")))
+    check("it stops at the failing step", ran[-1] == "userland" and "lock" not in ran, " ".join(ran))
+    check("fail.txt: the [FAIL] line and the tail of the recipe's log",
+          fail.startswith("userland: [FAIL] userland: foo did not build") and "line 59 of foo's build" in fail
+          and "line 19 of foo's build" not in fail
+          and r.get("failed_log") == os.path.join(d2, "out", "build", "userland", "foo.log"), fail)
+    check("the status: RED <commit> <date>; the summary points at fail.txt",
+          read(os.path.join(root, "status-master")) == "RED %s %s\n" % (c2, today)
+          and "master: RED at %s, stopped at userland: foo" % c2[:8] in read(os.path.join(root, "summary"))
+          and os.path.join(d2, "fail.txt") in read(os.path.join(root, "summary")), read(os.path.join(root, "summary")))
+
+    rc, out = run("master")
+    check("a red head with no new commit stays red: exit 1",
+          rc == 1 and "skipped" in read(os.path.join(root, "status-master")), out)
+
+    rc, out = run("master", NIGHTLY_FORCE="1", GAP_STEP="release")
+    d3 = d1 + "-r3"
+    r = result(d3)
+    ran = read(os.path.join(d3, "out", "steps-run")).split()
+    check("a gap: the others still run, RED, rc 3, the gap named",
+          rc == 1 and r.get("status") == "RED" and r.get("failed_step") == "release" and r.get("rc") == "3"
+          and ran[-1] == "lock" and "(gaps: release)" in read(os.path.join(root, "summary")),
+          out + read(os.path.join(d3, "result")) + " ".join(ran))
+
+    rc, out = run("master", NIGHTLY_FORCE="1", LOCK_FAIL="lock")
+    r = result(d1 + "-r4")
+    check("a red lock step: the package it names, without the colon",
+          rc == 1 and r.get("failed_step") == "lock" and r.get("failed_recipe") == "old-1-1.pkg",
+          out + read(os.path.join(d1 + "-r4", "result")))
+
+    rc, out = run("nosuch")
+    check("a line the repository does not have: RED, exit 1", rc == 1 and "nosuch: RED" in out, out)
+    rc, out = run()
+    check("no line: usage, exit 2", rc == 2, out)
+    lk = subprocess.Popen(["flock", os.path.join(root, ".lock"), "sleep", "5"])
+    try:
+        import time
+        time.sleep(0.5)
+        rc, out = run("master", NIGHTLY_FORCE="1")
+        check("a run already going: exit 1, nothing built", rc == 1 and "already going" in out
+              and not os.path.exists(d1 + "-r5"), out)
+    finally:
+        lk.kill()
+        lk.wait()
+finally:
+    shutil.rmtree(tmp)
+
+print("%d/%d passed" % (passed, passed + failed))
+sys.exit(1 if failed else 0)

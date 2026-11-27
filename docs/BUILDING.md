@@ -193,6 +193,25 @@ pinned epoch, never the environment's. A driver directory's `pkg/build.sh` is th
 lines around `build/pkg/common/kdrv.sh`, which rolls each recipe from the objects
 the `drivers` step built.
 
+### Every night: build/nightly-dist
+
+A change that moves a build-wide default is proven by the whole build, not by
+one recipe. `build/nightly-dist master next` builds each line in turn from a
+fresh clone at its head (`NIGHTLY_REPO`), with the release step on the
+published tree as a point release is built (`RELEASE_PREVIOUS`) and the lock
+step at the end. Each line gets a dated result under `NIGHTLY_ROOT`: the
+status, the exit status, the wall time, each step's time, the first failing
+step and recipe with the tail of its log, the catalog md5 and the lock's
+sha256. `status-<line>` there is one line, `GREEN` or `RED` with the commit
+and the date, and `summary` has a line per line built. A line whose head was
+built already is skipped, and says so. The caches a night ends with seed the
+next night, so it fetches only what a moved pin needs. After three days a
+result keeps only its logs. The script's header lists its settings.
+
+`DIST_OUT=<directory>` gives a build its own output tree, and
+`DIST_NETWORK=none` runs every step's container with no network, so a build
+that would fetch fails instead.
+
 ## out/
 
 ```

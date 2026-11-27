@@ -1,0 +1,226 @@
+#!/bin/sh
+# nightly-dist: the full make dist of each line named, one after the other,
+# from a fresh clone at the line's head, with a dated result per line, a
+# one-line status per line and a short summary.
+#
+# MIT licence, see LICENSE at the top of the repository.
+#
+#     build/nightly-dist <line>...          (e.g. master next)
+#
+# Environment:
+#   NIGHTLY_REPO       the git repository the lines are cloned from (required)
+#   NIGHTLY_ROOT       the results directory (required)
+#   NIGHTLY_STEPS      the steps, in order (default: make dist's but media)
+#   NIGHTLY_KEEP_DAYS  days a result keeps its clone and output tree (3)
+#   NIGHTLY_FORCE=1    build a line whose head was built already
+#   AMIX_SYSTEM_REPO   a local amix-system clone: each line's system input is
+#                      its pin, by system/fetch-amix-system, from there
+#   SYSTEM             an amix-system checkout to use instead
+#   RELEASE_PREVIOUS   the published tree the release step builds on, as a
+#                      point release is built (release/README.md); STOCK
+#                      defaults to its pkgs/stock
+#   RELEASE_PUBLIC     1 by default; ROM_MANIFEST, PRIVACY_PATTERNS, STOCK,
+#                      DIST_NETWORK, AMIX_IMAGE, VARIANT: passed on as set
+#
+# Each line built gets NIGHTLY_ROOT/<date>-<line>/ (-r2, -r3 on a second run
+# that day):
+#   result     key=value lines: line commit date status rc seconds steps
+#              (step:rc:seconds ...), failed_step, failed_recipe, failed_log,
+#              catalog_md5 (<release>:<md5> per release tree), lock_sha256
+#   dist.log   every step's output, between `=== <step>` lines
+#   fail.txt   the first [FAIL] line of the step that stopped, and the tail of
+#              the log it names
+#   src/ out/ system/   the clone, its DIST_OUT and its amix-system, removed
+#              after NIGHTLY_KEEP_DAYS (logs and result stay; a log over
+#              1 MiB is gzipped)
+# NIGHTLY_ROOT/status-<line>: one line, `GREEN|RED <commit> <date>`, and
+# ` skipped <date>` after it when a later night found the same head.
+# NIGHTLY_ROOT/summary: this run's lines, one line each.
+# NIGHTLY_ROOT/cache/<line>/: the caches carried from one night to the next
+# (DIST_OUT's cache/ and the cut hooks' kernel/*/build/src/), so that a night
+# fetches only what a moved pin needs.
+#
+# A step that exits 3 (a gap) is named and the others still run, as in make
+# dist; any other failure stops the line. The status is GREEN only when every
+# step exited 0. Exit status: 0 every line GREEN or skipped, 1 a line RED or
+# a run already going, 2 usage.
+set -u
+
+usage() { sed -n '/^#     build/,/^# Environment/p' "$0" | sed '$d; s/^# \{0,1\}//' >&2; exit 2; }
+[ $# -gt 0 ] || usage
+: "${NIGHTLY_REPO:?nightly-dist: NIGHTLY_REPO, the repository to clone}"
+: "${NIGHTLY_ROOT:?nightly-dist: NIGHTLY_ROOT, the results directory}"
+steps=${NIGHTLY_STEPS:-kit kernel-k30 kernel-k46 modules drivers kspace userland apkg catalogs release lock}
+keep=${NIGHTLY_KEEP_DAYS:-3}
+: "${RELEASE_PUBLIC=1}"
+export RELEASE_PUBLIC
+if [ -z "${STOCK:-}" ] && [ -n "${RELEASE_PREVIOUS:-}" ] && [ -d "$RELEASE_PREVIOUS/pkgs/stock" ]; then
+	STOCK=$RELEASE_PREVIOUS/pkgs/stock
+	export STOCK
+fi
+unset DIST_OUT DIST_HOST LOCK
+
+mkdir -p "$NIGHTLY_ROOT"
+root=$(cd "$NIGHTLY_ROOT" && pwd)
+exec 9> "$root/.lock"
+flock -n 9 || { echo "nightly-dist: a run is already going ($root/.lock)" >&2; exit 1; }
+today=$(date +%F)
+
+# --- results older than NIGHTLY_KEEP_DAYS: logs and result only -------------
+old=$(date -d "$today - $keep days" +%F)
+for d in "$root"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*; do
+	[ -d "$d" ] || continue
+	day=$(basename "$d" | cut -c1-10)
+	[ "$day" \< "$old" ] || [ "$day" = "$old" ] || continue
+	[ -e "$d/src" ] || [ -e "$d/out" ] || [ -e "$d/system" ] || continue
+	rm -rf "${d:?}/src" "${d:?}/out" "${d:?}/system"
+	find "$d" -maxdepth 1 -name '*.log' -size +1M -exec gzip -9 {} +
+	echo "pruned=$today" >> "$d/result"
+done
+
+# --- one line ------------------------------------------------------------------
+setkey() { echo "$1=$2" >> "$run/result"; }
+summary=
+add() { summary="$summary$1
+"; }
+anyred=0
+
+build_line() {
+	line=$1
+	commit=$(git -C "$NIGHTLY_REPO" rev-parse --verify -q "$line^{commit}") || {
+		add "$line: RED, no such line in the repository"; anyred=1; return; }
+	short=$(echo "$commit" | cut -c1-8)
+	status=$root/status-$line
+	if [ -z "${NIGHTLY_FORCE:-}" ] && [ -f "$status" ]; then
+		read -r st was wdate _rest < "$status"
+		if [ "$was" = "$commit" ]; then
+			echo "$st $was $wdate skipped $today" > "$status"
+			add "$line: skipped, no new commit ($st at $short, built $wdate)"
+			[ "$st" = GREEN ] || anyred=1
+			return
+		fi
+	fi
+	run=$root/$today-$line
+	n=2
+	while [ -e "$run" ]; do run=$root/$today-$line-r$n; n=$((n + 1)); done
+	mkdir -p "$run"
+	log=$run/dist.log
+	: > "$run/result"
+	setkey line "$line"; setkey commit "$commit"; setkey date "$today"
+	start=$(date +%s)
+	failed= gaps= stepinfo= rc=0
+	{
+		echo "=== nightly-dist $line $commit $(date '+%F %T')"
+		echo "=== release previous: ${RELEASE_PREVIOUS:-none}${RELEASE_PREVIOUS:+, catalog md5 $(md5sum < "$RELEASE_PREVIOUS/catalog" 2>/dev/null | cut -c1-32)}"
+	} >> "$log"
+	if ! git clone -q --no-checkout "$NIGHTLY_REPO" "$run/src" >> "$log" 2>&1 ||
+	   ! git -C "$run/src" -c advice.detachedHead=false checkout -q --detach "$commit" >> "$log" 2>&1; then
+		failed=setup; rc=1; echo "[FAIL] nightly-dist: no clone of $line at $commit" >> "$log"
+	fi
+	if [ -z "$failed" ]; then
+		if [ -n "${SYSTEM:-}" ]; then
+			sys=$SYSTEM
+		else
+			sys=$run/system
+			sh "$run/src/system/fetch-amix-system" "$sys" >> "$log" 2>&1 || {
+				failed=setup; rc=1; echo "[FAIL] nightly-dist: no amix-system at the line's pin" >> "$log"; }
+		fi
+	fi
+	if [ -z "$failed" ]; then
+		cache=$root/cache/$line
+		mkdir -p "$run/out/cache"
+		[ ! -d "$cache/out" ] || cp -a "$cache/out/." "$run/out/cache/"
+		for s in "$cache"/kernel/*/build/src; do
+			[ -d "$s" ] || continue
+			k=${s#"$cache"/}
+			mkdir -p "$run/src/$k"
+			cp -a "$s/." "$run/src/$k/"
+		done
+		for s in $steps; do
+			t0=$(date +%s)
+			echo "=== $s $(date +%T)" >> "$log"
+			rc=0
+			( cd "$run/src" && SYSTEM=$sys DIST_OUT=$run/out sh build/dist.sh "$s" ) > "$run/step.log" 2>&1 || rc=$?
+			cat "$run/step.log" >> "$log"
+			echo "=== $s rc=$rc $(( $(date +%s) - t0 ))s" >> "$log"
+			stepinfo="$stepinfo $s:$rc:$(( $(date +%s) - t0 ))"
+			case $rc in
+			0) ;;
+			3) gaps="$gaps $s"; [ -n "$failed" ] || { failed=$s; cp "$run/step.log" "$run/fail-step.log"; } ;;
+			*) failed=$s; cp "$run/step.log" "$run/fail-step.log"; break ;;
+			esac
+		done
+		rm -f "$run/step.log"
+		# the caches this night ended with, for the next
+		rm -rf "${cache:?}.new"
+		mkdir -p "$cache.new/out"
+		[ ! -d "$run/out/cache" ] || cp -a "$run/out/cache/." "$cache.new/out/"
+		for s in "$run"/src/kernel/*/build/src; do
+			[ -d "$s" ] || continue
+			k=${s#"$run"/src/}
+			mkdir -p "$cache.new/$k"
+			cp -a "$s/." "$cache.new/$k/"
+		done
+		rm -rf "${cache:?}"
+		mv "$cache.new" "$cache"
+	fi
+	secs=$(( $(date +%s) - start ))
+	setkey seconds "$secs"
+	setkey steps "${stepinfo# }"
+	cat=
+	for c in "$run"/out/release/*/catalog; do
+		[ -f "$c" ] || continue
+		r=$(basename "$(dirname "$c")")
+		cat="$cat $r:$(md5sum < "$c" | cut -c1-32)"
+	done
+	setkey catalog_md5 "${cat# }"
+	lock=
+	[ ! -f "$run/out/lock" ] || lock=$(sha256sum < "$run/out/lock" | cut -c1-64)
+	setkey lock_sha256 "$lock"
+	mins=$(( (secs + 30) / 60 ))
+	if [ -z "$failed" ] && [ -z "$gaps" ]; then
+		setkey status GREEN; setkey rc 0
+		echo "GREEN $commit $today" > "$status"
+		add "$line: GREEN at $short, $mins min, catalog${cat:- none}, lock ${lock:-none}"
+		return
+	fi
+	anyred=1
+	[ "$rc" != 0 ] || rc=3
+	setkey status RED; setkey rc "$rc"
+	setkey failed_step "$failed"
+	# the step's own line (a recipe's log tail may hold [FAIL] lines before
+	# it), else its last [FAIL], else its first [MISSING]
+	f=
+	if [ -f "$run/fail-step.log" ]; then
+		f=$(grep -m1 "^\[FAIL\] $failed: " "$run/fail-step.log")
+		[ -n "$f" ] || f=$(grep '^\[FAIL\]' "$run/fail-step.log" | tail -n 1)
+		[ -n "$f" ] || f=$(grep -m1 '^\[MISSING\]' "$run/fail-step.log")
+	fi
+	[ -n "$f" ] || f=$(grep '^\[FAIL\]' "$log" | tail -n 1)
+	recipe=$(echo "$f" | sed -n 's/^\[[A-Z]*\] [^:]*: \([^ ;:]*\):\{0,1\} .*/\1/p')
+	flog=$(echo "$f" | sed -n 's/.*; log out\/\([^ ;]*\).*/\1/p')
+	setkey failed_recipe "$recipe"
+	setkey failed_log "${flog:+$run/out/$flog}"
+	{
+		echo "$failed: ${f:-no [FAIL] line; the step's output is the end of dist.log}"
+		if [ -n "$flog" ] && [ -f "$run/out/$flog" ]; then
+			echo "--- tail of $run/out/$flog"
+			tail -n 40 "$run/out/$flog"
+		elif [ -f "$run/fail-step.log" ]; then
+			echo "--- tail of the step's output"
+			tail -n 40 "$run/fail-step.log"
+		fi
+	} > "$run/fail.txt"
+	rm -f "$run/fail-step.log"
+	echo "RED $commit $today" > "$status"
+	what=$failed${recipe:+: $recipe}
+	[ -z "$gaps" ] || what="$what (gaps:$gaps)"
+	add "$line: RED at $short, stopped at $what, $mins min; $run/fail.txt"
+}
+
+for line; do
+	build_line "$line"
+done
+printf 'nightly make dist, %s\n%s' "$today" "$summary" > "$root/summary"
+cat "$root/summary"
+exit $anyred

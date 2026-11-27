@@ -75,7 +75,8 @@ try:
     dist = os.path.join(top, "build", "dist.sh")
     base = {k: v for k, v in os.environ.items()
             if not k.startswith(("AMIX_", "GIT_")) and k not in ("SYSTEM", "GCA", "G14", "DIST_HOST", "STOCK",
-                                                                 "RELEASE_PREVIOUS", "ROM_MANIFEST", "PRIVACY_PATTERNS")}
+                                                                 "RELEASE_PREVIOUS", "ROM_MANIFEST", "PRIVACY_PATTERNS",
+                                                                 "DIST_OUT", "DIST_NETWORK")}
 
     def run(*steps, where=dist, cwd=None, **env):
         e = dict(base, SYSTEM=sysdir, DIST_HOST="1", GCA="/nonexistent/gca")
@@ -751,6 +752,13 @@ clean:
           and "-w" in args and args[args.index("-w") + 1] == "/src", " ".join(args))
     check("no release input set, none mounted", not any("/release-in/" in x for x in args), " ".join(args))
     check("no DIST_OUT: nothing mounted over /src/out", not any(x.endswith(":/src/out") for x in args), " ".join(args))
+    check("no DIST_NETWORK: the container's network is the default", "--network" not in args, " ".join(args))
+    rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
+                  DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test", DIST_NETWORK="none")
+    args = open(argf).read().split("\n") if os.path.exists(argf) else []
+    check("DIST_NETWORK=none: the step's container has no network",
+          rc == 0 and "--network" in args and args[args.index("--network") + 1] == "none"
+          and args.index("--network") < args.index("amix-toolchain:test"), out + " ".join(args))
     # DIST_OUT: an output tree of its own, the container's /src/out
     rc, out = run("kspace", DIST_HOST=None, PATH=os.path.dirname(fake) + ":" + base["PATH"],
                   DOCKER_ARGS=argf, AMIX_IMAGE="amix-toolchain:test", DIST_OUT="out/roll2")

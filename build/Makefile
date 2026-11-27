@@ -14,7 +14,9 @@ STEPS = dist tools kit kernel-k30 kernel-k46 modules drivers kspace userland apk
 # output tree in place of out/ (out/build, the packages, the caches), are
 # passed on to dist.sh in the environment: two rolls at once each take a
 # DIST_OUT of their own (make recipes/cde DIST_OUT=out/roll2).
-export SYSTEM LOCK VARIANT DIST_OUT
+# DIST_NETWORK=none runs the steps' containers with no network, every input
+# from the caches.
+export SYSTEM LOCK VARIANT DIST_OUT DIST_NETWORK
 
 $(STEPS):
 	sh dist.sh $@
@@ -37,6 +39,7 @@ test:
 	python3 -I pkg/tests/test-kdrv
 	python3 -I pkg/tests/test-manpages
 	python3 -I tests/test-dist
+	python3 -I tests/test-nightly
 	python3 -I tests/test-lock
 	python3 -I tests/test-together
 	sh hosttools/gencat/tests/run.sh
