@@ -1379,18 +1379,30 @@ l11_data_mb()
 }
 
 # --- swap by memory (1.1): the SAME text in setup.sh and install.sh (installer-selftest audit SR) ---
-# kinfo_fast_mb -- the fast memory the running kernel uses, in MB: /dev/kinfo's big-endian long at 528
-# (amix kernel/dlm C2-1). The miniroot has no od: the disc's SVR4 `sum -r` of one byte is that byte's value.
-# INSTALL_RAM_MB, when set, stands for it (the selftest). Nothing when there is nothing to read.
+# kinfo_fast_mb -- the fast memory of the region the running kernel was bound in, in MB to the nearest (amix
+# kernel/dlm C2-1, 10-boot-loader 5.4). /dev/kinfo's big-endian long at 528 is what the kernel uses of it: the
+# region less its 32-byte memory header, and on the RAM-disk boot that installs, less the RAM disk at its top too,
+# whose size the loader record gives at 204 (zero on a disk boot). The two are added and rounded, so a 32 MiB
+# region counts as 32 (33554400 bytes on a disk boot). Each is read in 64 KiB units, from its two high bytes;
+# the parts left out stay below the half MB the rounding allows. The miniroot has no od: the disc's SVR4
+# `sum -r` of one byte is that byte's value. Sets KINFO_MB, and KINFO_FAST_KB and KINFO_RD_KB, the two parts in
+# KiB, for the log; INSTALL_RAM_MB, when set, stands for it (the selftest). All empty when there is nothing to read.
+kinfo_byte()
+{
+	dd if=/dev/kinfo bs=1 skip="$1" count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )
+}
 kinfo_fast_mb()
 {
-	if [ -n "${INSTALL_RAM_MB:-}" ]; then echo "$INSTALL_RAM_MB"; return 0; fi
+	KINFO_MB= KINFO_FAST_KB= KINFO_RD_KB=
+	if [ -n "${INSTALL_RAM_MB:-}" ]; then KINFO_MB="$INSTALL_RAM_MB"; return 0; fi
 	[ -r /dev/kinfo ] && [ -x "$INST/bin/sum" ] || return 0
 	[ "`dd if=/dev/kinfo bs=4 count=1 2>/dev/null`" = KIF1 ] || return 0
-	_k0=`dd if=/dev/kinfo bs=1 skip=528 count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )`
-	_k1=`dd if=/dev/kinfo bs=1 skip=529 count=1 2>/dev/null | "$INST/bin/sum" -r | ( read s rest; echo "$s" )`
-	case "$_k0$_k1" in ""|*[!0-9]*) return 0 ;; esac
-	expr "$_k0" \* 16 + "$_k1" / 16
+	_k0=`kinfo_byte 528`; _k1=`kinfo_byte 529`; _r0=`kinfo_byte 204`; _r1=`kinfo_byte 205`
+	case "$_k0$_k1$_r0$_r1" in ""|*[!0-9]*) return 0 ;; esac
+	_kf=`expr "$_k0" \* 256 + "$_k1"`; _kr=`expr "$_r0" \* 256 + "$_r1"`
+	KINFO_FAST_KB=`expr "$_kf" \* 64`; KINFO_RD_KB=`expr "$_kr" \* 64`
+	_kf=`expr "$_kf" + "$_kr" + 8`
+	KINFO_MB=`expr "$_kf" / 16`
 }
 # swap_by_ram DISK_MB -- DEFSWAP and SWAPBOUND for a 1.1 install. The default grows with the memory: 64 MB
 # below 32 MB of it, 128 MB from 32 MB, never more than a quarter of the disk nor less than MINSWAP (30 on
@@ -1399,7 +1411,7 @@ kinfo_fast_mb()
 # counts as 16 MB.
 swap_by_ram()
 {
-	_ram=`kinfo_fast_mb`
+	kinfo_fast_mb; _ram="$KINFO_MB"
 	case "$_ram" in ""|*[!0-9]*|0) _ram=16 ;; esac
 	if [ "$_ram" -ge 32 ]; then DEFSWAP=128; else DEFSWAP=64; fi
 	case "${INSTALL_CPU:-030}" in
