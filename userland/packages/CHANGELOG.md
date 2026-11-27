@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — ten more recipes pin SOURCE_EPOCH; CONTRIBUTING (eafaa881, 045f2e08)
+
+acompat, amix-benchmark-gcc14, bzip2, gzip, less, prngd, pth, python3, rsync and zlib pin SOURCE_EPOCH to their published builds' epochs (bytes unchanged, proven by rebuild against the 1.1 catalog), so a docs-only commit can no longer move them; CONTRIBUTING.md gives the full pkgmeta index/fragments commands and the epoch rule.
+
 ## 2026-11-27 — seven published packages pin SOURCE_EPOCH (29e96a3b)
 
 grep 2.5.1a-10, coreutils 5.2.1-6, diffutils 2.8.1-5, make 3.81-11, patch 2.5.9-9, tar 1.14-12 and vim 9.1.0000-6 pin SOURCE_EPOCH to their published builds' epochs, so a rebuild gives the published bytes again after a docs-only commit (246aad68) had moved them; no version or content change.
