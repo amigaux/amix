@@ -6,8 +6,9 @@
 #
 # COEXISTENCE.  Stock ships /usr/sbin/tar (and /etc/tar), owned by `core`.
 # This package does NOT claim, overwrite or symlink either path -- ours is
-# /opt/amix/bin/tar and wins for interactive users purely by PATH order, while
-# stock scripts that name /usr/sbin/tar keep stock behaviour.  The PKG is
+# /opt/amix/bin/tar.  /opt/amix/bin is last on the login PATH, so a plain `tar`
+# runs the stock one; ours runs by full path or for a user who puts
+# /opt/amix/bin first.  The PKG is
 # `gtar`, so the catalog never lists two packages called tar.
 #
 # NO INSTALL SCRIPTS.  No rmt: remote-tape support is not built or

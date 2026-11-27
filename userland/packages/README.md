@@ -92,12 +92,13 @@ The `admin` file is what makes it non-interactive — `pkgadd -n` alone aborts o
 `docs/porting.md` §7 gives the working set of admin settings, and the whole smoke loop as it was
 actually run. [`tools/pkg-smoke`](tools/pkg-smoke/) stages that loop for one package.
 
-**`/opt/amix/bin` is not on the stock Amix PATH**, so add it yourself — after `/usr/local/bin`, ahead
-of `/usr/bin`, so your own builds still win and stock scripts that hard-code `/usr/bin/grep` keep
-stock behaviour:
+**`/opt/amix/bin` is LAST on an installed system's login PATH** (`/etc/profile.d/opt-amix.sh`,
+written at first boot), so stock tools keep their names: a tool stock lacks (`less`, `gzip`, `rsync`)
+runs by name, and a tool stock also has (`tar`, `grep`, `diff`, `make`, `ls`) runs the stock program.
+To run ours, use its full path (`/opt/amix/bin/grep`), or put `/opt/amix/bin` first in your own PATH:
 
 ```sh
-PATH=/usr/local/bin:/opt/amix/bin:/usr/bin:/usr/ccs/bin:/sbin:/usr/sbin:/etc:/usr/ucb:/usr/amiga/bin:/usr/public/bin:/usr/hosts
+PATH=/opt/amix/bin:$PATH        # in ~/.profile
 export PATH
 ```
 
@@ -109,7 +110,7 @@ No package here edits `/etc/profile` or symlinks into a stock directory. The rea
 | File | What it is |
 |---|---|
 | [`docs/porting.md`](docs/porting.md) | The constraints every recipe inherits, probe-verified against the real toolchain: the wrapper traps, the `__STDC__` header gate, the libc gap, the packaging rules |
-| [`docs/coexistence.md`](docs/coexistence.md) | How these packages sit beside stock Amix — the `/opt/amix` prefix, the never-overwrite rule, PATH precedence, and the stock-userland audit |
+| [`docs/coexistence.md`](docs/coexistence.md) | How these packages sit beside stock Amix — the `/opt/amix` prefix, the never-overwrite rule, PATH order, and the stock-userland audit |
 | [`docs/recipes.md`](docs/recipes.md) | The traps the recipes encode, and why they are written by hand |
 | [`docs/history-map.txt`](docs/history-map.txt) | Old amix-packages commit hashes → amix hashes |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The package directory, the rules every recipe follows, and how publishing works |

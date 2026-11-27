@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — docs: /opt/amix/bin is last on the login PATH (246aad68)
+
+/opt/amix/bin is last on the installed login PATH (firstboot's /etc/profile.d/opt-amix.sh), so names stock also has (tar, grep, diff, make, ls …) run the stock program; coexistence.md §3 and the package READMEs now say so and give the two ways to run ours: full path, or /opt/amix/bin first in the user's own PATH. No package changes.
+
 ## 2026-11-26 — x11contrib 6.0-1.s, xztop 1.1.1-3.s: shared variants; cde needs amix-base 1.0-38 (bea277de, 1cdd8cc0)
 
 x11contrib 6.0-1.s and xztop 1.1.1-3.s are shared variants and the default; they load X11R6.3's shared libraries and need x11r6.3 6.3-15.s and amixrt 1.0-5, so installing or upgrading them over a static X11R6.3 lifts it in the same transaction. The static variants stay buildable with unchanged bytes (x11contrib e3e2bfbf, xztop a736ae57). cde 2.5.3-4.s needs amix-base 1.0-38 (dtlogin's local_uid root server line); apkg install cde lifts it. x11contrb-6.0-1.s.pkg md5 9139b006, xztop-1.1.1-3.s.pkg md5 bdeac944 (29184 bytes; static 807424).

@@ -1,7 +1,10 @@
 # diffutils — GNU diffutils 2.8.1 for Amix
 
 `diff`, `diff3`, `sdiff` and `cmp` under `/opt/amix/bin`, beside the stock SVR4 tools in
-`/usr/bin` (owned by `core`), which this package does not touch. Ours win by PATH.
+`/usr/bin` (owned by `core`), which this package does not touch. `/opt/amix/bin` is last on the
+login PATH, so a plain `diff` runs the stock one (which has no `-u`). Ours run by full path
+(`/opt/amix/bin/diff -u`), or by name for a user who puts `/opt/amix/bin` first in their own PATH
+(`PATH=/opt/amix/bin:$PATH; export PATH` in `~/.profile`).
 
     sh build/pkg/pkgbuild.sh userland/packages/diffutils        # build + roll
     sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/diffutils          # stage the on-box acceptance

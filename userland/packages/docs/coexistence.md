@@ -2,9 +2,9 @@
 
 Amix 2.1 ships a general SVR4 userland. Some of the tools this directory ports already exist on a stock
 box at 1980s/1990s versions; most do not. This file is the **standing policy** for how a ported
-package coexists with stock — the prefix it installs under, the files it must never touch, how the
-newer tool wins for interactive users, and what `pkgadd` actually does when two packages claim one
-path. Every recipe inherits it; a recipe that wants to diverge
+package coexists with stock — the prefix it installs under, the files it must never touch, where
+`/opt/amix/bin` sits on PATH and how a user reaches the newer tool, and what `pkgadd` actually does
+when two packages claim one path. Every recipe inherits it; a recipe that wants to diverge
 argues here first, in the commit that changes this file.
 
 Package paths
@@ -23,8 +23,9 @@ repackaged factory catalog, and the install-tape extraction), never re-invented.
 
 1. **Install everything under `/opt/amix`** — one shared `/opt/amix/{bin,lib,man,share}` for the
    whole add-on userland. Cross-configure with `--prefix=/opt/amix`. Never claim a stock-owned path.
-2. **PATH becomes `/usr/local/bin:/opt/amix/bin:/usr/bin:/bin`** — the user's own hand-built tools
-   in `/usr/local` win first, our packaged tools beat stock next, stock SVR4 is the floor.
+2. **`/opt/amix/bin` goes LAST on PATH** — the user's own hand-built tools in `/usr/local` first,
+   stock SVR4 next, our packaged tools after it. A name stock also has (`tar`, `grep`, `ls`) runs the
+   stock program; ours runs by full path, or for a user who puts `/opt/amix/bin` first.
 3. **Port a tool only if the chosen version adds something users want over stock.** Otherwise mark
    it `skip-stock-adequate` and move on.
 
@@ -58,8 +59,8 @@ that pull the same way:
 **Layout: one shared prefix, not a per-package subtree.** The whole add-on userland shares
 `/opt/amix/{bin,lib,man,share}`. We do **not** use `/opt/<pkg>/...` (the SVR4 default for a single
 vendor product, and what the packagemanager's throwaway `AMIXtst` test package used —
-`/opt/amixtst/...`): a per-package tree fragments the PATH into a dozen `bin` directories and makes
-the newer-tool-wins story unmanageable. `--prefix=/opt/amix` for every recipe; `man` pages under
+`/opt/amixtst/...`): a per-package tree fragments the PATH into a dozen `bin` directories, each one a
+line to manage. `--prefix=/opt/amix` for every recipe; `man` pages under
 `/opt/amix/man` (or `/opt/amix/share/man`), read by adding that dir to `MANPATH`.
 
 **That `/opt` works as a `pkgadd` target is [PROVEN-AMIX]:** the packagemanager side installed and
@@ -105,44 +106,56 @@ overwrite — which is the strongest argument for the prefix.
 
 ---
 
-## 3. PATH precedence — and the one cost of moving off `/usr/local`
+## 3. PATH order — `/opt/amix/bin` is last
 
-Interactive users get the newer tool through PATH order, not by replacing stock binaries:
-
-```
-PATH=/usr/local/bin:/opt/amix/bin:/usr/bin:/bin:...
-```
-
-A ported GNU `grep` in `/opt/amix/bin` shadows stock `/usr/bin/grep` for anyone at a shell, while
-the user's own `/usr/local` build (if they have one) still overrides both, and **stock system
-scripts that hard-code `/usr/bin/grep` keep stock behaviour** — we change what a person sees, never
-what a script sees. That last point is the safety of the whole scheme.
-
-**The cost, stated plainly.** `/usr/local/bin` is *already* first on the stock Amix PATH
-**[MEASURED]**:
+The stock Amix login PATH **[MEASURED]** begins with `/usr/local/bin` and does not name
+`/opt/amix/bin` (root's; other users' stock PATH adds `$HOME/bin` in front and `/usr/games:.` at
+the end):
 
 ```
 PATH=/usr/local/bin:/usr/bin:/usr/ccs/bin:/sbin:/usr/sbin:/etc:/usr/ucb:/usr/amiga/bin:
      /usr/public/bin:/usr/hosts
 ```
 
-`/opt/amix/bin` is **not** on it. So unlike a `/usr/local` install (which needed zero configuration
-to win), a `/opt/amix` install **requires `/opt/amix/bin` to be inserted into PATH** — after
-`/usr/local/bin`, before `/usr/bin` — before its tools take precedence. This is the deliberate
-trade for the clean, user-free `/opt/amix` tree, and the mechanism must be a **documented step**,
-not a silent package side effect:
+On an installed system two `/etc/profile.d` drop-ins change it for login shells
+(`/etc/profile` reads `/etc/profile.d/*.sh` in name order; no package edits `/etc/profile`):
 
-- **Do:** document the one-line PATH addition in each package's description / a README, and prefer a
-  future **bootstrap package** that ships a sourceable snippet at `/opt/amix/etc/profile.amix` for
-  the user to add to `/etc/profile` or `~/.profile` (`. /opt/amix/etc/profile.amix`).
-- **Do not:** have a package edit `/etc/profile`. That file is `core`-owned (never overwrite, §2),
-  and SVR4 package install scripts are an **[UNVERIFIED]** path on Amix's 1992 `/bin/sh`.
-- **Do not:** symlink `/opt/amix/bin/<tool>` from `/usr/bin/<tool>` to force precedence — it
-  re-enters `/usr/bin` (§2), and stock `pkgadd` **corrupts a relative symlink target**
-  ([MEASURED], `patch/prototype`), so it would also demand absolute-target care for no gain.
+- `amix-base.sh` (the base package) puts `/usr/amix/bin` just before `/usr/bin`. That directory holds
+  only front-ends that answer for the add-on packages' files and pass everything else to the stock
+  command of the same name (`man`; `userland/base/docs/man.md`).
+- `opt-amix.sh` (written by the installer's first boot, `media/payload/firstboot/firstboot.sh`)
+  appends `/opt/amix/bin` — **last**, so stock tools keep precedence.
 
-**[OPEN — for this repository to decide]** how `/opt/amix/bin` reaches PATH out of the box (manual
-line vs. a bootstrap-package profile snippet vs. left entirely to the user). See §7.
+The resulting login PATH (root's):
+
+```
+PATH=/usr/local/bin:/usr/amix/bin:/usr/bin:/usr/ccs/bin:/sbin:/usr/sbin:/etc:/usr/ucb:
+     /usr/amiga/bin:/usr/public/bin:/usr/hosts:/opt/amix/bin
+```
+
+(The X drop-ins append their own directories after it.) What this means for a package here:
+
+- **A tool stock lacks** (`gzip`, `less`, `bzip2`, `rsync`, `md5sum`, `vim`) runs by its name.
+- **A tool stock also has** (`tar`, `grep`, `diff`, `make`, `ls`, `cp` …) runs the stock program (or
+  the Heirloom one where a package replaced it, such as `/usr/sbin/tar`) under its plain name. Ours
+  is reached in one of two ways:
+  - by full path: `/opt/amix/bin/tar`, `/opt/amix/bin/grep`;
+  - by putting `/opt/amix/bin` first in the user's own PATH, in `~/.profile`:
+    `PATH=/opt/amix/bin:$PATH; export PATH`.
+- **Stock system scripts** that name `/usr/bin/grep` or rely on the stock PATH keep stock behaviour
+  either way.
+- `man` follows the binary PATH runs: `man tar` shows the page of the `tar` that runs
+  (`userland/base/docs/man.md`).
+
+**What a package does not do:**
+
+- **No package edits `/etc/profile`.** It is amix-base's conffile; a package that needs a PATH
+  directory ships an `/etc/profile.d/<name>.sh` drop-in (`profile.d(4)`).
+- **No symlink `/usr/bin/<tool>` → `/opt/amix/bin/<tool>`** to take a stock name — it re-enters
+  `/usr/bin` (§2), and stock `pkgadd` **corrupts a relative symlink target**
+  ([MEASURED], `patch/prototype`). `patch` is the one package that ships a `/usr/bin` symlink; stock
+  has no `/usr/bin/patch` (its 1990 one is `/usr/public/bin/patch`), so nothing stock is shadowed
+  in `/usr/bin` (§5).
 
 ---
 
@@ -190,13 +203,15 @@ recorded in each registry entry's `coexistence.verdict` field:
 
 | verdict | meaning |
 |---|---|
-| **`port-alongside`** | the default. Newer/absent tool installs to `/opt/amix`, supersedes stock (if any) by PATH. |
+| **`port-alongside`** | the default. Newer/absent tool installs to `/opt/amix`, beside stock (if any); a stock name keeps running stock (§3). |
 | **`skip-stock-adequate`** | stock already does the job and the delta is unwanted — do **not** port; record the reason. |
 | **`replace`** | strong-justification only: our file must occupy the stock path (violates §2). No Wave-0/1 tool qualifies, and none is expected to. |
 
-`patch` is the worked example: stock ships Larry Wall `patch` **12u4** (1990) in `/usr/public/bin`
-**[PROVEN-AMIX]**, we ship GNU `patch` 2.5.9 to `/opt/amix/bin`, and PATH precedence lets ours win —
-`port-alongside`, superseding a 13-year-older tool without touching it.
+`patch` is the worked example, and an older layout: stock ships Larry Wall `patch` **12u4** (1990) in
+`/usr/public/bin` **[PROVEN-AMIX]**; we ship GNU `patch` 2.5.9 at `/usr/local/bin/patch` with a
+`/usr/bin/patch` symlink, both ahead of `/usr/public/bin` on PATH, so a plain `patch` runs ours —
+`port-alongside`, without touching the 13-year-older tool. The `/opt/amix` packages do not take a
+stock name this way (§3).
 
 No Wave-0/1 tool is `skip-stock-adequate`: each either fills a genuine gap (gzip, less, bzip2,
 rsync, zlib, md5sum/sha1sum) or adds features stock materially lacks (GNU grep `-r/-o/--color`, GNU
@@ -229,8 +244,8 @@ complete 28,866-member repackaging), the `hdf/tape21/` tape extraction, and the 
 
 **Bonus finding (Wave 2, not audited-for-fields here):** stock `public` also ships a **`bash`**
 (297 KB, dated March 1992 — a 1.x), plus `elm`, `gcc` (a 1.x driver), and `gdb` at
-`/usr/public/bin`. So the Wave-2 `bash` port is another `port-alongside`-superseding-a-stock-1.x
-case, exactly like `patch`.
+`/usr/public/bin`. So the Wave-2 `bash` port is another `port-alongside` beside a stock 1.x; under `/opt/amix`
+the stock `bash` keeps the plain name (§3).
 
 **Reconciliation note.** The `hdf/tape21/` extraction's `public/bin` shows only ~18 files
 (the elm mail suite + bash/gcc/gdb) and does **not** contain `patch`, `gzip`, or `less`; yet
@@ -255,10 +270,8 @@ box one-liner).
   `/opt/amix`, live, with no formal blessing on either. The decision did not get made; it got
   overtaken by a publish. Still open for whatever ships next — and now with a real prefix split
   already live to reconcile against, not just a hypothetical one.
-- **[OPEN]** PATH mechanism (§3): is `/opt/amix/bin` put on PATH by a documented manual line, by a
-  bootstrap-package `/opt/amix/etc/profile.amix` snippet, or left to the user? Needs a decision
-  before the first batch ships so every recipe's description says the same thing. **Also overtaken
-  by the 2026-09-15 publish** without being decided.
+- **PATH mechanism (§3) — settled.** `/opt/amix/bin` reaches PATH through `/etc/profile.d/opt-amix.sh`,
+  written by the installer's first boot, and it goes **last**: stock tools keep their names.
 - **[MEASURED]** Box one-liner: **does stock `diff` support `-u`?** No: stock `/usr/bin/diff -u`
   says `diff: invalid option -u`, so `diffutils` adds unified diffs.
 - **Category taxonomy — RESOLVED (2026-09-01), both sides.** The packagemanager side declared the

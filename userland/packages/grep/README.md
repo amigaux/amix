@@ -9,8 +9,10 @@ Metadata and source pin: [`package.sh`](package.sh); build hooks: [`build.sh`](b
 
 Stock ships SVR4 `grep` at `/usr/bin/grep` (→`/sbin/grep`), owned by `core`, with no
 `-r`/`-o`/`--color` and a shaky `-E`. This package **does not touch it** — ours installs to
-`/opt/amix/bin/grep` and wins for interactive users purely by PATH order, while stock scripts that
-hard-code `/usr/bin/grep` keep stock behaviour (`docs/coexistence.md §2–3`). Nothing lands outside
+`/opt/amix/bin/grep`, and `/opt/amix/bin` is last on the login PATH, so a plain `grep` runs the
+stock one. Ours runs as `/opt/amix/bin/grep`, or as `grep` for a user who puts `/opt/amix/bin`
+first in their own PATH (`PATH=/opt/amix/bin:$PATH; export PATH` in `~/.profile`); stock scripts
+keep stock behaviour either way (`docs/coexistence.md §2–3`). Nothing lands outside
 `/opt/amix`, so the `pkgadd` conflict machinery never fires and a stock `pkgrm` can never take our
 binary with it.
 
