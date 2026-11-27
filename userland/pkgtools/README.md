@@ -146,6 +146,20 @@ Amix permission does not cover. Stock Amix object code statically linked into a 
 (SVR4 `libm`) is permitted since 2026-10-30 and is recorded, one `embeds` line per binary, not
 refused. Detail and history: NOTES.md 2026-10-30 and 2026-09-16.
 
+The payload gate unpacks every package with the host-built `pkgtrans`. A checkout that has run
+`make dist` holds the build container's copy instead: its compiled-in tool path does not exist on
+the host, and the gate refuses because it cannot run. Run `heirloom/build-host.sh` in that
+checkout first.
+
+### Before publishing: the user-path gate
+
+`tools/ugate/` tests a candidate repository the way its users meet it. Released, installed systems
+boot in the emulator, one per row and in parallel, and run the plain `apkg` commands a user types
+against the candidate served as a private repository. The gate reports each command's exit status
+and output, the booted kernel, `pkgchk -n` and the bus errors. No box is prepared by hand: a
+hand-upgraded package is exactly what hides a missing dependency floor. How to run it for a release
+candidate and how to add a row: [`tools/ugate/README.md`](tools/ugate/README.md).
+
 ### Catalog format (v1)
 
 Pipe-delimited text, one package per line, `#` comments:
