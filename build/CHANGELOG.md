@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — check-packages refuses a published version whose epoch has moved (328632b7)
+
+check-packages refuses a published version whose epoch has moved (pkgmeta epochs): a recipe whose version release/'s locks or carried-* lists name needs SOURCE_EPOCH, or its directory's last commit must be the one that set its VERSION/PKGREV; the message names the package, the commit and the SOURCE_EPOCH to pin; a shallow clone is refused. nightly-dist names a tool's refusal (a published version rebuilt with other bytes) and never an earlier step's [FAIL] line. gcc14-env.sh's header and build/pkg/README.md's check-packages text match the code.
+
 ## 2026-11-27 — test-pkgbuild: the stub roll stamps times with the epoch (b69eceee)
 
 The test's stub roll stamps every time with SOURCE_DATE_EPOCH, as the real roll does, so the VARIANT=shared check no longer fails when two builds stage in different seconds; package bytes unchanged.
