@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — the 1.1.3 lock (0d5d68db)
+
+amix-1.1.3-published.lock (sha256 d9913450), the build at amix f9de17de (tag 1.1.3) on the served 1.1.2 tree (catalog 6c837186), catalog md5 13364d8e as pkg.amigaux.org serves it; the README names what 1.1.3 adds and that the shared packages wait for APKG 0.3.15 on an older apkg.
+
 ## 2026-11-26 — carried-1.1 keeps xztop 1.1.1-1 (0d7d7668)
 
 carried-1.1 keeps xztop 1.1.1-1, which 1.1.3's xztop 1.1.1-3.s replaces, by the bytes of the published 1.1.2 lock, rebuilt by make dist at ec9dfd6e.
