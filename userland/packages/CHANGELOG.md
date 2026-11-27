@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — seven published packages pin SOURCE_EPOCH (29e96a3b)
+
+grep 2.5.1a-10, coreutils 5.2.1-6, diffutils 2.8.1-5, make 3.81-11, patch 2.5.9-9, tar 1.14-12 and vim 9.1.0000-6 pin SOURCE_EPOCH to their published builds' epochs, so a rebuild gives the published bytes again after a docs-only commit (246aad68) had moved them; no version or content change.
+
 ## 2026-11-27 — docs: /opt/amix/bin is last on the login PATH (246aad68)
 
 /opt/amix/bin is last on the installed login PATH (firstboot's /etc/profile.d/opt-amix.sh), so names stock also has (tar, grep, diff, make, ls …) run the stock program; coexistence.md §3 and the package READMEs now say so and give the two ways to run ours: full path, or /opt/amix/bin first in the user's own PATH. No package changes.
