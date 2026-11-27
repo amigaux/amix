@@ -3,6 +3,7 @@ NAME=make
 PKG=make
 VERSION=3.81
 PKGREV=11   # -11: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
+SOURCE_EPOCH=1795177562   # -11's published build (2026-11-20 12:26:02 UTC), kept when only docs change
 SUMMARY="GNU make 3.81"
 DESC="GNU make 3.81 beside the stock SVR4 make, which it does NOT replace (stock /usr/ccs/bin/make is untouched; ours wins by PATH). Pattern rules, VPATH, \$(shell), \$(eval), order-only prerequisites, -j with the jobserver. make -l only warns (no load average on Amix). Installs /opt/amix/bin/make; add /opt/amix/bin to PATH."
 CATEGORY=development
