@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — test-pkgbuild: the stub roll stamps times with the epoch (b69eceee)
+
+The test's stub roll stamps every time with SOURCE_DATE_EPOCH, as the real roll does, so the VARIANT=shared check no longer fails when two builds stage in different seconds; package bytes unchanged.
+
 ## 2026-11-27 — nightly-dist: a published tree per line (0fbfe344)
 
 NIGHTLY_PREVIOUS_<line> names the published tree each line's release step builds on, or none for a fresh release tree (next is not a 1.1 point release); RELEASE_PREVIOUS is the fallback; STOCK defaults per line; the result records release_previous.
