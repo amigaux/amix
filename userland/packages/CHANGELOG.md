@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — libzz9k pins SOURCE_EPOCH; heirloom-tar README (68373307)
+
+libzz9k 2.9.1-4 pins SOURCE_EPOCH to its published build's epoch (bytes unchanged, proven by rebuild), so every recipe under userland/packages now names its epoch; heirloom-tar's README says /opt/amix/bin is last on the login PATH, so a plain tar runs Heirloom tar.
+
 ## 2026-11-27 — ten more recipes pin SOURCE_EPOCH; CONTRIBUTING (eafaa881, 045f2e08)
 
 acompat, amix-benchmark-gcc14, bzip2, gzip, less, prngd, pth, python3, rsync and zlib pin SOURCE_EPOCH to their published builds' epochs (bytes unchanged, proven by rebuild against the 1.1 catalog), so a docs-only commit can no longer move them; CONTRIBUTING.md gives the full pkgmeta index/fragments commands and the epoch rule.
