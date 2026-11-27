@@ -3,6 +3,7 @@ NAME=zlib
 PKG=zlib
 VERSION=1.2.13
 PKGREV=11   # -11: gcc14-cross-amix 9d13dcd (release-1.1): fold-mem-offsets off
+SOURCE_EPOCH=1795177562   # -11's published build (2026-11-20 12:26:02 UTC), kept when only docs change
 SUMMARY="zlib 1.2.13 - the deflate/inflate compression library"
 DESC="zlib 1.2.13 static compression library (libz.a) plus headers, under /opt/amix. The first zlib on Amix; rsync, wget and git link it. Ships /opt/amix/bin/zlib-test, an on-box acceptance check (crc32/adler32 canaries, a multi-MB deflate/inflate round trip, and inflate of a host-produced stream)."
 CATEGORY=library

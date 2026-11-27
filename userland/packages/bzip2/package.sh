@@ -3,6 +3,7 @@ NAME=bzip2
 PKG=bzip2
 VERSION=1.0.8
 PKGREV=5   # -5: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
+SOURCE_EPOCH=1795097888   # -5's published build (2026-11-19 14:18:08 UTC), kept when only docs change
 SUMMARY="bzip2 1.0.8"
 DESC="bzip2 1.0.8 block-sorting compressor: bzip2, bunzip2, bzcat, bzip2recover, the bzgrep/bzmore/bzdiff wrappers, and libbz2.a with bzlib.h. Installs under /opt/amix; add /opt/amix/bin to PATH."
 CATEGORY=archive

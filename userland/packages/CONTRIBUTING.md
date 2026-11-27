@@ -22,9 +22,9 @@ in [`build/pkg/README.md`](../../build/pkg/README.md).
   `build/pkg/pkgbuild.sh`. Both belong to the build framework; a change there is a change to
   `build/`, not to a package.
 - **After changing any `package.sh`**, regenerate the index and the catalog fragments with
-  `build/pkg/pkgmeta index userland/packages` and
-  `build/pkg/pkgmeta fragments userland/packages -o userland/packages/conf`
-  (from the top of amix); CI's `make -C build check-packages` fails while they are stale.
+  `python3 -I build/pkg/pkgmeta index userland/packages userland/base/pkg -o userland/packages/INDEX.md`
+  and `python3 -I build/pkg/pkgmeta fragments userland/packages userland/base/pkg -o userland/packages/conf`
+  (from the top of amix; the base package's recipe in `userland/base/pkg` is part of both); CI's `make -C build check-packages` fails while they are stale.
 - **Everything a build produces** goes under the ignored `out/pkg/`: work trees, fetched source
   tarballs, `.pkg` datastreams, staging roots and logs. Git tracks recipes, tools and docs only.
 
@@ -50,7 +50,11 @@ in [`build/pkg/README.md`](../../build/pkg/README.md).
    `/usr/local` is left to the box's user. The two oldest packages (`acompat`, `patch`) predate
    this and still use `/usr/local`.
 8. **One version, one set of bytes.** A changed package takes a new `PKGREV`; a version that has
-   been rolled into a catalog is never rolled again with other bytes.
+   been rolled into a catalog is never rolled again with other bytes. The build epoch is
+   `package.sh`'s `SOURCE_EPOCH`, else the time of the package directory's last commit, so any
+   commit there (a README, a prototype comment) moves it. Before changing anything in a package
+   directory without bumping `PKGREV`, make sure its `package.sh` sets `SOURCE_EPOCH`; if it does
+   not, add `SOURCE_EPOCH=$(git log -1 --format=%ct -- <dir>)` in the same commit.
 
 ## Format, catalog and publishing
 
