@@ -3,8 +3,9 @@
 #
 # AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>); pkginfo is
 # generated from package.sh.  The stock SVR4 tools in /usr/bin, /sbin and
-# /usr/ucb (owned by core and friends) are NOT touched; ours win by PATH for
-# interactive users, and scripts naming /usr/bin/... keep stock behaviour.
+# /usr/ucb (owned by core and friends) are NOT touched; /opt/amix/bin is last
+# on the login PATH, so a stock name runs the stock tool and ours runs by full
+# path or for a user who puts /opt/amix/bin first.
 # `install' is GNU ginstall under its usual name.  Not shipped: uptime (the
 # nlist/kmem load average, PORTING.md 3.3), su (setuid root), hostid, the
 # info manual (no info reader).  No install scripts.  Every basename

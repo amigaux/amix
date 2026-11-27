@@ -2,8 +2,11 @@
 
 86 GNU programs plus the `groups` script under `/opt/amix/bin`: `ls cp mv rm sort date df du
 install stat md5sum sha1sum …`. They sit beside the stock SVR4 tools, which this package
-does not touch; ours win by PATH. The headline is **`md5sum` and `sha1sum`**: the box had
-no content checksum at all, only `sum`.
+does not touch. `/opt/amix/bin` is last on the login PATH, so a name stock also has (`ls`, `cp`,
+`sort`, `date` …) runs the stock program; the GNU one runs by full path (`/opt/amix/bin/ls`), or by
+name for a user who puts `/opt/amix/bin` first in their own PATH (`PATH=/opt/amix/bin:$PATH;
+export PATH` in `~/.profile`). Names stock lacks run by name. The headline is **`md5sum` and
+`sha1sum`**: the box had no content checksum at all, only `sum`.
 
     sh build/pkg/pkgbuild.sh userland/packages/coreutils     # build + roll
     sh userland/packages/tools/pkg-smoke/prepare.sh userland/packages/coreutils     # stage the on-box acceptance

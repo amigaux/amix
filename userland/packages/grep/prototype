@@ -6,9 +6,9 @@
 #
 # ★ COEXISTENCE, THE WORKED CASE.  Stock ships /usr/bin/grep (-> /sbin/grep),
 # owned by `core`.  This package deliberately does NOT claim, overwrite, or
-# symlink that path -- our grep is /opt/amix/bin/grep and wins for interactive
-# users purely by PATH order, while stock scripts that hard-code /usr/bin/grep
-# keep stock behaviour (COEXISTENCE.md 2-3).  So there is nothing here outside
+# symlink that path -- our grep is /opt/amix/bin/grep.  /opt/amix/bin is last
+# on the login PATH, so a plain `grep` runs the stock one; ours runs by full
+# path or for a user who puts /opt/amix/bin first (docs/coexistence.md 2-3).  So there is nothing here outside
 # /opt/amix, the pkgadd conflict machinery never fires, and a stock pkgrm can
 # never take our binary with it.
 #

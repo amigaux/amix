@@ -138,8 +138,9 @@ under `/usr/local/doc/patch/`, and one symlink:
 
     s none /usr/bin/patch=../local/bin/patch
 
-That line is why the package is useful at all — `/usr/local/bin` is not on the stock Amix PATH, so
-without it the user installs `patch` and cannot type `patch`. It follows the package manager's own
+That line puts `patch` in `/usr/bin` as well, so a plain `patch` runs ours also where PATH has no
+`/usr/local/bin` (a non-login shell, a script that sets its own PATH); `/usr/local/bin` itself is
+first on the stock login PATH. It follows the package manager's own
 `/usr/bin/apkg` precedent, relative target included so it stays correct under `pkgadd -R`. SVR4
 ships no `patch` in `/usr/bin`, so nothing is being shadowed — the 1990 one lives in
 `/usr/public/bin`, later on PATH. `pkgproto` would have silently dropped this line, which is the
