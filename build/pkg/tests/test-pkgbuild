@@ -81,11 +81,13 @@ amix_gate_elf() { :; }
 amix_gate_g14_strict() { echo "  stub strict gate ran"; }
 amix_gate_g14_compat() { :; }
 """,
+    # every stamp the epoch, as the real roll's (dsroll.sh): two rolls of one
+    # tree are the same bytes whenever the tree was staged
     "pkgroll.sh": """\
 amix_pkgroll() {
 	cp "$1/pkginfo" "$STUB_LOG/pkginfo"
 	echo "$SOURCE_DATE_EPOCH" > "$STUB_LOG/epoch"
-	tar cf "$5" -C "$2" .
+	tar cf "$5" --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -C "$2" .
 }
 """,
 }
