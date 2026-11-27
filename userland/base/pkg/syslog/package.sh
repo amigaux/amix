@@ -3,6 +3,7 @@ NAME=syslog
 PKG=syslog
 VERSION=1.0
 PKGREV=2
+SOURCE_EPOCH=1793526101   # -2's published build (2026-11-01 09:41:41 UTC), kept when only docs change
 SUMMARY="System log: the syslogd boot step and /etc/syslog.conf"
 DESC="init.d/syslogd on rc.subr (on unless rc.conf says syslogd=no), the stock syslog.conf as a conffile, /var/log and /dev/conslog; the daemon is the system's /usr/sbin/syslogd"
 CATEGORY=system

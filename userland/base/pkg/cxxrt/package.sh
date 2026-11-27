@@ -4,6 +4,7 @@ NAME=cxxrt
 PKG=cxxrt
 VERSION=1.0
 PKGREV=1   # -1: gcc14-cross-amix 276ef49 (release-1.1), 1796012 bytes
+SOURCE_EPOCH=1795373719   # -1's published build (2026-11-22 18:55:19 UTC), kept when only docs change
 SUMMARY="libstdc++.so.6: the shared C++ runtime for GCC 14 programs"
 DESC="/usr/lib/libstdc++.so.6, GCC 14's C++ standard library built as a shared object: the runtime of a program linked with g++ -shared-libgcc or against a library built with g++ -shared, so that such a library and the program share one copy of the C++ runtime and exceptions thrown in one are caught in the other. It needs libamixrt.so.1 (amixrt) and the system's libc.so.1."
 CATEGORY=library

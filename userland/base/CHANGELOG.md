@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — five published base packages pin SOURCE_EPOCH (1e57613e)
+
+amix-base 1.0-38, amixrt 1.0-5, cxxrt 1.0-1, dhcp-client 1.0-10 and syslog 1.0-2 pin SOURCE_EPOCH to their published builds (bytes unchanged, proven by rebuild against the 1.1 catalog), so a later docs commit leaves their bytes unchanged.
+
 ## 2026-11-22 — cxxrt 1.0-1 (new) (8e1ab748)
 
 /usr/lib/libstdc++.so.6 from gcc14-cross-amix 276ef49 (62530457, 1796012 bytes), the shared C++ runtime for programs linked with g++ -shared-libgcc or against a g++ -shared library, so exceptions cross between them. Set base, needs amixrt. Proven on k30 and k46 with an exception thrown in a shared library and caught in the program.
