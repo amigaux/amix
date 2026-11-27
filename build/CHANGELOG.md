@@ -16,6 +16,10 @@ NIGHTLY_PREVIOUS_<line> names the published tree each line's release step builds
 
 nightly-dist runs the full make dist of each line from a fresh clone at its head through the lock step, with the release step on a published tree; a dated result per line (status, rc, time, the failing step and recipe with its log tail, catalog md5, lock sha256), a status line and a summary; an unchanged head is skipped, caches are carried to the next night, results older than 3 days are reduced to their logs. dist.sh: DIST_NETWORK, the steps' container network (none: every input from the caches).
 
+## 2026-11-27 — test-pkgbuild's stub roll stamps with the epoch (663d2250)
+
+test-pkgbuild's stub roll stamps every time with the epoch (663d2250, from next's b69eceee): the VARIANT=shared check, which compares two rolls of one package, no longer fails when they stage in different seconds.
+
 ## 2026-11-25 — the shared variant is the build default; DIST_OUT (12d473e6, 255aa056)
 
 pkgbuild.sh, make dist and pkgmeta (pkginfo, catalog, fragments, build-order) take VARIANT=shared unless told VARIANT=static; userland/packages/conf holds the shared fragments, and a static catalog generates its own; check-packages checks both variants' build order. `make DIST_OUT=<dir>` builds into an output tree of its own, mounted over /src/out in the container, so two rolls can run at once with the same bytes (x11r63 6.3-15.s 15909334, motif 2.3.8-3.s 2af365c8, cde 2.5.3-4.s a726c8c9 from concurrent rolls).
