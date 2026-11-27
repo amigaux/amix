@@ -40,6 +40,17 @@ Commands:
                             (otherwise in the ROOTs' order); with --for, only
                             those packages and what they need; refused on a
                             name that is no package, or on a cycle
+  epochs ROOT... --release DIR [--lock FILE]...
+                            the published versions' epochs: a recipe whose
+                            NAME and VERSION-PKGREV (either variant) is
+                            published, a pkg release/ line of a DIR/amix-*.lock
+                            or a --lock FILE, or a DIR/carried-* line, is
+                            refused unless package.sh sets SOURCE_EPOCH or its
+                            directory's last commit is the one that last
+                            changed its VERSION or PKGREV line: any later
+                            commit moved the epoch, so a rebuild is no longer
+                            the published bytes. Needs the git history of the
+                            ROOTs: a shallow clone or no checkout is refused
 
 pkginfo, catalog, fragments and build-order take --variant static|shared
 (default shared): shared is the variant of a recipe with a prototype.shared,
@@ -1111,6 +1122,96 @@ def staging_entries(path):
 
 # ------------------------------------------------------------------ main ---
 
+def published_files(release, locks=()):
+    """{package file: where it is recorded} for what RELEASE records as
+    published (the pkg release/ lines of its amix-*.lock files and of LOCKS,
+    the first word of its carried-* lines)."""
+    if not os.path.isdir(release):
+        raise Refused("%s: not a directory" % release)
+    found = {}
+    paths = [os.path.join(release, f) for f in sorted(os.listdir(release))
+             if re.match(r"^amix-.*\.lock$", f)] + list(locks)
+    for path in paths:
+        with open(path, errors="replace") as fp:
+            for line in fp:
+                w = line.split()
+                if len(w) >= 3 and w[0] == "pkg" and w[1].startswith("release/"):
+                    found.setdefault(w[2], os.path.basename(path))
+    for f in sorted(os.listdir(release)):
+        if f.startswith("carried-"):
+            with open(os.path.join(release, f), errors="replace") as fp:
+                for line in fp:
+                    w = line.split()
+                    if w and not line.startswith("#"):
+                        found.setdefault(w[0], f)
+    if not found:
+        raise Refused("%s: no lock or carried-* list names a published "
+                      "package: nothing to check against" % release)
+    return found
+
+
+def git_out(where, *args):
+    p = subprocess.run(["git", "-C", where] + list(args), stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE, universal_newlines=True)
+    if p.returncode != 0:
+        raise Refused("%s: git %s failed: %s" % (where, args[0], p.stderr.strip()))
+    return p.stdout.strip()
+
+
+def history_problem(root):
+    """Why ROOT's git history cannot give its recipes' epochs, or None."""
+    p = subprocess.run(["git", "-C", root, "rev-parse", "--is-shallow-repository"],
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                       universal_newlines=True)
+    if p.returncode != 0:
+        return ("%s is not in a git checkout: a package's epoch is its "
+                "directory's last commit, and only the history shows it" % root)
+    if p.stdout.strip() == "true":
+        return ("%s is in a shallow clone: a package's epoch is its directory's "
+                "last commit, and only the full history shows it (git fetch "
+                "--unshallow; in CI, actions/checkout with fetch-depth: 0)" % root)
+    return None
+
+
+def epoch_problems(loaded, published):
+    """(problems, pinned, held): a published version whose epoch moved, and
+    the published versions pinned by SOURCE_EPOCH or still at the commit that
+    set their version."""
+    bad, pinned, held = [], [], []
+    for r, m in loaded:
+        for variant in VARIANTS if has_shared(r) else ("static",):
+            v = variant_view(r, m, variant)
+            filename = "%s-%s.pkg" % (v["PKG"], pkgversion(v))
+            if filename not in published:
+                continue
+            if m["SOURCE_EPOCH"]:
+                pinned.append(filename)
+                continue
+            rev = "SHARED_PKGREV" if v["_VARIANT"] == "shared" and m["SHARED_PKGREV"] else "PKGREV"
+            last = git_out(r, "log", "-1", "--format=%H %h %s", "--", ".")
+            set_by = git_out(r, "log", "-1", "--format=%H %h %ct", "-E", "-G",
+                             "^(VERSION|%s)=" % rev, "--", "package.sh")
+            if not last or not set_by:
+                bad.append("%s (%s): %s is published (%s), and git names no "
+                           "commit of %s" % (m["NAME"], r, filename,
+                                             published[filename], "it" if not last
+                                             else "its VERSION or %s line" % rev))
+                continue
+            if last.split()[0] == set_by.split()[0]:
+                held.append(filename)
+                continue
+            lh, ls = last.split(" ", 2)[1], last.split(" ", 2)[2:]
+            vh, vct = set_by.split()[1], set_by.split()[2]
+            bad.append("%s (%s): %s is published (%s), and its epoch has moved: "
+                       "the directory's last commit %s (%s) is later than %s, "
+                       "which set its VERSION and %s, so a rebuild is not the "
+                       "published bytes; pin it: SOURCE_EPOCH=%s in package.sh "
+                       "(the epoch of %s; the published package's md5 decides)"
+                       % (m["NAME"], r, filename, published[filename], lh,
+                          ls[0] if ls else "", vh, rev, vct, vh))
+    return bad, pinned, held
+
+
 def main(argv):
     ap = argparse.ArgumentParser(prog="pkgmeta", description=__doc__.split(
         "\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1146,6 +1247,10 @@ def main(argv):
     p.add_argument("roots", nargs="+")
     p.add_argument("--for", dest="names", action="append")
     p.add_argument("--variant", choices=VARIANTS, default="shared")
+    p = sub.add_parser("epochs")
+    p.add_argument("roots", nargs="+")
+    p.add_argument("--release", required=True)
+    p.add_argument("--lock", dest="locks", action="append", default=[])
     a = ap.parse_args(argv)
 
     if a.cmd == "check":
@@ -1228,6 +1333,21 @@ def main(argv):
         else:
             with open(out, "w") as fp:
                 fp.write(text)
+    elif a.cmd == "epochs":
+        published = published_files(a.release, a.locks)
+        loaded = load_roots(a.roots)
+        why = [w for w in (history_problem(r) for r in a.roots) if w]
+        if why:
+            raise Refused("epochs: cannot tell whether a published version's "
+                          "epoch moved: " + "; ".join(why))
+        bad, pinned, held = epoch_problems(loaded, published)
+        if bad:
+            raise Refused("\n".join(bad))
+        print("pkgmeta: %d published version(s) of %d recipe(s): %d pinned by "
+              "SOURCE_EPOCH, %d at the commit that set their version%s"
+              % (len(pinned) + len(held), len(loaded), len(pinned), len(held),
+                 (" (their epoch moves with any later commit to the directory: "
+                  "%s)" % " ".join(held)) if held else ""))
     elif a.cmd == "stock-pages":
         with open(a.whatis, "rb") as fp:
             sys.stdout.write(stock_pages_list(fp.read()))

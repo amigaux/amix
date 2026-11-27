@@ -2,8 +2,9 @@
 #
 # Sourced by amix-env.sh only, never by a recipe and never executed.
 # gcc14-cross-amix is the USERLAND compiler; kernel space stays on
-# gcc-cross-amix.  Nothing built through this file is a kernel object.  The
-# period toolchain stays the default (TOOLCHAIN unset).
+# gcc-cross-amix.  Nothing built through this file is a kernel object.  It
+# is the default: pkgbuild.sh takes TOOLCHAIN=gcc14 for a package.sh that
+# sets none; a recipe on the period toolchain says TOOLCHAIN=period.
 #
 # What changes against the period toolchain, and why:
 #
@@ -113,11 +114,11 @@
 #              gate.  libamixc99's vsnprintf also saves %fp2 in its prologue,
 #              so any binary that calls snprintf executes an FPU instruction
 #              even for integer-only formats.
-#   outputs    build/gcc14/<recipe>/ and build/gcc14/pkg/, so a gcc14 build
-#              never overwrites a period artifact; the package revision is
-#              the recipe's own (a new revision: different bytes).
-#              AMIX_GCC14_BUILD_ROOT moves them, for a measurement build
-#              that must not touch the shipped artifacts.
+#   outputs    out/pkg/<recipe>/ and out/pkg/pkg/, as for the period
+#              toolchain; the package revision is the recipe's own (a new
+#              revision: different bytes).  AMIX_GCC14_BUILD_ROOT moves
+#              them, for a measurement build that must not touch the
+#              shipped artifacts.
 #   identity   the toolchain is PINNED: gcc14-cross-amix AMIX_GCC14_COMMIT, and the
 #              sha256 of its cc1, libgcc.a, libamixc99.a, specs, init
 #              objects and libamixrt.so.1 in the

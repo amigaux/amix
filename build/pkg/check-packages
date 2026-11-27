@@ -15,12 +15,20 @@
 # its doc and man directories) is 0755 root sys in every package. A directory
 # that does not exist, or no package.sh in any of them, is a failure: nothing
 # was checked.
+#
+# A published version's epoch (pkgmeta epochs): a recipe whose version
+# release/'s locks or carried-* lists name is refused unless package.sh sets
+# SOURCE_EPOCH or its directory's last commit set that version, since a later
+# commit moves the epoch and a rebuild is no longer the published bytes. It
+# reads the git history, so a shallow clone is refused (CI fetches it whole).
+# Checked without arguments, or against CHECK_PACKAGES_RELEASE=<release dir>.
 set -e
 
 here=$(cd "$(dirname "$0")" && pwd)
 top=$(cd "$here/../.." && pwd)
 kspace=
-[ $# -gt 0 ] || { set -- "$top/userland/packages" "$top/userland/base/pkg"; kspace=$top/kernel; }
+release=${CHECK_PACKAGES_RELEASE:-}
+[ $# -gt 0 ] || { set -- "$top/userland/packages" "$top/userland/base/pkg"; kspace=$top/kernel; release=${release:-$top/release}; }
 out=$1
 pkgmeta() { python3 -I "$here/pkgmeta" "$@"; }
 
@@ -45,3 +53,4 @@ pkgmeta build-order --variant static "$@" >/dev/null
 [ -z "$kspace" ] || pkgmeta dirs "$kspace"
 pkgmeta index "$@" -o "$out/INDEX.md" --check
 pkgmeta fragments "$@" -o "$out/conf" --check
+[ -z "$release" ] || pkgmeta epochs "$@" --release "$release"

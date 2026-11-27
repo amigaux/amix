@@ -790,6 +790,114 @@ try:
     rc, out = check_packages(cp)
     check("check-packages refuses after a package.sh change", rc == 1, out)
 
+    # --- epochs: a published version's epoch has not moved ---------------------------
+    def git(where, *args, env=None):
+        e = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
+                 GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid")
+        e.update(env or {})
+        return subprocess.run(["git", "-C", where, "-c", "commit.gpgsign=false"] + list(args),
+                              env=e, check=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE).stdout.decode().strip()
+
+    ep = os.path.join(tmp, "epochs")
+    eroot, erel = os.path.join(ep, "userland", "packages"), os.path.join(ep, "release")
+    os.makedirs(ep)
+    git(ep, "init", "-q", "-b", "master")
+    when = [1790000000]
+
+    def commit(msg):
+        when[0] += 100
+        t = "@%d +0000" % when[0]
+        git(ep, "add", "-A")
+        git(ep, "commit", "-q", "-m", msg, env={"GIT_AUTHOR_DATE": t, "GIT_COMMITTER_DATE": t})
+        return git(ep, "rev-parse", "--short", "HEAD"), when[0]
+
+    recipe(eroot, "pubd", PKG="pubd", VERSION="1.0", PKGREV="2")
+    recipe(eroot, "unpub", PKG="unpub", VERSION="1.0", PKGREV="1")
+    recipe(eroot, "carry", PKG="carry", VERSION="2.0", PKGREV="1")
+    write(os.path.join(erel, "amix-1.1-published.lock"),
+          "#amix-lock 1\npkg release/1.1 pubd-1.0-2.pkg 10 %s\npkg kspace unpub-1.0-1.pkg 10 %s\n"
+          % ("0" * 64, "0" * 64))
+    write(os.path.join(erel, "carried-1.1"), "# older versions\ncarry-2.0-1.pkg %s f00\n" % ("0" * 64))
+    set_by, set_when = commit("three recipes")
+
+    def epochs(*extra):
+        return run("epochs", eroot, "--release", erel, *extra)
+
+    rc, out, err = epochs()
+    check("epochs: published versions at the commit that set them pass, named",
+          rc == 0 and "2 published version(s) of 3 recipe(s): 0 pinned" in out
+          and "pubd-1.0-2.pkg" in out and "carry-2.0-1.pkg" in out and "unpub" not in out, err or out)
+    write(os.path.join(eroot, "pubd", "README.md"), "docs\n")
+    write(os.path.join(eroot, "unpub", "README.md"), "docs\n")
+    docs, _ = commit("docs: a README in two recipes")
+    rc, out, err = epochs()
+    check("epochs: a published recipe with a later docs commit and no pin is refused: "
+          "the package, the commit, the remedy",
+          rc == 1 and "pubd (%s): pubd-1.0-2.pkg is published (amix-1.1-published.lock)"
+          % os.path.join(eroot, "pubd") in err
+          and "last commit %s (docs: a README in two recipes) is later than %s" % (docs, set_by) in err
+          and "pin it: SOURCE_EPOCH=%d in package.sh" % set_when in err, err or out)
+    check("epochs: an unpublished recipe with a later commit is left alone",
+          "unpub" not in err, err)
+    pkgsh = os.path.join(eroot, "pubd", "package.sh")
+    write(pkgsh, read(pkgsh) + "SOURCE_EPOCH=%d\n" % set_when)
+    commit("pubd: pin SOURCE_EPOCH")
+    rc, out, err = epochs()
+    check("epochs: with a SOURCE_EPOCH pin it passes",
+          rc == 0 and "1 pinned by SOURCE_EPOCH, 1 at the commit" in out, err or out)
+    write(os.path.join(eroot, "carry", "README.md"), "docs\n")
+    commit("docs: carry")
+    refused("epochs: a version carried-1.1 lists is published too",
+            ("epochs", eroot, "--release", erel), "carry-2.0-1.pkg is published (carried-1.1)")
+    write(os.path.join(eroot, "carry", "package.sh"),
+          read(os.path.join(eroot, "carry", "package.sh")).replace("PKGREV=1", "PKGREV=2"))
+    commit("carry 2.0-2")
+    rc, out, err = epochs()
+    check("epochs: a new version, not yet published, passes", rc == 0, err or out)
+    write(os.path.join(erel, "x.lock"), "pkg release/1.1 carry-2.0-2.pkg 10 %s\n" % ("0" * 64))
+    rc, out, err = epochs("--lock", os.path.join(erel, "x.lock"))
+    check("epochs: --lock adds a lock's published versions",
+          rc == 0 and "carry-2.0-2.pkg" in out, err or out)
+    os.remove(os.path.join(erel, "x.lock"))
+    shallow = os.path.join(tmp, "epochs-shallow")
+    subprocess.run(["git", "clone", "-q", "--depth", "1", "file://" + ep, shallow], check=True,
+                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    refused("epochs: a shallow clone is refused, never passed: it cannot see the history",
+            ("epochs", os.path.join(shallow, "userland", "packages"), "--release",
+             os.path.join(shallow, "release")), "is in a shallow clone")
+    nogit = os.path.join(tmp, "epochs-nogit")
+    shutil.copytree(eroot, os.path.join(nogit, "packages"))
+    refused("epochs: recipes outside a git checkout are refused",
+            ("epochs", os.path.join(nogit, "packages"), "--release", erel), "is not in a git checkout")
+    os.makedirs(os.path.join(tmp, "epochs-norel"))
+    refused("epochs: a release directory that names nothing published is refused",
+            ("epochs", eroot, "--release", os.path.join(tmp, "epochs-norel")), "nothing to check against")
+    # the shared variant: its SHARED_PKGREV line sets its version
+    recipe(eroot, "shv", PKG="shv", VERSION="1.0", PKGREV="1", SHARED_PKGREV="1.s")
+    write(os.path.join(eroot, "shv", "prototype"), "i pkginfo\n")
+    write(os.path.join(eroot, "shv", "prototype.shared"), "i pkginfo\n")
+    write(os.path.join(erel, "carried-1.1"), read(os.path.join(erel, "carried-1.1")).replace(
+        "carry-2.0-1.pkg", "carry-2.0-2.pkg") + "shv-1.0-1.s.pkg %s f00\n" % ("0" * 64))
+    commit("shv 1.0-1.s")
+    rc, out, err = epochs()
+    check("epochs: a published shared variant at the commit that set it passes",
+          rc == 0 and "shv-1.0-1.s.pkg" in out, err or out)
+    write(os.path.join(eroot, "shv", "README.md"), "docs\n")
+    commit("docs: shv")
+    refused("epochs: a published shared variant whose directory moved on is refused",
+            ("epochs", eroot, "--release", erel), "shv-1.0-1.s.pkg is published (carried-1.1)")
+    # check-packages runs it against CHECK_PACKAGES_RELEASE
+    os.environ["CHECK_PACKAGES_RELEASE"] = erel
+    try:
+        run("index", eroot)
+        run("fragments", eroot, "-o", os.path.join(eroot, "conf"))
+        rc, out = check_packages(eroot)
+    finally:
+        del os.environ["CHECK_PACKAGES_RELEASE"]
+    check("check-packages: CHECK_PACKAGES_RELEASE checks the published epochs",
+          rc == 1 and "shv-1.0-1.s.pkg is published" in out, out)
+
     # --- several roots, one catalog (userland/packages and userland/base/pkg) ----------
     pk, bp = os.path.join(tmp, "multi", "packages"), os.path.join(tmp, "multi", "base", "pkg")
     shutil.copytree(RECIPES, pk)

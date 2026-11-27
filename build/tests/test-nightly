@@ -71,6 +71,11 @@ if [ "$1" = "${FAIL_STEP:-}" ]; then
 	echo "[FAIL] userland: foo did not build; log out/build/userland/foo.log" >&2
 	exit 1
 fi
+[ "$1" != kit ] || [ -z "${STALE_FAIL:-}" ] || echo "[FAIL] kit: a line of an earlier step that passed" >&2
+if [ "$1" = "${REFUSE_STEP:-}" ]; then
+	echo "assemble-release: refused: grep 2.5.1a-10 (userland): version 2.5.1a-10 is published with other bytes (grep-2.5.1a-10.pkg, md5 0123); a published version never changes" >&2
+	exit 1
+fi
 if [ "$1" = "${LOCK_FAIL:-}" ]; then
 	echo "[FAIL] mklock: old-1-1.pkg: an older version not in release/carried-1.1" >&2
 	exit 1
@@ -101,7 +106,7 @@ try:
     today = datetime.date.today().isoformat()
     base = {k: v for k, v in os.environ.items()
             if not k.startswith(("NIGHTLY_", "AMIX_", "DIST_", "GIT_"))
-            and k not in ("SYSTEM", "STOCK", "RELEASE_PREVIOUS", "RELEASE_PUBLIC", "FAIL_STEP", "GAP_STEP", "LOCK_FAIL")}
+            and k not in ("SYSTEM", "STOCK", "RELEASE_PREVIOUS", "RELEASE_PUBLIC", "FAIL_STEP", "GAP_STEP", "LOCK_FAIL", "REFUSE_STEP", "STALE_FAIL")}
 
     def run(*lines, **env):
         e = dict(base, NIGHTLY_REPO=repo, NIGHTLY_ROOT=root, SYSTEM=sysdir)
@@ -206,6 +211,17 @@ try:
           rc == 1 and r.get("failed_step") == "lock" and r.get("failed_recipe") == "old-1-1.pkg",
           out + read(os.path.join(d1 + "-r4", "result")))
 
+    rc, out = run("master", NIGHTLY_FORCE="1", REFUSE_STEP="release", STALE_FAIL="1")
+    r = result(d1 + "-r5")
+    check("a published version rebuilt with other bytes: RED at release, the refusal and the package named, "
+          "not an earlier step's [FAIL] line",
+          rc == 1 and r.get("failed_step") == "release" and r.get("failed_recipe") == "grep"
+          and read(os.path.join(d1 + "-r5", "fail.txt")).startswith(
+              "release: assemble-release: refused: grep 2.5.1a-10 (userland): version 2.5.1a-10 is published "
+              "with other bytes")
+          and "stopped at release: grep" in read(os.path.join(root, "summary")),
+          out + read(os.path.join(d1 + "-r5", "result")) + read(os.path.join(d1 + "-r5", "fail.txt")))
+
     # the published tree per line
     prev = os.path.join(tmp, "published")
     os.makedirs(os.path.join(prev, "pkgs", "stock"))
@@ -214,18 +230,18 @@ try:
         return read(os.path.join(d1 + "-r%d" % n, "out", "release-env")).strip()
     rc, out = run("master", NIGHTLY_FORCE="1", RELEASE_PREVIOUS=prev)
     check("RELEASE_PREVIOUS: the release step builds on it, STOCK its pkgs/stock",
-          env_of(5) == "previous=%s stock=%s" % (prev, os.path.join(prev, "pkgs", "stock"))
-          and result(d1 + "-r5").get("release_previous") == prev, out + env_of(5))
+          env_of(6) == "previous=%s stock=%s" % (prev, os.path.join(prev, "pkgs", "stock"))
+          and result(d1 + "-r6").get("release_previous") == prev, out + env_of(6))
     rc, out = run("master", NIGHTLY_FORCE="1", RELEASE_PREVIOUS="/nowhere", NIGHTLY_PREVIOUS_master=prev)
     check("NIGHTLY_PREVIOUS_<line> is taken over RELEASE_PREVIOUS",
-          env_of(6) == "previous=%s stock=%s" % (prev, os.path.join(prev, "pkgs", "stock")), out + env_of(6))
+          env_of(7) == "previous=%s stock=%s" % (prev, os.path.join(prev, "pkgs", "stock")), out + env_of(7))
     rc, out = run("master", NIGHTLY_FORCE="1", RELEASE_PREVIOUS=prev, NIGHTLY_PREVIOUS_master="none")
     check("NIGHTLY_PREVIOUS_<line>=none: a fresh release tree, no published tree, no stock from it",
-          env_of(7) == "previous=none stock=none" and result(d1 + "-r7").get("release_previous") == "none"
-          and "release previous: none" in read(os.path.join(d1 + "-r7", "dist.log")), out + env_of(7))
+          env_of(8) == "previous=none stock=none" and result(d1 + "-r8").get("release_previous") == "none"
+          and "release previous: none" in read(os.path.join(d1 + "-r8", "dist.log")), out + env_of(8))
     rc, out = run("master", NIGHTLY_FORCE="1", NIGHTLY_PREVIOUS_master="none", STOCK="/given/stock")
     check("a STOCK given is passed on with no published tree",
-          env_of(8) == "previous=none stock=/given/stock", out + env_of(8))
+          env_of(9) == "previous=none stock=/given/stock", out + env_of(9))
     git("branch", "release-1.1", cwd=repo)
     rc, out = run("release-1.1", NIGHTLY_PREVIOUS_release_1_1=prev)
     check("a line name with - and .: its variable has _ for them",
@@ -241,7 +257,7 @@ try:
         time.sleep(0.5)
         rc, out = run("master", NIGHTLY_FORCE="1")
         check("a run already going: exit 1, nothing built", rc == 1 and "already going" in out
-              and not os.path.exists(d1 + "-r9"), out)
+              and not os.path.exists(d1 + "-r10"), out)
     finally:
         lk.kill()
         lk.wait()

@@ -105,6 +105,7 @@ build/pkg/pkgmeta index <packages dir>... [-o FILE] [--check]
 build/pkg/pkgmeta stock-pages <stock /usr/share/man/whatis>
 build/pkg/pkgmeta guard <catalog>|<directory of .pkg>...
 build/pkg/pkgmeta dirs <prototype>|<tree>...
+build/pkg/pkgmeta epochs <packages dir>... --release <release dir> [--lock <lock>]...
 ```
 
 - `check` also reads the prototype. It refuses an object outside `PREFIX`,
@@ -145,6 +146,17 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   tracked files, never build output (a cut's whole old tree under
   `kernel/port/build/cuts`), and refuses when git cannot list them. `check-packages` runs it on
   `kernel/`, and so does make dist's kspace step.
+- `epochs` keeps a published version rebuilding to its published bytes. A
+  recipe whose file name (`<PKG>-<VERSION>-<PKGREV>.pkg`, or the shared
+  variant's) is a `pkg release/` line of a `release/amix-*.lock` (or of a
+  `--lock` file) or a `release/carried-*` line is refused unless `package.sh`
+  sets `SOURCE_EPOCH`, or the directory's last commit is the one that last
+  changed its `VERSION` or `PKGREV` line. A later commit, even to a README,
+  moves the epoch and so every time stamp of the datastream. The message
+  names the package and the commit, and the remedy: `SOURCE_EPOCH=` the
+  epoch of the commit that set the version (the published package's md5
+  decides). It reads the git history and refuses a shallow clone or a tree
+  outside a checkout rather than pass. `check-packages` runs it.
 - `pkginfo` is what the roll packs.
 - `catalog` prints the package's catalog v1 line, the one
   amix-packagemanager's `gen-catalog.py` writes for the rolled package:
@@ -163,8 +175,9 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   `check-packages` uses them on `userland/packages` and `userland/base/pkg`
   together: every `package.sh` passes `check`, and `userland/packages`'
   `INDEX.md` and `conf/` (the fragments) are current. A directory that does
-  not exist is skipped; nothing is checked while neither holds a
-  `package.sh`.
+  not exist is a failure, and so is no `package.sh` in any of them: nothing
+  was checked. It also refuses a published version whose epoch has moved
+  (`pkgmeta epochs`, below).
 
 ## One version per name
 

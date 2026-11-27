@@ -33,8 +33,10 @@
 #              failed_recipe, failed_log, catalog_md5 (<release>:<md5> per
 #              release tree), lock_sha256
 #   dist.log   every step's output, between `=== <step>` lines
-#   fail.txt   the first [FAIL] line of the step that stopped, and the tail of
-#              the log it names
+#   fail.txt   the line of the step that stopped (its [FAIL] line, else a
+#              tool's refusal), and the tail of the log it names; a published
+#              version rebuilt with other bytes stops the release step, and
+#              the refusal names the package
 #   src/ out/ system/   the clone, its DIST_OUT and its amix-system, removed
 #              after NIGHTLY_KEEP_DAYS (logs and result stay; a log over
 #              1 MiB is gzipped)
@@ -202,15 +204,19 @@ build_line() {
 	setkey status RED; setkey rc "$rc"
 	setkey failed_step "$failed"
 	# the step's own line (a recipe's log tail may hold [FAIL] lines before
-	# it), else its last [FAIL], else its first [MISSING]
+	# it), else a tool's refusal (the release step's "a published version
+	# never changes"), else its last [FAIL], else its first [MISSING]; only
+	# the step's output, never an earlier step's lines in dist.log
 	f=
 	if [ -f "$run/fail-step.log" ]; then
 		f=$(grep -m1 "^\[FAIL\] $failed: " "$run/fail-step.log")
+		[ -n "$f" ] || f=$(grep -m1 ': refused: ' "$run/fail-step.log")
 		[ -n "$f" ] || f=$(grep '^\[FAIL\]' "$run/fail-step.log" | tail -n 1)
 		[ -n "$f" ] || f=$(grep -m1 '^\[MISSING\]' "$run/fail-step.log")
 	fi
-	[ -n "$f" ] || f=$(grep '^\[FAIL\]' "$log" | tail -n 1)
+	[ -n "$f" ] || [ "$failed" != setup ] || f=$(grep '^\[FAIL\] nightly-dist: ' "$log" | tail -n 1)
 	recipe=$(echo "$f" | sed -n 's/^\[[A-Z]*\] [^:]*: \([^ ;:]*\):\{0,1\} .*/\1/p')
+	[ -n "$recipe" ] || recipe=$(echo "$f" | sed -n 's/^[^ ]*: refused: \([^ ]*\) .*/\1/p')
 	flog=$(echo "$f" | sed -n 's/.*; log out\/\([^ ;]*\).*/\1/p')
 	setkey failed_recipe "$recipe"
 	setkey failed_log "${flog:+$run/out/$flog}"

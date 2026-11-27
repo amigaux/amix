@@ -21,7 +21,7 @@ finding to fix, not a gate.
 | tests | build/pkg host tests (pkgmeta, the driver, the roll's normaliser) | `make -C build test` |
 | tests | pkgtools: the host engine, then its eight suites (apkg, the kbootset consumer, conffile end to end, the no-http variant, conffile, contents-fsck, migrate, the repository tools) | `PKGTOOLS_REQUIRE="objdump fakeroot compress engine" make -C userland/pkgtools test` |
 | tests | toolchain host tests (the distfile fetch, the m68k-gnu-bin shim, check-image, the image manifest) | `sh toolchain/test-tools` |
-| tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current | `make -C build check-packages` |
+| tests | userland/packages and userland/base/pkg: every package.sh; `INDEX.md` and `conf/` in userland/packages current; a published version's epoch has not moved (reads the full history) | `make -C build check-packages` |
 | kit | amix-system at its pin, checked | `system/fetch-amix-system DIR` |
 | kit | the build container (or the cached image) | `toolchain/container-build.sh DIR amix-toolchain:ci` |
 | kit | the image's gcc14 is the pinned build (`toolchain/gcc14-cross-amix.tree`) | `toolchain/extract-g14.sh --check amix-toolchain:ci` |
