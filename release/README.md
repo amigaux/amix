@@ -89,6 +89,32 @@ of every earlier release of the series, built from its tag, against the
 written tree. A row it refuses fails the step; a row that only has to wait
 is named on a WAIT line.
 
+## A point release of packages: 1.1.3
+
+1.1.3 is built the same way, at its commit on the published 1.1.2 tree as
+served after the catalog-only update (catalog md5
+`6c837186584ce26f812b1aa41c7d9e0f`). Its X11, Motif and CDE are the shared
+variants. Against 1.1.2 it adds APKG 0.3.15, amix-base 1.0-38, amixrt 1.0-5,
+x11r6.3 6.3-15.s, xztop 1.1.1-3.s, kern46m k46.1.6.261120-68, va2000-k30 and
+-k46 1.1.0-3, xsurf-k30 and -k46 1.0.0-5, z3660rtg-k30 and -k46 1.1.2-4, new
+revisions of 22 other userland packages, and the new cxxrt 1.0-1, regex 3.8-2,
+libjpeg 9f-1, motif 2.3.8-3.s, cde 2.5.3-4.s and x11contrib 6.0-1.s: 40 new
+files. The versions they replace move to the older block, and every 1.1.2 file
+is kept byte for byte. Its lock, built at amix f9de17de (the tag `1.1.3`):
+
+- `amix-1.1.3-published.lock` (sha256 `d99134508b908db93990f424f659114e0e85d69fbb844ae9bbe1a07d42692383`):
+  the record of what `http://pkg.amigaux.org/1.1` holds with 1.1.3 (catalog md5
+  `13364d8e9ed75a94f8444535d5bc5024`), the build on the published 1.1.2 tree.
+  Its `previous` line is the digest of the 2026-11-17 catalog above. As for
+  1.1.2, the media were not part of this release, so the lock has no lines
+  for them.
+
+The shared packages name their dependencies with version floors
+(`amixrt>=1.0-5`), which apkg reads from 0.3.14 on. On a box with an older
+apkg (0.3.11 or 0.3.13), x11r6.3, motif, cde, x11contrib and xztop install
+once APKG 0.3.15 is in, by `apkg upgrade apkg` or in the next upgrade;
+`older-apkg-check.sh` names them on WAIT lines.
+
 `make lock LOCK=<file>` writes nothing; it refuses a build in `out/` whose
 lock differs from `<file>`, and prints each line that differs (`-` in the lock
 of record, `+` in this build).
