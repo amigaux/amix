@@ -3,6 +3,7 @@ NAME=coreutils
 PKG=coreutil
 VERSION=5.2.1
 PKGREV=6   # -6: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
+SOURCE_EPOCH=1795097888   # -6's published build (2026-11-19 14:18:08 UTC), kept when only docs change
 SUMMARY="GNU coreutils 5.2.1"
 DESC="GNU coreutils 5.2.1 beside the stock SVR4 tools, which it does NOT replace: GNU ls, cp, mv, rm, sort, date, df, du, install, stat and the rest, plus md5sum and sha1sum (the box has no content checksum otherwise). Installs /opt/amix/bin; add /opt/amix/bin to PATH."
 CATEGORY=utility

@@ -3,6 +3,7 @@ NAME=diffutils
 PKG=diffutil
 VERSION=2.8.1
 PKGREV=5   # -5: gcc14-cross-amix c806d49 (release-1.1): library names first in .dynstr
+SOURCE_EPOCH=1795097888   # -5's published build (2026-11-19 14:18:08 UTC), kept when only docs change
 SUMMARY="GNU diffutils 2.8.1"
 DESC="GNU diffutils 2.8.1 beside the stock SVR4 diff tools, which it does NOT replace: diff with unified (-u) and recursive (-r) output, diff3, sdiff and cmp. Installs /opt/amix/bin/{diff,diff3,sdiff,cmp}; add /opt/amix/bin to PATH."
 CATEGORY=utility
