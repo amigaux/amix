@@ -25,6 +25,18 @@ row old-k30 k30 1.1.1-k30-x11 session=cde
 	apkg upgrade apkg
 	apkg install cde
 
+# a 1.1.2 user who skips 'apkg upgrade apkg' and types a plain 'apkg upgrade': apkg 0.3.13 lays the newer apkg
+# first and hands the rest of the upgrade to it, so the floors hold; on k46 the upgrade brings the new kernel
+row plain-k30 k30 1.1.2-k30-x11 session=cde
+	apkg update
+	apkg upgrade
+	apkg install cde
+
+row plain-k46 k46 1.1.2-k46-x11 session=cde
+	apkg update
+	apkg upgrade
+	apkg install cde
+
 row std-k30 k30 1.1.2-k30-std session=cde
 	apkg update
 	apkg upgrade apkg
