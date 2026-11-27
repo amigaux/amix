@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — the installer counts a 32 MiB machine as 32 (508bc988)
+
+The installer counts a 32 MiB machine as 32 for the swap default (128 MB): kinfo_fast_mb adds back the RAM disk the install boot's figure lacks and rounds to the nearest MB, in setup.sh and install.sh; install.sh logs the reading. Every 1.1, 1.1.1 and 1.1.2 install medium offered 64 MB of swap on a machine where the kernel runs in a 32 MiB region.
+
 ## 2026-11-20 — 1.1 notes: the 68060 image's boots on real hardware (67294ee9)
 
 docs/releases/1.1.md: the 68060 image's line says it was booted on an A4000T with a Z3660 before release (its first boot and four cold boots, on the 1.1 and the stock Z3660 firmware). Docs only.
