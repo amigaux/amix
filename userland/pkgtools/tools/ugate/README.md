@@ -47,6 +47,20 @@ A row passes when all of these hold:
 
 The disk copies are deleted when their row ends (`--keep-disks` keeps them); the evidence stays under `OUT/rows/`.
 
+## The session check
+
+The conf's `UGATE_SESSION_HOOK` names the session check, which comes from outside this directory. Keep it an
+unchanged copy of its source, and set everything a gate needs through its environment in that one conf line:
+- **It installs nothing.** A check that installs a missing session is a hand-prepared box, and a missing
+  dependency floor goes unseen. A row whose session is not installed must fail at once.
+- **The source commit goes in a comment beside the conf line.**
+- **To refresh it:**
+  1. copy the tools whole at the new commit (`git archive`);
+  2. compare each file's sha256 with the source's list;
+  3. carry the conf line's environment over, and run every rows file once.
+
+  The copy is not patched: a change the gate needs goes to the source first.
+
 ## Adding a row
 
 A rows file has one block per row:

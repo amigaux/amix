@@ -30,6 +30,7 @@ UGATE_IMAGE_KEY=root6
 UGATE_ROW_PREFIX=E95
 # the session check a row names with session=<name>: run on boot 2 and later with UGATE_SESSION=<name> and the
 # runner's environment (RIG_SLOT, RIG_CELL, RIG_IPC); its exit status is the check's. It must install nothing.
+# An unchanged copy of its source, configured only here (README: The session check); source: <repo> <commit>
 UGATE_SESSION_HOOK=env SCENARIO=$UGATE_SESSION bash /path/to/session-hook.sh
 # optional: UGATE_IGNORE_CHECKS (runner reasons that do not fail a row; default display-rtg), UGATE_ROW_TIMEOUT
 # (s, default 14400), UGATE_BOX_WAIT (s, default 7200), UGATE_AMIXRUN / UGATE_AMIXSYNC (default kernel/k30/tools)
