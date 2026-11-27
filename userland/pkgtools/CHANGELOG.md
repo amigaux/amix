@@ -1,3 +1,7 @@
+## 2026-11-27 — tools/ugate: a plain apkg upgrade from 1.1.2 (b95b1786)
+
+The 1.1.3 rows gain a 1.1.2 user who types a plain `apkg upgrade` first. apkg 0.3.13 lays the newer apkg and hands it the rest, so cde's dependency floors hold, and CDE comes up on k30 and k46.
+
 ## 2026-11-27 — tools/ugate: the user-path release gate (0313bf36)
 
 One command serves a candidate release tree read-only to released, installed systems booted in the emulator (one row per slot, in parallel) and runs the plain commands their users type. Each row is judged on every command's exit status, the kernel on each boot, new pkgchk -n errors, bus errors and a session check, and failing rows are named. Nothing on the box is prepared by hand. The 1.1.3 rows pass on the published tree and fail without cde's amix-base floor.
