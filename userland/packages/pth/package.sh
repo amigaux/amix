@@ -3,6 +3,7 @@ NAME=pth
 PKG=pth
 VERSION=2.0.7
 PKGREV=3   # -3: sockets on Amix: connect finishes before it returns (a refused one gives ECONNREFUSED), recv and send without the NULL address libsocket faults on, send through write, which counts what went, poll leaves listeners alone
+SOURCE_EPOCH=1793981688   # -3's published build (2026-11-06 16:14:48 UTC), kept when only docs change
 SUMMARY="GNU Pth 2.0.7 - user-space threads and a pthread library"
 DESC="GNU Pth 2.0.7, cooperative user-space threads for Amix (which has no kernel threads): libpth.a with pth.h, and libpthread.a with a pthread.h emulation for porting POSIX-threads programs. Static, under /opt/amix. Python and SDL2 link it."
 CATEGORY=library
