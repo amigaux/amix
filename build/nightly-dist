@@ -16,17 +16,22 @@
 #   AMIX_SYSTEM_REPO   a local amix-system clone: each line's system input is
 #                      its pin, by system/fetch-amix-system, from there
 #   SYSTEM             an amix-system checkout to use instead
-#   RELEASE_PREVIOUS   the published tree the release step builds on, as a
-#                      point release is built (release/README.md); STOCK
-#                      defaults to its pkgs/stock
+#   NIGHTLY_PREVIOUS_<line>  the published tree the line's release step
+#                      builds on, as a point release is built
+#                      (release/README.md), or none: a fresh release tree;
+#                      the line's name with each character but A-Z a-z 0-9 _
+#                      as _ (NIGHTLY_PREVIOUS_release_1_1)
+#   RELEASE_PREVIOUS   the tree for a line with no NIGHTLY_PREVIOUS_<line>;
+#                      STOCK defaults to the tree's pkgs/stock
 #   RELEASE_PUBLIC     1 by default; ROM_MANIFEST, PRIVACY_PATTERNS, STOCK,
 #                      DIST_NETWORK, AMIX_IMAGE, VARIANT: passed on as set
 #
 # Each line built gets NIGHTLY_ROOT/<date>-<line>/ (-r2, -r3 on a second run
 # that day):
-#   result     key=value lines: line commit date status rc seconds steps
-#              (step:rc:seconds ...), failed_step, failed_recipe, failed_log,
-#              catalog_md5 (<release>:<md5> per release tree), lock_sha256
+#   result     key=value lines: line commit date release_previous status rc
+#              seconds steps (step:rc:seconds ...), failed_step,
+#              failed_recipe, failed_log, catalog_md5 (<release>:<md5> per
+#              release tree), lock_sha256
 #   dist.log   every step's output, between `=== <step>` lines
 #   fail.txt   the first [FAIL] line of the step that stopped, and the tail of
 #              the log it names
@@ -54,10 +59,7 @@ steps=${NIGHTLY_STEPS:-kit kernel-k30 kernel-k46 modules drivers kspace userland
 keep=${NIGHTLY_KEEP_DAYS:-3}
 : "${RELEASE_PUBLIC=1}"
 export RELEASE_PUBLIC
-if [ -z "${STOCK:-}" ] && [ -n "${RELEASE_PREVIOUS:-}" ] && [ -d "$RELEASE_PREVIOUS/pkgs/stock" ]; then
-	STOCK=$RELEASE_PREVIOUS/pkgs/stock
-	export STOCK
-fi
+stock_given=${STOCK:-}
 unset DIST_OUT DIST_HOST LOCK
 
 mkdir -p "$NIGHTLY_ROOT"
@@ -90,6 +92,12 @@ build_line() {
 	commit=$(git -C "$NIGHTLY_REPO" rev-parse --verify -q "$line^{commit}") || {
 		add "$line: RED, no such line in the repository"; anyred=1; return; }
 	short=$(echo "$commit" | cut -c1-8)
+	# the line's published tree, and the stock packages from it
+	v=NIGHTLY_PREVIOUS_$(printf %s "$line" | tr -c 'A-Za-z0-9_' _)
+	eval "prev=\${$v-\${RELEASE_PREVIOUS:-}}"
+	[ "$prev" != none ] || prev=
+	stock=$stock_given
+	[ -n "$stock" ] || [ -z "$prev" ] || [ ! -d "$prev/pkgs/stock" ] || stock=$prev/pkgs/stock
 	status=$root/status-$line
 	if [ -z "${NIGHTLY_FORCE:-}" ] && [ -f "$status" ]; then
 		read -r st was wdate _rest < "$status"
@@ -107,11 +115,12 @@ build_line() {
 	log=$run/dist.log
 	: > "$run/result"
 	setkey line "$line"; setkey commit "$commit"; setkey date "$today"
+	setkey release_previous "${prev:-none}"
 	start=$(date +%s)
 	failed= gaps= stepinfo= rc=0
 	{
 		echo "=== nightly-dist $line $commit $(date '+%F %T')"
-		echo "=== release previous: ${RELEASE_PREVIOUS:-none}${RELEASE_PREVIOUS:+, catalog md5 $(md5sum < "$RELEASE_PREVIOUS/catalog" 2>/dev/null | cut -c1-32)}"
+		echo "=== release previous: ${prev:-none}${prev:+, catalog md5 $(md5sum < "$prev/catalog" 2>/dev/null | cut -c1-32)}"
 	} >> "$log"
 	if ! git clone -q --no-checkout "$NIGHTLY_REPO" "$run/src" >> "$log" 2>&1 ||
 	   ! git -C "$run/src" -c advice.detachedHead=false checkout -q --detach "$commit" >> "$log" 2>&1; then
@@ -140,7 +149,11 @@ build_line() {
 			t0=$(date +%s)
 			echo "=== $s $(date +%T)" >> "$log"
 			rc=0
-			( cd "$run/src" && SYSTEM=$sys DIST_OUT=$run/out sh build/dist.sh "$s" ) > "$run/step.log" 2>&1 || rc=$?
+			( cd "$run/src" || exit
+			  unset RELEASE_PREVIOUS STOCK
+			  [ -z "$prev" ] || { RELEASE_PREVIOUS=$prev; export RELEASE_PREVIOUS; }
+			  [ -z "$stock" ] || { STOCK=$stock; export STOCK; }
+			  SYSTEM=$sys DIST_OUT=$run/out sh build/dist.sh "$s" ) > "$run/step.log" 2>&1 || rc=$?
 			cat "$run/step.log" >> "$log"
 			echo "=== $s rc=$rc $(( $(date +%s) - t0 ))s" >> "$log"
 			stepinfo="$stepinfo $s:$rc:$(( $(date +%s) - t0 ))"

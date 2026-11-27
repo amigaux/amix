@@ -197,9 +197,13 @@ the `drivers` step built.
 
 A change that moves a build-wide default is proven by the whole build, not by
 one recipe. `build/nightly-dist master next` builds each line in turn from a
-fresh clone at its head (`NIGHTLY_REPO`), with the release step on the
-published tree as a point release is built (`RELEASE_PREVIOUS`) and the lock
-step at the end. Each line gets a dated result under `NIGHTLY_ROOT`: the
+fresh clone at its head (`NIGHTLY_REPO`), through the lock step. The release
+step of a line that ships point releases is built on the published tree, as
+a point release is built: `NIGHTLY_PREVIOUS_master=<tree>`. A line that is
+not a point release of it, such as `next`, builds a fresh release tree:
+`NIGHTLY_PREVIOUS_next=none`. (In the variable, each character of the line's
+name but letters, digits and `_` is `_`; `RELEASE_PREVIOUS` is the tree of a
+line with no variable of its own.) Each line gets a dated result under `NIGHTLY_ROOT`: the
 status, the exit status, the wall time, each step's time, the first failing
 step and recipe with the tail of its log, the catalog md5 and the lock's
 sha256. `status-<line>` there is one line, `GREEN` or `RED` with the commit
