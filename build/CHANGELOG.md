@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — nightly-dist: a published tree per line (0fbfe344)
+
+NIGHTLY_PREVIOUS_<line> names the published tree each line's release step builds on, or none for a fresh release tree (next is not a 1.1 point release); RELEASE_PREVIOUS is the fallback; STOCK defaults per line; the result records release_previous.
+
 ## 2026-11-27 — nightly-dist; DIST_NETWORK (f01cd6bf)
 
 nightly-dist runs the full make dist of each line from a fresh clone at its head through the lock step, with the release step on a published tree; a dated result per line (status, rc, time, the failing step and recipe with its log tail, catalog md5, lock sha256), a status line and a summary; an unchanged head is skipped, caches are carried to the next night, results older than 3 days are reduced to their logs. dist.sh: DIST_NETWORK, the steps' container network (none: every input from the caches).
