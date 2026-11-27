@@ -615,6 +615,103 @@ for p in FLIB FSAT FUAPP FTOOL FCHAIN; do rm -rf "${ROOT:?}/var/sadm/pkg/${p:?}"
 rm -f "${CACHE:?}"/f*-*.pkg
 "$APKG" update >/dev/null 2>&1 || bad "the main catalog is not back"
 
+# ------------------------------------------------ not a 1.1 install (0.3.16)
+# amix-base is laid by the 1.1 installer, never by apkg: on a system that
+# has none, an install whose plan would lay it is refused before anything
+# is fetched; an upgrade against a tree that carries it says so once.
+AB=$WORK/abrepo
+mkdir -p "$AB/pkgs"
+for f in amix-base-1.0-38.pkg abapp-1.0.pkg abmid-1.0.pkg abtool-2.0.pkg; do
+    printf 'fake SVR4 datastream for %s\n' "$f" > "$AB/pkgs/$f"
+done
+ab() {  # ab <name> <version> <pkginst> <deps>: a catalog row of abrepo
+    printf '%s|%s|%s|%s-%s.pkg|%s|%s|%s|system|base fixture %s\n' "$1" "$2" "$3" \
+        "$1" "$2" "$(md5of "$AB/pkgs/$1-$2.pkg")" "$(sizeof "$AB/pkgs/$1-$2.pkg")" "$4" "$1"
+}
+{
+    echo "#apkg-catalog 1"
+    ab abmid 1.0 ABMID abapp
+    ab abapp 1.0 ABAPP 'amix-base>=1.0-38,abtool'
+    ab abtool 2.0 ABTOOL none
+    ab amix-base 1.0-38 amxbase none
+} > "$AB/catalog"
+md5sum "$AB/catalog" > "$AB/catalog.md5"
+mkconf "$WORK/conf-ab" "http://127.0.0.1:$PORT/abrepo" "$WORK/bin/pkgadd-shim"
+ABC="$APKG -c $WORK/conf-ab"
+fin ABTOOL 1.0
+run 0 "a catalog with amix-base is read" $ABC update
+NOTE="apkg: this system has no amix-base: it is not an amigaux 1.1 install, and what needs amix-base needs one: https://amigaux.org/install/from-1.0/"
+abnone() {  # abnone: nothing fetched, nothing laid
+    [ ! -s "$SHIMLOG" ] && [ -z "$(ls "$CACHE" | grep -e '^ab' -e '^amix-base')" ]
+}
+: > "$SHIMLOG"
+run 5 "no amix-base: install of a package that needs it is refused (exit 5)" $ABC install abapp
+echo "$OUT" | grep -qx "apkg: abapp needs amix-base, and this system has none: it is not an amigaux 1.1 install" && \
+echo "$OUT" | grep -qx "apkg: what needs amix-base needs a 1.1 system, which is a clean install: https://amigaux.org/install/from-1.0/" && \
+echo "$OUT" | grep -qx "apkg: a 1.0 system takes its packages from repo=http://pkg.amigaux.org" && \
+echo "$OUT" | grep -qx "apkg: nothing was changed" && [ "$(echo "$OUT" | wc -l)" = 4 ] && abnone \
+    && ok "... it says what the system is and where 1.1 is described; nothing fetched or laid" \
+    || bad "amix-base refusal" "$OUT $(cat "$SHIMLOG") $(ls "$CACHE")"
+: > "$SHIMLOG"
+run 5 "... through a dependency of a dependency too" $ABC install abmid
+echo "$OUT" | grep -qx "apkg: abapp needs amix-base, and this system has none: it is not an amigaux 1.1 install" && abnone \
+    && ok "... naming the package that needs it" || bad "amix-base refusal, transitive" "$OUT $(cat "$SHIMLOG")"
+: > "$SHIMLOG"
+run 5 "... and amix-base named itself" $ABC install amix-base
+echo "$OUT" | grep -qx "apkg: amix-base is laid by the amigaux 1.1 installer, and this system has none: it is not an amigaux 1.1 install" && abnone \
+    && ok "... it says the installer lays it" || bad "amix-base named" "$OUT $(cat "$SHIMLOG")"
+: > "$SHIMLOG"
+run 5 "... and with -n" $ABC -n install abapp
+abnone && ok "... -n fetches nothing either" || bad "amix-base refusal -n" "$OUT"
+: > "$SHIMLOG"
+run 0 "no amix-base: install of a package that does not need it goes on" $ABC -f install abtool
+[ "$(grep -c pkgadd "$SHIMLOG")" = 1 ] && grep -q ' ABTOOL$' "$SHIMLOG" && ! echo "$OUT" | grep -q 'amix-base' \
+    && ok "... with no word about amix-base" || bad "unrelated install" "$OUT $(cat "$SHIMLOG")"
+fin ABTOOL 1.0
+: > "$SHIMLOG"
+run 0 "no amix-base: a plain upgrade says it once and goes on" $ABC upgrade
+[ "$(echo "$OUT" | grep -cxF "$NOTE")" = 1 ] && grep -q ' ABTOOL$' "$SHIMLOG" && \
+echo "$OUT" | grep -qx "upgraded abtool to 2.0" \
+    && ok "... abtool upgraded, the line once" || bad "upgrade note" "$OUT $(cat "$SHIMLOG")"
+fin ABTOOL 1.0
+: > "$SHIMLOG"
+run 0 "... and an upgrade by name the same" $ABC upgrade abtool
+[ "$(echo "$OUT" | grep -cxF "$NOTE")" = 1 ] && grep -q ' ABTOOL$' "$SHIMLOG" \
+    && ok "... the line once" || bad "named upgrade note" "$OUT $(cat "$SHIMLOG")"
+# a partially installed amix-base is one the system has: as before
+fin amxbase 1.0-38; : > "$ROOT/var/sadm/pkg/amxbase/!I-Lock!"
+: > "$SHIMLOG"
+run 0 "a partial amix-base: install goes on as before" $ABC install abapp
+grep -q ' amxbase$' "$SHIMLOG" && grep -q ' ABAPP$' "$SHIMLOG" && ! echo "$OUT" | grep -q 'not an amigaux 1.1' \
+    && ok "... amix-base laid again, then abapp" || bad "partial amix-base" "$OUT $(cat "$SHIMLOG")"
+rm -rf "${ROOT:?}/var/sadm/pkg/amxbase" "${ROOT:?}/var/sadm/pkg/ABAPP"
+# a 1.1 system (and the installer's apkg -R into a target that has it)
+fin amxbase 1.0-38
+fin ABTOOL 1.0
+: > "$SHIMLOG"
+run 0 "amix-base installed: install goes on" $ABC install abapp
+grep -q ' ABAPP$' "$SHIMLOG" && ! grep -q ' amxbase$' "$SHIMLOG" && ! echo "$OUT" | grep -q 'not an amigaux 1.1' \
+    && ok "... abapp laid, no word" || bad "1.1 install" "$OUT $(cat "$SHIMLOG")"
+: > "$SHIMLOG"
+run 0 "amix-base installed: upgrade without the line" $ABC upgrade abtool
+! echo "$OUT" | grep -qF "$NOTE" && ok "... no line" || bad "1.1 upgrade" "$OUT"
+# the target composes under the client's root (APKG_ROOT): <root><target>/var/sadm/pkg
+TGT=$ROOT/abtarget
+mkdir -p "$TGT/var/sadm/pkg"
+rm -f "${CACHE:?}"/ab*-*.pkg "${CACHE:?}"/amix-base-*.pkg
+: > "$SHIMLOG"
+run 5 "-R into a target without amix-base: refused" $ABC -R /abtarget install abapp
+abnone && ok "... the target decides, not the client's root" || bad "-R refusal" "$OUT $(cat "$SHIMLOG")"
+mkdir -p "$TGT/var/sadm/pkg/amxbase"
+printf 'PKG=amxbase\nNAME=base\nVERSION=1.0-38\nCATEGORY=system\n' > "$TGT/var/sadm/pkg/amxbase/pkginfo"
+: > "$SHIMLOG"
+run 0 "-R into a target that has amix-base (the 1.1 installer's case): goes on" $ABC -R /abtarget install abapp
+grep -q ' ABAPP$' "$SHIMLOG" && ok "... abapp laid into the target" || bad "-R target with amix-base" "$OUT $(cat "$SHIMLOG")"
+for p in amxbase ABTOOL ABAPP ABMID; do rm -rf "${ROOT:?}/var/sadm/pkg/${p:?}"; done
+rm -rf "${TGT:?}"
+rm -f "${CACHE:?}"/ab*-*.pkg "${CACHE:?}"/amix-base-*.pkg
+"$APKG" update >/dev/null 2>&1 || bad "the main catalog is not back"
+
 # ------------------------------------------------ missing dep / cycle / unknown
 run 5 "install with missing dep fails with exit 5" "$APKG" install misdep
 run 5 "install with dependency cycle fails with exit 5" "$APKG" install cyca

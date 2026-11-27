@@ -22,7 +22,7 @@ beside them, under a parallel prefix, so the stock tools keep working the whole 
 
 **Status: shipped and in use.** The direction was decided 2026-07-04 and everything below is
 bench-verified on a real Amix 2.1c system; the live package repositories are at
-<http://pkg.amigaux.org/>, one per release (`/1.0`, `/1.1`). Development state and history:
+<http://pkg.amigaux.org/>: the 1.0 tree at the top (`/`), 1.1's under `/1.1`. Development state and history:
 [NOTES.md](NOTES.md) (the authority) and [CHANGELOG.md](CHANGELOG.md).
 
 ## What is here
@@ -107,11 +107,11 @@ This is a hard rule of the project, not a default:
 ## Publishing a repository (maintainers)
 
 A repository is a static file tree served over plain HTTP — a `catalog`, a `catalog.md5` and a
-`pkgs/` directory — one per Amix release: `http://pkg.amigaux.org/1.0`, `http://pkg.amigaux.org/1.1`,
-each its own directory under the docroot, nothing at the docroot itself. No server-side software.
-`publish.sh` takes the release as a required argument and writes only that release's tree; the
-1.0 tree, published at the docroot until 2026-11-01, moves to `/1.0/` once with
-`tools/repo/move-1.0-tree.sh` (a dry-run plan by default; `docs/design.md` section 5.1). The
+`pkgs/` directory — one per Amix release. The 1.0 tree is at the docroot (`http://pkg.amigaux.org`,
+what a 1.0 system's `repo=` names); 1.1's is `http://pkg.amigaux.org/1.1`. No server-side software.
+`publish.sh` takes the release as a required argument and writes only that release's tree.
+`tools/repo/move-1.0-tree.sh` would move the 1.0 tree to `/1.0/` (a dry-run plan by default;
+`docs/design.md` section 5.1); it has not been run, so a 1.0 system's `repo=` still works. The
 host-side pipeline is:
 
 ```

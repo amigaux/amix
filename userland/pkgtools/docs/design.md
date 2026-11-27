@@ -346,11 +346,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
 
 ### 5.1 Catalog and publishing
 
-- **Repository layout: one tree per release.** The host serves each Amix release from its own
-  directory, and nothing from the docroot itself:
+- **Repository layout: one tree per release.** The host serves 1.0's tree from the docroot and
+  1.1's from its own directory:
 
   ```
-  <docroot>/1.0/catalog, catalog.md5, pkgs/<filename>   http://pkg.amigaux.org/1.0
+  <docroot>/catalog, catalog.md5, pkgs/<filename>       http://pkg.amigaux.org
   <docroot>/1.1/catalog, catalog.md5, pkgs/<filename>   http://pkg.amigaux.org/1.1
   ```
 
@@ -358,10 +358,11 @@ though the gate and acceptance scripts are Bourne sh precisely so they *can* be 
   relative to the tree's `pkgs/` (`stock/core-2.1.pkg`, `base/APKG-0.3.4.pkg`), so the catalog
   format does not change. apkg's `repo=` names a release's tree (apkg 0.3.4's default and shipped
   template: `http://pkg.amigaux.org/1.1`), and apkg fetches `<repo>/catalog` and
-  `<repo>/pkgs/<filename>` below it. 1.0 was published at the docroot until 2026-11-01;
-  `tools/repo/move-1.0-tree.sh` moves it to `/1.0/` once (a dry-run plan, `--apply` copies and
-  verifies, `--remove-root` removes the root's copy), and the web server answers the old root
-  paths with a 301 into `/1.0/`, which the deployed 0.2.x clients follow (`redirects=1`).
+  `<repo>/pkgs/<filename>` below it. `tools/repo/move-1.0-tree.sh` would move 1.0's tree to
+  `/1.0/` (a dry-run plan, `--apply` copies and verifies, `--remove-root` removes the root's
+  copy), with the web server answering the old root paths with a 301 into `/1.0/`, which the
+  deployed 0.2.x clients follow (`redirects=1`). It has not been run: 1.0's tree is at the
+  docroot, where a 1.0 system's `repo=http://pkg.amigaux.org` finds it.
 
 - **A local repository has the same layout.** gen-catalog moves no file. apkg reads
   `<repo>/catalog` and `<repo>/pkgs/<filename>`, so a directory R works as a repository when

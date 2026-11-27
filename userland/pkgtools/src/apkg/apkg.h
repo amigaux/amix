@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-#define APKG_VERSION "0.3.15"
+#define APKG_VERSION "0.3.16"
 
 /*
  * Built-in defaults for every knob on the fetch path.  All seven are
@@ -548,6 +548,11 @@ extern int kspace_preflight(const struct conf *cf, struct pkgent **todo,
 #define APKG_PKG     "apkg"
 #define APKGENG_PKG  "apkgeng"
 #define APKG_REEXEC_ENV "APKG_REEXEC"
+/* the base package of an amigaux 1.1 install: laid by the 1.1 installer,
+ * never added by apkg (install.c, 0.3.16); a system without it is told
+ * where the 1.1 install is described */
+#define AMIXBASE_PKG "amix-base"
+#define FROM10_URL   "https://amigaux.org/install/from-1.0/"
 /* main()'s argv, for that re-exec */
 extern char **apkg_argv;
 /* A kernel in the transaction brings its set (apkg 0.3.5): every installed

@@ -449,6 +449,83 @@ static int ent_partial(const struct conf *cf, const struct pkgent *e)
     return pkg_partial(cf, e->pkginst) == 1;
 }
 
+/* ---------------- a system that is not a 1.1 install (0.3.16) ----------------
+ *
+ * amix-base is laid by the 1.1 installer (with the engine's own pkgadd,
+ * under the target's chroot), never by apkg.  A system without it is not
+ * an amigaux 1.1 install: a 1.0 system, or stock 2.1.  There, laying it
+ * stops part-way (its /dev/audio needs a group the kept /etc/group does
+ * not have), and every later upgrade lays it again and stops the same
+ * way.  So an install whose plan holds amix-base, on a system that has
+ * none (neither installed nor partial), is refused before anything is
+ * fetched; an upgrade against a tree that carries amix-base says once
+ * what the system is, and goes on (an upgrade never pulls amix-base in).
+ */
+
+static int ent_index(struct pkgent **v, int n, const struct pkgent *e);
+
+/* the catalog's amix-base entry when the target has none, else NULL */
+static struct pkgent *amixbase_missing(const struct conf *cf,
+                                       struct catalog *cat)
+{
+    struct pkgent *e;
+    char iver[128];
+
+    e = catalog_find(cat, AMIXBASE_PKG);
+    if (e == NULL || ent_partial(cf, e) ||
+        ent_installed(cf, e, iver, sizeof(iver)))
+        return NULL;
+    return e;
+}
+
+/* install: refuse a plan that lays amix-base where there is none.
+ * EX_DEPS with the message, or EX_OK. */
+static int amixbase_refuse(const struct conf *cf, struct catalog *cat,
+                           struct pkgent **order, int no,
+                           char **names, int nnames)
+{
+    struct pkgent *ab;
+    const char *who;
+    int i, j;
+
+    ab = amixbase_missing(cf, cat);
+    if (ab == NULL || ent_index(order, no, ab) < 0)
+        return EX_OK;
+    who = NULL;
+    if (!is_named(names, nnames, ab))
+        for (i = 0; i < no && who == NULL; i++)
+            for (j = 0; j < order[i]->ndeps; j++)
+                if (strcmp(order[i]->deps[j], AMIXBASE_PKG) == 0) {
+                    who = order[i]->name;
+                    break;
+                }
+    if (who != NULL)
+        warnx2("%s needs %s, and this system has none: it is not an "
+               "amigaux 1.1 install", who, AMIXBASE_PKG);
+    else
+        warnx2("%s is laid by the amigaux 1.1 installer, and this system "
+               "has none: it is not an amigaux 1.1 install", AMIXBASE_PKG);
+    warnx2("what needs %s needs a 1.1 system, which is a clean install: %s",
+           AMIXBASE_PKG, FROM10_URL);
+    warnx2("a 1.0 system takes its packages from repo=http://pkg.amigaux.org");
+    warnx2("nothing was changed");
+    return EX_DEPS;
+}
+
+/* upgrade: the line, once per command (not again in the re-exec) */
+static void amixbase_note(const struct conf *cf, struct catalog *cat)
+{
+    static int said = 0;
+
+    if (said || getenv(APKG_REEXEC_ENV) != NULL ||
+        amixbase_missing(cf, cat) == NULL)
+        return;
+    said = 1;
+    warnx2("this system has no %s: it is not an amigaux 1.1 install, and "
+           "what needs %s needs one: %s", AMIXBASE_PKG, AMIXBASE_PKG,
+           FROM10_URL);
+}
+
 /* ---------------- dependency floors (0.3.14) ----------------
  *
  * A dependency may carry a floor in the catalog ("amixrt>=1.0-5"): the
@@ -1107,6 +1184,12 @@ int cmd_install(const struct conf *cf, struct catalog *cat,
             return EX_DEPS;
         }
     }
+    /* amix-base onto a system that is not a 1.1 install (0.3.16) */
+    if (amixbase_refuse(cf, cat, order, no, names, nnames) != EX_OK) {
+        if (order != NULL)
+            free((char *)order);
+        return EX_DEPS;
+    }
 
     /* Decide what actually gets pkgadd'ed.  Three rules, all learned
      * the hard way on the metal (A4000D/68LC060, 2026-09-16):
@@ -1610,6 +1693,7 @@ int cmd_upgrade(const struct conf *cf, struct catalog *cat,
      * one name; but a kernel brings its set (kspace_expand: the modules
      * of its line, the loader, kbootset).  No names: every installed
      * package the catalog has a newer version of (0.3.5). */
+    amixbase_note(cf, cat);
     if (nnames == 0)
         return upgrade_all(cf, cat);
     todo = (struct pkgent **)xmalloc(

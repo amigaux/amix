@@ -115,7 +115,11 @@ PKGTRANS="$HOSTBIN/pkgtrans"
 # 0.3.15 (2026-11-26): a pkgadd that stops part-way is reported as such: the
 # package is partially installed and the command that lays it again is named,
 # where an upgrade used to call the installed version untouched.
-VER_APKG="0.3.15"
+# 0.3.16 (2026-11-27): an install whose plan would lay amix-base on a system
+# that has none (not a 1.1 install) is refused before anything is fetched,
+# naming the page that describes the 1.1 install; an upgrade against a tree
+# that carries amix-base says so once on such a system and goes on.
+VER_APKG="0.3.16"
 # VER_ENG: 1.12.1 (2026-10-05) -- the first engine mint whose binaries carry
 # no 68060-unimplemented integer instruction (heirloom/amix-cc expands the
 # 64-bit multiply; scan060 gates it below).  1.12.0 names TWO different
@@ -170,11 +174,11 @@ VER_ENG="1.12.10"
 # taken from the environment (a build container sets its own) nor from this
 # file's last commit (which every arm here shares).  EPOCH_ENG:
 # 2026-11-06 00:00:00 UTC, the day 1.12.10 was set (1.12.9's was 1793836800,
-# 1.12.7's and 1.12.8's 1793750400, 1.12.6's 1793577600, 1.12.5's 1793318400); EPOCH_APKG: 2026-11-26
-# 00:00:00 UTC, the day 0.3.15 was set (0.3.14's was 1795478400, 0.3.12 and 0.3.13's 1794700800, 0.3.7 to 0.3.11's 1793750400, 0.3.6's 1793577600, 0.3.5's
+# 1.12.7's and 1.12.8's 1793750400, 1.12.6's 1793577600, 1.12.5's 1793318400); EPOCH_APKG: 2026-11-27
+# 00:00:00 UTC, the day 0.3.16 was set (0.3.15's was 1795651200, 0.3.14's 1795478400, 0.3.12 and 0.3.13's 1794700800, 0.3.7 to 0.3.11's 1793750400, 0.3.6's 1793577600, 0.3.5's
 # 1793491200, 0.3.4's
 # 1793318400).  The other arms roll without one, as before.
-EPOCH_APKG=1795651200
+EPOCH_APKG=1795737600
 EPOCH_ENG=1793923200
 VER_DEMO="1.0"
 # m4: the stock bytes of the Amix 2.1 tape, so the stock set's VERSION.
@@ -648,6 +652,8 @@ EOF
   # change; every other payload byte is 0.3.13's.
   # Version 0.3.15 (2026-11-26).  The apkg binary, apkg.1 and apkg.conf.5
   # change; every other payload byte is 0.3.14's.
+  # Version 0.3.16 (2026-11-27).  The apkg binary, apkg.1 and apkg.conf.5
+  # change; every other payload byte is 0.3.15's.
   { printf 'APKG: the apkg client, contents-fsck and amix-sadm-migrate, MIT.\n'
     printf 'Source: https://github.com/amigaux/amix, in userland/pkgtools.\n\n'
     cat "$REPO/src/apkg/LICENSE"; } > "$A/copyright"

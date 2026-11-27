@@ -1,6 +1,6 @@
 .\" apkg.1 - manual page for apkg, the Amix remote package client.
 .\" Copyright (c) 2026 Jussi Alanärä.  MIT license - see LICENSE.
-.TH APKG 1 "November 2026" "apkg 0.3.15" "Amix User Commands"
+.TH APKG 1 "November 2026" "apkg 0.3.16" "Amix User Commands"
 .SH NAME
 apkg \- remote package client for Amiga Unix (SVR4)
 .SH SYNOPSIS
@@ -450,6 +450,46 @@ Only
 honours the mark.  The engine ignores the parameter, and the stock
 .BR pkgrm (1M)
 removes an essential package like any other when asked to directly.
+.SH "A SYSTEM THAT IS NOT A 1.1 INSTALL"
+.B amix-base
+is the base package of an amigaux 1.1 install.  The 1.1 installer lays
+it; apkg never adds it.  A system that has none (neither installed nor
+partially installed) is not a 1.1 install: a 1.0 system, or stock 2.1.
+Laid there, amix-base stops part-way, and every later upgrade stops on
+it the same way.  So
+.B install
+refuses, before anything is fetched and with exit 5, a package whose
+dependencies would lay amix-base on such a system (also with
+.BR \-n ):
+.PP
+.RS
+.nf
+apkg: cde needs amix-base, and this system has none: it is not an
+amigaux 1.1 install
+apkg: what needs amix-base needs a 1.1 system, which is a clean
+install: https://amigaux.org/install/from-1.0/
+apkg: a 1.0 system takes its packages from repo=http://pkg.amigaux.org
+apkg: nothing was changed
+.fi
+.RE
+.PP
+(four lines).  An
+.B upgrade
+never brings in a package that is not installed, so it goes on; against
+a tree whose catalog has amix-base, on such a system, it first says once:
+.PP
+.RS
+.nf
+apkg: this system has no amix-base: it is not an amigaux 1.1 install,
+and what needs amix-base needs one: https://amigaux.org/install/from-1.0/
+.fi
+.RE
+.PP
+The 1.1 installer lays amix-base with the engine's
+.BR pkgadd ,
+and its later
+.B "apkg \-R"
+installs find it in the target, so they are not affected.
 .SH KERNEL SPACE
 Kernel, loader and module packages are listed in a block of the
 catalog that every older client skips as comments:
