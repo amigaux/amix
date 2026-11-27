@@ -8,7 +8,9 @@ both texts ship). Metadata and source pin: [`package.sh`](package.sh); build hoo
 ## Coexistence
 
 Stock ships the AT&T/SVR4 `make` at `/usr/ccs/bin/make`, owned by `core`. This package does not
-touch it: ours is `/opt/amix/bin/make` and wins by PATH order.
+touch it: ours is `/opt/amix/bin/make`. `/opt/amix/bin` is last on the login PATH, so a plain
+`make` runs the stock one. GNU make runs as `/opt/amix/bin/make`, or as `make` for a user who puts
+`/opt/amix/bin` first in their own PATH (`PATH=/opt/amix/bin:$PATH; export PATH` in `~/.profile`).
 
 ## Result
 

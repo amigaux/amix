@@ -7,7 +7,11 @@ Vim 9.1.0000, terminal only, under `/opt/amix`:
   colour schemes, the help files and the tutor;
 - the pages `vim(1)` (with its aliases), `vimdiff(1)` and `xxd(1)`.
 
-The stock `vi` is untouched; `vim` is found when `/opt/amix/bin` is on `PATH`.
+The stock `vi` is untouched. `/opt/amix/bin` is last on the login PATH, so `vim` and `xxd` run by
+name, and any of the links whose name stock also has (SVR4's `vi` family includes `ex` and `view`)
+runs the stock program; Vim's runs by full path (`/opt/amix/bin/view`), or by name for a user who
+puts `/opt/amix/bin` first in their own PATH (`PATH=/opt/amix/bin:$PATH; export PATH` in
+`~/.profile`).
 
     sh build/pkg/pkgbuild.sh userland/packages/ncurses     # first: vim links it
     sh build/pkg/pkgbuild.sh userland/packages/vim

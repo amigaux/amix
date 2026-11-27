@@ -3,7 +3,8 @@
 #
 # AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
 # generated from package.sh.  Stock diff/diff3/sdiff/cmp in /usr/bin (core)
-# are NOT touched; ours win by PATH.  No install scripts; no info
+# are NOT touched; /opt/amix/bin is last on the login PATH, so ours run by
+# full path or for a user who puts /opt/amix/bin first.  No install scripts; no info
 # manual (the box has no info reader).  Every basename <= 14 bytes.
 #
 i pkginfo

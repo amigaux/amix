@@ -9,7 +9,10 @@
 ## Coexistence
 
 Stock ships SVR4 `tar` at `/usr/sbin/tar` (+ `/etc/tar`), owned by `core`. This package does not
-touch it: ours is `/opt/amix/bin/tar` and wins by PATH order. The PKG is **`gtar`**, so the catalog
+touch it: ours is `/opt/amix/bin/tar`. `/opt/amix/bin` is last on the login PATH, so a plain `tar`
+runs the stock one (or Heirloom tar, where the `heirloom-tar` package replaced `/usr/sbin/tar`).
+GNU tar runs as `/opt/amix/bin/tar`, or as `tar` for a user who puts `/opt/amix/bin` first in
+their own PATH (`PATH=/opt/amix/bin:$PATH; export PATH` in `~/.profile`). The PKG is **`gtar`**, so the catalog
 never lists two packages named `tar` — the catalog *name* is `tar` via the packagemanager's
 `names.conf` (`gtar: tar`), the same name/pkginst split `amix-benchmark` proved on metal.
 
@@ -79,8 +82,8 @@ GCC 14 only (`patches-gcc14/`; the period build is frozen):
 
 `/opt/amix/bin/tar` and `COPYING`/`NEWS`/`README` under `/opt/amix/doc/tar/`. No `rmt` (remote tape
 is not built), the man page `/opt/amix/man/1/tar`, written here since tar 1.14 documents itself in texinfo only (`tar --help` is the
-reference). Pure file payload. `-z` runs `gzip` from `PATH` — install the `gzip` package and
-put `/opt/amix/bin` on `PATH`.
+reference). Pure file payload. `-z` runs `gzip` from `PATH` — install the `gzip` package; stock has no
+`gzip`, so the one in `/opt/amix/bin` (on the login PATH, last) is found.
 
 ## Known limits
 

@@ -5,9 +5,9 @@
 # PREFIX /opt/amix (docs/coexistence.md); nothing lands outside it.
 #
 # COEXISTENCE.  Stock ships /usr/ccs/bin/make, owned by `core`.  This package
-# does NOT claim, overwrite or symlink it -- ours is /opt/amix/bin/make and wins
-# for interactive users purely by PATH order; stock scripts naming
-# /usr/ccs/bin/make keep stock behaviour.  No stock package is named `make`, so
+# does NOT claim, overwrite or symlink it -- ours is /opt/amix/bin/make.
+# /opt/amix/bin is last on the login PATH, so a plain `make` runs the stock
+# one; ours runs by full path or for a user who puts /opt/amix/bin first.  No stock package is named `make`, so
 # the PKG name does not collide.
 #
 # NO INSTALL SCRIPTS.  No info manual (the box has no info reader); the
