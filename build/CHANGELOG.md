@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-27 — test-pkgbuild's stub roll stamps with the epoch (663d2250)
+
+test-pkgbuild's stub roll stamps every time with the epoch (663d2250, from next's b69eceee): the VARIANT=shared check, which compares two rolls of one package, no longer fails when they stage in different seconds.
+
 ## 2026-11-25 — the shared variant is the build default; DIST_OUT (12d473e6, 255aa056)
 
 pkgbuild.sh, make dist and pkgmeta (pkginfo, catalog, fragments, build-order) take VARIANT=shared unless told VARIANT=static; userland/packages/conf holds the shared fragments, and a static catalog generates its own; check-packages checks both variants' build order. `make DIST_OUT=<dir>` builds into an output tree of its own, mounted over /src/out in the container, so two rolls can run at once with the same bytes (x11r63 6.3-15.s 15909334, motif 2.3.8-3.s 2af365c8, cde 2.5.3-4.s a726c8c9 from concurrent rolls).
