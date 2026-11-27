@@ -56,7 +56,8 @@ Why this tar: it is SVR4 tar's own lineage, with the same keys, the same
 GNU long names and large numbers, pax headers, and gzip or bzip2 compressed
 archives, which it pipes through `gzip -cd` or `bzip2 -cd` from `PATH`. GNU
 tar 1.14 (the `gtar` package) stays as `/opt/amix/bin/tar` for those who want
-GNU's options.
+GNU's options; `/opt/amix/bin` is last on the login PATH, so a plain `tar` runs
+this one.
 
 ## Porting
 
