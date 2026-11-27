@@ -1,0 +1,37 @@
+# The 1.1.3 user path: CDE onto released 1.1.1 and 1.1.2 systems, as their users type it.
+# Disks (UGATE_DISKS/<name>.hdf): the released images, installed and first-booted, nothing else done to them.
+#   1.1.2-k30-x11  1.1.2-k46-x11   the 1.1.2 4g images (x11 set), first-booted in the Z3660 machine's 030 / 060 shape
+#   1.1.1-k30-x11                  the 1.1.1 k30 4g image, first-booted the same way
+#   1.1.2-k30-std  1.1.2-k46-std   1.1.2 from the netinstall CD, standard set (no X), root 575 MiB, swap 128 MiB
+# The 68030 rows take the two steps apkg names (a newer apkg, then cde): cde's own dependency floors must bring
+# every package it needs. The 68040/68060 rows take the three steps the 1.1.3 notes give, since the File Manager
+# needs the newer kernel; the second boot is the power cycle that boots it.
+
+row x11-k30 k30 1.1.2-k30-x11 session=cde
+	apkg update
+	apkg upgrade apkg
+	apkg install cde
+
+row x11-k46 k46 1.1.2-k46-x11 session=cde
+	apkg update
+	apkg upgrade apkg
+	apkg upgrade
+	apkg install cde
+
+# a 1.1.1 user who skips the first step: the old apkg cannot read cde's floors and changes nothing
+row old-k30 k30 1.1.1-k30-x11 session=cde
+	apkg update
+	=5 apkg install cde
+	apkg upgrade apkg
+	apkg install cde
+
+row std-k30 k30 1.1.2-k30-std session=cde
+	apkg update
+	apkg upgrade apkg
+	apkg install cde
+
+row std-k46 k46 1.1.2-k46-std session=cde
+	apkg update
+	apkg upgrade apkg
+	apkg upgrade
+	apkg install cde

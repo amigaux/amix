@@ -116,5 +116,6 @@ run conffile sh src/conffile/tests/run-tests.sh
 run contents-fsck make -C src/contents-fsck test
 run migrate sh tools/migrate/tests/run-tests.sh
 run repo-tools bash tools/repo/tests/run-tests.sh
+run ugate sh tools/ugate/tests/run-tests.sh
 
 echo "pkgtools tests: $n suites passed, $nsuite_skip skipped whole, $nskip skip line(s)${require:+, PKGTOOLS_REQUIRE='$require'}"

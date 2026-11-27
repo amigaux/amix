@@ -1,0 +1,35 @@
+# ugate.conf -- the emulator host's side of the user-path gate. Copy it OUTSIDE the repository and fill it in:
+# addresses, slots and host paths never go into amix. KEY=VALUE, one per line; ${KEY} is replaced by an earlier
+# key (or the environment); \t is a tab. An environment variable of the same name wins over the file.
+
+# the row runner (kerntools' rig-run), run as: bash UGATE_RUNNER run UGATE_RUNNER_ARGS --matrix .. --rows ..
+UGATE_RUNNER=/path/to/amix-kerntools/tools/rig-run.sh
+UGATE_RUNNER_ARGS=--tier T3
+# a command that prints AMIX_HOST=<the box's address> for the slot number given as its argument
+UGATE_SLOT_ENV=bash /path/to/amix-kerntools/tools/rig-slot.sh env
+# the tool that copies a disk so it claims a slot's address: python3 UGATE_DISKADDR --set SLOT SRC DST
+UGATE_DISKADDR=/path/to/amix-kerntools/tools/rig-diskaddr.py
+# where the candidate repository is served: the host's address on the boxes' network, and a free port
+UGATE_BIND=<host address the boxes reach>
+UGATE_PORT=9114
+# the slots the rows may take (one row per slot at a time), and slots never to take
+UGATE_SLOTS=1 2 4 5
+UGATE_REFUSE_SLOTS=
+# the ready-installed starting disks: <name>.hdf, named as the rows files name them
+UGATE_DISKS=/path/to/disks
+# the boxes' root password (the released images' default)
+AMIX_PASS=<root password>
+# the runner's matrix columns for a row of each line (machine .. status; the id, evidence, flags and image columns
+# are added per row), the flags column, and the image key the controller column names
+UGATE_ROW_k30=A4000\tAGA\t030/Z3660\t...\tuntested
+UGATE_FLAGS_k30=loader,serial
+UGATE_ROW_k46=A4000\tAGA\tLC060/Z3660\t...\tuntested
+UGATE_FLAGS_k46=loader,serial
+UGATE_IMAGE_KEY=root6
+# the runner's row ids: <prefix><nn>
+UGATE_ROW_PREFIX=E95
+# the session check a row names with session=<name>: run on boot 2 and later with UGATE_SESSION=<name> and the
+# runner's environment (RIG_SLOT, RIG_CELL, RIG_IPC); its exit status is the check's. It must install nothing.
+UGATE_SESSION_HOOK=env SCENARIO=$UGATE_SESSION bash /path/to/session-hook.sh
+# optional: UGATE_IGNORE_CHECKS (runner reasons that do not fail a row; default display-rtg), UGATE_ROW_TIMEOUT
+# (s, default 14400), UGATE_BOX_WAIT (s, default 7200), UGATE_AMIXRUN / UGATE_AMIXSYNC (default kernel/k30/tools)
