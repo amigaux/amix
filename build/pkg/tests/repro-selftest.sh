@@ -6,8 +6,10 @@
 #     sh build/pkg/tests/repro-selftest.sh
 #
 # One recipe (a gcc14 program that prints its __FILE__, a static library made
-# by `$AR rc`, a data file and a conffile, so the datastream has install/
-# scripts too) is built and rolled by pkgbuild.sh from two
+# by `$AR rc`, a data file, a conffile, and a postinstall and a preremove of
+# its own, so the datastream has install/ scripts of both kinds, the latter
+# mode 0755 in one checkout and 0644 in the other) is built and rolled by
+# pkgbuild.sh from two
 # copies of build/ at different paths, seconds apart, under umasks 022 and
 # 077, with the second build tree on another filesystem (/dev/shm when it is
 # one) so the spool's directory order, inodes and device differ. The two
@@ -69,8 +71,11 @@ SET=extra
 LICENSE=MIT
 STYLE=hooks
 CONFFILES=/etc/rtest.conf
+INSTALL_SCRIPTS="postinstall preremove"
 SOURCE_EPOCH=1793303717
 EOF
+	printf '#!/sbin/sh\necho rtest installed\nexit 0\n' > "$r/postinstall"
+	printf '#!/sbin/sh\necho rtest removed\nexit 0\n' > "$r/preremove"
 	cat > "$r/build.sh" <<'EOF'
 build() {
 	# by absolute path, as a VPATH build does: __FILE__ names the build tree
@@ -110,12 +115,16 @@ d none /opt/amix/share/rtest 0755 root sys
 f none /opt/amix/share/rtest/c 0644 root bin
 f none /opt/amix/share/rtest/a 0644 root bin
 f none /opt/amix/share/rtest/b 0644 root bin
+i postinstall
+i preremove
 EOF
 }
 A="$T/one/amix"
 B="$S/a/much/longer/path/amix"
 checkout "$A"
 checkout "$B"
+chmod 0755 "$A/userland/packages/rtest/postinstall" "$A/userland/packages/rtest/preremove"
+chmod 0644 "$B/userland/packages/rtest/postinstall" "$B/userland/packages/rtest/preremove"
 
 roll() {	# roll <checkout> <umask> <build root> <log>
 	( umask "$2"; AMIX_BUILD_ROOT="$3" AMIX_GCC14_BUILD_ROOT="$3" \
@@ -172,9 +181,15 @@ for f in opt/amix/bin/rtest opt/amix/share/rtest/a etc/rtest.conf; do
 	cmp -s "$x/rtest/root/$f" "$A/out/pkg/rtest/dest/$f" || fail "unpacked $f differs from the staged file"
 done
 [ -f "$x/rtest/install/i.conffile" ] || fail "no install/i.conffile in the datastream"
+for f in postinstall preremove; do
+	cmp -s "$x/rtest/install/$f" "$A/userland/packages/rtest/$f" ||
+		fail "install/$f is not the recipe's $f"
+	awk -v f="$f" '$2 == "i" && $3 == f { n++ } END { exit n != 1 }' "$x/rtest/pkgmap" ||
+		fail "pkgmap has no one i $f line"
+done
 awk '$1 ~ /^[0-9]+$/ && $2 ~ /^[fei]$/ { if ($NF != e) bad = 1 } END { exit bad }' e="$EP" \
 	"$x/rtest/pkgmap" || fail "pkgmap's modtime column is not the epoch"
-ok "the heirloom reader unpacks it: payload as staged, install/ scripts, pkgmap at the epoch"
+ok "the heirloom reader unpacks it: payload as staged, install/ scripts (CONFFILES' and INSTALL_SCRIPTS'), pkgmap at the epoch"
 
 rm -f "$pb"
 sed -i "s/^SOURCE_EPOCH=$EP\$/SOURCE_EPOCH=$((EP + 86400))/" "$B/userland/packages/rtest/package.sh"

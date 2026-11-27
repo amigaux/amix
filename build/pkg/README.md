@@ -24,6 +24,7 @@ so each fact about a package is written in one place.
   build.sh          optional hooks only (see the top of pkgbuild.sh)
   src/              our own source, when there is no upstream tarball
   prototype         the hand-written SVR4 payload; `i pkginfo' is generated
+  postinstall ...   install scripts of its own, when INSTALL_SCRIPTS names them
   patches/*.patch   applied in name order, each with its reason in its header
   tests/smoke.sh    the on-box acceptance test
   README.md         porting decisions
@@ -58,6 +59,7 @@ so each fact about a package is written in one place.
 | `PREBUILT=""` | payload paths of ELFs the package ships ready-made from the pinned GCC 14 prefix (libamixrt.so.1); each must have the sha256 of a file `common/gcc14-pin.sh` pins and is not stripped. A build that then compiles nothing skips the flags gate, and any other ELF in its payload is refused |
 | `ESSENTIAL=no` | `yes` or `no`; `yes` writes `APKG_ESSENTIAL=yes` into pkginfo (after `APKG_DESC`), and apkg then refuses to remove or purge the installed package (userland/pkgtools). For the base packages a machine cannot boot without |
 | `CONFFILES=""` | config files the administrator edits in place, absolute paths under `/etc`, `/var` or the package's own `PREFIX` tree (X's `/opt/amix/X11R6/lib/X11/xinit/xinitrc`), space-separated; each is an `f` (or `e`) line of the prototype. pkginfo then says `CLASSES=none conffile`, followed by any other class the prototype names, in its order (a device node whose group a conffile creates goes in a class of its own, so pkgadd makes it after that file), and the roll makes each line `e conffile` and adds userland/pkgtools' `i.conffile` and `r.conffile`, which keep an edited file and put the new default beside it as `.new` |
+| `INSTALL_SCRIPTS=""` | install scripts of the package's own, space- or comma-separated, of `preinstall`, `postinstall`, `preremove` and `postremove`: pkgadd runs the first two, pkgrm the others. For what a prototype line cannot say, such as a link whose target depends on the system it is installed on. Each is a file of that name in the package directory and one `i <name>` line of the prototype (and of `prototype.shared`); the driver copies it beside pkginfo, and the roll gives it the epoch's time and a fixed mode, as everything else, so two rolls are the same bytes. `request` and `checkinstall` are refused: apkg runs `pkgadd -n`, where neither may ask. A package with scripts installs and removes without questions only through APKGENG's pkgadd and pkgrm, apkg's path; the stock ones ask the super-user scripts question (userland/pkgtools `docs/stock-pkg-system.md`), as for `CONFFILES`' class scripts, which a package may have beside these |
 | `SRCDIR=$NAME-$VERSION`, `PATCH_STRIP=1` | the tree the tarball unpacks to, and `patch -p` |
 | `SHARED_PKGREV=""` | the shared variant's revision, for a recipe with a `prototype.shared`: `PKGREV`, a dot and a lowercase word (`14.s`, version `6.3-14.s`). apkg compares versions split at `.` and `-`, a numeric segment against a numeric one by number and any other pair as strings, so the word is a segment of its own: above `6.3-14`, below `6.3-15`, at any width. Required with a `prototype.shared`, refused without one |
 | `SHARED_SUMMARY=""`, `SHARED_DESC=""`, `SHARED_DEPENDS=""`, `SHARED_BUILD_DEPENDS=""` | the shared variant's values in place of `SUMMARY`, `DESC`, `DEPENDS` and `BUILD_DEPENDS`, where set |
@@ -121,7 +123,13 @@ build/pkg/pkgmeta dirs <prototype>|<tree>...
   an `e` object that `CONFFILES` does not list; one conffile listed by two
   packages; an object under `/etc/rc.d`; and a run-level link outside the
   boot bands: `S01`-`S09`, `S20`-`S29`, `S69`, `S70`-`S98`
-  and `S99z*`, with `S10`-`S19` the installer's. It warns, without refusing,
+  and `S99z*`, with `S10`-`S19` the installer's. It refuses an
+  `INSTALL_SCRIPTS` name that is not one of the four, is listed twice, or is
+  not a non-empty regular file of the package directory; a listed script
+  without its `i` line; an `i` line other than `i pkginfo` and the listed
+  scripts (`i <name>=<path>`, an unlisted script, CONFFILES' `i.conffile` and
+  `r.conffile`, which the roll adds); and a file of one of the six SVR4
+  script names that `INSTALL_SCRIPTS` does not list. It warns, without refusing,
   about every command (in a `bin/` or `sbin/` directory) and every config file
   (`CONFFILES`, and files in `/etc` other than run-level scripts) that has no
   man page in the payload: a file `…/man/<sect>/<name>`, the packages' layout

@@ -31,7 +31,8 @@ Run them with
 `test-pkgbuild` copies the driver into a throwaway amix tree and builds small
 packages against a stub harness that records the environment it is given.
 That covers both harness layouts, the three styles, sources from a tarball,
-from `src/` and from `SRCPKG`, and one refusal per check.
+from `src/` and from `SRCPKG`, `INSTALL_SCRIPTS` (the scripts beside pkginfo
+in the roll directory), and one refusal per check.
 
 The fixtures are the reference the framework has to match:
 
@@ -53,9 +54,11 @@ gate), `gate-gcc14-selftest.sh` (the gcc14 gates and the toolchain pin) and
 `onever-selftest.sh` (the one-version guard, against the kernel-space
 catalog of record in an amix-packages checkout, `AMIX_KSPACE_REPO`; without
 one it exits 77, a SKIP), and `repro-selftest.sh` (the reproducible roll:
-one gcc14 recipe built and rolled from two copies of `build/` at different
-paths, seconds apart, under other umasks and on another filesystem, must
-give byte-identical `.pkg` files, which the heirloom reader unpacks; another
+one gcc14 recipe, with a conffile and a postinstall and a preremove of its
+own at mode 0755 in one copy and 0644 in the other, built and rolled from two
+copies of `build/` at different paths, seconds apart, under other umasks and
+on another filesystem, must give byte-identical `.pkg` files, which the
+heirloom reader unpacks, scripts and all; another
 `SOURCE_DATE_EPOCH` must give other bytes). They need both cross toolchains and the host
 pkgtools, which `run-selftests` builds when missing; CI runs them in the
 build container.

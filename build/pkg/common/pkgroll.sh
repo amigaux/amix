@@ -6,7 +6,8 @@
 #     (with $CONFFILES, the package.sh list, in the environment or the shell,
 #     and SOURCE_DATE_EPOCH, the time of every stamp: dsroll.sh)
 #
-# <workdir>   holds the recipe's AUTHORED pkginfo and prototype
+# <workdir>   holds the recipe's AUTHORED pkginfo and prototype, and the
+#             install scripts its i lines name (package.sh INSTALL_SCRIPTS)
 # <destroot>  the staged tree: <destroot>/usr/local/bin/patch etc.
 # <PKG>       the SVR4 package abbreviation (<= 9 characters)
 # <outfile>   the .pkg datastream to write

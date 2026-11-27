@@ -103,7 +103,7 @@ fi
 python3 -I "$PKGDIR/pkgmeta" check "$HERE" >/dev/null
 STYLE=configure TOOLCHAIN=gcc14 PREFIX=/opt/amix DEPENDS= BUILD_DEPENDS= SRCDIR= PATCH_STRIP=1
 URL= SHA256= SRCPKG= APKG_DESC= CONFFILES= SYSTEM_PATHS= ESSENTIAL=no STOCK_ETC= SOURCE_EPOCH= PREBUILT= FORKPIN= FORKDIRS=
-MAN_REPLACES= STOCK_PATCHED=
+MAN_REPLACES= STOCK_PATCHED= INSTALL_SCRIPTS=
 SHARED_PKGREV= SHARED_SUMMARY= SHARED_DESC= SHARED_DEPENDS= SHARED_BUILD_DEPENDS=
 . "$HERE/package.sh"
 PROTO=$HERE/prototype BUILDNAME=$NAME
@@ -606,6 +606,13 @@ WORK="$BUILD/pkgwork"
 rm -rf "${WORK:?}"; mkdir -p "${WORK:?}"
 python3 -I "$PKGDIR/pkgmeta" pkginfo --variant $VARIANT "$HERE" > "$WORK/pkginfo"
 cp "$PROTO" "$WORK/prototype"
+# INSTALL_SCRIPTS: the recipe's own install scripts beside pkginfo, named by
+# the prototype's i lines (pkgmeta check has checked both); the roll stamps
+# their mode and time as everything else's
+for s in $(printf '%s\n' "$INSTALL_SCRIPTS" | tr ',' ' '); do
+	cp "$HERE/$s" "$WORK/$s"
+	echo "  script  $s (INSTALL_SCRIPTS)"
+done
 echo "  epoch   $SOURCE_DATE_EPOCH ($_pb_from)"
 amix_pkgroll "$WORK" "$DEST" "$PKG" "$PKGVERSION" "$PKGOUT/$PKG-$PKGVERSION.pkg"
 

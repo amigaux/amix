@@ -196,6 +196,12 @@ printf 'all:\\n\\techo "$(CFLAGS)" > out.txt\\n' > Makefile
                 src={"greet.txt": "hello from src/\n", "sub dir/a b": "x\n"})
         package(pkgs, "inside2", "hooks", "SRCPKG=inside\n", build=HOOKS_BUILD)
         package(pkgs, "nohook", "hooks", src={"greet.txt": "x\n"})
+        # INSTALL_SCRIPTS: a postinstall and a preremove of its own
+        d = package(pkgs, "scr", "hooks", 'INSTALL_SCRIPTS="postinstall preremove"\n',
+                    build=HOOKS_BUILD, src={"greet.txt": "x\n"})
+        write(os.path.join(d, "prototype"), PROTOTYPE + "i postinstall\ni preremove\n")
+        write(os.path.join(d, "postinstall"), "#!/sbin/sh\nln -s x /usr/lib/y\nexit 0\n")
+        write(os.path.join(d, "preremove"), "#!/sbin/sh\nrm -f /usr/lib/y\nexit 0\n")
         # a fork pinned in the checkout (FORKPIN): a local repository, its tip
         fork = os.path.join(tmp, "forkrepo")
         write(os.path.join(fork, "greet.txt"), "hello from the fork\n")
@@ -941,6 +947,27 @@ stage() {
         check("VARIANT=shared: a recipe without prototype.shared builds its static variant and says so",
               rc == 0 and "VARIANT=shared: conf has no prototype.shared; its one variant, static, is built" in out
               and seen().get("VARIANT") == "static" and "\nVERSION=1.0-1\n" in read(os.path.join(log, "pkginfo")), out)
+        # --- INSTALL_SCRIPTS ----------------------------------------------------------------
+        rc, out = build("scr")
+        sw = os.path.join(out_pkg, "scr", "pkgwork")
+        scr = os.path.join(pkgs, "scr")
+        check("INSTALL_SCRIPTS: the scripts beside pkginfo in the roll directory, the prototype's i lines kept",
+              rc == 0 and "script  postinstall (INSTALL_SCRIPTS)" in out
+              and "script  preremove (INSTALL_SCRIPTS)" in out
+              and read(os.path.join(sw, "postinstall")) == read(os.path.join(scr, "postinstall"))
+              and read(os.path.join(sw, "preremove")) == read(os.path.join(scr, "preremove"))
+              and read(os.path.join(sw, "prototype")) == read(os.path.join(scr, "prototype")), out)
+        check("INSTALL_SCRIPTS unset: no script in the roll directory (control)",
+              sorted(f for f in os.listdir(os.path.join(out_pkg, "conf", "pkgwork"))
+                     if not f.startswith(".")) == ["pkginfo", "prototype"],
+              str(os.listdir(os.path.join(out_pkg, "conf", "pkgwork"))))
+        write(os.path.join(scr, "package.sh"), read(os.path.join(scr, "package.sh")).replace(
+            'INSTALL_SCRIPTS="postinstall preremove"', 'INSTALL_SCRIPTS="postinstall request"'))
+        rc, out = build("scr")
+        check("INSTALL_SCRIPTS: the driver refuses a name check refuses, before the build",
+              rc != 0 and "request is not allowed" in out and "--- source ---" not in out, out)
+        write(os.path.join(scr, "package.sh"), read(os.path.join(scr, "package.sh")).replace(
+            'INSTALL_SCRIPTS="postinstall request"', 'INSTALL_SCRIPTS="postinstall preremove"'))
         rc, out = build("var", VARIANT="dynamic")
         check("VARIANT: anything but static or shared is refused",
               rc == 2 and "VARIANT=dynamic: static or shared" in out, out)
