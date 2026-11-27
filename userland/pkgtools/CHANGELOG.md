@@ -1,3 +1,7 @@
+## 2026-11-27 — apkg 0.3.16: no amix-base on a system that has none (50d9f780)
+
+An install that would lay amix-base on a system without it (not a 1.1 install) is refused before any download, naming https://amigaux.org/install/from-1.0/; an upgrade there says so once and goes on. README and design.md: the 1.0 tree is at the docroot.
+
 ## 2026-11-27 — tools/ugate: the session check is an unchanged copy (c456e5ab)
 
 The session check is kept as an unchanged copy of its source, configured only through the conf line (install nothing, its own window-type data), with the README saying how to refresh it. All seven 1.1.3 rows pass with it.
