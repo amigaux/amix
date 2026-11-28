@@ -1,5 +1,6 @@
 # The major-number registry of 1.1, c 54 from 1.3, c 48 from 2026-10-31,
-# c 55 from 2026-11-01, c 56 from 2026-11-14, c 68 from 2026-11-15
+# c 55 from 2026-11-01, c 56 from 2026-11-14, c 68 from 2026-11-15,
+# c 57 from 2026-11-28
 # (docs/spec/20-module-format-and-abi.md section 6, confirmed against the
 # kernels of record by M-REG1).  One line
 # per number: c (character) or b (block), the major, the module that owns
@@ -19,6 +20,9 @@ c 55 zz9ksvc
 # c 56: the X-Surf and X-Surf-100 ethernet module, kernel/drivers/xsurf
 # (STREAMS, DLPI, interface xsf0)
 c 56 xsurf
+# c 57: zz9knet, the MNT ZZ9000 ethernet module (STREAMS, DLPI, interface
+# zzn0, /dev/zzn0 minor 0)
+c 57 zz9knet
 # c 68: the MNT VA2000 graphics card module (/dev/va2000), the major its
 # static driver has always used
 c 68 va2000

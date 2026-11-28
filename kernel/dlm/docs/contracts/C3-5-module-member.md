@@ -1,4 +1,4 @@
-# C3-5 — the module package and the per-module manifest record, version 26
+# C3-5 — the module package and the per-module manifest record, version 27
 
 - **Status:** agreed 2026-10-26, version 1; version 2
   (2026-10-26): what `kbootset` accepts and writes for a parameter value
@@ -38,7 +38,8 @@
   (§1.1); version 24 (2026-11-14): short names for buddha and xsurf
   (§1.1); version 25 (2026-11-15): va2000's short name (§1.1); version 26
   (2026-11-15): the package's kbootset floor, `APKG_KBOOTSET=` (§1.2, C2-2
-  version 7).
+  version 7); version 27 (2026-11-28): zz9knet's short name and floor
+  (§1.1, §1.2).
   Every consumer
   is in kernel/dlm: `kbootset` writes the records, boot2 and the module core
   read them. A change from here is a contract change with a version bump.
@@ -107,6 +108,7 @@ per line**:
 | buddha | `buddha` | `buddha30` / `buddha46`: the Buddha and Catweasel Z-II IDE (C4-2 §8.2) (version 24) |
 | xsurf | `xsurf` | `xsurf30` / `xsurf46`: the X-Surf and X-Surf-100 ethernet, character major 56 (version 24) |
 | va2000 | `va2000` | `va200030` / `va200046`: the MNT VA2000 graphics card, character major 68 (version 25) |
+| zz9knet | `zz9knet` | `zz9knet30` / `zz9knet46`: the MNT ZZ9000 ethernet, character major 57 (version 27) |
 
   A new module gets its row in a version bump of this contract.
 
@@ -182,8 +184,9 @@ per line**:
   installing the module alone brings that kbootset into the transaction
   instead of ending at gate 3. A module owning a major newer than 1.1's
   rows sets at least the version `abi/registry/kbootset` gives that
-  major: xsurf 1.1.0.261114-45 (c 56), va2000 1.1.0.261115-46 (c 68). A
-  module whose majors are all 1.1's sets none.
+  major: xsurf 1.1.0.261114-45 (c 56), va2000 1.1.0.261115-46 (c 68),
+  zz9knet 1.1.0.261128-47 (c 57). A module whose majors are all 1.1's
+  sets none.
 - **apkg does not check dependencies** between module
   packages at install: a module whose `depend=` names a module that is not
   installed (or is disabled) is refused by `kbootset build`, gate 3 (§2).

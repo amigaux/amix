@@ -191,6 +191,17 @@ for l in k30 k46; do
 		fi
 	mkbad $l vaother "$WRAP"'MOD_MISC_WRAPPER(vaother, l, u, "x");\n' "$M0"'$majors c:68\nvaother\tvaother\n' &&
 		refused "va2000's major on another module" $l "$W/$l-vaother/out/mod.d/vaother" "registered to va2000"
+	# c 57 is registered to zz9knet (2026-11-28), boot class on the ZZ9000's keys:
+	# zz9knet passes, another module is refused
+	ZB='$modtype misc\n$class boot\n$cpu 68020\n$match zorro:6d6e:03,zorro:6d6e:04\n'
+	mkbad $l zz9knet "$WRAP"'MOD_MISC_WRAPPER(zz9knet, l, u, "x");\n' "$ZB"'$majors c:57\nzz9knet\tzz9knet\n' &&
+		if python3 "$K/tools/modcheck.py" -k "$K" "$W/$l-zz9knet/out/mod.d/zz9knet" > "$W/zz9knet.out" 2>&1; then
+			pass "$l: zz9knet with character major 57 is accepted"
+		else
+			fail "$l: zz9knet with character major 57"; cat "$W/zz9knet.out"
+		fi
+	mkbad $l zzother "$WRAP"'MOD_MISC_WRAPPER(zzother, l, u, "x");\n' "$M0"'$majors c:57\nzzother\tzzother\n' &&
+		refused "zz9knet's major on another module" $l "$W/$l-zzother/out/mod.d/zzother" "registered to zz9knet"
 	mkbad $l boolp "$WRAP"'MOD_MISC_WRAPPER(boolp, l, u, "x");\n' "$M0"'$param on:bool:yes\nboolp\tboolp\n' &&
 		refused "a bool default other than 0 or 1" $l "$W/$l-boolp/out/mod.d/boolp" "is not a bool value"
 	# a root-class disk controller (C4-2 section 1): accepted, rank= written

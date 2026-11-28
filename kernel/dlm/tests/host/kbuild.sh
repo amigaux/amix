@@ -347,6 +347,7 @@ cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantma
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
 grep -a -q "^major c 56 xsurf$" $T/disk.img
+grep -a -q "^major c 57 zz9knet$" $T/disk.img
 grep -a -q "^major c 68 va2000$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 echo "param blit=off   # the administrator's" > $R/etc/conf/modreg.local.d/z3660rtg
@@ -376,6 +377,7 @@ cmp -s $T/wantmaj $T/gotmaj || { echo "kbuild: major table:" >&2; diff $T/wantma
 grep -A1 '^ident ' $B5 | sed -n 2p | grep -q '^major '
 grep -a -q "^major c 55 zz9ksvc$" $T/disk.img
 grep -a -q "^major c 56 xsurf$" $T/disk.img
+grep -a -q "^major c 57 zz9knet$" $T/disk.img
 grep -a -q "^major c 68 va2000$" $T/disk.img
 grep -q "generation $id: major table ok" $T/out
 # check: a module copy changed, then gone
@@ -494,6 +496,16 @@ rm -rf "${R:?}/stand/gen/${id:?}"
 three; modpkg vaother class=demand majors=c:68
 refused 3 $KB build $FACTS			# va2000's major
 grep -q "major c:68 is registered to another module" $T/out
+# c 57 is zz9knet's (2026-11-28): its boot record on the ZZ9000's two keys is
+# composed; another module's c:57 is refused
+three; modpkg zz9knet class=boot match=zorro:6d6e:03,zorro:6d6e:04 majors=c:57
+$KB build $FACTS | grep -q "built"
+id=$(ls $R/stand/gen | sort -n | tail -1)
+grep -q "^module zz9knet boot .* match=zorro:6d6e:03,zorro:6d6e:04$" $R/stand/gen/$id/build
+rm -rf "${R:?}/stand/gen/${id:?}"
+three; modpkg zzother class=demand majors=c:57
+refused 3 $KB build $FACTS			# zz9knet's major
+grep -q "major c:57 is registered to another module" $T/out
 three; modpkg monsw class=demand majors=c:52 depend=z3660rtg
 refused 3 $KB build $FACTS			# a depend cycle
 three; modpkg z3660eth class=boot match=always majors=c:51 depend=monsw
