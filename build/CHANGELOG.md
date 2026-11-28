@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-28 — build/pkg ships a recipe's own install scripts (bd981475)
+
+package.sh INSTALL_SCRIPTS names any of preinstall, postinstall, preremove and postremove, each a file of the package directory on an `i` line of the prototype; the driver copies them beside pkginfo and the roll stamps them with the epoch, so two rolls are the same bytes. pkgmeta check refuses request and checkinstall (apkg's pkgadd -n cannot ask), a missing, empty, duplicated or unlisted script, and any other i line; CONFFILES' class scripts go on beside them.
+
 ## 2026-11-27 — check-packages refuses a published version whose epoch has moved (328632b7)
 
 check-packages refuses a published version whose epoch has moved (pkgmeta epochs): a recipe whose version release/'s locks or carried-* lists name needs SOURCE_EPOCH, or its directory's last commit must be the one that set its VERSION/PKGREV; the message names the package, the commit and the SOURCE_EPOCH to pin; a shallow clone is refused. nightly-dist names a tool's refusal (a published version rebuilt with other bytes) and never an earlier step's [FAIL] line. gcc14-env.sh's header and build/pkg/README.md's check-packages text match the code.

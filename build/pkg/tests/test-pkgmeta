@@ -1034,6 +1034,86 @@ try:
             ("vpipe", SPROTO, {"SHARED_PKGREV": "2.s", "SHARED_DESC": '"a|b"'},
              "SHARED_DESC holds '|'")):
         refused("variant: check refuses %s" % name, ("check", variant("varbad", name, sproto, **over)), needle)
+    # --- INSTALL_SCRIPTS: the recipe's own install scripts, on i lines ---------------------
+    IPROTO = PROTO + "i postinstall\ni preremove\n"
+
+    def iscr(name, proto=IPROTO, files=("postinstall", "preremove"), sproto=None, **over):
+        over.setdefault("INSTALL_SCRIPTS", '"postinstall preremove"')
+        over.setdefault("PKG", name[:9])
+        r = recipe(os.path.join(tmp, "iscr"), name, **over)
+        write(os.path.join(r, "prototype"), proto)
+        if sproto is not None:
+            write(os.path.join(r, "prototype.shared"), sproto)
+        for f in files:
+            write(os.path.join(r, f), "#!/sbin/sh\nexit 0\n")
+        return r
+
+    rc, out, err = run("check", iscr("igood"))
+    check("INSTALL_SCRIPTS: a postinstall and a preremove, each a file and an i line (control)",
+          rc == 0, err)
+    rc, out, err = run("check", iscr("icomma", INSTALL_SCRIPTS='"postinstall,preremove"'))
+    check("INSTALL_SCRIPTS: comma-separated as DEPENDS", rc == 0, err)
+    rc, out, err = run("check", iscr("iall", PROTO + "".join("i %s\n" % n for n in (
+        "preinstall", "postinstall", "preremove", "postremove")),
+        ("preinstall", "postinstall", "preremove", "postremove"),
+        INSTALL_SCRIPTS='"preinstall postinstall preremove postremove"'))
+    check("INSTALL_SCRIPTS: all four allowed names", rc == 0, err)
+    rc, out, err = run("check", iscr("ishared", sproto=SPROTO + "i postinstall\ni preremove\n",
+                                     SHARED_PKGREV="2.s"))
+    check("INSTALL_SCRIPTS: prototype.shared names them too (control)", rc == 0, err)
+    rc, out, err = run("check", iscr("iconf", CONFFILES='"/etc/foo.conf"'))
+    check("INSTALL_SCRIPTS: with CONFFILES (the roll adds the class scripts)", rc == 0, err)
+    rc, info, err = run("pkginfo", os.path.join(tmp, "iscr", "iconf"))
+    check("INSTALL_SCRIPTS: pkginfo's CLASSES are CONFFILES' alone",
+          rc == 0 and "\nCLASSES=none conffile\n" in info, err or info)
+    for name, proto, files, over, needle in (
+            ("irequest", PROTO + "i request\n", ("request",), {"INSTALL_SCRIPTS": "request"},
+             "INSTALL_SCRIPTS: request is not allowed: apkg runs pkgadd -n, where a request script cannot ask"),
+            ("ichecki", PROTO + "i checkinstall\n", ("checkinstall",), {"INSTALL_SCRIPTS": "checkinstall"},
+             "INSTALL_SCRIPTS: checkinstall is not allowed"),
+            ("iother", PROTO + "i postinst\n", ("postinst",), {"INSTALL_SCRIPTS": "postinst"},
+             "INSTALL_SCRIPTS: postinst is not one of preinstall, postinstall, preremove, postremove"),
+            ("imissing", IPROTO, ("postinstall",), {},
+             "INSTALL_SCRIPTS: preremove is not a file in the recipe directory"),
+            ("itwice", IPROTO, ("postinstall", "preremove"),
+             {"INSTALL_SCRIPTS": '"postinstall preremove postinstall"'},
+             "INSTALL_SCRIPTS lists postinstall twice"),
+            ("inoline", PROTO + "i postinstall\n", ("postinstall", "preremove"), {},
+             "INSTALL_SCRIPTS: preremove has no `i preremove` line in the prototype"),
+            ("iunlisted", IPROTO, ("postinstall", "preremove"), {"INSTALL_SCRIPTS": "postinstall"},
+             "prototype: i preremove is not in INSTALL_SCRIPTS"),
+            ("ifile", PROTO + "i postinstall\n", ("postinstall", "postremove"),
+             {"INSTALL_SCRIPTS": "postinstall"},
+             "postremove: a file of an install script's name that INSTALL_SCRIPTS does not list"),
+            ("ipath", PROTO + "i postinstall=/tmp/postinstall\n", ("postinstall",),
+             {"INSTALL_SCRIPTS": "postinstall"},
+             "prototype: i postinstall=/tmp/postinstall: an install script is the recipe's file"),
+            ("idup", IPROTO + "i postinstall\n", ("postinstall", "preremove"), {},
+             "prototype: i postinstall is on 2 lines"),
+            ("icf", PROTO + "i i.conffile\n", (), {"INSTALL_SCRIPTS": '""'},
+             "prototype: i i.conffile: the roll adds it for CONFFILES"),
+            ("icopy", PROTO + "i copyright\n", (), {"INSTALL_SCRIPTS": '""'},
+             "prototype: i copyright: the only i lines are pkginfo and INSTALL_SCRIPTS' scripts"),
+            ("inone", PROTO, (), {"INSTALL_SCRIPTS": '""', "PKG": "inone"},
+             None)):
+        r = iscr(name, proto, files, **over)
+        if needle is None:
+            rc, out, err = run("check", r)
+            check("INSTALL_SCRIPTS unset: no i line but pkginfo (control)", rc == 0, err)
+            continue
+        refused("INSTALL_SCRIPTS: check refuses %s" % name, ("check", r), needle)
+    r = iscr("iempty")
+    write(os.path.join(r, "preremove"), "")
+    refused("INSTALL_SCRIPTS: check refuses an empty script", ("check", r),
+            "INSTALL_SCRIPTS: preremove is empty")
+    r = iscr("ilink", files=("postinstall",))
+    os.symlink("postinstall", os.path.join(r, "preremove"))
+    refused("INSTALL_SCRIPTS: check refuses a symbolic link", ("check", r),
+            "INSTALL_SCRIPTS: preremove is not a file in the recipe directory")
+    refused("INSTALL_SCRIPTS: check refuses a prototype.shared without the i lines",
+            ("check", iscr("isnoline", sproto=SPROTO, SHARED_PKGREV="2.s")),
+            "prototype.shared: INSTALL_SCRIPTS: postinstall has no `i postinstall` line in the prototype")
+
     vb = os.path.join(tmp, "vbo")
     for name, deps, sdeps in (("p", "", ""), ("q", "", ""), ("r", "p", "q")):
         variant("vbo", name, SHARED_PKGREV="2.s", BUILD_DEPENDS='"%s"' % deps,

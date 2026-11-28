@@ -92,7 +92,7 @@ DEFAULTS = (("STYLE", "configure"), ("TOOLCHAIN", "gcc14"),
             ("APKG_DESC", ""), ("CONFFILES", ""), ("SYSTEM_PATHS", ""),
             ("ESSENTIAL", "no"), ("STOCK_ETC", ""), ("SOURCE_EPOCH", ""),
             ("PREBUILT", ""), ("FORKPIN", ""), ("FORKDIRS", ""), ("MAN_REPLACES", ""),
-            ("STOCK_PATCHED", ""),
+            ("STOCK_PATCHED", ""), ("INSTALL_SCRIPTS", ""),
             ("SHARED_PKGREV", ""), ("SHARED_SUMMARY", ""), ("SHARED_DESC", ""),
             ("SHARED_DEPENDS", ""), ("SHARED_BUILD_DEPENDS", ""))
 KEYS = REQUIRED + SOURCE + tuple(k for k, _ in DEFAULTS)
@@ -235,6 +235,15 @@ def source_tree(recipe, m):
 # the path; l and s paths are "link=target".
 OBJECT_TYPES = "fevdxlspcb"
 
+# The install scripts a recipe may ship (INSTALL_SCRIPTS), from its own
+# directory: pkgadd runs preinstall and postinstall, pkgrm preremove and
+# postremove. The other two SVR4 scripts are refused: apkg runs pkgadd -n,
+# where a request script cannot ask its questions, and a checkinstall script
+# exists to ask or refuse before anything is laid, which -n turns into a
+# stop. Every name fits s5's 14 bytes (install/<name> on the box).
+INSTALL_SCRIPTS = ("preinstall", "postinstall", "preremove", "postremove")
+SVR4_SCRIPTS = INSTALL_SCRIPTS + ("request", "checkinstall")
+
 # A class name: pkgroll.sh accepts these after `none conffile', and a class
 # action script i.<class> or r.<class> fits s5's 14-byte names.
 CLASS_RE = re.compile(r"^[a-z][a-z0-9]{0,11}$")
@@ -329,6 +338,79 @@ def prototype_objects(recipe, name="prototype"):
                 continue
             path, _, target = f[2].partition("=")
             out.append((f[0], f[1], path, target))
+    return out
+
+
+def info_files(recipe, name="prototype"):
+    """The file of every i line of RECIPE's prototype NAME, as written, or
+    None when it has none."""
+    proto = os.path.join(recipe, name)
+    if not os.path.isfile(proto):
+        return None
+    out = []
+    with open(proto, encoding="latin-1") as fp:
+        for line in fp:
+            f = line.split()
+            if f and f[0].isdigit():
+                f = f[1:]
+            if len(f) >= 2 and f[0] == "i":
+                out.append(f[1])
+    return out
+
+
+def scripts_problems(recipe, m):
+    """INSTALL_SCRIPTS: each an allowed name, listed once, a non-empty
+    regular file of the recipe directory; and no file of an SVR4 script
+    name there that it does not list."""
+    out = []
+    names = words(m["INSTALL_SCRIPTS"])
+    for s in names:
+        path = os.path.join(recipe, s)
+        if s in ("request", "checkinstall"):
+            out.append("INSTALL_SCRIPTS: %s is not allowed: apkg runs pkgadd -n, "
+                       "where a %s script cannot ask" % (s, s))
+        elif s not in INSTALL_SCRIPTS:
+            out.append("INSTALL_SCRIPTS: %s is not one of %s"
+                       % (s, ", ".join(INSTALL_SCRIPTS)))
+        elif os.path.islink(path) or not os.path.isfile(path):
+            out.append("INSTALL_SCRIPTS: %s is not a file in the recipe directory" % s)
+        elif os.path.getsize(path) == 0:
+            out.append("INSTALL_SCRIPTS: %s is empty" % s)
+    for s in sorted(set(s for s in names if names.count(s) > 1)):
+        out.append("INSTALL_SCRIPTS lists %s twice" % s)
+    for s in SVR4_SCRIPTS:
+        if s not in names and os.path.lexists(os.path.join(recipe, s)):
+            out.append("%s: a file of an install script's name that INSTALL_SCRIPTS "
+                       "does not list; it would not be shipped" % s)
+    return out
+
+
+def info_problems(recipe, m):
+    """The prototype's i lines: pkginfo, and each INSTALL_SCRIPTS script once
+    by its name alone; nothing else (the roll adds CONFFILES' scripts)."""
+    out = []
+    names = words(m["INSTALL_SCRIPTS"])
+    files = info_files(recipe, proto_name(m))
+    if files is None:
+        return ["INSTALL_SCRIPTS is set, but there is no prototype to check it against"] if names else []
+    for s in names:
+        if s in INSTALL_SCRIPTS and s not in files:
+            out.append("INSTALL_SCRIPTS: %s has no `i %s` line in the prototype" % (s, s))
+    for f in sorted(set(files), key=files.index):
+        if files.count(f) > 1:
+            out.append("prototype: i %s is on %d lines" % (f, files.count(f)))
+        if f == "pkginfo" or (f in names and f in INSTALL_SCRIPTS):
+            continue
+        if "=" in f:
+            out.append("prototype: i %s: an install script is the recipe's file of that "
+                       "name, named alone (INSTALL_SCRIPTS)" % f)
+        elif f in SVR4_SCRIPTS:
+            out.append("prototype: i %s is not in INSTALL_SCRIPTS" % f)
+        elif f in ("i.conffile", "r.conffile"):
+            out.append("prototype: i %s: the roll adds it for CONFFILES" % f)
+        else:
+            out.append("prototype: i %s: the only i lines are pkginfo and "
+                       "INSTALL_SCRIPTS' scripts" % f)
     return out
 
 
@@ -565,6 +647,7 @@ def prototype_problems(recipe, m):
     out += layout_problems(m, objs or ())
     out += stock_problems(m, objs or ())
     out += stock_patched_problems(m, objs or ())
+    out += info_problems(recipe, m)
     named = []
     for ftype, cls, path, _ in objs or ():
         if ftype == "e" and path not in conf:
@@ -802,6 +885,7 @@ def problems(recipe, m):
             if not TOKEN_RE.match(d):
                 out.append("%s: '%s' is not a package name%s" % (
                     k, d, " (a floor goes in DEPENDS)" if ">=" in d else ""))
+    out += scripts_problems(recipe, m)
     out += prototype_problems(recipe, m)
     out += shared_problems(recipe, m)
     return out
