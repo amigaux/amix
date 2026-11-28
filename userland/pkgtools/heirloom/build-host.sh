@@ -223,5 +223,12 @@ echo "== removef stdin-form regression =="
 echo "== reproducible roll =="
 "$TOP/tests/repro-roll/run.sh" || { echo "SMOKE FAIL: reproducible roll"; exit 1; }
 
+# ------------------------------------------------------------------
+# 8. a datastream that fails to unpack: reported, rc 1, no double free
+#    of the header (AMIX PORT fix 2026-11-28)
+# ------------------------------------------------------------------
+echo "== cut datastream =="
+"$TOP/tests/bad-stream/run.sh" || { echo "SMOKE FAIL: cut datastream"; exit 1; }
+
 echo "== host build + smoke test PASSED =="
 ls -l "$BIN"
