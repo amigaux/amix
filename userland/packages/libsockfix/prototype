@@ -1,0 +1,37 @@
+#
+# prototype -- libsockfix: the stock socket libraries without their heap leak.
+#
+# AUTHORED, NOT GENERATED, no host paths (pkgmk -r <destroot>).  pkginfo is
+# generated from package.sh.  The two libraries keep the stock shape: the
+# same paths, type, mode and owner as core's lines, which stay claimed by core
+# too.  /usr/lib/libsocket.so is not listed: it is a link to one of the two,
+# made by the postinstall and by amix-base's ifup, and recorded by the
+# scripts.  Every basename <= 14 bytes.
+#
+i pkginfo
+i postinstall
+i preremove
+#
+# core's own lines for the two directories, attributes as core has them
+d none /usr 0755 bin bin
+d none /usr/lib 0755 bin bin
+f none /usr/lib/libsockhost.so 0444 root bin
+f none /usr/lib/libsockdns.so 0444 root bin
+#
+d none /opt 0755 root sys
+d none /opt/amix 0755 root sys
+d none /opt/amix/sbin 0755 root sys
+f none /opt/amix/sbin/libsockfix 0555 root bin
+d none /opt/amix/lib 0755 root sys
+d none /opt/amix/lib/libsockfix 0755 root sys
+f none /opt/amix/lib/libsockfix/host.stock 0444 root bin
+f none /opt/amix/lib/libsockfix/dns.stock 0444 root bin
+d none /opt/amix/doc 0755 root sys
+d none /opt/amix/doc/libsockfix 0755 root sys
+f none /opt/amix/doc/libsockfix/README.md 0644 root bin
+f none /opt/amix/doc/libsockfix/LICENSE.amix 0644 root bin
+d none /opt/amix/man 0755 root sys
+d none /opt/amix/man/1m 0755 root sys
+f none /opt/amix/man/1m/libsockfix 0644 root bin
+d none /opt/amix/man/whatis.d 0755 root sys
+f none /opt/amix/man/whatis.d/libsockfx 0644 root bin

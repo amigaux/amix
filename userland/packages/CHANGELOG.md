@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-28 — libsockfix 1.0-1 (60917820)
+
+New package, set base: the stock libsockhost.so and libsockdns.so with _s_alloc_bufs freeing the buffer of a reused descriptor's link (55 bytes each). The stock library lost about 200 bytes per INET socket, accept or lookup and 4.4 KB per UNIX-domain socket until the program exited. postinstall re-links libsocket.so to the fixed file of its variant; removal rebuilds the stock bytes and link. Tested on both kernel lines with DNS on and off (20,000-operation soaks: no growth; CDE login; removal equal to the amix-system files). libsockfx-1.0-1.pkg md5 8da44c3da6188e59242cd03d76cdfea9.
+
 ## 2026-11-27 — libzz9k pins SOURCE_EPOCH; heirloom-tar README (68373307)
 
 libzz9k 2.9.1-4 pins SOURCE_EPOCH to its published build's epoch (bytes unchanged, proven by rebuild), so every recipe under userland/packages now names its epoch; heirloom-tar's README says /opt/amix/bin is last on the login PATH, so a plain tar runs Heirloom tar.

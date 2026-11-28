@@ -1,0 +1,6 @@
+#!/bin/sh
+# preremove -- libsockfix: put the stock bytes back into libsockhost.so and
+# libsockdns.so and libsocket.so back to the stock file of the variant it is
+# now, by rename, and record them; pkgrm then leaves the files to core, which
+# owns them too.  libsockfix(1M), README.md.
+/opt/amix/sbin/libsockfix unfix

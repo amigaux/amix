@@ -1,0 +1,135 @@
+#!/bin/sh
+#
+# libsockfix -- the libsockfix package's socket libraries: status, and the
+# two steps its install scripts take.  libsockfix(1M).
+#
+#     libsockfix status     which library /usr/lib/libsocket.so is, and
+#                           whether each library has the stock or the fixed bytes
+#     libsockfix link       (the postinstall) link libsocket.so, by rename, to
+#                           the fixed file of the variant it is: libsockdns.so
+#                           when DNS is on, libsockhost.so otherwise
+#     libsockfix unfix      (the preremove) put the stock bytes back into both
+#                           files and link libsocket.so to the stock file of the
+#                           variant it is at that moment
+#
+# The variant: libsocket.so is the DNS one when it is the same file as
+# libsockdns.so (amix-base's ifup links it so, ntpsync reads it so), or when
+# its bytes are libsockdns.so's (stock or fixed: pkgadd's rename has just
+# separated them); any other libsocket.so is the hosts-only one.
+#
+# MIT licence (the recipe), see LICENSE.amix in /opt/amix/doc/libsockfix.
+# Written for the 1992 Bourne shell: backticks, expr, no printf, no test -e.
+
+L=/usr/lib
+D=/opt/amix/lib/libsockfix
+I=/usr/apkg/bin/installf
+R=/usr/apkg/bin/removef
+P=libsockfx
+
+# sum -r and size of each library, stock and fixed (README.md)
+HS="47564 54032" HF="64706 54032" DS="14470 67636" DF="49390 67636"
+# the rewritten range: offset / 2, and (offset + 60) / 2, for dd bs=2
+HA=22903 HB=22933 DA=29119 DB=29149
+
+say() { echo "libsockfix: $*"; }
+
+# sz FILE: "sum size" of FILE, or "none"
+sz() {
+	if [ -f "$1" ]; then
+		s=`sum -r "$1" | awk '{print $1}'`
+		n=`ls -l "$1" | awk '{print $5}'`
+		echo "$s $n"
+	else
+		echo none
+	fi
+}
+
+# ino FILE: the inode number, or 0
+ino() {
+	if [ -f "$1" ]; then ls -i "$1" | awk '{print $1}'; else echo 0; fi
+}
+
+# state FILE STOCK FIXED: stock, fixed or other
+state() {
+	x=`sz "$1"`
+	if [ "$x" = "$2" ]; then echo stock
+	elif [ "$x" = "$3" ]; then echo fixed
+	else echo other
+	fi
+}
+
+# variant: dns or host, of /usr/lib/libsocket.so as it is now
+variant() {
+	if [ "`ino $L/libsocket.so`" = "`ino $L/libsockdns.so`" ]; then echo dns; return; fi
+	x=`sz $L/libsocket.so`
+	if [ "$x" = "$DS" ] || [ "$x" = "$DF" ]; then echo dns; else echo host; fi
+}
+
+# relink TARGET: make /usr/lib/libsocket.so TARGET's link, by rename, so the
+# name is never missing while programs start
+relink() {
+	t=$L/.libsock.$$
+	rm -f $t
+	ln "$1" $t || { say "cannot link $1 to $t"; return 1; }
+	mv $t $L/libsocket.so || { rm -f $t; say "cannot rename $t to $L/libsocket.so"; return 1; }
+}
+
+# record FILE: the contents database takes FILE's present size and sum
+record() {
+	[ -x $I ] || { say "$I missing: $1 not recorded"; return 1; }
+	$I $P "$1" f 0444 root bin || return 1
+}
+
+# restore NAME STOCKBYTES A B STOCK FIXED: FILE back to the stock bytes, by rename
+restore() {
+	f=$L/$1
+	case `state $f "$5" "$6"` in
+	stock)	return 0 ;;
+	fixed)	;;
+	*)	say "$f is neither the stock nor the fixed file (`sz $f`): left as it is"; return 1 ;;
+	esac
+	t=$L/.libsock.$$
+	rm -f $t
+	dd if=$f bs=2 count=$3 of=$t 2>/dev/null &&
+	cat "$2" >> $t &&
+	dd if=$f bs=2 skip=$4 2>/dev/null >> $t || { rm -f $t; say "cannot build $t"; return 1; }
+	x=`sz $t`
+	if [ "$x" != "$5" ]; then rm -f $t; say "the rebuilt $1 is $x, not $5"; return 1; fi
+	chmod 0444 $t; chown root $t; chgrp bin $t
+	mv $t $f || { rm -f $t; say "cannot rename $t to $f"; return 1; }
+}
+
+case "$1" in
+status)
+	echo "libsocket.so: the `variant` library (inode `ino $L/libsocket.so`)"
+	echo "libsockhost.so: `state $L/libsockhost.so "$HS" "$HF"` (`sz $L/libsockhost.so`)"
+	echo "libsockdns.so: `state $L/libsockdns.so "$DS" "$DF"` (`sz $L/libsockdns.so`)"
+	echo "libsocket.so: `sz $L/libsocket.so`"
+	;;
+link)
+	v=`variant`
+	if [ $v = dns ]; then w=libsockdns.so; else w=libsockhost.so; fi
+	relink $L/$w || exit 1
+	record $L/libsocket.so && $I -f $P
+	say "libsocket.so is the fixed $w"
+	;;
+unfix)
+	v=`variant`
+	bad=0
+	restore libsockhost.so $D/host.stock $HA $HB "$HS" "$HF" || bad=1
+	restore libsockdns.so $D/dns.stock $DA $DB "$DS" "$DF" || bad=1
+	if [ $v = dns ]; then w=libsockdns.so; else w=libsockhost.so; fi
+	relink $L/$w || bad=1
+	if [ -x $I ] && [ -x $R ]; then
+		record $L/libsockhost.so; record $L/libsockdns.so; record $L/libsocket.so
+		$I -f $P
+		$R $P $L/libsocket.so > /dev/null; $R -f $P
+	fi
+	[ $bad = 0 ] && say "the stock files are back; libsocket.so is the stock $w"
+	exit $bad
+	;;
+*)
+	echo "usage: libsockfix status|link|unfix" >&2
+	exit 2
+	;;
+esac
