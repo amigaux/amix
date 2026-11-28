@@ -14,6 +14,7 @@ in [`build/pkg/README.md`](../../build/pkg/README.md).
   - `build.sh`: optional build hooks (configure arguments, configure seeds, asserts, staging);
   - `src/`: our own source, when there is no upstream tarball;
   - `prototype`: the SVR4 payload, written by hand; `i pkginfo` is generated;
+  - `postinstall`, `preremove` (and `preinstall`, `postremove`): install scripts of the package's own, for what a prototype line cannot say; each is named in `package.sh`'s `INSTALL_SCRIPTS` and on an `i <name>` line of the prototype (see build/pkg/README.md);
   - `patches/*.patch`: unified diffs applied in name order, each with its reason in its header;
   - `tests/smoke.sh`: the on-box acceptance check;
   - `README.md`: what the port needed, and why.

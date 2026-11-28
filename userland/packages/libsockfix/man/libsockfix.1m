@@ -1,0 +1,135 @@
+.TH LIBSOCKFIX 1M "28 November 2026" "libsockfix 1.0-1"
+.SH NAME
+libsockfix \- the socket libraries without their per-socket heap leak
+.SH SYNOPSIS
+.B /opt/amix/sbin/libsockfix status
+.br
+.B /opt/amix/sbin/libsockfix link
+.br
+.B /opt/amix/sbin/libsockfix unfix
+.SH DESCRIPTION
+The libsockfix package replaces the system's two socket libraries,
+.B /usr/lib/libsockhost.so
+(names from
+.BR /etc/hosts )
+and
+.B /usr/lib/libsockdns.so
+(names also from DNS), with the stock files changed in one place.
+.B /usr/lib/libsocket.so ,
+the name programs load, is a link to one of the two.
+.PP
+The stock library keeps a buffer for each socket it creates.
+When a program closes a socket with
+.BR close (2),
+which is the C library's and not the socket library's, the buffer
+stays behind; the next
+.BR socket (3N),
+.BR accept (3N)
+or DNS lookup that gets the same descriptor number allocates a new
+buffer and loses the old one.
+Each lost buffer is about 200 bytes for an Internet socket and 4.4
+Kbytes for a UNIX-domain socket, and the program's data grows by that
+much until it exits.
+A server that runs for a long time grows without limit: an X server
+kept by
+.BR dtlogin (1X)
+by about 1 Mbyte for a day of desktop use, inetd and dropbear by about
+200 bytes a connection.
+With the fixed library the old buffer is freed before the new one is
+allocated.
+Everything else is the stock library, byte for byte.
+.PP
+The
+.B libsockfix
+command shows the state of the libraries and does the work of the
+package's installation scripts; an administrator needs only
+.BR status .
+.TP
+.B status
+Shows whether
+.B libsocket.so
+is the DNS library or the hosts-only one, and whether each of the two
+files holds the stock or the fixed bytes.
+.TP
+.B link
+Run by the package's postinstall.
+Links
+.B libsocket.so
+to the fixed file of the variant it is: to
+.B libsockdns.so
+when it was that file (DNS on), or has its bytes, and to
+.B libsockhost.so
+otherwise.
+The link is made under a temporary name and renamed over
+.BR libsocket.so ,
+so the name is never missing while programs start.
+The contents database records the result.
+.TP
+.B unfix
+Run by the package's preremove.
+Puts the stock bytes back into both files, each by rename, and links
+.B libsocket.so
+to the stock file of the variant it is at that moment, then records the
+three files.
+After
+.BR pkgrm (1M)
+the system has the files exactly as the core package installed them.
+.PP
+Turning DNS on or off is amix-base's
+.BR ifup (1M)
+as before: it links
+.B libsocket.so
+to
+.B libsockdns.so
+at every boot when a name server is set, and with the package installed
+that file is the fixed one.
+.SH FILES
+.TP
+.B /usr/lib/libsockhost.so, /usr/lib/libsockdns.so
+the fixed libraries
+.TP
+.B /opt/amix/lib/libsockfix/host.stock, dns.stock
+the 60 stock bytes of each library's changed range, which
+.B unfix
+writes back
+.TP
+.B /opt/amix/doc/libsockfix/README.md
+the changed bytes, the reasons and the tests
+.SH DIAGNOSTICS
+.B unfix
+leaves a library that is neither the stock nor the fixed file as it is,
+says so, and exits 1.
+.B link
+and
+.B unfix
+need apkg's
+.BR installf (1M)
+and
+.BR removef (1M)
+in
+.BR /usr/apkg/bin ;
+the stock
+.B installf
+faults.
+.SH NOTES
+Programs that are already running keep the library they started with
+until they exit.
+.PP
+Programs linked with the archive
+.B /usr/lib/libsocket.a
+keep the stock code.
+On a standard system only the DHCP client and apkg are, and neither
+creates sockets in a loop.
+.PP
+.BR pkgchk (1M)
+compares
+.B /usr/lib/libsocket.so
+with the bytes recorded when the package last linked it.
+When
+.BR ifup (1M)
+later turns DNS on or off, it reports the file as changed, as it does
+on the stock system with DNS on.
+.SH SEE ALSO
+.BR ifup (1M),
+.BR pkgrm (1M),
+.BR socket (3N)

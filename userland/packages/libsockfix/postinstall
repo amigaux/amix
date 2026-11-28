@@ -1,0 +1,5 @@
+#!/bin/sh
+# postinstall -- libsockfix: pkgadd has laid the fixed libsockhost.so and
+# libsockdns.so by rename; link libsocket.so to the fixed file of the variant
+# it was, and record it.  libsockfix(1M), README.md.
+/opt/amix/sbin/libsockfix link
