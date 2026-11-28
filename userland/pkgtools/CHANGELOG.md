@@ -1,3 +1,7 @@
+## 2026-11-28 — heirloom: no double free on a datastream that fails to unpack (44265d78)
+
+ds_init's error returns free the stream header and clear the pointer, so pkgtrans, pkgtrans -i and pkginfo -d report a datastream that fails to unpack with rc 1 instead of aborting under glibc (upstream latent bug; on Amix the same double free ran unseen). Test tests/bad-stream, run from build-host.sh. Not in a rolled engine yet: ships with the next APKGENG version.
+
 ## 2026-11-27 — apkg 0.3.16: no amix-base on a system that has none (50d9f780)
 
 An install that would lay amix-base on a system without it (not a 1.1 install) is refused before any download, naming https://amigaux.org/install/from-1.0/; an upgrade there says so once and goes on. README and design.md: the 1.0 tree is at the docroot.
