@@ -1,3 +1,7 @@
+## 2026-11-28 — tools/ugate: a session-check refresh runs a row the check must fail (9cae1eaf)
+
+README: refreshing the gate's session check also runs one row the check must fail, in a rows file of its own outside rows/. The gate's session check now needs the CDE session's own programs (dtsession, front panel, Help Viewer, File Manager): shown passing on k30 and k46 and failing a session without the File Manager.
+
 ## 2026-11-28 — heirloom: no double free on a datastream that fails to unpack (44265d78)
 
 ds_init's error returns free the stream header and clear the pointer, so pkgtrans, pkgtrans -i and pkginfo -d report a datastream that fails to unpack with rc 1 instead of aborting under glibc (upstream latent bug; on Amix the same double free ran unseen). Test tests/bad-stream, run from build-host.sh. Not in a rolled engine yet: ships with the next APKGENG version.
