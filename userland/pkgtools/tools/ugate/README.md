@@ -57,7 +57,9 @@ unchanged copy of its source, and set everything a gate needs through its enviro
 - **To refresh it:**
   1. copy the tools whole at the new commit (`git archive`);
   2. compare each file's sha256 with the source's list;
-  3. carry the conf line's environment over, and run every rows file once.
+  3. carry the conf line's environment over, and run every rows file once;
+  4. run one row the check must fail: a session with one of its programs broken on purpose, in a rows file of its
+     own outside `rows/` (it is not a user path). A check that never fails proves nothing.
 
   The copy is not patched: a change the gate needs goes to the source first.
 
