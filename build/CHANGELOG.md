@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-28 — build/pkg ships a recipe's own install scripts (bd981475)
+
+package.sh INSTALL_SCRIPTS names any of preinstall, postinstall, preremove and postremove, each a file of the package directory on an `i` line of the prototype; the driver copies them beside pkginfo and the roll stamps them with the epoch, so two rolls are the same bytes. pkgmeta check refuses request and checkinstall (apkg's pkgadd -n cannot ask), a missing, empty, duplicated or unlisted script, and any other i line; CONFFILES' class scripts go on beside them.
+
 ## 2026-11-27 — test-pkgbuild's stub roll stamps with the epoch (663d2250)
 
 test-pkgbuild's stub roll stamps every time with the epoch (663d2250, from next's b69eceee): the VARIANT=shared check, which compares two rolls of one package, no longer fails when they stage in different seconds.
