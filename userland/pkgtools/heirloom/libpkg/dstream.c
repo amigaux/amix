@@ -292,6 +292,19 @@ static char *ds_header;
 static char *ds_header_raw;
 static int ds_headsize;
 
+/*
+ * AMIX PORT: ds_init's error returns freed ds_header and kept the
+ * pointer, and the caller's cleanup (ds_close(1)) freed it again: a
+ * double free on every datastream that fails to unpack (pkgtrans,
+ * pkgtrans -i, pkginfo -d).  The header is dropped through here.
+ */
+static void
+ds_hdrfree(void)
+{
+	free(ds_header);
+	ds_header = NULL;
+}
+
 static char *
 ds_gets(char *buf, int size)
 {
@@ -524,7 +537,7 @@ ds_init(char *device, char **pkg, char *norewind)
 			    | O_LARGEFILE)) < 0) {
 				progerr(pkg_gt(ERR_UNPACK));
 				logerr(pkg_gt(MSG_OPEN), device, errno);
-				(void) free(ds_header);
+				ds_hdrfree();
 				return (-1);
 			}
 
@@ -613,7 +626,7 @@ ds_init(char *device, char **pkg, char *norewind)
 			progerr(pkg_gt(ERR_UNPACK));
 			logerr(pkg_gt(MSG_MEM));
 			ecleanup();
-			(void) free(ds_header);
+			ds_hdrfree();
 			return (-1);
 		}
 		if (sscanf(line, "%s %d %ld %[ 0-9]", toc_pt->pkg,
@@ -621,7 +634,7 @@ ds_init(char *device, char **pkg, char *norewind)
 			progerr(pkg_gt(ERR_UNPACK));
 			logerr(pkg_gt(MSG_TOC));
 			free(toc_pt);
-			(void) free(ds_header);
+			ds_hdrfree();
 			ecleanup();
 			return (-1);
 		}
@@ -635,7 +648,7 @@ ds_init(char *device, char **pkg, char *norewind)
 	if (!ret) {
 		progerr(pkg_gt(ERR_UNPACK));
 		logerr(pkg_gt(MSG_TOC));
-		(void) free(ds_header);
+		ds_hdrfree();
 		return (-1);
 	}
 	sighold(SIGINT);
@@ -643,7 +656,7 @@ ds_init(char *device, char **pkg, char *norewind)
 	if (!ds_head) {
 		progerr(pkg_gt(ERR_UNPACK));
 		logerr(pkg_gt(MSG_EMPTY));
-		(void) free(ds_header);
+		ds_hdrfree();
 		return (-1);
 	}
 	/* this could break, thanks to cpio command limit */
@@ -712,7 +725,7 @@ ds_init(char *device, char **pkg, char *norewind)
 		rpterr();
 		progerr(pkg_gt(ERR_UNPACK));
 		logerr(pkg_gt(MSG_CMDFAIL), cmd, n);
-		(void) free(ds_header);
+		ds_hdrfree();
 		return (-1);
 	}
 

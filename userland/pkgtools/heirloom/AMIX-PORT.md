@@ -967,6 +967,13 @@ is ≥ 14 characters (2026-08-14):**
   fall back to the legacy unbounded behavior.  Active on BOTH builds
   (GNU cpio versions differ in trailer behavior too); host-verified:
   single- and two-package streams, skip+extract byte-identical.
+- `libpkg/dstream.c` — `ds_hdrfree()` (upstream latent bug): ds_init's
+  six error returns freed `ds_header` and kept the pointer, and the
+  command's cleanup (`ds_close(1)`) freed it again.  Any datastream that
+  fails to unpack (cpio exits non-zero, a cut file, no table of contents)
+  hit a double free: glibc aborts pkgtrans, pkgtrans -i and pkginfo -d
+  with rc 134 instead of the unpack error and rc 1.  Those returns now
+  free and clear the pointer.  Regression: `tests/bad-stream/run.sh`.
 - `libpkg/runcmd.c` — `esystem_bounded(cmd, ifd, nbytes)`: esystem()
   variant that pipes exactly nbytes from ifd into the child's stdin
   (SIGPIPE-safe: if the child stops reading early the remainder is
