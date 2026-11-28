@@ -12,6 +12,14 @@
 # 6c243ef6; no 040/060-only FPU form), equal to amix-dlm's own
 # build/box/kbootset at db0ef3a.  -2 was 1230e8b (e4d136d6).
 
+# -47 (2026-11-28): amix 7e8524f -- kbootset knows character major 57,
+# the zz9knet module's (the MNT ZZ9000 ethernet, interface zzn0): gate 3
+# and the major table every module-kernel generation carries, so zz9knet
+# loads on the 1.1 kernels with no kernel change.  Built in
+# amix-toolchain:dist (gcc14-cross-amix d5a43a7): the box binary 6c3b1fc2
+# (179160 bytes, text 151908 + data 1828 + bss 553660); kbootset(1M),
+# whatis and rc scripts as -46.
+#
 # -46 (2026-11-15): amix 575654e -- kbootset knows character major 68,
 # the va2000 module's (the MNT VA2000 graphics card, /dev/va2000): gate 3
 # and the major table every module-kernel generation carries (core patch
@@ -313,8 +321,8 @@
 # -24 was 565de49 0b9b8ec4; -23 was e089c2a 3c18c3b5; -22 was 1308c0b 37e78d88; -21 was 4442c76 143cc1d8; -20 was 1da3474 b3e7b987; -19 was 178a47b f537493d; -18 was d227dbf a9e4f923; -17 was 33ea0c7 527b8d59; -16 was f340556 98c04c09; -15 was 594731b d44f6a32; -14 was c6ad5bd 9acb9add; -13 was d814da1 e56172b6; -12 was af363be cd02b817; -11 was f5ce731 013fe25f; -10 was 42df482 305345a3; -9 a71a875 8cb4c157; -8 124b86c 05c1d40f; -7 f43fe08 a2970b20;
 # -6 fb77acd 870d4752; -5 6c69125 6b76c54c; -4 d64bad7 9cf75c1c;
 # -3 db0ef3a f4a6632b.
-KB_DLM_COMMIT=575654e
-KB_SHA=69d71509c8a2d0ab0ac924b7d6c74c120af89fd30f7df1cb04025f949559222b
+KB_DLM_COMMIT=7e8524f
+KB_SHA=6c3b1fc2e6ba39617b8743e966dce8d6e91eb5b9b9aebd51225e5f11d045c51d
 # kbootset(1M) and its whatis line, from the same commit (kernel/dlm/man)
 KB_MAN_SHA=adfaa6f71704215c4b18bcbba61ff96d31da330b0b6a3f572f3082fdf6842297
 KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
@@ -323,5 +331,5 @@ KB_WHATIS_SHA=b80d0af059afa64cee8c6d3f154c677064b223e7ce2d84138cd5f4a564c6445a
 KB_RC_KBNAMELIST_SHA=4594a81878859a1738b11f1c389f5e7a624bc8a8a5346781f2f88d150c9a4503
 KB_RC_KBMARKGOOD_SHA=1c089c0f93e5f3ee2f962e55b59bb3ba326355ca69a6f535f0668fe891c59a04
 
-KB_VERSION=1.1.0.261115-46
-KB_SOURCE_EPOCH=1794700800
+KB_VERSION=1.1.0.261128-47
+KB_SOURCE_EPOCH=1795824000
