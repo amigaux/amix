@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-28 — character major 57 for zz9knet; kbootset -47 (7e8524fa, 64158e56)
+
+Character major 57 for zz9knet, the MNT ZZ9000 ethernet module (STREAMS, DLPI, zzn0; boot class on zorro:6d6e:03 and 6d6e:04, shared with z3660rtg); C3-5 v27 short name zz9knet. kbootset 1.1.0.261128-47 knows the major (package 311cedd1): install it before zz9knet, whose packages carry it as their kbootset floor.
+
 ## 2026-11-22 — C4-7 accepted; core 0059; kit k30.1.6 / k46.1.7 (d5e1036e, 17cc5692)
 
 C4-7 version 1, accepted: disk commands with segment lists. Core 0059 adds sd_limits (a controller's limits beside its sd_register entry), sd_lim and sdqueuex for dd; the kit is k30.1.6 / k46.1.7, lists sd_limits, ships sys/sdseg.h (DDI_SD_LIMITS, weak), and keeps the fingerprint texts of the minor before.
